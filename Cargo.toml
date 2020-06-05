@@ -1,0 +1,30 @@
+[package]
+name = "opaque-ke"
+version = "0.1.0"
+repository = "https://github.com/novifinancial/opaque-ke"
+keywords = ["cryptography", "crypto", "opaque", "passwords", "authentication"]
+description = "An implementation of the OPAQUE password-authenticated key exchange protocol"
+authors = ["Kevin Lewi <klewi@fb.com>", "François Garillot <fga@fb.com>"]
+license = "MIT"
+edition = "2018"
+readme = "README.md"
+
+[dependencies]
+aead = "0.2.0"
+curve25519-dalek = "2.0.0"
+generic-array = "0.12.3"
+hkdf = "0.8.0"
+hmac = "0.7.1"
+rand_core = "0.5.1"
+sha2 = "0.8"
+thiserror = "1"
+x25519-dalek = "0.6.0"
+zeroize = "1.1"
+
+[dev-dependencies]
+aes-gcm = "0.5.0"
+base64 = "0.11.0"
+chacha20poly1305 = "0.4.1"
+hex = "0.4.2"
+lazy_static = "1.4.0"
+serde_json = "1.0"
