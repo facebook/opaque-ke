@@ -5,6 +5,9 @@
 
 //! An implementation of the OPAQUE asymmetric password authentication key exchange protocol
 //!
+//! Note: This implementation is in sync with [draft-krawczyk-cfrg-opaque-05](https://tools.ietf.org/html/draft-krawczyk-cfrg-opaque-05),
+//! but this specification is subject to change, until the final version published by the IETF.
+//!
 //! # Overview
 //!
 //! OPAQUE is a protocol between a client and a server. They must first agree on a collection of primitives
@@ -20,10 +23,8 @@
 //! use opaque_ke::keypair::X25519KeyPair;
 //! ```
 //!
-//! This implementation is in sync with [draft-krawczyk-cfrg-opaque-05](https://tools.ietf.org/html/draft-krawczyk-cfrg-opaque-05),
-//! with a concrete instantiation of the authenticated key exchange protocol using 3DH. In the future, we plan to
+//! We have included a concrete instantiation of the authenticated key exchange protocol using 3DH. In the future, we plan to
 //! add support for other KE protocols as well.
-//!
 //!
 //! ## Setup
 //! To setup the protocol, the server begins by generating a static keypair:
