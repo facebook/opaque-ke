@@ -9,6 +9,7 @@ use crate::{
     key_exchange::NONCE_LEN,
     keypair::{Key, KeyPair, SignalKeyPair},
     opaque::*,
+    slow_hash::NoOpHash,
     tests::mock_rng::CycleRng,
 };
 use aes_gcm::Aes256Gcm;
@@ -257,7 +258,11 @@ fn generate_parameters() -> TestVectorParameters {
 
     let mut finish_registration_rng = CycleRng::new(client_s_sk_and_nonce);
     let (r3, opaque_key_registration) = client_registration
-        .finish::<_, SignalKeyPair>(r2, server_s_kp.public(), &mut finish_registration_rng)
+        .finish::<_, SignalKeyPair, NoOpHash>(
+            r2,
+            server_s_kp.public(),
+            &mut finish_registration_rng,
+        )
         .unwrap();
     let r3_bytes = r3.to_bytes().to_vec();
 
@@ -292,7 +297,7 @@ fn generate_parameters() -> TestVectorParameters {
 
     let mut client_e_sk_rng = CycleRng::new(client_e_kp.private().to_vec());
     let (l3, client_shared_secret, _opaque_key_login) = client_login
-        .finish(l2, server_s_kp.public(), &mut client_e_sk_rng)
+        .finish::<_, NoOpHash>(l2, server_s_kp.public(), &mut client_e_sk_rng)
         .unwrap();
     let l3_bytes = l3.to_bytes().to_vec();
 
@@ -382,7 +387,7 @@ fn test_r3() -> Result<(), PakeError> {
         &parameters.client_registration_state[..],
     )
     .unwrap()
-    .finish::<CycleRng, SignalKeyPair>(
+    .finish::<CycleRng, SignalKeyPair, NoOpHash>(
         RegisterSecondMessage::try_from(&parameters.r2[..]).unwrap(),
         &Key::try_from(parameters.server_s_pk).unwrap(),
         &mut finish_registration_rng,
@@ -474,7 +479,7 @@ fn test_l3() -> Result<(), PakeError> {
             &parameters.client_login_state[..],
         )
         .unwrap()
-        .finish(
+        .finish::<_, NoOpHash>(
             LoginSecondMessage::<Aes256Gcm, EdwardsPoint>::try_from(&parameters.l2[..]).unwrap(),
             &Key::try_from(parameters.server_s_pk)?,
             &mut client_e_sk_rng,
@@ -529,7 +534,7 @@ fn test_complete_flow(
             &mut server_rng,
         )?;
     let (register_m3, registration_opaque_key) =
-        client_state.finish(register_m2, server_kp.public(), &mut client_rng)?;
+        client_state.finish::<_, _, NoOpHash>(register_m2, server_kp.public(), &mut client_rng)?;
     let p_file = server_state.finish(register_m3)?;
     let (login_m1, client_login_state) =
         ClientLogin::<Aes256Gcm, EdwardsPoint, SignalKeyPair>::start(
@@ -541,7 +546,7 @@ fn test_complete_flow(
         ServerLogin::start(p_file, &server_kp.private(), login_m1, &mut server_rng)?;
 
     let client_login_result =
-        client_login_state.finish(login_m2, &server_kp.public(), &mut client_rng);
+        client_login_state.finish::<_, NoOpHash>(login_m2, &server_kp.public(), &mut client_rng);
 
     if hex::encode(registration_password) == hex::encode(login_password) {
         let (login_m3, client_shared_secret, login_opaque_key) = client_login_result?;
