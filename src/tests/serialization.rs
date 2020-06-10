@@ -29,9 +29,7 @@ fn client_registration_roundtrip() {
     let mut rng = OsRng;
     let sc = <RistrettoPoint as Group>::random_scalar(&mut rng);
     // serialization order: scalar, password
-    let mut bytes: Vec<u8> = vec![];
-    bytes.extend_from_slice(sc.as_bytes());
-    bytes.extend_from_slice(pw);
+    let bytes: Vec<u8> = [&sc.as_bytes()[..], &pw[..]].concat();
     let reg = ClientRegistration::<ChaCha20Poly1305, RistrettoPoint>::try_from(&bytes[..]).unwrap();
     let reg_bytes = reg.to_bytes();
     assert_eq!(reg_bytes, bytes);
@@ -113,10 +111,7 @@ fn register_third_message_roundtrip() {
     )
     .unwrap();
 
-    let mut message = Vec::new();
-    message.extend_from_slice(&ciphertext.to_bytes());
-    message.extend_from_slice(&pubkey_bytes);
-
+    let message: Vec<u8> = [&ciphertext.to_bytes(), &pubkey_bytes[..]].concat();
     let r3 =
         RegisterThirdMessage::<ChaCha20Poly1305, SignalKeyPair>::try_from(&message[..]).unwrap();
     let r3_bytes = r3.to_bytes();
