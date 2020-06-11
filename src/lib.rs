@@ -369,6 +369,7 @@ mod oprf;
 // do the oprf on
 mod group;
 pub mod slow_hash;
+pub mod ciphersuite;
 
 #[cfg(test)]
 mod tests;
