@@ -6,7 +6,6 @@
 use crate::errors::InternalPakeError;
 
 use generic_array::GenericArray;
-use scrypt::{scrypt, ScryptParams};
 use sha2::{Digest, Sha256};
 
 pub trait SlowHash {
@@ -25,15 +24,15 @@ impl SlowHash for NoOpHash {
     }
 }
 
-pub struct Scrypt;
-
-impl SlowHash for Scrypt {
+#[cfg(feature = "slow-hash")]
+impl SlowHash for scrypt::ScryptParams {
     fn hash(
         input: GenericArray<u8, <Sha256 as Digest>::OutputSize>,
     ) -> Result<Vec<u8>, InternalPakeError> {
-        let params = ScryptParams::new(15, 8, 1).unwrap();
+        let params = scrypt::ScryptParams::new(15, 8, 1).unwrap();
         let mut output = [0u8; 32];
-        scrypt(&input, &[], &params, &mut output).map_err(|_| InternalPakeError::SlowHashError)?;
+        scrypt::scrypt(&input, &[], &params, &mut output)
+            .map_err(|_| InternalPakeError::SlowHashError)?;
         Ok(output.to_vec())
     }
 }

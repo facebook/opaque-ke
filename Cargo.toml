@@ -9,6 +9,9 @@ license = "MIT"
 edition = "2018"
 readme = "README.md"
 
+[features]
+slow-hash = ["scrypt"]
+
 [dependencies]
 aead = "0.2.0"
 curve25519-dalek = "2.0.0"
@@ -16,7 +19,7 @@ generic-array = "0.12.3"
 hkdf = "0.8.0"
 hmac = "0.7.1"
 rand_core = "0.5.1"
-scrypt = "0.2.0"
+scrypt = {version = "0.2.0", optional = true}
 sha2 = "0.8"
 thiserror = "1"
 x25519-dalek = "0.6.0"
