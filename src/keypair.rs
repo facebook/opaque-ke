@@ -219,93 +219,9 @@ impl KeyPair for X25519KeyPair {
     }
 }
 
-/// A custom, minimalistic Key pair struct built on Key, aimed at reproducing the behavior of libsignal's keypairs
-#[derive(Debug, PartialEq, Eq)]
-pub struct SignalKeyPair {
-    pk: Key,
-    sk: Key,
-}
-
-impl SignalKeyPair {
-    fn clamp_scalar(mut scalar: [u8; 32]) -> ::curve25519_dalek::scalar::Scalar {
-        scalar[0] &= 248;
-        scalar[31] &= 127;
-        scalar[31] |= 64;
-
-        ::curve25519_dalek::scalar::Scalar::from_bits(scalar)
-    }
-
-    fn gen<R: RngCore + CryptoRng>(rng: &mut R) -> (Vec<u8>, Vec<u8>) {
-        let mut bits = [0u8; 32];
-        rng.fill_bytes(&mut bits);
-
-        // It's proper to sanitize the scalar here, and reproduces x25519::StaticSecret::new
-        let sk = SignalKeyPair::clamp_scalar(bits);
-        let pk = ::curve25519_dalek::constants::X25519_BASEPOINT * sk;
-
-        (pk.as_bytes().to_vec(), sk.as_bytes().to_vec())
-    }
-}
-
-impl KeyPair for SignalKeyPair {
-    type Repr = Key;
-
-    fn public(&self) -> &Self::Repr {
-        &self.pk
-    }
-
-    fn private(&self) -> &Self::Repr {
-        &self.sk
-    }
-
-    fn new(public: Self::Repr, private: Self::Repr) -> Result<Self, InternalPakeError> {
-        Ok(SignalKeyPair {
-            pk: public,
-            sk: private,
-        })
-    }
-
-    fn generate_random<R: RngCore + CryptoRng>(rng: &mut R) -> Result<Self, InternalPakeError> {
-        let (public, private) = SignalKeyPair::gen(rng);
-        Ok(SignalKeyPair {
-            pk: Key(public),
-            sk: Key(private),
-        })
-    }
-
-    fn public_from_private(secret: &Self::Repr) -> Self::Repr {
-        let mut secret_data = [0u8; 32];
-        secret_data.copy_from_slice(&secret.0[..]);
-        let base_data = ::x25519_dalek::X25519_BASEPOINT_BYTES;
-        Key(::x25519_dalek::x25519(secret_data, base_data).to_vec())
-    }
-
-    fn check_public_key(key: Self::Repr) -> Result<Self::Repr, InternalPakeError> {
-        let mut key_bytes = [0u8; 32];
-        key_bytes.copy_from_slice(&key);
-        let point = ::curve25519_dalek::montgomery::MontgomeryPoint(key_bytes)
-            .to_edwards(1)
-            .ok_or(InternalPakeError::PointError)?;
-        if !point.is_torsion_free() {
-            Err(InternalPakeError::SubGroupError)
-        } else {
-            Ok(key)
-        }
-    }
-
-    fn diffie_hellman(pk: Self::Repr, sk: Self::Repr) -> Vec<u8> {
-        let mut pk_data = [0; 32];
-        pk_data.copy_from_slice(&pk.0[..]);
-        let mut sk_data = [0; 32];
-        sk_data.copy_from_slice(&sk.0[..]);
-        ::x25519_dalek::x25519(sk_data, pk_data).to_vec()
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use proptest::prelude::*;
 
     proptest! {
         #[test]
@@ -319,52 +235,6 @@ mod tests {
             let pk = kp.public();
             let sk = kp.private();
             prop_assert_eq!(&X25519KeyPair::public_from_private(sk), pk);
-        }
-
-        #[test]
-        fn test_signal_check(kp in SignalKeyPair::uniform_keypair_strategy()) {
-            let pk = kp.public();
-            prop_assert!(SignalKeyPair::check_public_key(pk.clone()).is_ok());
-        }
-
-        #[test]
-        fn test_signal_pub_from_priv(kp in SignalKeyPair::uniform_keypair_strategy()) {
-            let pk = kp.public();
-            let sk = kp.private();
-            prop_assert_eq!(&SignalKeyPair::public_from_private(sk), pk);
-        }
-
-        #[test]
-        fn test_signal_x25519_roundtrips(kp_signal in SignalKeyPair::uniform_keypair_strategy(),
-                                         kp_x25519 in X25519KeyPair::uniform_keypair_strategy()) {
-            let kp_signal_bytes: &[u8] = &kp_signal.to_arr();
-            let kp_x25519_bytes: &[u8] = &kp_x25519.to_arr();
-
-            let reinterpret_signal = X25519KeyPair::from_bytes(kp_signal_bytes).unwrap();
-            let reinterpret_x25519 = SignalKeyPair::from_bytes(kp_x25519_bytes).unwrap();
-
-            prop_assert_eq!(kp_signal_bytes, &reinterpret_signal.to_arr()[..]);
-            prop_assert_eq!(kp_x25519_bytes, &reinterpret_x25519.to_arr()[..]);
-        }
-
-        #[test]
-        fn test_signal_as_x25519(kp_signal in SignalKeyPair::uniform_keypair_strategy()) {
-            let kp: X25519KeyPair = X25519KeyPair::from_bytes(&kp_signal.to_arr()).unwrap();
-            let pk = kp.public();
-            prop_assert!(X25519KeyPair::check_public_key(pk.clone()).is_ok());
-            let sk = kp.private();
-            prop_assert_eq!(&X25519KeyPair::public_from_private(sk), pk);
-
-        }
-
-        #[test]
-        fn test_x25519_as_signal(kp_x25519 in X25519KeyPair::uniform_keypair_strategy()) {
-            let kp: SignalKeyPair = SignalKeyPair::from_bytes(&kp_x25519.to_arr()).unwrap();
-            let pk = kp.public();
-            prop_assert!(SignalKeyPair::check_public_key(pk.clone()).is_ok());
-            let sk = kp.private();
-            prop_assert_eq!(&SignalKeyPair::public_from_private(sk), pk);
-
         }
 
     }
