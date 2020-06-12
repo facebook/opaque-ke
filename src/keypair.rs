@@ -306,4 +306,66 @@ impl KeyPair for SignalKeyPair {
 mod tests {
     use super::*;
     use proptest::prelude::*;
+
+    proptest! {
+        #[test]
+        fn test_x25519_check(kp in X25519KeyPair::uniform_keypair_strategy()) {
+            let pk = kp.public();
+            prop_assert!(X25519KeyPair::check_public_key(pk.clone()).is_ok());
+        }
+
+        #[test]
+        fn test_x25519_pub_from_priv(kp in X25519KeyPair::uniform_keypair_strategy()) {
+            let pk = kp.public();
+            let sk = kp.private();
+            prop_assert_eq!(&X25519KeyPair::public_from_private(sk), pk);
+        }
+
+        #[test]
+        fn test_signal_check(kp in SignalKeyPair::uniform_keypair_strategy()) {
+            let pk = kp.public();
+            prop_assert!(SignalKeyPair::check_public_key(pk.clone()).is_ok());
+        }
+
+        #[test]
+        fn test_signal_pub_from_priv(kp in SignalKeyPair::uniform_keypair_strategy()) {
+            let pk = kp.public();
+            let sk = kp.private();
+            prop_assert_eq!(&SignalKeyPair::public_from_private(sk), pk);
+        }
+
+        #[test]
+        fn test_signal_x25519_roundtrips(kp_signal in SignalKeyPair::uniform_keypair_strategy(),
+                                         kp_x25519 in X25519KeyPair::uniform_keypair_strategy()) {
+            let kp_signal_bytes: &[u8] = &kp_signal.to_arr();
+            let kp_x25519_bytes: &[u8] = &kp_x25519.to_arr();
+
+            let reinterpret_signal = X25519KeyPair::from_bytes(kp_signal_bytes).unwrap();
+            let reinterpret_x25519 = SignalKeyPair::from_bytes(kp_x25519_bytes).unwrap();
+
+            prop_assert_eq!(kp_signal_bytes, &reinterpret_signal.to_arr()[..]);
+            prop_assert_eq!(kp_x25519_bytes, &reinterpret_x25519.to_arr()[..]);
+        }
+
+        #[test]
+        fn test_signal_as_x25519(kp_signal in SignalKeyPair::uniform_keypair_strategy()) {
+            let kp: X25519KeyPair = X25519KeyPair::from_bytes(&kp_signal.to_arr()).unwrap();
+            let pk = kp.public();
+            prop_assert!(X25519KeyPair::check_public_key(pk.clone()).is_ok());
+            let sk = kp.private();
+            prop_assert_eq!(&X25519KeyPair::public_from_private(sk), pk);
+
+        }
+
+        #[test]
+        fn test_x25519_as_signal(kp_x25519 in X25519KeyPair::uniform_keypair_strategy()) {
+            let kp: SignalKeyPair = SignalKeyPair::from_bytes(&kp_x25519.to_arr()).unwrap();
+            let pk = kp.public();
+            prop_assert!(SignalKeyPair::check_public_key(pk.clone()).is_ok());
+            let sk = kp.private();
+            prop_assert_eq!(&SignalKeyPair::public_from_private(sk), pk);
+
+        }
+
+    }
 }
