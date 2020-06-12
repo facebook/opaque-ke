@@ -11,7 +11,12 @@ use generic_array::{
     typenum::{Sum, Unsigned, U32},
     ArrayLength, GenericArray,
 };
+#[cfg(test)]
+use proptest::prelude::*;
+#[cfg(test)]
+use rand::{rngs::StdRng, SeedableRng};
 use rand_core::{CryptoRng, RngCore};
+use std::fmt::Debug;
 use x25519_dalek::{PublicKey, StaticSecret};
 
 use std::convert::TryFrom;
@@ -34,7 +39,7 @@ pub trait SizedBytes: Sized + PartialEq {
 }
 
 /// A Keypair trait with public-private verification
-pub trait KeyPair: Sized {
+pub trait KeyPair: Sized + Debug {
     /// The single key representation must have a specific byte size itself
     type Repr: SizedBytes + Clone;
 
@@ -63,6 +68,21 @@ pub trait KeyPair: Sized {
 
     /// Computes the diffie hellman function on a public key and private key
     fn diffie_hellman(pk: Self::Repr, sk: Self::Repr) -> Vec<u8>;
+
+    /// Test-only strategy returning a proptest Strategy based on
+    /// generate_random
+    #[cfg(test)]
+    fn uniform_keypair_strategy() -> BoxedStrategy<Self> {
+        // The no_shrink is because keypairs should be fixed -- shrinking would cause a different
+        // keypair to be generated, which appears to not be very useful.
+        any::<[u8; 32]>()
+            .prop_filter_map("valid random keypair", |seed| {
+                let mut rng = StdRng::from_seed(seed);
+                Self::generate_random(&mut rng).ok()
+            })
+            .no_shrink()
+            .boxed()
+    }
 }
 
 /// This is a blanket implementation of SizedBytes for any instance of KeyPair
@@ -95,7 +115,7 @@ where
 }
 
 /// A minimalist key type built around [u8;32]
-#[derive(PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 #[repr(transparent)]
 pub struct Key(Vec<u8>);
 
@@ -130,7 +150,7 @@ impl SizedBytes for Key {
 }
 
 /// A representation of an X25519 keypair according to RFC7748
-#[derive(PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct X25519KeyPair {
     pk: Key,
     sk: Key,
@@ -200,7 +220,7 @@ impl KeyPair for X25519KeyPair {
 }
 
 /// A custom, minimalistic Key pair struct built on Key, aimed at reproducing the behavior of libsignal's keypairs
-#[derive(PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct SignalKeyPair {
     pk: Key,
     sk: Key,
@@ -280,4 +300,10 @@ impl KeyPair for SignalKeyPair {
         sk_data.copy_from_slice(&sk.0[..]);
         ::x25519_dalek::x25519(sk_data, pk_data).to_vec()
     }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use proptest::prelude::*;
 }
