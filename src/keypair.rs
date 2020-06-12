@@ -237,5 +237,15 @@ mod tests {
             prop_assert_eq!(&X25519KeyPair::public_from_private(sk), pk);
         }
 
+
+        #[test]
+        fn test_x25519_dh(kp1 in X25519KeyPair::uniform_keypair_strategy(),
+                          kp2 in X25519KeyPair::uniform_keypair_strategy()) {
+
+            let dh1 = X25519KeyPair::diffie_hellman(kp1.public().clone(), kp2.private().clone());
+            let dh2 = X25519KeyPair::diffie_hellman(kp2.public().clone(), kp1.private().clone());
+
+            prop_assert_eq!(dh1,dh2);
+        }
     }
 }
