@@ -61,13 +61,12 @@ impl TryFrom<&[u8]> for KE1State {
 
 impl KE1State {
     pub fn to_bytes(&self) -> Vec<u8> {
-        let output: Vec<u8> = [
+        [
             &self.client_e_sk.to_arr(),
             &self.client_nonce[..],
             &self.hashed_l1[..],
         ]
-        .concat();
-        output
+        .concat()
     }
 }
 

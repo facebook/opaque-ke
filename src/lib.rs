@@ -393,6 +393,8 @@ pub mod ciphersuite;
 mod rkr_encryption;
 // Your choice of KE
 mod key_exchange;
+
+mod key_exchange_traits;
 pub mod keypair;
 // Low-level API contains OPRF stuff
 mod oprf;
@@ -400,6 +402,8 @@ mod oprf;
 // do the oprf on
 mod group;
 pub mod slow_hash;
+
+mod indexed_state;
 
 #[cfg(test)]
 mod tests;

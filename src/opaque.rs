@@ -660,7 +660,7 @@ impl<CS: CipherSuite> ClientLogin<CS> {
 
 type ClientLoginFinishResult = (
     LoginThirdMessage,
-    Vec<u8>,
+    Vec<u8>, // KE3State
     GenericArray<u8, <Sha256 as Digest>::OutputSize>,
 );
 
