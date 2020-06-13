@@ -113,10 +113,11 @@ where
     KeyFormat: KeyPair,
 {
     pub fn to_bytes(&self) -> Vec<u8> {
-        let mut res = Vec::new();
-        res.extend(self.envelope.to_bytes());
-        res.extend(self.client_s_pk.to_arr());
-        res
+        [
+            &self.envelope.to_bytes(),
+            self.client_s_pk.to_arr().as_slice(),
+        ]
+        .concat()
     }
 }
 
@@ -165,12 +166,11 @@ impl<Grp: Group> TryFrom<&[u8]> for LoginFirstMessage<Grp> {
 
 impl<Grp: Group> LoginFirstMessage<Grp> {
     pub fn to_bytes(&self) -> Vec<u8> {
-        let output: Vec<u8> = [
+        [
             self.alpha.to_bytes().as_slice(),
             &self.ke1_message.to_bytes(),
         ]
-        .concat();
-        output
+        .concat()
     }
 }
 
