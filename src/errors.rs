@@ -26,6 +26,8 @@ pub enum InternalPakeError {
     HkdfError,
     #[error("Computing HMAC failed while supplying a secret key")]
     HmacError,
+    #[error("Computing the slow hashing function failed")]
+    SlowHashError,
 }
 
 /// Represents an error in password checking

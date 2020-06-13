@@ -21,7 +21,11 @@
 //! use chacha20poly1305::ChaCha20Poly1305;
 //! use curve25519_dalek::ristretto::RistrettoPoint;
 //! use opaque_ke::keypair::X25519KeyPair;
+//! use opaque_ke::slow_hash::NoOpHash;
 //! ```
+//!
+//! Note that our choice of slow hashing function in this example, `NoOpHash`, is selected only to ensure
+//! that the tests execute quickly. A real application should use an actual slow hashing function, such as `Scrypt`.
 //!
 //! We have included a concrete instantiation of the authenticated key exchange protocol using 3DH. In the future, we plan to
 //! add support for other KE protocols as well.
@@ -49,8 +53,12 @@
 //! In the first step (client registration start), the client chooses a registration password and an optional "pepper", and
 //! runs `ClientRegistration::start` to produce a message `r1`:
 //! ```
-//! # use opaque_ke::{opaque::{ClientRegistration, ServerRegistration}, keypair::{KeyPair, X25519KeyPair, SizedBytes}};
-//! # use opaque_ke::errors::ProtocolError;
+//! # use opaque_ke::{
+//! #   errors::ProtocolError,
+//! #   opaque::{ClientRegistration, ServerRegistration},
+//! #   keypair::{KeyPair, X25519KeyPair, SizedBytes},
+//! #   slow_hash::NoOpHash,
+//! # };
 //! # use curve25519_dalek::ristretto::RistrettoPoint;
 //! # use chacha20poly1305::ChaCha20Poly1305;
 //! use rand_core::{OsRng, RngCore};
@@ -68,8 +76,12 @@
 //! In the second step (server registration start), the server takes as input the `r1` message from the client and runs
 //! `ServerRegistration::start` to produce `r2`:
 //! ```
-//! # use opaque_ke::{opaque::{ClientRegistration, ServerRegistration}, keypair::{KeyPair, X25519KeyPair, SizedBytes}};
-//! # use opaque_ke::errors::ProtocolError;
+//! # use opaque_ke::{
+//! #   errors::ProtocolError,
+//! #   opaque::{ClientRegistration, ServerRegistration},
+//! #   keypair::{KeyPair, X25519KeyPair, SizedBytes},
+//! #   slow_hash::NoOpHash,
+//! # };
 //! # use curve25519_dalek::ristretto::RistrettoPoint;
 //! # use chacha20poly1305::ChaCha20Poly1305;
 //! # use rand_core::{OsRng, RngCore};
@@ -94,8 +106,12 @@
 //! with the server's static public key `server_kp.public()`, and uses `client_state` from the first step to run
 //! `finish` and produce a message `r3` along with the key derivation key `kd_key_registration`:
 //! ```
-//! # use opaque_ke::{opaque::{ClientRegistration, ServerRegistration}, keypair::{KeyPair, X25519KeyPair, SizedBytes}};
-//! # use opaque_ke::errors::ProtocolError;
+//! # use opaque_ke::{
+//! #   errors::ProtocolError,
+//! #   opaque::{ClientRegistration, ServerRegistration},
+//! #   keypair::{KeyPair, X25519KeyPair, SizedBytes},
+//! #   slow_hash::NoOpHash,
+//! # };
 //! # use curve25519_dalek::ristretto::RistrettoPoint;
 //! # use chacha20poly1305::ChaCha20Poly1305;
 //! # use rand_core::{OsRng, RngCore};
@@ -113,7 +129,7 @@
 //! #     )?;
 //! # let server_kp = X25519KeyPair::generate_random(&mut server_rng)?;
 //! let (r3, kd_key_registration) =
-//!     client_state.finish::<_, X25519KeyPair>(r2, server_kp.public(), &mut client_rng)?;
+//!     client_state.finish::<_, X25519KeyPair, NoOpHash>(r2, server_kp.public(), &mut client_rng)?;
 //! # Ok::<(), ProtocolError>(())
 //! ```
 //! `r3` is sent to the server, and the client can optionally use `kd_key_registration` for applications that choose to
@@ -122,8 +138,12 @@
 //! In the fourth step of registration, the server takes as input the `r3` message from the client and uses
 //! `server_state` from the second step to run `finish` and produce `password_file`:
 //! ```
-//! # use opaque_ke::{opaque::{ClientRegistration, ServerRegistration}, keypair::{KeyPair, X25519KeyPair, SizedBytes}};
-//! # use opaque_ke::errors::ProtocolError;
+//! # use opaque_ke::{
+//! #   errors::ProtocolError,
+//! #   opaque::{ClientRegistration, ServerRegistration},
+//! #   keypair::{KeyPair, X25519KeyPair, SizedBytes},
+//! #   slow_hash::NoOpHash,
+//! # };
 //! # use curve25519_dalek::ristretto::RistrettoPoint;
 //! # use chacha20poly1305::ChaCha20Poly1305;
 //! # use rand_core::{OsRng, RngCore};
@@ -141,7 +161,7 @@
 //! #     )?;
 //! # let server_kp = X25519KeyPair::generate_random(&mut server_rng)?;
 //! # let (r3, kd_key_registration) =
-//! #     client_state.finish::<_, X25519KeyPair>(r2, server_kp.public(), &mut client_rng)?;
+//! #     client_state.finish::<_, X25519KeyPair, NoOpHash>(r2, server_kp.public(), &mut client_rng)?;
 //! let password_file = server_state.finish(r3)?;
 //! # Ok::<(), ProtocolError>(())
 //! ```
@@ -159,8 +179,12 @@
 //! In the first step (client login start), the client chooses a registration password and an optional "pepper", and runs
 //! `ClientLogin::start` to produce a message `l1`:
 //! ```
-//! # use opaque_ke::{opaque::{ClientRegistration, ServerRegistration, ClientLogin, ServerLogin, LoginThirdMessage}, keypair::{KeyPair, X25519KeyPair, SizedBytes}};
-//! # use opaque_ke::errors::ProtocolError;
+//! # use opaque_ke::{
+//! #   errors::ProtocolError,
+//! #   opaque::{ClientRegistration, ServerRegistration, ClientLogin, ServerLogin, LoginThirdMessage},
+//! #   keypair::{KeyPair, X25519KeyPair, SizedBytes},
+//! #   slow_hash::NoOpHash,
+//! # };
 //! # use curve25519_dalek::ristretto::RistrettoPoint;
 //! # use chacha20poly1305::ChaCha20Poly1305;
 //! # use rand_core::{OsRng, RngCore};
@@ -178,8 +202,12 @@
 //! private key `server_kp.private()`, along with a serialized version of the password file, `password_file_bytes`, and
 //! runs `ServerLogin::start` to produce `l2`:
 //! ```
-//! # use opaque_ke::{opaque::{ClientRegistration, ServerRegistration, ClientLogin, ServerLogin, LoginThirdMessage}, keypair::{KeyPair, X25519KeyPair, SizedBytes}};
-//! # use opaque_ke::errors::ProtocolError;
+//! # use opaque_ke::{
+//! #   errors::ProtocolError,
+//! #   opaque::{ClientRegistration, ServerRegistration, ClientLogin, ServerLogin, LoginThirdMessage},
+//! #   keypair::{KeyPair, X25519KeyPair, SizedBytes},
+//! #   slow_hash::NoOpHash,
+//! # };
 //! # use curve25519_dalek::ristretto::RistrettoPoint;
 //! # use chacha20poly1305::ChaCha20Poly1305;
 //! # use rand_core::{OsRng, RngCore};
@@ -197,7 +225,7 @@
 //! #     )?;
 //! # let server_kp = X25519KeyPair::generate_random(&mut server_rng)?;
 //! # let (r3, kd_key_registration) =
-//! #     client_state.finish::<_, X25519KeyPair>(r2, server_kp.public(), &mut client_rng)?;
+//! #     client_state.finish::<_, X25519KeyPair, NoOpHash>(r2, server_kp.public(), &mut client_rng)?;
 //! # let password_file_bytes = server_state.finish(r3)?.to_bytes();
 //! # let (l1, client_state) = ClientLogin::<ChaCha20Poly1305, RistrettoPoint, X25519KeyPair>::start(
 //! #   b"password",
@@ -220,8 +248,12 @@
 //! server's static public key `server_kp.public()`, and uses `client_state` from the first step to run `finish` and produce
 //! a message `l3`, the shared secret `client_shared_secret`, and the key derivation key `kd_key_login`:
 //! ```
-//! # use opaque_ke::{opaque::{ClientRegistration, ServerRegistration, ClientLogin, ServerLogin, LoginThirdMessage}, keypair::{KeyPair, X25519KeyPair, SizedBytes}};
-//! # use opaque_ke::errors::ProtocolError;
+//! # use opaque_ke::{
+//! #   errors::ProtocolError,
+//! #   opaque::{ClientRegistration, ServerRegistration, ClientLogin, ServerLogin, LoginThirdMessage},
+//! #   keypair::{KeyPair, X25519KeyPair, SizedBytes},
+//! #   slow_hash::NoOpHash,
+//! # };
 //! # use curve25519_dalek::ristretto::RistrettoPoint;
 //! # use chacha20poly1305::ChaCha20Poly1305;
 //! # use rand_core::{OsRng, RngCore};
@@ -239,7 +271,7 @@
 //! #     )?;
 //! # let server_kp = X25519KeyPair::generate_random(&mut server_rng)?;
 //! # let (r3, kd_key_registration) =
-//! #     client_state.finish::<_, X25519KeyPair>(r2, server_kp.public(), &mut client_rng)?;
+//! #     client_state.finish::<_, X25519KeyPair, NoOpHash>(r2, server_kp.public(), &mut client_rng)?;
 //! # let password_file_bytes = server_state.finish(r3)?.to_bytes();
 //! # let (l1, client_state) = ClientLogin::<ChaCha20Poly1305, RistrettoPoint, X25519KeyPair>::start(
 //! #   b"password",
@@ -253,7 +285,7 @@
 //! #   )?;
 //! # let (l2, server_state) =
 //! #     ServerLogin::start(password_file, &server_kp.private(), l1, &mut server_rng)?;
-//! let (l3, client_shared_secret, kd_key_login) = client_state.finish(
+//! let (l3, client_shared_secret, kd_key_login) = client_state.finish::<_, NoOpHash>(
 //!   l2,
 //!   &server_kp.public(),
 //!   &mut client_rng,
@@ -271,8 +303,12 @@
 //! In the fourth step of login, the server takes as input the `l3` message from the client and uses `server_state` from
 //! the second step to run `finish`:
 //! ```
-//! # use opaque_ke::{opaque::{ClientRegistration, ServerRegistration, ClientLogin, ServerLogin, LoginThirdMessage}, keypair::{KeyPair, X25519KeyPair, SizedBytes}};
-//! # use opaque_ke::errors::ProtocolError;
+//! # use opaque_ke::{
+//! #   errors::ProtocolError,
+//! #   opaque::{ClientRegistration, ServerRegistration, ClientLogin, ServerLogin, LoginThirdMessage},
+//! #   keypair::{KeyPair, X25519KeyPair, SizedBytes},
+//! #   slow_hash::NoOpHash,
+//! # };
 //! # use curve25519_dalek::ristretto::RistrettoPoint;
 //! # use chacha20poly1305::ChaCha20Poly1305;
 //! # use rand_core::{OsRng, RngCore};
@@ -290,7 +326,7 @@
 //! #     )?;
 //! # let server_kp = X25519KeyPair::generate_random(&mut server_rng)?;
 //! # let (r3, kd_key) =
-//! #     client_state.finish::<_, X25519KeyPair>(r2, server_kp.public(), &mut client_rng)?;
+//! #     client_state.finish::<_, X25519KeyPair, NoOpHash>(r2, server_kp.public(), &mut client_rng)?;
 //! # let password_file_bytes = server_state.finish(r3)?.to_bytes();
 //! # let (l1, client_state) = ClientLogin::<ChaCha20Poly1305, RistrettoPoint, X25519KeyPair>::start(
 //! #   b"password",
@@ -304,7 +340,7 @@
 //! #   )?;
 //! # let (l2, server_state) =
 //! #     ServerLogin::start(password_file, &server_kp.private(), l1, &mut server_rng)?;
-//! # let (l3, client_shared_secret, kd_key) = client_state.finish(
+//! # let (l3, client_shared_secret, kd_key) = client_state.finish::<_, NoOpHash>(
 //! #   l2,
 //! #   &server_kp.public(),
 //! #   &mut client_rng,
@@ -332,6 +368,7 @@ mod oprf;
 // Technical module for your choice of cyclic subgroup to
 // do the oprf on
 mod group;
+pub mod slow_hash;
 
 #[cfg(test)]
 mod tests;

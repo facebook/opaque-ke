@@ -16,6 +16,7 @@ use crate::{
     oprf,
     oprf::OprfClientBytes,
     rkr_encryption::{RKRCipher, RKRCiphertext},
+    slow_hash::SlowHash,
 };
 use generic_array::{
     typenum::{Unsigned, U32, U64},
@@ -363,6 +364,7 @@ where
     /// use opaque_ke::{opaque::{ClientRegistration, ServerRegistration}, keypair::{X25519KeyPair, SizedBytes}};
     /// # use opaque_ke::errors::ProtocolError;
     /// # use opaque_ke::keypair::KeyPair;
+    /// # use opaque_ke::slow_hash::NoOpHash;
     /// use rand_core::{OsRng, RngCore};
     /// use chacha20poly1305::ChaCha20Poly1305;
     /// use curve25519_dalek::ristretto::RistrettoPoint;
@@ -373,10 +375,10 @@ where
     /// let (register_m2, server_state) =
     /// ServerRegistration::<ChaCha20Poly1305, RistrettoPoint, X25519KeyPair>::start(register_m1, &mut server_rng)?;
     /// let mut client_rng = OsRng;
-    /// let register_m3 = client_state.finish::<_, X25519KeyPair>(register_m2, server_kp.public(), &mut client_rng)?;
+    /// let register_m3 = client_state.finish::<_, X25519KeyPair, NoOpHash>(register_m2, server_kp.public(), &mut client_rng)?;
     /// # Ok::<(), ProtocolError>(())
     /// ```
-    pub fn finish<R: CryptoRng + RngCore, KeyFormat: KeyPair>(
+    pub fn finish<R: CryptoRng + RngCore, KeyFormat: KeyPair, SH: SlowHash>(
         self,
         r2: RegisterSecondMessage<Grp>,
         server_s_pk: &KeyFormat::Repr,
@@ -384,8 +386,11 @@ where
     ) -> Result<ClientRegistrationFinishResult<Aead, KeyFormat>, ProtocolError> {
         let client_static_keypair = KeyFormat::generate_random(rng)?;
 
-        let password_derived_key =
-            get_password_derived_key::<Grp>(self.password.clone(), r2.beta, &self.blinding_factor)?;
+        let password_derived_key = get_password_derived_key::<Grp, SH>(
+            self.password.clone(),
+            r2.beta,
+            &self.blinding_factor,
+        )?;
         let h = Hkdf::<Sha256>::new(None, &password_derived_key);
         let mut okm = [0u8; 3 * DERIVED_KEY_LEN];
         h.expand(STR_ENVU, &mut okm)
@@ -572,6 +577,7 @@ where
     /// use opaque_ke::{opaque::*, keypair::{X25519KeyPair, SizedBytes}};
     /// # use opaque_ke::errors::ProtocolError;
     /// # use opaque_ke::keypair::KeyPair;
+    /// # use opaque_ke::slow_hash::NoOpHash;
     /// use rand_core::{OsRng, RngCore};
     /// use chacha20poly1305::ChaCha20Poly1305;
     /// use curve25519_dalek::ristretto::RistrettoPoint;
@@ -582,7 +588,7 @@ where
     /// let (register_m2, server_state) =
     /// ServerRegistration::<ChaCha20Poly1305, RistrettoPoint, X25519KeyPair>::start(register_m1, &mut server_rng)?;
     /// let mut client_rng = OsRng;
-    /// let (register_m3, _opaque_key) = client_state.finish(register_m2, server_kp.public(), &mut client_rng)?;
+    /// let (register_m3, _opaque_key) = client_state.finish::<_, _, NoOpHash>(register_m2, server_kp.public(), &mut client_rng)?;
     /// let client_record = server_state.finish(register_m3)?;
     /// # Ok::<(), ProtocolError>(())
     /// ```
@@ -722,6 +728,7 @@ where
     /// # use opaque_ke::opaque::{ClientRegistration, ServerRegistration};
     /// # use opaque_ke::errors::ProtocolError;
     /// # use opaque_ke::keypair::{X25519KeyPair, KeyPair};
+    /// # use opaque_ke::slow_hash::NoOpHash;
     /// use rand_core::{OsRng, RngCore};
     /// use chacha20poly1305::ChaCha20Poly1305;
     /// use curve25519_dalek::ristretto::RistrettoPoint;
@@ -730,14 +737,14 @@ where
     /// # let (register_m1, client_state) = ClientRegistration::<ChaCha20Poly1305, RistrettoPoint>::start(b"hunter2", None, &mut client_rng)?;
     /// # let server_kp = X25519KeyPair::generate_random(&mut server_rng)?;
     /// # let (register_m2, server_state) = ServerRegistration::<ChaCha20Poly1305, RistrettoPoint, X25519KeyPair>::start(register_m1, &mut server_rng)?;
-    /// # let (register_m3, _opaque_key) = client_state.finish(register_m2, server_kp.public(), &mut client_rng)?;
+    /// # let (register_m3, _opaque_key) = client_state.finish::<_, _, NoOpHash>(register_m2, server_kp.public(), &mut client_rng)?;
     /// # let p_file = server_state.finish(register_m3)?;
     /// let (login_m1, client_login_state) = ClientLogin::<ChaCha20Poly1305, RistrettoPoint, X25519KeyPair>::start(b"hunter2", None, &mut client_rng)?;
     /// let (login_m2, server_login_state) = ServerLogin::start(p_file, &server_kp.private(), login_m1, &mut server_rng)?;
-    /// let (login_m3, client_transport, _opaque_key) = client_login_state.finish(login_m2, &server_kp.public(), &mut client_rng)?;
+    /// let (login_m3, client_transport, _opaque_key) = client_login_state.finish::<_, NoOpHash>(login_m2, &server_kp.public(), &mut client_rng)?;
     /// # Ok::<(), ProtocolError>(())
     /// ```
-    pub fn finish<R: RngCore + CryptoRng>(
+    pub fn finish<R: RngCore + CryptoRng, SH: SlowHash>(
         self,
         l2: LoginSecondMessage<Aead, Grp>,
         server_s_pk: &KeyFormat::Repr,
@@ -745,8 +752,11 @@ where
     ) -> Result<ClientLoginFinishResult, ProtocolError> {
         let l2_bytes: Vec<u8> = [l2.beta.to_bytes().as_slice(), &l2.envelope.to_bytes()].concat();
 
-        let password_derived_key =
-            get_password_derived_key::<Grp>(self.password.clone(), l2.beta, &self.blinding_factor)?;
+        let password_derived_key = get_password_derived_key::<Grp, SH>(
+            self.password.clone(),
+            l2.beta,
+            &self.blinding_factor,
+        )?;
         let h = Hkdf::<Sha256>::new(None, &password_derived_key);
         let mut okm = [0u8; 3 * DERIVED_KEY_LEN];
         h.expand(STR_ENVU, &mut okm)
@@ -812,6 +822,7 @@ impl ServerLogin {
     /// # use opaque_ke::opaque::{ClientRegistration,  ServerRegistration};
     /// # use opaque_ke::errors::ProtocolError;
     /// # use opaque_ke::keypair::{KeyPair, X25519KeyPair};
+    /// # use opaque_ke::slow_hash::NoOpHash;
     /// use rand_core::{OsRng, RngCore};
     /// use chacha20poly1305::ChaCha20Poly1305;
     /// use curve25519_dalek::ristretto::RistrettoPoint;
@@ -821,7 +832,7 @@ impl ServerLogin {
     /// # let (register_m1, client_state) = ClientRegistration::<ChaCha20Poly1305, RistrettoPoint>::start(b"hunter2", None, &mut client_rng)?;
     /// # let (register_m2, server_state) =
     /// ServerRegistration::<ChaCha20Poly1305, RistrettoPoint, X25519KeyPair>::start(register_m1, &mut server_rng)?;
-    /// # let (register_m3, _opaque_key) = client_state.finish(register_m2, server_kp.public(), &mut client_rng)?;
+    /// # let (register_m3, _opaque_key) = client_state.finish::<_, _, NoOpHash>(register_m2, server_kp.public(), &mut client_rng)?;
     /// # let p_file = server_state.finish(register_m3)?;
     /// let (login_m1, client_login_state) = ClientLogin::<ChaCha20Poly1305, RistrettoPoint, X25519KeyPair>::start(b"hunter2", None, &mut client_rng)?;
     /// let (login_m2, server_login_state) = ServerLogin::start(p_file, &server_kp.private(), login_m1, &mut server_rng)?;
@@ -880,6 +891,7 @@ impl ServerLogin {
     /// # use opaque_ke::opaque::{ClientRegistration,  ServerRegistration};
     /// # use opaque_ke::errors::ProtocolError;
     /// # use opaque_ke::keypair::{KeyPair, X25519KeyPair};
+    /// # use opaque_ke::slow_hash::NoOpHash;
     /// use rand_core::{OsRng, RngCore};
     /// use chacha20poly1305::ChaCha20Poly1305;
     /// use curve25519_dalek::ristretto::RistrettoPoint;
@@ -889,11 +901,11 @@ impl ServerLogin {
     /// # let (register_m1, client_state) = ClientRegistration::<ChaCha20Poly1305, RistrettoPoint>::start(b"hunter2", None, &mut client_rng)?;
     /// # let (register_m2, server_state) =
     /// ServerRegistration::<ChaCha20Poly1305, RistrettoPoint, X25519KeyPair>::start(register_m1, &mut server_rng)?;
-    /// # let (register_m3, _opaque_key) = client_state.finish(register_m2, server_kp.public(), &mut client_rng)?;
+    /// # let (register_m3, _opaque_key) = client_state.finish::<_, _, NoOpHash>(register_m2, server_kp.public(), &mut client_rng)?;
     /// # let p_file = server_state.finish(register_m3)?;
     /// let (login_m1, client_login_state) = ClientLogin::<ChaCha20Poly1305, RistrettoPoint, X25519KeyPair>::start(b"hunter2", None, &mut client_rng)?;
     /// let (login_m2, server_login_state) = ServerLogin::start(p_file, &server_kp.private(), login_m1, &mut server_rng)?;
-    /// let (login_m3, client_transport, _opaque_key) = client_login_state.finish(login_m2, &server_kp.public(), &mut client_rng)?;
+    /// let (login_m3, client_transport, _opaque_key) = client_login_state.finish::<_, NoOpHash>(login_m2, &server_kp.public(), &mut client_rng)?;
     /// let mut server_transport = server_login_state.finish(login_m3)?;
     /// # Ok::<(), ProtocolError>(())
     /// ```
@@ -909,10 +921,11 @@ impl ServerLogin {
 
 // Helper functions
 
-fn get_password_derived_key<G: Group>(
+fn get_password_derived_key<G: Group, SH: SlowHash>(
     password: Vec<u8>,
     beta: G,
     blinding_factor: &G::Scalar,
-) -> Result<GenericArray<u8, <Sha256 as Digest>::OutputSize>, PakeError> {
-    Ok(oprf::generate_oprf3::<G>(&password, beta, blinding_factor)?)
+) -> Result<Vec<u8>, InternalPakeError> {
+    let oprf_output = oprf::generate_oprf3::<G>(&password, beta, blinding_factor)?;
+    SH::hash(oprf_output)
 }
