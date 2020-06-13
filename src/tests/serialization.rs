@@ -5,7 +5,7 @@
 
 use crate::{
     group::Group,
-    keypair::{KeyPair, SignalKeyPair, SizedBytes},
+    keypair::{KeyPair, SizedBytes, X25519KeyPair},
     opaque::*,
     rkr_encryption::{RKRCipher as _, RKRCiphertext},
 };
@@ -43,7 +43,7 @@ fn server_registration_roundtrip() {
     let sc = <RistrettoPoint as Group>::random_scalar(&mut rng);
     let mut oprf_bytes: Vec<u8> = vec![];
     oprf_bytes.extend_from_slice(sc.as_bytes());
-    let reg = ServerRegistration::<ChaCha20Poly1305, RistrettoPoint, SignalKeyPair>::try_from(
+    let reg = ServerRegistration::<ChaCha20Poly1305, RistrettoPoint, X25519KeyPair>::try_from(
         &oprf_bytes[..],
     )
     .unwrap();
@@ -55,14 +55,14 @@ fn server_registration_roundtrip() {
     let mut mock_rkr_bytes = vec![0u8; rkr_size];
     rng.fill_bytes(&mut mock_rkr_bytes);
     println!("{}", mock_rkr_bytes.len());
-    let mock_client_kp = SignalKeyPair::generate_random(&mut rng).unwrap();
+    let mock_client_kp = X25519KeyPair::generate_random(&mut rng).unwrap();
     // serialization order: scalar, public key, envelope
     let mut bytes = Vec::<u8>::new();
     bytes.extend_from_slice(sc.as_bytes());
     bytes.extend_from_slice(&mock_client_kp.public().to_arr());
     bytes.extend_from_slice(&mock_rkr_bytes);
     let reg =
-        ServerRegistration::<ChaCha20Poly1305, RistrettoPoint, SignalKeyPair>::try_from(&bytes[..])
+        ServerRegistration::<ChaCha20Poly1305, RistrettoPoint, X25519KeyPair>::try_from(&bytes[..])
             .unwrap();
     let reg_bytes = reg.to_bytes();
     assert_eq!(reg_bytes, bytes);
@@ -91,7 +91,7 @@ fn register_second_message_roundtrip() {
 #[test]
 fn register_third_message_roundtrip() {
     let mut rng = OsRng;
-    let skp = SignalKeyPair::generate_random(&mut rng).unwrap();
+    let skp = X25519KeyPair::generate_random(&mut rng).unwrap();
     let pubkey_bytes = skp.public().to_arr();
 
     let mut encryption_key = [0u8; 32];
@@ -113,7 +113,7 @@ fn register_third_message_roundtrip() {
 
     let message: Vec<u8> = [&ciphertext.to_bytes(), &pubkey_bytes[..]].concat();
     let r3 =
-        RegisterThirdMessage::<ChaCha20Poly1305, SignalKeyPair>::try_from(&message[..]).unwrap();
+        RegisterThirdMessage::<ChaCha20Poly1305, X25519KeyPair>::try_from(&message[..]).unwrap();
     let r3_bytes = r3.to_bytes();
     assert_eq!(message, r3_bytes);
 }

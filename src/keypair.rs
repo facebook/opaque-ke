@@ -11,7 +11,12 @@ use generic_array::{
     typenum::{Sum, Unsigned, U32},
     ArrayLength, GenericArray,
 };
+#[cfg(test)]
+use proptest::prelude::*;
+#[cfg(test)]
+use rand::{rngs::StdRng, SeedableRng};
 use rand_core::{CryptoRng, RngCore};
+use std::fmt::Debug;
 use x25519_dalek::{PublicKey, StaticSecret};
 
 use std::convert::TryFrom;
@@ -34,7 +39,7 @@ pub trait SizedBytes: Sized + PartialEq {
 }
 
 /// A Keypair trait with public-private verification
-pub trait KeyPair: Sized {
+pub trait KeyPair: Sized + Debug {
     /// The single key representation must have a specific byte size itself
     type Repr: SizedBytes + Clone;
 
@@ -63,6 +68,21 @@ pub trait KeyPair: Sized {
 
     /// Computes the diffie hellman function on a public key and private key
     fn diffie_hellman(pk: Self::Repr, sk: Self::Repr) -> Vec<u8>;
+
+    /// Test-only strategy returning a proptest Strategy based on
+    /// generate_random
+    #[cfg(test)]
+    fn uniform_keypair_strategy() -> BoxedStrategy<Self> {
+        // The no_shrink is because keypairs should be fixed -- shrinking would cause a different
+        // keypair to be generated, which appears to not be very useful.
+        any::<[u8; 32]>()
+            .prop_filter_map("valid random keypair", |seed| {
+                let mut rng = StdRng::from_seed(seed);
+                Self::generate_random(&mut rng).ok()
+            })
+            .no_shrink()
+            .boxed()
+    }
 }
 
 /// This is a blanket implementation of SizedBytes for any instance of KeyPair
@@ -95,7 +115,7 @@ where
 }
 
 /// A minimalist key type built around [u8;32]
-#[derive(PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 #[repr(transparent)]
 pub struct Key(Vec<u8>);
 
@@ -130,7 +150,7 @@ impl SizedBytes for Key {
 }
 
 /// A representation of an X25519 keypair according to RFC7748
-#[derive(PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct X25519KeyPair {
     pk: Key,
     sk: Key,
@@ -199,85 +219,33 @@ impl KeyPair for X25519KeyPair {
     }
 }
 
-/// A custom, minimalistic Key pair struct built on Key, aimed at reproducing the behavior of libsignal's keypairs
-#[derive(PartialEq)]
-pub struct SignalKeyPair {
-    pk: Key,
-    sk: Key,
-}
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-impl SignalKeyPair {
-    fn clamp_scalar(mut scalar: [u8; 32]) -> ::curve25519_dalek::scalar::Scalar {
-        scalar[0] &= 248;
-        scalar[31] &= 127;
-        scalar[31] |= 64;
-
-        ::curve25519_dalek::scalar::Scalar::from_bits(scalar)
-    }
-
-    fn gen<R: RngCore + CryptoRng>(rng: &mut R) -> (Vec<u8>, Vec<u8>) {
-        let mut bits = [0u8; 32];
-        rng.fill_bytes(&mut bits);
-
-        // It's proper to sanitize the scalar here, and reproduces x25519::StaticSecret::new
-        let sk = SignalKeyPair::clamp_scalar(bits);
-        let pk = ::curve25519_dalek::constants::X25519_BASEPOINT * sk;
-
-        (pk.as_bytes().to_vec(), sk.as_bytes().to_vec())
-    }
-}
-
-impl KeyPair for SignalKeyPair {
-    type Repr = Key;
-
-    fn public(&self) -> &Self::Repr {
-        &self.pk
-    }
-
-    fn private(&self) -> &Self::Repr {
-        &self.sk
-    }
-
-    fn new(public: Self::Repr, private: Self::Repr) -> Result<Self, InternalPakeError> {
-        Ok(SignalKeyPair {
-            pk: public,
-            sk: private,
-        })
-    }
-
-    fn generate_random<R: RngCore + CryptoRng>(rng: &mut R) -> Result<Self, InternalPakeError> {
-        let (public, private) = SignalKeyPair::gen(rng);
-        Ok(SignalKeyPair {
-            pk: Key(public),
-            sk: Key(private),
-        })
-    }
-
-    fn public_from_private(secret: &Self::Repr) -> Self::Repr {
-        let mut secret_data = [0u8; 32];
-        secret_data.copy_from_slice(&secret.0[..]);
-        let base_data = ::x25519_dalek::X25519_BASEPOINT_BYTES;
-        Key(::x25519_dalek::x25519(secret_data, base_data).to_vec())
-    }
-
-    fn check_public_key(key: Self::Repr) -> Result<Self::Repr, InternalPakeError> {
-        let mut key_bytes = [0u8; 32];
-        key_bytes.copy_from_slice(&key);
-        let point = ::curve25519_dalek::montgomery::MontgomeryPoint(key_bytes)
-            .to_edwards(1)
-            .ok_or(InternalPakeError::PointError)?;
-        if !point.is_torsion_free() {
-            Err(InternalPakeError::SubGroupError)
-        } else {
-            Ok(key)
+    proptest! {
+        #[test]
+        fn test_x25519_check(kp in X25519KeyPair::uniform_keypair_strategy()) {
+            let pk = kp.public();
+            prop_assert!(X25519KeyPair::check_public_key(pk.clone()).is_ok());
         }
-    }
 
-    fn diffie_hellman(pk: Self::Repr, sk: Self::Repr) -> Vec<u8> {
-        let mut pk_data = [0; 32];
-        pk_data.copy_from_slice(&pk.0[..]);
-        let mut sk_data = [0; 32];
-        sk_data.copy_from_slice(&sk.0[..]);
-        ::x25519_dalek::x25519(sk_data, pk_data).to_vec()
+        #[test]
+        fn test_x25519_pub_from_priv(kp in X25519KeyPair::uniform_keypair_strategy()) {
+            let pk = kp.public();
+            let sk = kp.private();
+            prop_assert_eq!(&X25519KeyPair::public_from_private(sk), pk);
+        }
+
+
+        #[test]
+        fn test_x25519_dh(kp1 in X25519KeyPair::uniform_keypair_strategy(),
+                          kp2 in X25519KeyPair::uniform_keypair_strategy()) {
+
+            let dh1 = X25519KeyPair::diffie_hellman(kp1.public().clone(), kp2.private().clone());
+            let dh2 = X25519KeyPair::diffie_hellman(kp2.public().clone(), kp1.private().clone());
+
+            prop_assert_eq!(dh1,dh2);
+        }
     }
 }
