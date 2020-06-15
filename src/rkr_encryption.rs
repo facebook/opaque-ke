@@ -6,7 +6,7 @@
 use crate::errors::{utils::check_slice_size, InternalPakeError, PakeError};
 use aead::{Aead, NewAead};
 use generic_array::{typenum::Unsigned, GenericArray};
-use hmac::{Hmac, Mac};
+use hmac::{Hmac, Mac, NewMac};
 use rand_core::{CryptoRng, RngCore};
 use sha2::{Digest, Sha256};
 
@@ -83,7 +83,7 @@ pub trait RKRCipher: Sized {
         rng.fill_bytes(&mut nonce);
         let gen_nonce = GenericArray::from_slice(&nonce[..]);
 
-        let ciphertext = <Self::AEAD as NewAead>::new(*GenericArray::from_slice(&encryption_key))
+        let ciphertext = <Self::AEAD as NewAead>::new(GenericArray::from_slice(&encryption_key))
             .encrypt(
                 GenericArray::from_slice(&nonce),
                 aead::Payload {
@@ -95,11 +95,11 @@ pub trait RKRCipher: Sized {
 
         let mut mac =
             Hmac::<Sha256>::new_varkey(&hmac_key).map_err(|_| InternalPakeError::HmacError)?;
-        mac.input(&ciphertext);
+        mac.update(&ciphertext);
 
         Ok(<Self as RKRCipher>::new(
             ciphertext,
-            &mac.result().code(),
+            &mac.finalize().into_bytes(),
             gen_nonce,
         ))
     }
@@ -112,13 +112,13 @@ pub trait RKRCipher: Sized {
     ) -> Result<Vec<u8>, PakeError> {
         let mut mac =
             Hmac::<Sha256>::new_varkey(&hmac_key).map_err(|_| InternalPakeError::HmacError)?;
-        mac.input(self.aead_output());
+        mac.update(self.aead_output());
         if mac.verify(self.hmac()).is_err() {
             return Err(PakeError::DecryptionHmacError);
         }
 
         Aead::decrypt(
-            &<Self::AEAD as NewAead>::new(*GenericArray::from_slice(&encryption_key)),
+            &<Self::AEAD as NewAead>::new(GenericArray::from_slice(&encryption_key)),
             self.nonce(),
             aead::Payload {
                 msg: self.aead_output(),

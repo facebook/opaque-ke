@@ -9,8 +9,9 @@ use crate::{
 };
 use generic_array::GenericArray;
 use hkdf::Hkdf;
-use hmac::{Hmac, Mac};
+use hmac::{Hmac, Mac, NewMac};
 use rand_core::{CryptoRng, RngCore};
+
 use sha2::{Digest, Sha256};
 use std::convert::TryFrom;
 
@@ -99,8 +100,8 @@ pub(crate) fn generate_ke1<R: RngCore + CryptoRng, KeyFormat: KeyPair<Repr = Key
 
     let l1_data: Vec<u8> = [&l1_component[..], &ke1_message.to_bytes()].concat();
     let mut hasher = Sha256::new();
-    hasher.input(&l1_data);
-    let hashed_l1 = hasher.result();
+    hasher.update(&l1_data);
+    let hashed_l1 = hasher.finalize();
 
     Ok((
         KE1State {
@@ -259,8 +260,8 @@ pub(crate) fn generate_ke2<R: RngCore + CryptoRng, KeyFormat: KeyPair<Repr = Key
     )?;
 
     let mut hasher = Sha256::new();
-    hasher.input(&l1_bytes);
-    let hashed_l1 = hasher.result();
+    hasher.update(&l1_bytes);
+    let hashed_l1 = hasher.finalize();
 
     let transcript2: Vec<u8> = [
         &hashed_l1[..],
@@ -271,11 +272,11 @@ pub(crate) fn generate_ke2<R: RngCore + CryptoRng, KeyFormat: KeyPair<Repr = Key
     .concat();
 
     let mut hasher2 = Sha256::new();
-    hasher2.input(&transcript2);
-    let hashed_transcript = hasher2.result();
+    hasher2.update(&transcript2);
+    let hashed_transcript = hasher2.finalize();
 
     let mut mac = Hmac::<Sha256>::new_varkey(&km2).map_err(|_| InternalPakeError::HmacError)?;
-    mac.input(&hashed_transcript);
+    mac.update(&hashed_transcript);
 
     Ok((
         KE2State {
@@ -286,7 +287,7 @@ pub(crate) fn generate_ke2<R: RngCore + CryptoRng, KeyFormat: KeyPair<Repr = Key
         KE2Message {
             server_nonce: server_nonce.to_vec(),
             server_e_pk: server_e_kp.public().clone(),
-            mac: mac.result().code().to_vec(),
+            mac: mac.finalize().into_bytes().to_vec(),
         },
     ))
 }
@@ -360,14 +361,14 @@ pub(crate) fn generate_ke3<KeyFormat: KeyPair<Repr = Key>>(
     .concat();
 
     let mut hasher = Sha256::new();
-    hasher.input(&transcript);
-    let hashed_transcript = hasher.result();
+    hasher.update(&transcript);
+    let hashed_transcript = hasher.finalize();
 
     let mut server_mac =
         Hmac::<Sha256>::new_varkey(&km2).map_err(|_| InternalPakeError::HmacError)?;
-    server_mac.input(&hashed_transcript);
+    server_mac.update(&hashed_transcript);
 
-    if ke2_message.mac != server_mac.result().code().to_vec() {
+    if ke2_message.mac != server_mac.finalize().into_bytes().to_vec() {
         return Err(ProtocolError::VerificationError(
             PakeError::KeyExchangeMacValidationError,
         ));
@@ -375,14 +376,14 @@ pub(crate) fn generate_ke3<KeyFormat: KeyPair<Repr = Key>>(
 
     let mut client_mac =
         Hmac::<Sha256>::new_varkey(&km3).map_err(|_| InternalPakeError::HmacError)?;
-    client_mac.input(&hashed_transcript);
+    client_mac.update(&hashed_transcript);
 
     Ok((
         KE3State {
             shared_secret: shared_secret.to_vec(),
         },
         KE3Message {
-            mac: client_mac.result().code().to_vec(),
+            mac: client_mac.finalize().into_bytes().to_vec(),
         },
     ))
 }
@@ -394,9 +395,9 @@ pub(crate) fn finish_ke(
 ) -> Result<Vec<u8>, ProtocolError> {
     let mut client_mac =
         Hmac::<Sha256>::new_varkey(&ke2_state.km3).map_err(|_| InternalPakeError::HmacError)?;
-    client_mac.input(&ke2_state.hashed_transcript);
+    client_mac.update(&ke2_state.hashed_transcript);
 
-    if ke3_message.mac != client_mac.result().code().to_vec() {
+    if ke3_message.mac != client_mac.finalize().into_bytes().to_vec() {
         return Err(ProtocolError::VerificationError(
             PakeError::KeyExchangeMacValidationError,
         ));

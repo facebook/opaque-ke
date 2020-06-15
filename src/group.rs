@@ -15,6 +15,7 @@ use generic_array::{
     ArrayLength, GenericArray,
 };
 use rand_core::{CryptoRng, RngCore};
+
 use sha2::{Digest, Sha256};
 
 use std::ops::Mul;
@@ -93,10 +94,13 @@ impl Group for RistrettoPoint {
 
     type UniformBytesLen = U64;
     fn hash_to_curve(uniform_bytes: &GenericArray<u8, Self::UniformBytesLen>) -> Self {
+        // This is because RistrettoPoint is on an obsolete sha2 version
         let mut bits = [0u8; 64];
-        bits.copy_from_slice(uniform_bytes);
-        // This could really be a from_uniform_bytes!
-        RistrettoPoint::hash_from_bytes::<sha2::Sha512>(&bits)
+        let mut hasher = sha2::Sha512::new();
+        hasher.update(uniform_bytes);
+        bits.copy_from_slice(&hasher.finalize());
+
+        RistrettoPoint::from_uniform_bytes(&bits)
     }
 }
 
@@ -147,7 +151,7 @@ impl Group for EdwardsPoint {
                 &Sha256::new()
                     .chain(&uniform_bytes[..32])
                     .chain(&[counter])
-                    .result()[..32],
+                    .finalize()[..32],
             );
             wrapped_point = CompressedEdwardsY::from_slice(&result).decompress();
             counter += 1;

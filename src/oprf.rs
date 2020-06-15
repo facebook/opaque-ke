@@ -7,6 +7,7 @@ use crate::{errors::InternalPakeError, group::Group};
 use generic_array::{typenum::U64, GenericArray};
 use hkdf::Hkdf;
 use rand_core::{CryptoRng, RngCore};
+
 use sha2::{Digest, Sha256};
 
 // Low-level API
@@ -67,7 +68,7 @@ mod tests {
     use super::*;
     use crate::group::Group;
     use curve25519_dalek::ristretto::RistrettoPoint;
-    use generic_array::{arr, arr_impl, GenericArray};
+    use generic_array::{arr, GenericArray};
     use hkdf::Hkdf;
     use rand_core::OsRng;
 
@@ -122,7 +123,13 @@ mod tests {
         let mut curve_input: Vec<u8> = Vec::new();
         curve_input.extend_from_slice(&hashed_input);
         curve_input.extend_from_slice(&[0u8; 32]);
-        let point = RistrettoPoint::hash_from_bytes::<sha2::Sha512>(&curve_input);
+        // This is because RistrettoPoint is on an obsolete sha2 version
+        let mut bits = [0u8; 64];
+        let mut hasher = sha2::Sha512::new();
+        hasher.update(&curve_input[..]);
+        bits.copy_from_slice(&hasher.finalize());
+
+        let point = RistrettoPoint::from_uniform_bytes(&bits);
         let mut ikm: Vec<u8> = Vec::new();
         ikm.extend_from_slice(&point.to_bytes());
         ikm.extend_from_slice(&input);

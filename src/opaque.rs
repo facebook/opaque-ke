@@ -25,6 +25,7 @@ use generic_array::{
 };
 use hkdf::Hkdf;
 use rand_core::{CryptoRng, RngCore};
+
 use sha2::{Digest, Sha256};
 use std::{convert::TryFrom, marker::PhantomData};
 use zeroize::Zeroize;
