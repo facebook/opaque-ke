@@ -4,12 +4,12 @@
 // LICENSE file in the root directory of this source tree.
 
 use crate::{
+    ciphersuite::CipherSuite,
     errors::*,
     group::Group,
     key_exchange::NONCE_LEN,
-    keypair::{Key, KeyPair, X25519KeyPair},
+    keypair::{Key, KeyPair},
     opaque::*,
-    slow_hash::NoOpHash,
     tests::mock_rng::CycleRng,
 };
 use aes_gcm::Aes256Gcm;
@@ -20,6 +20,14 @@ use std::convert::TryFrom;
 
 // Tests
 // =====
+
+struct AesgcmX255193dhNoSlowHash;
+impl CipherSuite for AesgcmX255193dhNoSlowHash {
+    type Aead = Aes256Gcm;
+    type Group = EdwardsPoint;
+    type KeyFormat = crate::keypair::X25519KeyPair;
+    type SlowHash = crate::slow_hash::NoOpHash;
+}
 
 pub struct TestVectorParameters {
     pub client_s_pk: Vec<u8>,
@@ -215,10 +223,10 @@ fn generate_parameters() -> TestVectorParameters {
     let mut rng = OsRng;
 
     // Inputs
-    let server_s_kp = X25519KeyPair::generate_random(&mut rng).unwrap();
-    let server_e_kp = X25519KeyPair::generate_random(&mut rng).unwrap();
-    let client_s_kp = X25519KeyPair::generate_random(&mut rng).unwrap();
-    let client_e_kp = X25519KeyPair::generate_random(&mut rng).unwrap();
+    let server_s_kp = AesgcmX255193dhNoSlowHash::generate_random_keypair(&mut rng).unwrap();
+    let server_e_kp = AesgcmX255193dhNoSlowHash::generate_random_keypair(&mut rng).unwrap();
+    let client_s_kp = AesgcmX255193dhNoSlowHash::generate_random_keypair(&mut rng).unwrap();
+    let client_e_kp = AesgcmX255193dhNoSlowHash::generate_random_keypair(&mut rng).unwrap();
     let password = b"password";
     let pepper = b"pepper";
     let mut blinding_factor_raw = [0u8; 64];
@@ -233,7 +241,7 @@ fn generate_parameters() -> TestVectorParameters {
     rng.fill_bytes(&mut server_nonce);
 
     let mut blinding_factor_registration_rng = CycleRng::new(blinding_factor_raw.to_vec());
-    let (r1, client_registration) = ClientRegistration::<Aes256Gcm, EdwardsPoint>::start(
+    let (r1, client_registration) = ClientRegistration::<AesgcmX255193dhNoSlowHash>::start(
         password,
         Some(pepper),
         &mut blinding_factor_registration_rng,
@@ -245,8 +253,7 @@ fn generate_parameters() -> TestVectorParameters {
 
     let mut oprf_key_rng = CycleRng::new(oprf_key_raw.to_vec());
     let (r2, server_registration) =
-        ServerRegistration::<Aes256Gcm, EdwardsPoint, X25519KeyPair>::start(r1, &mut oprf_key_rng)
-            .unwrap();
+        ServerRegistration::<AesgcmX255193dhNoSlowHash>::start(r1, &mut oprf_key_rng).unwrap();
     let r2_bytes = r2.to_bytes().to_vec();
     let oprf_key = server_registration.oprf_key;
     let oprf_key_bytes = EdwardsPoint::scalar_as_bytes(&oprf_key);
@@ -258,11 +265,7 @@ fn generate_parameters() -> TestVectorParameters {
 
     let mut finish_registration_rng = CycleRng::new(client_s_sk_and_nonce);
     let (r3, opaque_key_registration) = client_registration
-        .finish::<_, X25519KeyPair, NoOpHash>(
-            r2,
-            server_s_kp.public(),
-            &mut finish_registration_rng,
-        )
+        .finish(r2, server_s_kp.public(), &mut finish_registration_rng)
         .unwrap();
     let r3_bytes = r3.to_bytes().to_vec();
 
@@ -275,7 +278,7 @@ fn generate_parameters() -> TestVectorParameters {
     client_login_start.extend_from_slice(&client_nonce);
 
     let mut client_login_start_rng = CycleRng::new(client_login_start);
-    let (l1, client_login) = ClientLogin::<Aes256Gcm, EdwardsPoint, X25519KeyPair>::start(
+    let (l1, client_login) = ClientLogin::<AesgcmX255193dhNoSlowHash>::start(
         password,
         Some(pepper),
         &mut client_login_start_rng,
@@ -297,7 +300,7 @@ fn generate_parameters() -> TestVectorParameters {
 
     let mut client_e_sk_rng = CycleRng::new(client_e_kp.private().to_vec());
     let (l3, client_shared_secret, _opaque_key_login) = client_login
-        .finish::<_, NoOpHash>(l2, server_s_kp.public(), &mut client_e_sk_rng)
+        .finish(l2, server_s_kp.public(), &mut client_e_sk_rng)
         .unwrap();
     let l3_bytes = l3.to_bytes().to_vec();
 
@@ -344,7 +347,7 @@ fn generate_test_vectors() {
 fn test_r1() -> Result<(), PakeError> {
     let parameters = populate_test_vectors(&serde_json::from_str(TEST_VECTOR).unwrap());
     let mut blinding_factor_rng = CycleRng::new(parameters.blinding_factor_raw);
-    let (r1, client_registration) = ClientRegistration::<Aes256Gcm, EdwardsPoint>::start(
+    let (r1, client_registration) = ClientRegistration::<AesgcmX255193dhNoSlowHash>::start(
         &parameters.password,
         Some(&parameters.pepper),
         &mut blinding_factor_rng,
@@ -362,12 +365,11 @@ fn test_r1() -> Result<(), PakeError> {
 fn test_r2() -> Result<(), PakeError> {
     let parameters = populate_test_vectors(&serde_json::from_str(TEST_VECTOR).unwrap());
     let mut oprf_key_rng = CycleRng::new(parameters.oprf_key);
-    let (r2, server_registration) =
-        ServerRegistration::<Aes256Gcm, EdwardsPoint, X25519KeyPair>::start(
-            RegisterFirstMessage::try_from(&parameters.r1[..]).unwrap(),
-            &mut oprf_key_rng,
-        )
-        .unwrap();
+    let (r2, server_registration) = ServerRegistration::<AesgcmX255193dhNoSlowHash>::start(
+        RegisterFirstMessage::try_from(&parameters.r1[..]).unwrap(),
+        &mut oprf_key_rng,
+    )
+    .unwrap();
     assert_eq!(hex::encode(parameters.r2), hex::encode(r2.to_bytes()));
     assert_eq!(
         hex::encode(&parameters.server_registration_state),
@@ -383,11 +385,11 @@ fn test_r3() -> Result<(), PakeError> {
     let client_s_sk_and_nonce: Vec<u8> =
         [parameters.client_s_sk, parameters.envelope_nonce].concat();
     let mut finish_registration_rng = CycleRng::new(client_s_sk_and_nonce);
-    let (r3, opaque_key_registration) = ClientRegistration::<Aes256Gcm, EdwardsPoint>::try_from(
+    let (r3, opaque_key_registration) = ClientRegistration::<AesgcmX255193dhNoSlowHash>::try_from(
         &parameters.client_registration_state[..],
     )
     .unwrap()
-    .finish::<CycleRng, X25519KeyPair, NoOpHash>(
+    .finish(
         RegisterSecondMessage::try_from(&parameters.r2[..]).unwrap(),
         &Key::try_from(parameters.server_s_pk).unwrap(),
         &mut finish_registration_rng,
@@ -407,11 +409,10 @@ fn test_r3() -> Result<(), PakeError> {
 fn test_password_file() -> Result<(), PakeError> {
     let parameters = populate_test_vectors(&serde_json::from_str(TEST_VECTOR).unwrap());
 
-    let server_registration =
-        ServerRegistration::<Aes256Gcm, EdwardsPoint, X25519KeyPair>::try_from(
-            &parameters.server_registration_state[..],
-        )
-        .unwrap();
+    let server_registration = ServerRegistration::<AesgcmX255193dhNoSlowHash>::try_from(
+        &parameters.server_registration_state[..],
+    )
+    .unwrap();
     let password_file = server_registration
         .finish(RegisterThirdMessage::try_from(&parameters.r3[..]).unwrap())
         .unwrap();
@@ -434,7 +435,7 @@ fn test_l1() -> Result<(), PakeError> {
     ]
     .concat();
     let mut client_login_start_rng = CycleRng::new(client_login_start);
-    let (l1, client_login) = ClientLogin::<Aes256Gcm, EdwardsPoint, X25519KeyPair>::start(
+    let (l1, client_login) = ClientLogin::<AesgcmX255193dhNoSlowHash>::start(
         &parameters.password,
         Some(&parameters.pepper),
         &mut client_login_start_rng,
@@ -453,7 +454,7 @@ fn test_l2() -> Result<(), PakeError> {
     let parameters = populate_test_vectors(&serde_json::from_str(TEST_VECTOR).unwrap());
 
     let mut server_e_sk_rng = CycleRng::new(parameters.server_e_sk);
-    let (l2, server_login) = ServerLogin::start::<_, Aes256Gcm, _, X25519KeyPair>(
+    let (l2, server_login) = ServerLogin::start::<AesgcmX255193dhNoSlowHash, _>(
         ServerRegistration::try_from(&parameters.password_file[..]).unwrap(),
         &Key::try_from(parameters.server_s_sk).unwrap(),
         LoginFirstMessage::<EdwardsPoint>::try_from(&parameters.l1[..]).unwrap(),
@@ -475,16 +476,15 @@ fn test_l3() -> Result<(), PakeError> {
 
     let mut client_e_sk_rng = CycleRng::new(parameters.client_e_sk.to_vec());
     let (l3, shared_secret, opaque_key_login) =
-        ClientLogin::<Aes256Gcm, EdwardsPoint, X25519KeyPair>::try_from(
-            &parameters.client_login_state[..],
-        )
-        .unwrap()
-        .finish::<_, NoOpHash>(
-            LoginSecondMessage::<Aes256Gcm, EdwardsPoint>::try_from(&parameters.l2[..]).unwrap(),
-            &Key::try_from(parameters.server_s_pk)?,
-            &mut client_e_sk_rng,
-        )
-        .unwrap();
+        ClientLogin::<AesgcmX255193dhNoSlowHash>::try_from(&parameters.client_login_state[..])
+            .unwrap()
+            .finish(
+                LoginSecondMessage::<Aes256Gcm, EdwardsPoint>::try_from(&parameters.l2[..])
+                    .unwrap(),
+                &Key::try_from(parameters.server_s_pk)?,
+                &mut client_e_sk_rng,
+            )
+            .unwrap();
 
     assert_eq!(
         hex::encode(&parameters.shared_secret),
@@ -522,31 +522,24 @@ fn test_complete_flow(
 ) -> Result<(), ProtocolError> {
     let mut client_rng = OsRng;
     let mut server_rng = OsRng;
-    let server_kp = X25519KeyPair::generate_random(&mut server_rng)?;
-    let (register_m1, client_state) = ClientRegistration::<Aes256Gcm, EdwardsPoint>::start(
+    let server_kp = AesgcmX255193dhNoSlowHash::generate_random_keypair(&mut server_rng)?;
+    let (register_m1, client_state) = ClientRegistration::<AesgcmX255193dhNoSlowHash>::start(
         registration_password,
         None,
         &mut client_rng,
     )?;
     let (register_m2, server_state) =
-        ServerRegistration::<Aes256Gcm, EdwardsPoint, X25519KeyPair>::start(
-            register_m1,
-            &mut server_rng,
-        )?;
+        ServerRegistration::<AesgcmX255193dhNoSlowHash>::start(register_m1, &mut server_rng)?;
     let (register_m3, registration_opaque_key) =
-        client_state.finish::<_, _, NoOpHash>(register_m2, server_kp.public(), &mut client_rng)?;
+        client_state.finish(register_m2, server_kp.public(), &mut client_rng)?;
     let p_file = server_state.finish(register_m3)?;
     let (login_m1, client_login_state) =
-        ClientLogin::<Aes256Gcm, EdwardsPoint, X25519KeyPair>::start(
-            login_password,
-            None,
-            &mut client_rng,
-        )?;
+        ClientLogin::<AesgcmX255193dhNoSlowHash>::start(login_password, None, &mut client_rng)?;
     let (login_m2, server_login_state) =
         ServerLogin::start(p_file, &server_kp.private(), login_m1, &mut server_rng)?;
 
     let client_login_result =
-        client_login_state.finish::<_, NoOpHash>(login_m2, &server_kp.public(), &mut client_rng);
+        client_login_state.finish(login_m2, &server_kp.public(), &mut client_rng);
 
     if hex::encode(registration_password) == hex::encode(login_password) {
         let (login_m3, client_shared_secret, login_opaque_key) = client_login_result?;

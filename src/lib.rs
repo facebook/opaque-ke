@@ -13,15 +13,20 @@
 //! OPAQUE is a protocol between a client and a server. They must first agree on a collection of primitives
 //! to be kept consistent throughout protocol execution. These include:
 //! * an authenticated encryption scheme,
-//! * a finite cyclic group along with a point representation, and
-//! * a keypair type.
+//! * a finite cyclic group along with a point representation,
+//! * a keypair type, and
+//! * a slow hashing function.
 //!
 //! We will use the following choices in this example:
 //! ```
-//! use chacha20poly1305::ChaCha20Poly1305;
-//! use curve25519_dalek::ristretto::RistrettoPoint;
-//! use opaque_ke::keypair::X25519KeyPair;
-//! use opaque_ke::slow_hash::NoOpHash;
+//! use opaque_ke::ciphersuite::CipherSuite;
+//! struct Default;
+//! impl CipherSuite for Default {
+//!     type Aead = chacha20poly1305::ChaCha20Poly1305;
+//!     type Group = curve25519_dalek::ristretto::RistrettoPoint;
+//!     type KeyFormat = opaque_ke::keypair::X25519KeyPair;
+//!     type SlowHash = opaque_ke::slow_hash::NoOpHash;
+//! }
 //! ```
 //!
 //! Note that our choice of slow hashing function in this example, `NoOpHash`, is selected only to ensure
@@ -35,9 +40,17 @@
 //! ```
 //! # use opaque_ke::keypair::{KeyPair, X25519KeyPair, SizedBytes};
 //! # use opaque_ke::errors::ProtocolError;
+//! # use opaque_ke::ciphersuite::CipherSuite;
+//! # struct Default;
+//! # impl CipherSuite for Default {
+//! #     type Aead = chacha20poly1305::ChaCha20Poly1305;
+//! #     type Group = curve25519_dalek::ristretto::RistrettoPoint;
+//! #     type KeyFormat = opaque_ke::keypair::X25519KeyPair;
+//! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
+//! # }
 //! use rand_core::{OsRng, RngCore};
 //! let mut rng = OsRng;
-//! let server_kp = X25519KeyPair::generate_random(&mut rng)?;
+//! let server_kp = Default::generate_random_keypair(&mut rng)?;
 //! # Ok::<(), ProtocolError>(())
 //! ```
 //! The server must persist this keypair for the registration and login steps, where the public component will be
@@ -59,11 +72,17 @@
 //! #   keypair::{KeyPair, X25519KeyPair, SizedBytes},
 //! #   slow_hash::NoOpHash,
 //! # };
-//! # use curve25519_dalek::ristretto::RistrettoPoint;
-//! # use chacha20poly1305::ChaCha20Poly1305;
+//! # use opaque_ke::ciphersuite::CipherSuite;
+//! # struct Default;
+//! # impl CipherSuite for Default {
+//! #     type Aead = chacha20poly1305::ChaCha20Poly1305;
+//! #     type Group = curve25519_dalek::ristretto::RistrettoPoint;
+//! #     type KeyFormat = opaque_ke::keypair::X25519KeyPair;
+//! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
+//! # }
 //! use rand_core::{OsRng, RngCore};
 //! let mut client_rng = OsRng;
-//! let (r1, client_state) = ClientRegistration::<ChaCha20Poly1305, RistrettoPoint>::start(
+//! let (r1, client_state) = ClientRegistration::<Default>::start(
 //!     b"password",
 //!     Some(b"pepper"),
 //!     &mut client_rng,
@@ -82,21 +101,23 @@
 //! #   keypair::{KeyPair, X25519KeyPair, SizedBytes},
 //! #   slow_hash::NoOpHash,
 //! # };
-//! # use curve25519_dalek::ristretto::RistrettoPoint;
-//! # use chacha20poly1305::ChaCha20Poly1305;
+//! # use opaque_ke::ciphersuite::CipherSuite;
+//! # struct Default;
+//! # impl CipherSuite for Default {
+//! #     type Aead = chacha20poly1305::ChaCha20Poly1305;
+//! #     type Group = curve25519_dalek::ristretto::RistrettoPoint;
+//! #     type KeyFormat = opaque_ke::keypair::X25519KeyPair;
+//! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
+//! # }
 //! # use rand_core::{OsRng, RngCore};
 //! # let mut client_rng = OsRng;
-//! # let (r1, client_state) = ClientRegistration::<ChaCha20Poly1305, RistrettoPoint>::start(
+//! # let (r1, client_state) = ClientRegistration::<Default>::start(
 //! #     b"password",
 //! #     Some(b"pepper"),
 //! #     &mut client_rng,
 //! # )?;
 //! let mut server_rng = OsRng;
-//! let (r2, server_state) =
-//!     ServerRegistration::<ChaCha20Poly1305, RistrettoPoint, X25519KeyPair>::start(
-//!         r1,
-//!         &mut server_rng,
-//!     )?;
+//! let (r2, server_state) = ServerRegistration::<Default>::start(r1, &mut server_rng)?;
 //! # Ok::<(), ProtocolError>(())
 //! ```
 //! `r2` is returned to the client, and `server_state` must be persisted on the server for the final step of server
@@ -112,24 +133,26 @@
 //! #   keypair::{KeyPair, X25519KeyPair, SizedBytes},
 //! #   slow_hash::NoOpHash,
 //! # };
-//! # use curve25519_dalek::ristretto::RistrettoPoint;
-//! # use chacha20poly1305::ChaCha20Poly1305;
+//! # use opaque_ke::ciphersuite::CipherSuite;
+//! # struct Default;
+//! # impl CipherSuite for Default {
+//! #     type Aead = chacha20poly1305::ChaCha20Poly1305;
+//! #     type Group = curve25519_dalek::ristretto::RistrettoPoint;
+//! #     type KeyFormat = opaque_ke::keypair::X25519KeyPair;
+//! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
+//! # }
 //! # use rand_core::{OsRng, RngCore};
 //! # let mut client_rng = OsRng;
-//! # let (r1, client_state) = ClientRegistration::<ChaCha20Poly1305, RistrettoPoint>::start(
+//! # let (r1, client_state) = ClientRegistration::<Default>::start(
 //! #     b"password",
 //! #     Some(b"pepper"),
 //! #     &mut client_rng,
 //! # )?;
 //! # let mut server_rng = OsRng;
-//! # let (r2, server_state) =
-//! #     ServerRegistration::<ChaCha20Poly1305, RistrettoPoint, X25519KeyPair>::start(
-//! #         r1,
-//! #         &mut server_rng,
-//! #     )?;
-//! # let server_kp = X25519KeyPair::generate_random(&mut server_rng)?;
+//! let (r2, server_state) = ServerRegistration::<Default>::start(r1, &mut server_rng)?;
+//! # let server_kp = Default::generate_random_keypair(&mut server_rng)?;
 //! let (r3, kd_key_registration) =
-//!     client_state.finish::<_, X25519KeyPair, NoOpHash>(r2, server_kp.public(), &mut client_rng)?;
+//!     client_state.finish(r2, server_kp.public(), &mut client_rng)?;
 //! # Ok::<(), ProtocolError>(())
 //! ```
 //! `r3` is sent to the server, and the client can optionally use `kd_key_registration` for applications that choose to
@@ -144,24 +167,25 @@
 //! #   keypair::{KeyPair, X25519KeyPair, SizedBytes},
 //! #   slow_hash::NoOpHash,
 //! # };
-//! # use curve25519_dalek::ristretto::RistrettoPoint;
-//! # use chacha20poly1305::ChaCha20Poly1305;
+//! # use opaque_ke::ciphersuite::CipherSuite;
+//! # struct Default;
+//! # impl CipherSuite for Default {
+//! #     type Aead = chacha20poly1305::ChaCha20Poly1305;
+//! #     type Group = curve25519_dalek::ristretto::RistrettoPoint;
+//! #     type KeyFormat = opaque_ke::keypair::X25519KeyPair;
+//! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
+//! # }
 //! # use rand_core::{OsRng, RngCore};
 //! # let mut client_rng = OsRng;
-//! # let (r1, client_state) = ClientRegistration::<ChaCha20Poly1305, RistrettoPoint>::start(
+//! # let (r1, client_state) = ClientRegistration::<Default>::start(
 //! #     b"password",
 //! #     Some(b"pepper"),
 //! #     &mut client_rng,
 //! # )?;
 //! # let mut server_rng = OsRng;
-//! # let (r2, server_state) =
-//! #     ServerRegistration::<ChaCha20Poly1305, RistrettoPoint, X25519KeyPair>::start(
-//! #         r1,
-//! #         &mut server_rng,
-//! #     )?;
-//! # let server_kp = X25519KeyPair::generate_random(&mut server_rng)?;
-//! # let (r3, kd_key_registration) =
-//! #     client_state.finish::<_, X25519KeyPair, NoOpHash>(r2, server_kp.public(), &mut client_rng)?;
+//! let (r2, server_state) = ServerRegistration::<Default>::start(r1, &mut server_rng)?;
+//! # let server_kp = Default::generate_random_keypair(&mut server_rng)?;
+//! # let (r3, kd_key_registration) = client_state.finish(r2, server_kp.public(), &mut client_rng)?;
 //! let password_file = server_state.finish(r3)?;
 //! # Ok::<(), ProtocolError>(())
 //! ```
@@ -185,11 +209,17 @@
 //! #   keypair::{KeyPair, X25519KeyPair, SizedBytes},
 //! #   slow_hash::NoOpHash,
 //! # };
-//! # use curve25519_dalek::ristretto::RistrettoPoint;
-//! # use chacha20poly1305::ChaCha20Poly1305;
+//! # use opaque_ke::ciphersuite::CipherSuite;
+//! # struct Default;
+//! # impl CipherSuite for Default {
+//! #     type Aead = chacha20poly1305::ChaCha20Poly1305;
+//! #     type Group = curve25519_dalek::ristretto::RistrettoPoint;
+//! #     type KeyFormat = opaque_ke::keypair::X25519KeyPair;
+//! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
+//! # }
 //! # use rand_core::{OsRng, RngCore};
 //! let mut client_rng = OsRng;
-//! let (l1, client_state) = ClientLogin::<ChaCha20Poly1305, RistrettoPoint, X25519KeyPair>::start(
+//! let (l1, client_state) = ClientLogin::<Default>::start(
 //!   b"password",
 //!   Some(b"pepper"),
 //!   &mut client_rng,
@@ -208,35 +238,33 @@
 //! #   keypair::{KeyPair, X25519KeyPair, SizedBytes},
 //! #   slow_hash::NoOpHash,
 //! # };
-//! # use curve25519_dalek::ristretto::RistrettoPoint;
-//! # use chacha20poly1305::ChaCha20Poly1305;
+//! # use opaque_ke::ciphersuite::CipherSuite;
+//! # struct Default;
+//! # impl CipherSuite for Default {
+//! #     type Aead = chacha20poly1305::ChaCha20Poly1305;
+//! #     type Group = curve25519_dalek::ristretto::RistrettoPoint;
+//! #     type KeyFormat = opaque_ke::keypair::X25519KeyPair;
+//! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
+//! # }
 //! # use rand_core::{OsRng, RngCore};
 //! # let mut client_rng = OsRng;
-//! # let (r1, client_state) = ClientRegistration::<ChaCha20Poly1305, RistrettoPoint>::start(
+//! # let (r1, client_state) = ClientRegistration::<Default>::start(
 //! #     b"password",
 //! #     Some(b"pepper"),
 //! #     &mut client_rng,
 //! # )?;
 //! # let mut server_rng = OsRng;
-//! # let (r2, server_state) =
-//! #     ServerRegistration::<ChaCha20Poly1305, RistrettoPoint, X25519KeyPair>::start(
-//! #         r1,
-//! #         &mut server_rng,
-//! #     )?;
-//! # let server_kp = X25519KeyPair::generate_random(&mut server_rng)?;
-//! # let (r3, kd_key_registration) =
-//! #     client_state.finish::<_, X25519KeyPair, NoOpHash>(r2, server_kp.public(), &mut client_rng)?;
+//! let (r2, server_state) = ServerRegistration::<Default>::start(r1, &mut server_rng)?;
+//! # let server_kp = Default::generate_random_keypair(&mut server_rng)?;
+//! # let (r3, kd_key_registration) = client_state.finish(r2, server_kp.public(), &mut client_rng)?;
 //! # let password_file_bytes = server_state.finish(r3)?.to_bytes();
-//! # let (l1, client_state) = ClientLogin::<ChaCha20Poly1305, RistrettoPoint, X25519KeyPair>::start(
+//! # let (l1, client_state) = ClientLogin::<Default>::start(
 //! #   b"password",
 //! #   Some(b"pepper"),
 //! #   &mut client_rng,
 //! # )?;
 //! use std::convert::TryFrom;
-//! let password_file =
-//!   ServerRegistration::<ChaCha20Poly1305, RistrettoPoint, X25519KeyPair>::try_from(
-//!     &password_file_bytes[..],
-//!   )?;
+//! let password_file = ServerRegistration::<Default>::try_from(&password_file_bytes[..])?;
 //! let mut server_rng = OsRng;
 //! let (l2, server_state) =
 //!     ServerLogin::start(password_file, &server_kp.private(), l1, &mut server_rng)?;
@@ -254,38 +282,39 @@
 //! #   keypair::{KeyPair, X25519KeyPair, SizedBytes},
 //! #   slow_hash::NoOpHash,
 //! # };
-//! # use curve25519_dalek::ristretto::RistrettoPoint;
-//! # use chacha20poly1305::ChaCha20Poly1305;
+//! # use opaque_ke::ciphersuite::CipherSuite;
+//! # struct Default;
+//! # impl CipherSuite for Default {
+//! #     type Aead = chacha20poly1305::ChaCha20Poly1305;
+//! #     type Group = curve25519_dalek::ristretto::RistrettoPoint;
+//! #     type KeyFormat = opaque_ke::keypair::X25519KeyPair;
+//! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
+//! # }
 //! # use rand_core::{OsRng, RngCore};
 //! # let mut client_rng = OsRng;
-//! # let (r1, client_state) = ClientRegistration::<ChaCha20Poly1305, RistrettoPoint>::start(
+//! # let (r1, client_state) = ClientRegistration::<Default>::start(
 //! #     b"password",
 //! #     Some(b"pepper"),
 //! #     &mut client_rng,
 //! # )?;
 //! # let mut server_rng = OsRng;
-//! # let (r2, server_state) =
-//! #     ServerRegistration::<ChaCha20Poly1305, RistrettoPoint, X25519KeyPair>::start(
-//! #         r1,
-//! #         &mut server_rng,
-//! #     )?;
-//! # let server_kp = X25519KeyPair::generate_random(&mut server_rng)?;
-//! # let (r3, kd_key_registration) =
-//! #     client_state.finish::<_, X25519KeyPair, NoOpHash>(r2, server_kp.public(), &mut client_rng)?;
+//! let (r2, server_state) = ServerRegistration::<Default>::start(r1, &mut server_rng)?;
+//! # let server_kp = Default::generate_random_keypair(&mut server_rng)?;
+//! # let (r3, kd_key_registration) = client_state.finish(r2, server_kp.public(), &mut client_rng)?;
 //! # let password_file_bytes = server_state.finish(r3)?.to_bytes();
-//! # let (l1, client_state) = ClientLogin::<ChaCha20Poly1305, RistrettoPoint, X25519KeyPair>::start(
+//! # let (l1, client_state) = ClientLogin::<Default>::start(
 //! #   b"password",
 //! #   Some(b"pepper"),
 //! #   &mut client_rng,
 //! # )?;
 //! # use std::convert::TryFrom;
 //! # let password_file =
-//! #   ServerRegistration::<ChaCha20Poly1305, RistrettoPoint, X25519KeyPair>::try_from(
+//! #   ServerRegistration::<Default>::try_from(
 //! #     &password_file_bytes[..],
 //! #   )?;
 //! # let (l2, server_state) =
 //! #     ServerLogin::start(password_file, &server_kp.private(), l1, &mut server_rng)?;
-//! let (l3, client_shared_secret, kd_key_login) = client_state.finish::<_, NoOpHash>(
+//! let (l3, client_shared_secret, kd_key_login) = client_state.finish(
 //!   l2,
 //!   &server_kp.public(),
 //!   &mut client_rng,
@@ -309,38 +338,39 @@
 //! #   keypair::{KeyPair, X25519KeyPair, SizedBytes},
 //! #   slow_hash::NoOpHash,
 //! # };
-//! # use curve25519_dalek::ristretto::RistrettoPoint;
-//! # use chacha20poly1305::ChaCha20Poly1305;
+//! # use opaque_ke::ciphersuite::CipherSuite;
+//! # struct Default;
+//! # impl CipherSuite for Default {
+//! #     type Aead = chacha20poly1305::ChaCha20Poly1305;
+//! #     type Group = curve25519_dalek::ristretto::RistrettoPoint;
+//! #     type KeyFormat = opaque_ke::keypair::X25519KeyPair;
+//! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
+//! # }
 //! # use rand_core::{OsRng, RngCore};
 //! # let mut client_rng = OsRng;
-//! # let (r1, client_state) = ClientRegistration::<ChaCha20Poly1305, RistrettoPoint>::start(
+//! # let (r1, client_state) = ClientRegistration::<Default>::start(
 //! #     b"password",
 //! #     Some(b"pepper"),
 //! #     &mut client_rng,
 //! # )?;
 //! # let mut server_rng = OsRng;
-//! # let (r2, server_state) =
-//! #     ServerRegistration::<ChaCha20Poly1305, RistrettoPoint, X25519KeyPair>::start(
-//! #         r1,
-//! #         &mut server_rng,
-//! #     )?;
-//! # let server_kp = X25519KeyPair::generate_random(&mut server_rng)?;
-//! # let (r3, kd_key) =
-//! #     client_state.finish::<_, X25519KeyPair, NoOpHash>(r2, server_kp.public(), &mut client_rng)?;
+//! let (r2, server_state) = ServerRegistration::<Default>::start(r1, &mut server_rng)?;
+//! # let server_kp = Default::generate_random_keypair(&mut server_rng)?;
+//! # let (r3, kd_key) = client_state.finish(r2, server_kp.public(), &mut client_rng)?;
 //! # let password_file_bytes = server_state.finish(r3)?.to_bytes();
-//! # let (l1, client_state) = ClientLogin::<ChaCha20Poly1305, RistrettoPoint, X25519KeyPair>::start(
+//! # let (l1, client_state) = ClientLogin::<Default>::start(
 //! #   b"password",
 //! #   Some(b"pepper"),
 //! #   &mut client_rng,
 //! # )?;
 //! # use std::convert::TryFrom;
 //! # let password_file =
-//! #   ServerRegistration::<ChaCha20Poly1305, RistrettoPoint, X25519KeyPair>::try_from(
+//! #   ServerRegistration::<Default>::try_from(
 //! #     &password_file_bytes[..],
 //! #   )?;
 //! # let (l2, server_state) =
 //! #     ServerLogin::start(password_file, &server_kp.private(), l1, &mut server_rng)?;
-//! # let (l3, client_shared_secret, kd_key) = client_state.finish::<_, NoOpHash>(
+//! # let (l3, client_shared_secret, kd_key) = client_state.finish(
 //! #   l2,
 //! #   &server_kp.public(),
 //! #   &mut client_rng,
@@ -358,6 +388,7 @@ pub mod errors;
 // High-level API
 pub mod opaque;
 
+pub mod ciphersuite;
 // Your choice of RKR encryption
 mod rkr_encryption;
 // Your choice of KE
@@ -369,7 +400,6 @@ mod oprf;
 // do the oprf on
 mod group;
 pub mod slow_hash;
-pub mod ciphersuite;
 
 #[cfg(test)]
 mod tests;

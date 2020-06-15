@@ -4,6 +4,7 @@
 // LICENSE file in the root directory of this source tree.
 
 use crate::{
+    ciphersuite::CipherSuite,
     group::Group,
     keypair::{KeyPair, SizedBytes, X25519KeyPair},
     opaque::*,
@@ -15,6 +16,14 @@ use curve25519_dalek::ristretto::RistrettoPoint;
 use chacha20poly1305::ChaCha20Poly1305;
 use rand_core::{OsRng, RngCore};
 use std::convert::TryFrom;
+
+struct Default;
+impl CipherSuite for Default {
+    type Aead = ChaCha20Poly1305;
+    type Group = RistrettoPoint;
+    type KeyFormat = crate::keypair::X25519KeyPair;
+    type SlowHash = crate::slow_hash::NoOpHash;
+}
 
 fn random_ristretto_point() -> RistrettoPoint {
     let mut rng = OsRng;
@@ -30,7 +39,7 @@ fn client_registration_roundtrip() {
     let sc = <RistrettoPoint as Group>::random_scalar(&mut rng);
     // serialization order: scalar, password
     let bytes: Vec<u8> = [&sc.as_bytes()[..], &pw[..]].concat();
-    let reg = ClientRegistration::<ChaCha20Poly1305, RistrettoPoint>::try_from(&bytes[..]).unwrap();
+    let reg = ClientRegistration::<Default>::try_from(&bytes[..]).unwrap();
     let reg_bytes = reg.to_bytes();
     assert_eq!(reg_bytes, bytes);
 }
@@ -43,7 +52,7 @@ fn server_registration_roundtrip() {
     let sc = <RistrettoPoint as Group>::random_scalar(&mut rng);
     let mut oprf_bytes: Vec<u8> = vec![];
     oprf_bytes.extend_from_slice(sc.as_bytes());
-    let reg = ServerRegistration::<ChaCha20Poly1305, RistrettoPoint, X25519KeyPair>::try_from(
+    let reg = ServerRegistration::<Default>::try_from(
         &oprf_bytes[..],
     )
     .unwrap();
@@ -55,14 +64,14 @@ fn server_registration_roundtrip() {
     let mut mock_rkr_bytes = vec![0u8; rkr_size];
     rng.fill_bytes(&mut mock_rkr_bytes);
     println!("{}", mock_rkr_bytes.len());
-    let mock_client_kp = X25519KeyPair::generate_random(&mut rng).unwrap();
+    let mock_client_kp = Default::generate_random_keypair(&mut rng).unwrap();
     // serialization order: scalar, public key, envelope
     let mut bytes = Vec::<u8>::new();
     bytes.extend_from_slice(sc.as_bytes());
     bytes.extend_from_slice(&mock_client_kp.public().to_arr());
     bytes.extend_from_slice(&mock_rkr_bytes);
     let reg =
-        ServerRegistration::<ChaCha20Poly1305, RistrettoPoint, X25519KeyPair>::try_from(&bytes[..])
+        ServerRegistration::<Default>::try_from(&bytes[..])
             .unwrap();
     let reg_bytes = reg.to_bytes();
     assert_eq!(reg_bytes, bytes);
@@ -91,7 +100,7 @@ fn register_second_message_roundtrip() {
 #[test]
 fn register_third_message_roundtrip() {
     let mut rng = OsRng;
-    let skp = X25519KeyPair::generate_random(&mut rng).unwrap();
+    let skp = Default::generate_random_keypair(&mut rng).unwrap();
     let pubkey_bytes = skp.public().to_arr();
 
     let mut encryption_key = [0u8; 32];

@@ -3,17 +3,22 @@
 // This source code is licensed under the MIT license found in the
 // LICENSE file in the root directory of this source tree.
 
+//! Trait specifying a slow hashing function
+
 use crate::errors::InternalPakeError;
 
 use generic_array::GenericArray;
 use sha2::{Digest, Sha256};
 
+/// Used for the slow hashing function in OPAQUE
 pub trait SlowHash {
+    /// Computes the slow hashing function
     fn hash(
         input: GenericArray<u8, <Sha256 as Digest>::OutputSize>,
     ) -> Result<Vec<u8>, InternalPakeError>;
 }
 
+/// A no-op hash which simply returns its input
 pub struct NoOpHash;
 
 impl SlowHash for NoOpHash {
