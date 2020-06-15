@@ -52,10 +52,7 @@ fn server_registration_roundtrip() {
     let sc = <RistrettoPoint as Group>::random_scalar(&mut rng);
     let mut oprf_bytes: Vec<u8> = vec![];
     oprf_bytes.extend_from_slice(sc.as_bytes());
-    let reg = ServerRegistration::<Default>::try_from(
-        &oprf_bytes[..],
-    )
-    .unwrap();
+    let reg = ServerRegistration::<Default>::try_from(&oprf_bytes[..]).unwrap();
     let reg_bytes = reg.to_bytes();
     assert_eq!(reg_bytes, oprf_bytes);
     // If we do have envelope and client pk, the server registration contains
@@ -70,9 +67,7 @@ fn server_registration_roundtrip() {
     bytes.extend_from_slice(sc.as_bytes());
     bytes.extend_from_slice(&mock_client_kp.public().to_arr());
     bytes.extend_from_slice(&mock_rkr_bytes);
-    let reg =
-        ServerRegistration::<Default>::try_from(&bytes[..])
-            .unwrap();
+    let reg = ServerRegistration::<Default>::try_from(&bytes[..]).unwrap();
     let reg_bytes = reg.to_bytes();
     assert_eq!(reg_bytes, bytes);
 }
