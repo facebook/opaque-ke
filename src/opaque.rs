@@ -6,6 +6,7 @@
 //! Provides the main OPAQUE API
 
 use crate::{
+    ciphersuite::CipherSuite,
     errors::{utils::check_slice_size, InternalPakeError, PakeError, ProtocolError},
     group::Group,
     key_exchange::{
@@ -19,7 +20,7 @@ use crate::{
     slow_hash::SlowHash,
 };
 use generic_array::{
-    typenum::{Unsigned, U32, U64},
+    typenum::{Unsigned, U32},
     GenericArray,
 };
 use hkdf::Hkdf;
@@ -257,25 +258,23 @@ impl LoginThirdMessage {
 // ============
 
 /// The state elements the client holds to register itself
-pub struct ClientRegistration<Aead, Grp: Group> {
+pub struct ClientRegistration<CS: CipherSuite> {
     /// A choice of symmetric encryption for the envelope
-    _aead: PhantomData<Aead>,
+    _aead: PhantomData<CS::Aead>,
     /// a blinding factor
-    pub(crate) blinding_factor: Grp::Scalar,
+    pub(crate) blinding_factor: <<CS as CipherSuite>::Group as Group>::Scalar,
     /// the client's password
     password: Vec<u8>,
 }
 
-impl<Aead: aead::NewAead<KeySize = U32> + aead::Aead, Grp: Group> TryFrom<&[u8]>
-    for ClientRegistration<Aead, Grp>
-{
+impl<CS: CipherSuite> TryFrom<&[u8]> for ClientRegistration<CS> {
     type Error = ProtocolError;
     fn try_from(bytes: &[u8]) -> Result<Self, Self::Error> {
         // Check that the message is actually containing an element of the
         // correct subgroup
-        let scalar_len = Grp::ScalarLen::to_usize();
+        let scalar_len = <<CS as CipherSuite>::Group as Group>::ScalarLen::to_usize();
         let blinding_factor_bytes = GenericArray::from_slice(&bytes[..scalar_len]);
-        let blinding_factor = Grp::from_scalar_slice(blinding_factor_bytes)?;
+        let blinding_factor = CS::Group::from_scalar_slice(blinding_factor_bytes)?;
         let password = bytes[scalar_len..].to_vec();
         Ok(Self {
             _aead: PhantomData,
@@ -285,14 +284,10 @@ impl<Aead: aead::NewAead<KeySize = U32> + aead::Aead, Grp: Group> TryFrom<&[u8]>
     }
 }
 
-impl<Aead, Grp> ClientRegistration<Aead, Grp>
-where
-    Aead: aead::NewAead<KeySize = U32> + aead::Aead,
-    Grp: Group,
-{
+impl<CS: CipherSuite> ClientRegistration<CS> {
     pub fn to_bytes(&self) -> Vec<u8> {
         let output: Vec<u8> = [
-            Grp::scalar_as_bytes(&self.blinding_factor).as_slice(),
+            CS::Group::scalar_as_bytes(&self.blinding_factor).as_slice(),
             &self.password,
         ]
         .concat();
@@ -300,10 +295,7 @@ where
     }
 }
 
-impl<Aead, Grp> ClientRegistration<Aead, Grp>
-where
-    Grp: Group<ScalarLen = U32, UniformBytesLen = U64>,
-{
+impl<CS: CipherSuite> ClientRegistration<CS> {
     /// Returns an initial "blinded" request to send to the server, as well as a ClientRegistration
     ///
     /// # Arguments
@@ -314,25 +306,31 @@ where
     /// ```
     /// use opaque_ke::opaque::ClientRegistration;
     /// # use opaque_ke::errors::ProtocolError;
-    /// use chacha20poly1305::ChaCha20Poly1305;
-    /// use curve25519_dalek::ristretto::RistrettoPoint;
     /// use rand_core::{OsRng, RngCore};
+    /// use opaque_ke::ciphersuite::CipherSuite;
+    /// struct Default;
+    /// impl CipherSuite for Default {
+    ///     type Aead = chacha20poly1305::ChaCha20Poly1305;
+    ///     type Group = curve25519_dalek::ristretto::RistrettoPoint;
+    ///     type KeyFormat = opaque_ke::keypair::X25519KeyPair;
+    ///     type SlowHash = opaque_ke::slow_hash::NoOpHash;
+    /// }
     /// let mut rng = OsRng;
-    /// let (register_m1, registration_state) = ClientRegistration::<ChaCha20Poly1305, RistrettoPoint>::start(b"hunter2", None, &mut rng)?;
+    /// let (register_m1, registration_state) = ClientRegistration::<Default>::start(b"hunter2", None, &mut rng)?;
     /// # Ok::<(), ProtocolError>(())
     /// ```
     pub fn start<R: RngCore + CryptoRng>(
         password: &[u8],
         pepper: Option<&[u8]>,
         blinding_factor_rng: &mut R,
-    ) -> Result<(RegisterFirstMessage<Grp>, Self), ProtocolError> {
+    ) -> Result<(RegisterFirstMessage<CS::Group>, Self), ProtocolError> {
         let OprfClientBytes {
             alpha,
             blinding_factor,
-        } = oprf::generate_oprf1::<R, Grp>(&password, pepper, blinding_factor_rng)?;
+        } = oprf::generate_oprf1::<R, CS::Group>(&password, pepper, blinding_factor_rng)?;
 
         Ok((
-            RegisterFirstMessage::<Grp> { alpha },
+            RegisterFirstMessage::<CS::Group> { alpha },
             Self {
                 _aead: PhantomData,
                 blinding_factor,
@@ -347,11 +345,7 @@ type ClientRegistrationFinishResult<Aead, KeyFormat> = (
     GenericArray<u8, <Sha256 as Digest>::OutputSize>,
 );
 
-impl<Aead, Grp> ClientRegistration<Aead, Grp>
-where
-    Aead: aead::NewAead<KeySize = U32> + aead::Aead,
-    Grp: Group,
-{
+impl<CS: CipherSuite> ClientRegistration<CS> {
     /// "Unblinds" the server's answer and returns a final message containing
     /// cryptographic identifiers, to be sent to the server on setup finalization
     ///
@@ -364,29 +358,34 @@ where
     /// use opaque_ke::{opaque::{ClientRegistration, ServerRegistration}, keypair::{X25519KeyPair, SizedBytes}};
     /// # use opaque_ke::errors::ProtocolError;
     /// # use opaque_ke::keypair::KeyPair;
-    /// # use opaque_ke::slow_hash::NoOpHash;
     /// use rand_core::{OsRng, RngCore};
-    /// use chacha20poly1305::ChaCha20Poly1305;
-    /// use curve25519_dalek::ristretto::RistrettoPoint;
+    /// use opaque_ke::ciphersuite::CipherSuite;
+    /// struct Default;
+    /// impl CipherSuite for Default {
+    ///     type Aead = chacha20poly1305::ChaCha20Poly1305;
+    ///     type Group = curve25519_dalek::ristretto::RistrettoPoint;
+    ///     type KeyFormat = opaque_ke::keypair::X25519KeyPair;
+    ///     type SlowHash = opaque_ke::slow_hash::NoOpHash;
+    /// }
     /// let mut client_rng = OsRng;
     /// let mut server_rng = OsRng;
     /// let server_kp = X25519KeyPair::generate_random(&mut server_rng)?;
-    /// let (register_m1, client_state) = ClientRegistration::<ChaCha20Poly1305, RistrettoPoint>::start(b"hunter2", None, &mut client_rng)?;
+    /// let (register_m1, client_state) = ClientRegistration::<Default>::start(b"hunter2", None, &mut client_rng)?;
     /// let (register_m2, server_state) =
-    /// ServerRegistration::<ChaCha20Poly1305, RistrettoPoint, X25519KeyPair>::start(register_m1, &mut server_rng)?;
+    /// ServerRegistration::<Default>::start(register_m1, &mut server_rng)?;
     /// let mut client_rng = OsRng;
-    /// let register_m3 = client_state.finish::<_, X25519KeyPair, NoOpHash>(register_m2, server_kp.public(), &mut client_rng)?;
+    /// let register_m3 = client_state.finish(register_m2, server_kp.public(), &mut client_rng)?;
     /// # Ok::<(), ProtocolError>(())
     /// ```
-    pub fn finish<R: CryptoRng + RngCore, KeyFormat: KeyPair, SH: SlowHash>(
+    pub fn finish<R: CryptoRng + RngCore>(
         self,
-        r2: RegisterSecondMessage<Grp>,
-        server_s_pk: &KeyFormat::Repr,
+        r2: RegisterSecondMessage<CS::Group>,
+        server_s_pk: &<<CS as CipherSuite>::KeyFormat as KeyPair>::Repr,
         rng: &mut R,
-    ) -> Result<ClientRegistrationFinishResult<Aead, KeyFormat>, ProtocolError> {
-        let client_static_keypair = KeyFormat::generate_random(rng)?;
+    ) -> Result<ClientRegistrationFinishResult<CS::Aead, CS::KeyFormat>, ProtocolError> {
+        let client_static_keypair = CS::KeyFormat::generate_random(rng)?;
 
-        let password_derived_key = get_password_derived_key::<Grp, SH>(
+        let password_derived_key = get_password_derived_key::<CS::Group, CS::SlowHash>(
             self.password.clone(),
             r2.beta,
             &self.blinding_factor,
@@ -399,7 +398,7 @@ where
         let hmac_key = &okm[DERIVED_KEY_LEN..2 * DERIVED_KEY_LEN];
         let kd_key = &okm[2 * DERIVED_KEY_LEN..];
 
-        let envelope = RKRCiphertext::<Aead>::encrypt(
+        let envelope = RKRCiphertext::<CS::Aead>::encrypt(
             &encryption_key,
             &hmac_key,
             &client_static_keypair.private().to_arr(),
@@ -418,60 +417,59 @@ where
 }
 
 // This can't be derived because of the use of a phantom parameter
-impl<Aead, Grp: Group> Zeroize for ClientRegistration<Aead, Grp> {
+impl<CS: CipherSuite> Zeroize for ClientRegistration<CS> {
     fn zeroize(&mut self) {
         self.password.zeroize();
         self.blinding_factor.zeroize();
     }
 }
 
-impl<Aead, Grp: Group> Drop for ClientRegistration<Aead, Grp> {
+impl<CS: CipherSuite> Drop for ClientRegistration<CS> {
     fn drop(&mut self) {
         self.zeroize();
     }
 }
 
 // This can't be derived because of the use of a phantom parameter
-impl<Aead, Grp: Group, KeyFormat> Zeroize for ClientLogin<Aead, Grp, KeyFormat> {
+impl<CS: CipherSuite> Zeroize for ClientLogin<CS> {
     fn zeroize(&mut self) {
         self.password.zeroize();
         self.blinding_factor.zeroize();
     }
 }
 
-impl<Aead, Grp: Group, KeyFormat> Drop for ClientLogin<Aead, Grp, KeyFormat> {
+impl<CS: CipherSuite> Drop for ClientLogin<CS> {
     fn drop(&mut self) {
         self.zeroize();
     }
 }
 
 /// The state elements the server holds to record a registration
-pub struct ServerRegistration<Aead, Grp: Group, KeyFormat: KeyPair> {
-    envelope: Option<RKRCiphertext<Aead>>,
-    client_s_pk: Option<KeyFormat::Repr>,
-    pub(crate) oprf_key: Grp::Scalar,
+pub struct ServerRegistration<CS: CipherSuite> {
+    envelope: Option<RKRCiphertext<CS::Aead>>,
+    client_s_pk: Option<<<CS as CipherSuite>::KeyFormat as KeyPair>::Repr>,
+    pub(crate) oprf_key: <<CS as CipherSuite>::Group as Group>::Scalar,
 }
 
-impl<Aead, Grp, KeyFormat> TryFrom<&[u8]> for ServerRegistration<Aead, Grp, KeyFormat>
+impl<CS: CipherSuite> TryFrom<&[u8]> for ServerRegistration<CS>
 where
-    Aead: aead::NewAead<KeySize = U32> + aead::Aead,
-    Grp: Group,
-    KeyFormat: KeyPair + PartialEq,
-    <KeyFormat::Repr as SizedBytes>::Len: std::ops::Add<<KeyFormat::Repr as SizedBytes>::Len>,
+    <<<CS as CipherSuite>::KeyFormat as KeyPair>::Repr as SizedBytes>::Len:
+        std::ops::Add<<<<CS as CipherSuite>::KeyFormat as KeyPair>::Repr as SizedBytes>::Len>,
     generic_array::typenum::Sum<
-        <KeyFormat::Repr as SizedBytes>::Len,
-        <KeyFormat::Repr as SizedBytes>::Len,
+        <<<CS as CipherSuite>::KeyFormat as KeyPair>::Repr as SizedBytes>::Len,
+        <<<CS as CipherSuite>::KeyFormat as KeyPair>::Repr as SizedBytes>::Len,
     >: generic_array::ArrayLength<u8>,
 {
     type Error = ProtocolError;
     fn try_from(server_registration_bytes: &[u8]) -> Result<Self, Self::Error> {
-        let key_len = <KeyFormat::Repr as SizedBytes>::Len::to_usize();
-        let scalar_len = Grp::ScalarLen::to_usize();
-        let rkr_size = RKRCiphertext::<Aead>::rkr_with_nonce_size();
+        let key_len =
+            <<<CS as CipherSuite>::KeyFormat as KeyPair>::Repr as SizedBytes>::Len::to_usize();
+        let scalar_len = <<CS as CipherSuite>::Group as Group>::ScalarLen::to_usize();
+        let rkr_size = RKRCiphertext::<CS::Aead>::rkr_with_nonce_size();
 
         if server_registration_bytes.len() == scalar_len {
             return Ok(Self {
-                oprf_key: Grp::from_scalar_slice(GenericArray::from_slice(
+                oprf_key: CS::Group::from_scalar_slice(GenericArray::from_slice(
                     server_registration_bytes,
                 ))?,
                 client_s_pk: None,
@@ -485,10 +483,11 @@ where
             "server_registration_bytes",
         )?;
         let oprf_key_bytes = GenericArray::from_slice(&checked_bytes[..scalar_len]);
-        let oprf_key = Grp::from_scalar_slice(oprf_key_bytes)?;
-        let unchecked_client_s_pk =
-            KeyFormat::Repr::from_bytes(&checked_bytes[scalar_len..scalar_len + key_len])?;
-        let client_s_pk = KeyFormat::check_public_key(unchecked_client_s_pk)?;
+        let oprf_key = CS::Group::from_scalar_slice(oprf_key_bytes)?;
+        let unchecked_client_s_pk = <<CS as CipherSuite>::KeyFormat as KeyPair>::Repr::from_bytes(
+            &checked_bytes[scalar_len..scalar_len + key_len],
+        )?;
+        let client_s_pk = CS::KeyFormat::check_public_key(unchecked_client_s_pk)?;
         Ok(Self {
             envelope: Some(RKRCiphertext::from_bytes(
                 &checked_bytes[checked_bytes.len() - rkr_size..],
@@ -499,19 +498,17 @@ where
     }
 }
 
-impl<Aead, Grp, KeyFormat> ServerRegistration<Aead, Grp, KeyFormat>
+impl<CS: CipherSuite> ServerRegistration<CS>
 where
-    Aead: aead::NewAead<KeySize = U32> + aead::Aead,
-    Grp: Group,
-    KeyFormat: KeyPair + PartialEq,
-    <KeyFormat::Repr as SizedBytes>::Len: std::ops::Add<<KeyFormat::Repr as SizedBytes>::Len>,
+    <<<CS as CipherSuite>::KeyFormat as KeyPair>::Repr as SizedBytes>::Len:
+        std::ops::Add<<<<CS as CipherSuite>::KeyFormat as KeyPair>::Repr as SizedBytes>::Len>,
     generic_array::typenum::Sum<
-        <KeyFormat::Repr as SizedBytes>::Len,
-        <KeyFormat::Repr as SizedBytes>::Len,
+        <<<CS as CipherSuite>::KeyFormat as KeyPair>::Repr as SizedBytes>::Len,
+        <<<CS as CipherSuite>::KeyFormat as KeyPair>::Repr as SizedBytes>::Len,
     >: generic_array::ArrayLength<u8>,
 {
     pub fn to_bytes(&self) -> Vec<u8> {
-        let mut output: Vec<u8> = Grp::scalar_as_bytes(&self.oprf_key).to_vec();
+        let mut output: Vec<u8> = CS::Group::scalar_as_bytes(&self.oprf_key).to_vec();
         match &self.client_s_pk {
             Some(v) => output.extend_from_slice(&v.to_arr()),
             None => {}
@@ -534,26 +531,31 @@ where
     /// ```
     /// use opaque_ke::{opaque::*, keypair::{X25519KeyPair, SizedBytes}};
     /// # use opaque_ke::errors::ProtocolError;
-    /// # use opaque_ke::keypair::KeyPair;
     /// use rand_core::{OsRng, RngCore};
-    /// use chacha20poly1305::ChaCha20Poly1305;
-    /// use curve25519_dalek::ristretto::RistrettoPoint;
+    /// use opaque_ke::ciphersuite::CipherSuite;
+    /// struct Default;
+    /// impl CipherSuite for Default {
+    ///     type Aead = chacha20poly1305::ChaCha20Poly1305;
+    ///     type Group = curve25519_dalek::ristretto::RistrettoPoint;
+    ///     type KeyFormat = opaque_ke::keypair::X25519KeyPair;
+    ///     type SlowHash = opaque_ke::slow_hash::NoOpHash;
+    /// }
     /// let mut client_rng = OsRng;
     /// let mut server_rng = OsRng;
-    /// let (register_m1, client_state) = ClientRegistration::<ChaCha20Poly1305, RistrettoPoint>::start(b"hunter2", None, &mut client_rng)?;
+    /// let (register_m1, client_state) = ClientRegistration::<Default>::start(b"hunter2", None, &mut client_rng)?;
     /// let (register_m2, server_state) =
-    /// ServerRegistration::<ChaCha20Poly1305, RistrettoPoint, X25519KeyPair>::start(register_m1, &mut server_rng)?;
+    /// ServerRegistration::<Default>::start(register_m1, &mut server_rng)?;
     /// # Ok::<(), ProtocolError>(())
     /// ```
     pub fn start<R: RngCore + CryptoRng>(
-        message: RegisterFirstMessage<Grp>,
+        message: RegisterFirstMessage<CS::Group>,
         rng: &mut R,
-    ) -> Result<(RegisterSecondMessage<Grp>, Self), ProtocolError> {
+    ) -> Result<(RegisterSecondMessage<CS::Group>, Self), ProtocolError> {
         // RFC: generate oprf_key (salt) and v_u = g^oprf_key
-        let oprf_key = Grp::random_scalar(rng);
+        let oprf_key = CS::Group::random_scalar(rng);
 
         // Compute beta = alpha^oprf_key
-        let beta = oprf::generate_oprf2::<Grp>(message.alpha, &oprf_key)?;
+        let beta = oprf::generate_oprf2::<CS::Group>(message.alpha, &oprf_key)?;
 
         Ok((
             RegisterSecondMessage { beta },
@@ -574,27 +576,31 @@ where
     /// # Example
     ///
     /// ```
-    /// use opaque_ke::{opaque::*, keypair::{X25519KeyPair, SizedBytes}};
+    /// use opaque_ke::{opaque::*, keypair::{KeyPair, X25519KeyPair, SizedBytes}};
     /// # use opaque_ke::errors::ProtocolError;
-    /// # use opaque_ke::keypair::KeyPair;
-    /// # use opaque_ke::slow_hash::NoOpHash;
     /// use rand_core::{OsRng, RngCore};
-    /// use chacha20poly1305::ChaCha20Poly1305;
-    /// use curve25519_dalek::ristretto::RistrettoPoint;
+    /// use opaque_ke::ciphersuite::CipherSuite;
+    /// struct Default;
+    /// impl CipherSuite for Default {
+    ///     type Aead = chacha20poly1305::ChaCha20Poly1305;
+    ///     type Group = curve25519_dalek::ristretto::RistrettoPoint;
+    ///     type KeyFormat = opaque_ke::keypair::X25519KeyPair;
+    ///     type SlowHash = opaque_ke::slow_hash::NoOpHash;
+    /// }
     /// let mut client_rng = OsRng;
     /// let mut server_rng = OsRng;
     /// let server_kp = X25519KeyPair::generate_random(&mut server_rng)?;
-    /// let (register_m1, client_state) = ClientRegistration::<ChaCha20Poly1305, RistrettoPoint>::start(b"hunter2", None, &mut client_rng)?;
+    /// let (register_m1, client_state) = ClientRegistration::<Default>::start(b"hunter2", None, &mut client_rng)?;
     /// let (register_m2, server_state) =
-    /// ServerRegistration::<ChaCha20Poly1305, RistrettoPoint, X25519KeyPair>::start(register_m1, &mut server_rng)?;
+    /// ServerRegistration::<Default>::start(register_m1, &mut server_rng)?;
     /// let mut client_rng = OsRng;
-    /// let (register_m3, _opaque_key) = client_state.finish::<_, _, NoOpHash>(register_m2, server_kp.public(), &mut client_rng)?;
+    /// let (register_m3, _opaque_key) = client_state.finish(register_m2, server_kp.public(), &mut client_rng)?;
     /// let client_record = server_state.finish(register_m3)?;
     /// # Ok::<(), ProtocolError>(())
     /// ```
     pub fn finish(
         self,
-        message: RegisterThirdMessage<Aead, KeyFormat>,
+        message: RegisterThirdMessage<CS::Aead, CS::KeyFormat>,
     ) -> Result<Self, ProtocolError> {
         Ok(Self {
             envelope: Some(message.envelope),
@@ -608,27 +614,25 @@ where
 // =====
 
 /// The state elements the client holds to perform a login
-pub struct ClientLogin<Aead, Grp: Group, KeyFormat> {
+pub struct ClientLogin<CS: CipherSuite> {
     /// A choice of symmetric encryption for the envelope
-    _aead: PhantomData<Aead>,
+    _aead: PhantomData<CS::Aead>,
     /// A choice of the keypair type
-    _key_format: PhantomData<KeyFormat>,
+    _key_format: PhantomData<CS::KeyFormat>,
     /// A blinding factor, which is used to mask (and unmask) secret
     /// information before transmission
-    blinding_factor: Grp::Scalar,
+    blinding_factor: <<CS as CipherSuite>::Group as Group>::Scalar,
     /// The user's password
     password: Vec<u8>,
     ke1_state: KE1State,
 }
 
-impl<Aead: aead::NewAead<KeySize = U32> + aead::Aead, Grp: Group, KeyFormat: KeyPair> TryFrom<&[u8]>
-    for ClientLogin<Aead, Grp, KeyFormat>
-{
+impl<CS: CipherSuite> TryFrom<&[u8]> for ClientLogin<CS> {
     type Error = ProtocolError;
     fn try_from(bytes: &[u8]) -> Result<Self, Self::Error> {
-        let scalar_len = Grp::ScalarLen::to_usize();
+        let scalar_len = <<CS as CipherSuite>::Group as Group>::ScalarLen::to_usize();
         let blinding_factor_bytes = GenericArray::from_slice(&bytes[..scalar_len]);
-        let blinding_factor = Grp::from_scalar_slice(blinding_factor_bytes)?;
+        let blinding_factor = CS::Group::from_scalar_slice(blinding_factor_bytes)?;
         let ke1_state = KE1State::try_from(&bytes[scalar_len..scalar_len + KE1_STATE_LEN])?;
         let password = bytes[scalar_len + KE1_STATE_LEN..].to_vec();
         Ok(Self {
@@ -641,15 +645,10 @@ impl<Aead: aead::NewAead<KeySize = U32> + aead::Aead, Grp: Group, KeyFormat: Key
     }
 }
 
-impl<Aead, Grp, KeyFormat> ClientLogin<Aead, Grp, KeyFormat>
-where
-    Aead: aead::NewAead<KeySize = U32> + aead::Aead,
-    Grp: Group,
-    KeyFormat: KeyPair,
-{
+impl<CS: CipherSuite> ClientLogin<CS> {
     pub fn to_bytes(&self) -> Vec<u8> {
         let output: Vec<u8> = [
-            Grp::scalar_as_bytes(&self.blinding_factor).as_slice(),
+            CS::Group::scalar_as_bytes(&self.blinding_factor).as_slice(),
             &self.ke1_state.to_bytes(),
             &self.password,
         ]
@@ -664,12 +663,7 @@ type ClientLoginFinishResult = (
     GenericArray<u8, <Sha256 as Digest>::OutputSize>,
 );
 
-impl<Aead, Grp, KeyFormat> ClientLogin<Aead, Grp, KeyFormat>
-where
-    Aead: aead::NewAead<KeySize = U32> + aead::Aead,
-    Grp: Group<UniformBytesLen = U64>,
-    KeyFormat: KeyPair<Repr = Key>,
-{
+impl<CS: CipherSuite> ClientLogin<CS> {
     /// Returns an initial "blinded" password request to send to the server, as well as a ClientLogin
     ///
     /// # Arguments
@@ -680,26 +674,31 @@ where
     /// ```
     /// use opaque_ke::opaque::ClientLogin;
     /// # use opaque_ke::errors::ProtocolError;
-    /// use chacha20poly1305::ChaCha20Poly1305;
-    /// use curve25519_dalek::ristretto::RistrettoPoint;
-    /// use opaque_ke::keypair::X25519KeyPair;
     /// use rand_core::{OsRng, RngCore};
+    /// use opaque_ke::ciphersuite::CipherSuite;
+    /// struct Default;
+    /// impl CipherSuite for Default {
+    ///     type Aead = chacha20poly1305::ChaCha20Poly1305;
+    ///     type Group = curve25519_dalek::ristretto::RistrettoPoint;
+    ///     type KeyFormat = opaque_ke::keypair::X25519KeyPair;
+    ///     type SlowHash = opaque_ke::slow_hash::NoOpHash;
+    /// }
     /// let mut client_rng = OsRng;
-    /// let (login_m1, client_login_state) = ClientLogin::<ChaCha20Poly1305, RistrettoPoint, X25519KeyPair>::start(b"hunter2", None, &mut client_rng)?;
+    /// let (login_m1, client_login_state) = ClientLogin::<Default>::start(b"hunter2", None, &mut client_rng)?;
     /// # Ok::<(), ProtocolError>(())
     /// ```
     pub fn start<R: RngCore + CryptoRng>(
         password: &[u8],
         pepper: Option<&[u8]>,
         rng: &mut R,
-    ) -> Result<(LoginFirstMessage<Grp>, Self), ProtocolError> {
+    ) -> Result<(LoginFirstMessage<CS::Group>, Self), ProtocolError> {
         let OprfClientBytes {
             alpha,
             blinding_factor,
-        } = oprf::generate_oprf1::<R, Grp>(&password, pepper, rng)?;
+        } = oprf::generate_oprf1::<R, CS::Group>(&password, pepper, rng)?;
 
         let (ke1_state, ke1_message) =
-            generate_ke1::<_, KeyFormat>(alpha.to_bytes().to_vec(), rng)?;
+            generate_ke1::<_, CS::KeyFormat>(alpha.to_bytes().to_vec(), rng)?;
 
         let l1 = LoginFirstMessage { alpha, ke1_message };
 
@@ -728,31 +727,36 @@ where
     /// # use opaque_ke::opaque::{ClientRegistration, ServerRegistration};
     /// # use opaque_ke::errors::ProtocolError;
     /// # use opaque_ke::keypair::{X25519KeyPair, KeyPair};
-    /// # use opaque_ke::slow_hash::NoOpHash;
     /// use rand_core::{OsRng, RngCore};
-    /// use chacha20poly1305::ChaCha20Poly1305;
-    /// use curve25519_dalek::ristretto::RistrettoPoint;
+    /// use opaque_ke::ciphersuite::CipherSuite;
+    /// struct Default;
+    /// impl CipherSuite for Default {
+    ///     type Aead = chacha20poly1305::ChaCha20Poly1305;
+    ///     type Group = curve25519_dalek::ristretto::RistrettoPoint;
+    ///     type KeyFormat = opaque_ke::keypair::X25519KeyPair;
+    ///     type SlowHash = opaque_ke::slow_hash::NoOpHash;
+    /// }
     /// let mut client_rng = OsRng;
     /// # let mut server_rng = OsRng;
-    /// # let (register_m1, client_state) = ClientRegistration::<ChaCha20Poly1305, RistrettoPoint>::start(b"hunter2", None, &mut client_rng)?;
+    /// # let (register_m1, client_state) = ClientRegistration::<Default>::start(b"hunter2", None, &mut client_rng)?;
     /// # let server_kp = X25519KeyPair::generate_random(&mut server_rng)?;
-    /// # let (register_m2, server_state) = ServerRegistration::<ChaCha20Poly1305, RistrettoPoint, X25519KeyPair>::start(register_m1, &mut server_rng)?;
-    /// # let (register_m3, _opaque_key) = client_state.finish::<_, _, NoOpHash>(register_m2, server_kp.public(), &mut client_rng)?;
+    /// # let (register_m2, server_state) = ServerRegistration::<Default>::start(register_m1, &mut server_rng)?;
+    /// # let (register_m3, _opaque_key) = client_state.finish(register_m2, server_kp.public(), &mut client_rng)?;
     /// # let p_file = server_state.finish(register_m3)?;
-    /// let (login_m1, client_login_state) = ClientLogin::<ChaCha20Poly1305, RistrettoPoint, X25519KeyPair>::start(b"hunter2", None, &mut client_rng)?;
+    /// let (login_m1, client_login_state) = ClientLogin::<Default>::start(b"hunter2", None, &mut client_rng)?;
     /// let (login_m2, server_login_state) = ServerLogin::start(p_file, &server_kp.private(), login_m1, &mut server_rng)?;
-    /// let (login_m3, client_transport, _opaque_key) = client_login_state.finish::<_, NoOpHash>(login_m2, &server_kp.public(), &mut client_rng)?;
+    /// let (login_m3, client_transport, _opaque_key) = client_login_state.finish(login_m2, &server_kp.public(), &mut client_rng)?;
     /// # Ok::<(), ProtocolError>(())
     /// ```
-    pub fn finish<R: RngCore + CryptoRng, SH: SlowHash>(
+    pub fn finish<R: RngCore + CryptoRng>(
         self,
-        l2: LoginSecondMessage<Aead, Grp>,
-        server_s_pk: &KeyFormat::Repr,
+        l2: LoginSecondMessage<CS::Aead, CS::Group>,
+        server_s_pk: &<<CS as CipherSuite>::KeyFormat as KeyPair>::Repr,
         _client_e_sk_rng: &mut R,
     ) -> Result<ClientLoginFinishResult, ProtocolError> {
         let l2_bytes: Vec<u8> = [l2.beta.to_bytes().as_slice(), &l2.envelope.to_bytes()].concat();
 
-        let password_derived_key = get_password_derived_key::<Grp, SH>(
+        let password_derived_key = get_password_derived_key::<CS::Group, CS::SlowHash>(
             self.password.clone(),
             l2.beta,
             &self.blinding_factor,
@@ -774,7 +778,7 @@ where
                 })?,
         )?;
 
-        let (ke3_state, ke3_message) = generate_ke3::<KeyFormat>(
+        let (ke3_state, ke3_message) = generate_ke3::<CS::KeyFormat>(
             l2_bytes,
             l2.ke2_message,
             &self.ke1_state,
@@ -804,6 +808,11 @@ impl TryFrom<&[u8]> for ServerLogin {
     }
 }
 
+type ServerLoginStartResult<CS> = (
+    LoginSecondMessage<<CS as CipherSuite>::Aead, <CS as CipherSuite>::Group>,
+    ServerLogin,
+);
+
 impl ServerLogin {
     pub fn to_bytes(&self) -> Vec<u8> {
         self.ke2_state.to_bytes()
@@ -822,33 +831,33 @@ impl ServerLogin {
     /// # use opaque_ke::opaque::{ClientRegistration,  ServerRegistration};
     /// # use opaque_ke::errors::ProtocolError;
     /// # use opaque_ke::keypair::{KeyPair, X25519KeyPair};
-    /// # use opaque_ke::slow_hash::NoOpHash;
     /// use rand_core::{OsRng, RngCore};
-    /// use chacha20poly1305::ChaCha20Poly1305;
-    /// use curve25519_dalek::ristretto::RistrettoPoint;
+    /// use opaque_ke::ciphersuite::CipherSuite;
+    /// struct Default;
+    /// impl CipherSuite for Default {
+    ///     type Aead = chacha20poly1305::ChaCha20Poly1305;
+    ///     type Group = curve25519_dalek::ristretto::RistrettoPoint;
+    ///     type KeyFormat = opaque_ke::keypair::X25519KeyPair;
+    ///     type SlowHash = opaque_ke::slow_hash::NoOpHash;
+    /// }
     /// let mut client_rng = OsRng;
     /// let mut server_rng = OsRng;
     /// let server_kp = X25519KeyPair::generate_random(&mut server_rng)?;
-    /// # let (register_m1, client_state) = ClientRegistration::<ChaCha20Poly1305, RistrettoPoint>::start(b"hunter2", None, &mut client_rng)?;
+    /// # let (register_m1, client_state) = ClientRegistration::<Default>::start(b"hunter2", None, &mut client_rng)?;
     /// # let (register_m2, server_state) =
-    /// ServerRegistration::<ChaCha20Poly1305, RistrettoPoint, X25519KeyPair>::start(register_m1, &mut server_rng)?;
-    /// # let (register_m3, _opaque_key) = client_state.finish::<_, _, NoOpHash>(register_m2, server_kp.public(), &mut client_rng)?;
+    /// ServerRegistration::<Default>::start(register_m1, &mut server_rng)?;
+    /// # let (register_m3, _opaque_key) = client_state.finish(register_m2, server_kp.public(), &mut client_rng)?;
     /// # let p_file = server_state.finish(register_m3)?;
-    /// let (login_m1, client_login_state) = ClientLogin::<ChaCha20Poly1305, RistrettoPoint, X25519KeyPair>::start(b"hunter2", None, &mut client_rng)?;
+    /// let (login_m1, client_login_state) = ClientLogin::<Default>::start(b"hunter2", None, &mut client_rng)?;
     /// let (login_m2, server_login_state) = ServerLogin::start(p_file, &server_kp.private(), login_m1, &mut server_rng)?;
     /// # Ok::<(), ProtocolError>(())
     /// ```
-    pub fn start<
-        R: RngCore + CryptoRng,
-        Aead: aead::NewAead<KeySize = U32> + aead::Aead,
-        Grp: Group,
-        KeyFormat: KeyPair<Repr = Key>,
-    >(
-        password_file: ServerRegistration<Aead, Grp, KeyFormat>,
+    pub fn start<CS: CipherSuite, R: RngCore + CryptoRng>(
+        password_file: ServerRegistration<CS>,
         server_s_sk: &Key,
-        l1: LoginFirstMessage<Grp>,
+        l1: LoginFirstMessage<CS::Group>,
         rng: &mut R,
-    ) -> Result<(LoginSecondMessage<Aead, Grp>, Self), ProtocolError> {
+    ) -> Result<ServerLoginStartResult<CS>, ProtocolError> {
         let l1_bytes = &l1.to_bytes();
         let beta = oprf::generate_oprf2(l1.alpha, &password_file.oprf_key)?;
 
@@ -859,7 +868,7 @@ impl ServerLogin {
 
         let l2_component: Vec<u8> = [beta.to_bytes().as_slice(), &envelope.to_bytes()].concat();
 
-        let (ke2_state, ke2_message) = generate_ke2::<_, KeyFormat>(
+        let (ke2_state, ke2_message) = generate_ke2::<_, CS::KeyFormat>(
             rng,
             l1_bytes.to_vec(),
             l2_component,
@@ -891,21 +900,26 @@ impl ServerLogin {
     /// # use opaque_ke::opaque::{ClientRegistration,  ServerRegistration};
     /// # use opaque_ke::errors::ProtocolError;
     /// # use opaque_ke::keypair::{KeyPair, X25519KeyPair};
-    /// # use opaque_ke::slow_hash::NoOpHash;
     /// use rand_core::{OsRng, RngCore};
-    /// use chacha20poly1305::ChaCha20Poly1305;
-    /// use curve25519_dalek::ristretto::RistrettoPoint;
+    /// use opaque_ke::ciphersuite::CipherSuite;
+    /// struct Default;
+    /// impl CipherSuite for Default {
+    ///     type Aead = chacha20poly1305::ChaCha20Poly1305;
+    ///     type Group = curve25519_dalek::ristretto::RistrettoPoint;
+    ///     type KeyFormat = opaque_ke::keypair::X25519KeyPair;
+    ///     type SlowHash = opaque_ke::slow_hash::NoOpHash;
+    /// }
     /// let mut client_rng = OsRng;
     /// let mut server_rng = OsRng;
     /// let server_kp = X25519KeyPair::generate_random(&mut server_rng)?;
-    /// # let (register_m1, client_state) = ClientRegistration::<ChaCha20Poly1305, RistrettoPoint>::start(b"hunter2", None, &mut client_rng)?;
+    /// # let (register_m1, client_state) = ClientRegistration::<Default>::start(b"hunter2", None, &mut client_rng)?;
     /// # let (register_m2, server_state) =
-    /// ServerRegistration::<ChaCha20Poly1305, RistrettoPoint, X25519KeyPair>::start(register_m1, &mut server_rng)?;
-    /// # let (register_m3, _opaque_key) = client_state.finish::<_, _, NoOpHash>(register_m2, server_kp.public(), &mut client_rng)?;
+    /// ServerRegistration::<Default>::start(register_m1, &mut server_rng)?;
+    /// # let (register_m3, _opaque_key) = client_state.finish(register_m2, server_kp.public(), &mut client_rng)?;
     /// # let p_file = server_state.finish(register_m3)?;
-    /// let (login_m1, client_login_state) = ClientLogin::<ChaCha20Poly1305, RistrettoPoint, X25519KeyPair>::start(b"hunter2", None, &mut client_rng)?;
+    /// let (login_m1, client_login_state) = ClientLogin::<Default>::start(b"hunter2", None, &mut client_rng)?;
     /// let (login_m2, server_login_state) = ServerLogin::start(p_file, &server_kp.private(), login_m1, &mut server_rng)?;
-    /// let (login_m3, client_transport, _opaque_key) = client_login_state.finish::<_, NoOpHash>(login_m2, &server_kp.public(), &mut client_rng)?;
+    /// let (login_m3, client_transport, _opaque_key) = client_login_state.finish(login_m2, &server_kp.public(), &mut client_rng)?;
     /// let mut server_transport = server_login_state.finish(login_m3)?;
     /// # Ok::<(), ProtocolError>(())
     /// ```
