@@ -15,6 +15,8 @@ use curve25519_dalek::ristretto::RistrettoPoint;
 
 use chacha20poly1305::ChaCha20Poly1305;
 use rand_core::{OsRng, RngCore};
+
+use sha2::Digest;
 use std::convert::TryFrom;
 
 struct Default;
@@ -27,9 +29,16 @@ impl CipherSuite for Default {
 
 fn random_ristretto_point() -> RistrettoPoint {
     let mut rng = OsRng;
+    let mut random_bits = [0u8; 64];
+    rng.fill_bytes(&mut random_bits);
+
+    // This is because RistrettoPoint is on an obsolete sha2 version
     let mut bits = [0u8; 64];
-    rng.fill_bytes(&mut bits);
-    RistrettoPoint::hash_from_bytes::<sha2::Sha512>(&bits)
+    let mut hasher = sha2::Sha512::new();
+    hasher.update(&random_bits[..]);
+    bits.copy_from_slice(&hasher.finalize());
+
+    RistrettoPoint::from_uniform_bytes(&bits)
 }
 
 #[test]
