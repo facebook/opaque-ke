@@ -5,7 +5,7 @@
 
 use crate::{
     errors::{utils::check_slice_size, InternalPakeError, PakeError, ProtocolError},
-    keypair::{Key, KeyPair, SizedBytes},
+    keypair::{KeyPair, SizedBytes},
     sized_bytes_using_constant_and_try_from,
 };
 use generic_array::{
@@ -34,7 +34,7 @@ static STR_3DH: &[u8] = b"3DH keys";
 
 #[derive(PartialEq, Eq)]
 pub(crate) struct KE1State {
-    client_e_sk: Key,
+    client_e_sk: Vec<u8>,
     client_nonce: Vec<u8>,
     hashed_l1: Vec<u8>,
 }
@@ -42,7 +42,7 @@ pub(crate) struct KE1State {
 #[derive(PartialEq, Eq)]
 pub(crate) struct KE1Message {
     pub(crate) client_nonce: Vec<u8>,
-    pub(crate) client_e_pk: Key,
+    pub(crate) client_e_pk: Vec<u8>,
 }
 
 impl TryFrom<&[u8]> for KE1State {
@@ -52,7 +52,7 @@ impl TryFrom<&[u8]> for KE1State {
         let checked_bytes = check_slice_size(bytes, KE1_STATE_LEN, "ke1_state")?;
 
         Ok(Self {
-            client_e_sk: Key::from_bytes(&checked_bytes[..KEY_LEN])?,
+            client_e_sk: checked_bytes[..KEY_LEN].to_vec(),
             client_nonce: checked_bytes[KEY_LEN..KEY_LEN + NONCE_LEN].to_vec(),
             hashed_l1: checked_bytes[KEY_LEN + NONCE_LEN..].to_vec(),
         })
@@ -62,7 +62,7 @@ impl TryFrom<&[u8]> for KE1State {
 impl KE1State {
     pub fn to_bytes(&self) -> Vec<u8> {
         [
-            &self.client_e_sk.to_arr(),
+            &self.client_e_sk[..],
             &self.client_nonce[..],
             &self.hashed_l1[..],
         ]
@@ -74,7 +74,7 @@ sized_bytes_using_constant_and_try_from!(KE1State, U96);
 
 impl KE1Message {
     pub fn to_bytes(&self) -> Vec<u8> {
-        [&self.client_nonce[..], &self.client_e_pk.to_arr()].concat()
+        [&self.client_nonce[..], &self.client_e_pk[..]].concat()
     }
 }
 
@@ -87,14 +87,14 @@ impl TryFrom<&[u8]> for KE1Message {
 
         Ok(Self {
             client_nonce: checked_bytes[..NONCE_LEN].to_vec(),
-            client_e_pk: Key::from_bytes(&checked_bytes[NONCE_LEN..])?,
+            client_e_pk: checked_bytes[NONCE_LEN..].to_vec(),
         })
     }
 }
 
 sized_bytes_using_constant_and_try_from!(KE1Message, U64);
 
-pub(crate) fn generate_ke1<R: RngCore + CryptoRng, KeyFormat: KeyPair<Repr = Key>>(
+pub(crate) fn generate_ke1<R: RngCore + CryptoRng, KeyFormat: KeyPair>(
     l1_component: Vec<u8>,
     rng: &mut R,
 ) -> Result<(KE1State, KE1Message), ProtocolError> {
@@ -104,7 +104,7 @@ pub(crate) fn generate_ke1<R: RngCore + CryptoRng, KeyFormat: KeyPair<Repr = Key
 
     let ke1_message = KE1Message {
         client_nonce: client_nonce.to_vec(),
-        client_e_pk: client_e_kp.public().clone(),
+        client_e_pk: client_e_kp.public().to_arr().to_vec(),
     };
 
     let l1_data: Vec<u8> = [&l1_component[..], &ke1_message.to_bytes()].concat();
@@ -114,7 +114,7 @@ pub(crate) fn generate_ke1<R: RngCore + CryptoRng, KeyFormat: KeyPair<Repr = Key
 
     Ok((
         KE1State {
-            client_e_sk: client_e_kp.private().clone(),
+            client_e_sk: client_e_kp.private().to_arr().to_vec(),
             client_nonce: client_nonce.to_vec(),
             hashed_l1: hashed_l1.to_vec(),
         },
@@ -130,7 +130,7 @@ pub(crate) struct KE2State {
 
 pub(crate) struct KE2Message {
     server_nonce: Vec<u8>,
-    server_e_pk: Key,
+    server_e_pk: Vec<u8>,
     mac: Vec<u8>,
 }
 
@@ -162,12 +162,8 @@ impl TryFrom<&[u8]> for KE2State {
 
 impl KE2Message {
     pub fn to_bytes(&self) -> Vec<u8> {
-        let output: Vec<u8> = [
-            &self.server_nonce[..],
-            &self.server_e_pk.to_arr(),
-            &self.mac[..],
-        ]
-        .concat();
+        let output: Vec<u8> =
+            [&self.server_nonce[..], &self.server_e_pk[..], &self.mac[..]].concat();
         output
     }
 }
@@ -180,14 +176,14 @@ impl TryFrom<&[u8]> for KE2Message {
 
         Ok(Self {
             server_nonce: checked_bytes[..NONCE_LEN].to_vec(),
-            server_e_pk: Key::from_bytes(&checked_bytes[NONCE_LEN..NONCE_LEN + KEY_LEN])?,
+            server_e_pk: checked_bytes[NONCE_LEN..NONCE_LEN + KEY_LEN].to_vec(),
             mac: checked_bytes[NONCE_LEN + KEY_LEN..].to_vec(),
         })
     }
 }
 
 // The triple of public and private components used in the 3DH computation
-struct TripleDHComponents {
+struct TripleDHComponents<Key> {
     pk1: Key,
     sk1: Key,
     pk2: Key,
@@ -205,8 +201,8 @@ type TripleDHDerivationResult = (
 
 // Internal function which takes the public and private components of the client and server keypairs, along
 // with some auxiliary metadata, to produce the shared secret and two MAC keys
-fn derive_3dh_keys<KeyFormat: KeyPair<Repr = Key>>(
-    dh: TripleDHComponents,
+fn derive_3dh_keys<KeyFormat: KeyPair>(
+    dh: TripleDHComponents<KeyFormat::Repr>,
     client_nonce: &[u8],
     server_nonce: &[u8],
     client_s_pk: KeyFormat::Repr,
@@ -240,7 +236,7 @@ fn derive_3dh_keys<KeyFormat: KeyPair<Repr = Key>>(
     ))
 }
 
-pub(crate) fn generate_ke2<R: RngCore + CryptoRng, KeyFormat: KeyPair<Repr = Key>>(
+pub(crate) fn generate_ke2<R: RngCore + CryptoRng, KeyFormat: KeyPair>(
     rng: &mut R,
     l1_bytes: Vec<u8>,
     l2_bytes: Vec<u8>,
@@ -295,7 +291,7 @@ pub(crate) fn generate_ke2<R: RngCore + CryptoRng, KeyFormat: KeyPair<Repr = Key
         },
         KE2Message {
             server_nonce: server_nonce.to_vec(),
-            server_e_pk: server_e_kp.public().clone(),
+            server_e_pk: server_e_kp.public().to_arr().to_vec(),
             mac: mac.finalize().into_bytes().to_vec(),
         },
     ))
@@ -339,7 +335,7 @@ impl TryFrom<&[u8]> for KE3Message {
     }
 }
 
-pub(crate) fn generate_ke3<KeyFormat: KeyPair<Repr = Key>>(
+pub(crate) fn generate_ke3<KeyFormat: KeyPair>(
     l2_component: Vec<u8>,
     ke2_message: KE2Message,
     ke1_state: &KE1State,
@@ -348,11 +344,11 @@ pub(crate) fn generate_ke3<KeyFormat: KeyPair<Repr = Key>>(
 ) -> Result<(KE3State, KE3Message), ProtocolError> {
     let (shared_secret, km2, km3) = derive_3dh_keys::<KeyFormat>(
         TripleDHComponents {
-            pk1: ke2_message.server_e_pk.clone(),
-            sk1: ke1_state.client_e_sk.clone(),
+            pk1: KeyFormat::Repr::from_bytes(&ke2_message.server_e_pk)?,
+            sk1: KeyFormat::Repr::from_bytes(&ke1_state.client_e_sk)?,
             pk2: server_s_pk.clone(),
-            sk2: ke1_state.client_e_sk.clone(),
-            pk3: ke2_message.server_e_pk.clone(),
+            sk2: KeyFormat::Repr::from_bytes(&ke1_state.client_e_sk)?,
+            pk3: KeyFormat::Repr::from_bytes(&ke2_message.server_e_pk)?,
             sk3: client_s_sk.clone(),
         },
         &ke1_state.client_nonce,

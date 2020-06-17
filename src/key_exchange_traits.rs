@@ -5,7 +5,7 @@ use crate::{
         finish_ke, generate_ke1, generate_ke2, generate_ke3, KE1Message, KE1State, KE2Message,
         KE2State, KE3Message, KE3State,
     },
-    keypair::{Key, KeyPair},
+    keypair::{KeyPair, SizedBytes},
 };
 use rand_core::{CryptoRng, RngCore};
 
@@ -67,8 +67,10 @@ where
 
 // KE3State, or the shared secret, is the type that's characteristic of this
 // key exchange mode
-// TODO(fga): remove the undue constraint Repr = Key below, which is undue
-impl<KeyFormat: KeyPair<Repr = Key>> KeyExchangeInitiator<KeyFormat> for KE3State {
+impl<KeyFormat: KeyPair> KeyExchangeInitiator<KeyFormat> for KE3State
+where
+    KeyFormat::Repr: 'static,
+{
     type InitialStep = BoxStR<'static, (), KE1State, KE1Message, ProtocolError>;
     type FinalStep = BoxStR<'static, KE1State, KE3State, KE3Message, ProtocolError>;
 
@@ -93,8 +95,10 @@ impl<KeyFormat: KeyPair<Repr = Key>> KeyExchangeInitiator<KeyFormat> for KE3Stat
     }
 }
 
-// TODO(fga): remove the undue constraint Repr = Key below, which is undue
-impl<KeyFormat: KeyPair<Repr = Key>> KeyExchangeResponder<KeyFormat> for KE3State {
+impl<KeyFormat: KeyPair> KeyExchangeResponder<KeyFormat> for KE3State
+where
+    KeyFormat::Repr: 'static,
+{
     type InitialStep = BoxStR<'static, (), KE2State, KE2Message, ProtocolError>;
     type FinalStep = BoxStR<'static, KE2State, KE3State, (), ProtocolError>;
 
@@ -113,7 +117,7 @@ impl<KeyFormat: KeyPair<Repr = Key>> KeyExchangeResponder<KeyFormat> for KE3Stat
                 rng,
                 l1_component,
                 l2_component,
-                ke1m.client_e_pk,
+                <KeyFormat as KeyPair>::Repr::from_bytes(&ke1m.client_e_pk)?,
                 client_s_pk,
                 server_s_sk,
                 ke1m.client_nonce,

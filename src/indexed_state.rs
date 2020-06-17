@@ -20,7 +20,7 @@ fn st<F>(f: F) -> St<F> {
     St(f)
 }
 
-#[allow(clippy::type_complexity)] // generic boxed function for a 'complex' monad
+#[allow(clippy::type_complexity)] // generic boxed function for a 'complex' signature
 pub struct BoxStR<'state, S1, S2, T, E>(Box<dyn FnOnce(S1) -> Result<(S2, T), E> + 'state>);
 
 pub fn boxed_state<'state, S1, S2, T, E, F>(f: F) -> BoxStR<'state, S1, S2, T, E>
@@ -41,9 +41,9 @@ impl<'state, S1, S2, T, E> StateTR<S1> for BoxStR<'state, S1, S2, T, E> {
 }
 
 /// This is "just" the indexed state transformer applied to a Result monad.
-/// This would be a lot simpler with HKTs, allowing us to decouple
-/// the indexed state, output, and result computation, but "faute de grives,
-/// on mange des merles".
+/// This would be a lot simpler with HKTs, allowing us to decouple the indexed
+/// state, output, and result computation, but you can't always get what you
+/// need ...
 pub trait StateTR<S> {
     // Required members
     type Output;

@@ -873,7 +873,7 @@ impl ServerLogin {
             rng,
             l1_bytes.to_vec(),
             l2_component,
-            l1.ke1_message.client_e_pk,
+            Key::from_bytes(&l1.ke1_message.client_e_pk)?,
             client_s_pk,
             server_s_sk.clone(),
             l1.ke1_message.client_nonce.to_vec(),
