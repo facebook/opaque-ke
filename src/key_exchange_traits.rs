@@ -1,6 +1,5 @@
 use crate::{
     errors::ProtocolError,
-    indexed_state::{boxed_state, BoxStR, StateTR},
     key_exchange::{
         finish_ke, generate_ke1, generate_ke2, generate_ke3, KE1Message, KE1State, KE2Message,
         KE2State, KE3Message, KE3State,
@@ -8,128 +7,258 @@ use crate::{
     keypair::{KeyPair, SizedBytes},
 };
 use rand_core::{CryptoRng, RngCore};
+use std::marker::PhantomData;
 
-pub trait KeyExchangeInitiator<KeyFormat>: Sized
-where
-    KeyFormat: KeyPair,
-{
-    type InitialStep: StateTR<()>;
-    type FinalStep: StateTR<<Self::InitialStep as StateTR<()>>::Next>;
-
-    // The responder must understand our messages and agree on the key Format
-    type Responder: KeyExchangeResponder<KeyFormat, Initiator = Self>;
-
-    // client to server
-    fn start<R: RngCore + CryptoRng>(
-        l1_component: Vec<u8>,
-        rng: &'static mut R,
-    ) -> Self::InitialStep;
-
-    // client to server
-    fn finish(
-        l2_component: Vec<u8>,
-        ke2m: <<Self::Responder as KeyExchangeResponder<KeyFormat>>::InitialStep as StateTR<()>>::Output,
-        server_s_pk: <KeyFormat as KeyPair>::Repr,
-        client_s_sk: <KeyFormat as KeyPair>::Repr,
-    ) -> Self::FinalStep;
+pub trait IStateTR {
+    type Initial;
+    type Next;
+    type Output;
+    type Error;
+    fn generate(self, init_state: Self::Initial)
+        -> Result<(Self::Next, Self::Output), Self::Error>;
 }
 
-pub trait KeyExchangeResponder<KeyFormat>: Sized
+pub trait RngGetter {
+    type RNG: RngCore + CryptoRng;
+    fn rng() -> Self::RNG;
+}
+
+pub trait InitiatorFirstStep: IStateTR<Initial = ()> + RngGetter {
+    fn new(l1_component: Vec<u8>) -> Self;
+}
+
+pub trait ResponderFirstStep<KeyFormat>: IStateTR<Initial = ()> + RngGetter
 where
     KeyFormat: KeyPair,
 {
-    type InitialStep: StateTR<()>;
-    type FinalStep: StateTR<<Self::InitialStep as StateTR<()>>::Next>;
+    type Proposer: InitiatorFirstStep;
 
-    // The initiator must understand our messages and agree on the key Format
-    type Initiator: KeyExchangeInitiator<KeyFormat, Responder = Self>;
-
-    // server to client
-    fn start<R: CryptoRng + RngCore>(
+    fn new(
         l1_component: Vec<u8>,
         l2_component: Vec<u8>,
         client_s_pk: <KeyFormat as KeyPair>::Repr,
         server_s_sk: <KeyFormat as KeyPair>::Repr,
-        ke1m: <<Self::Initiator as KeyExchangeInitiator<KeyFormat>>::InitialStep as StateTR<()>>::Output,
-        rng: &'static mut R,
-    ) -> Self::InitialStep;
-
-    // server to client
-    #[allow(clippy::type_complexity)] // associated type constraints across two paired traits
-    fn finish(
-        // This unsightly constraint is the
-        // precisely qualified version of `Self::Initiator::FinalStep::Output`
-        ke3m: <<Self::Initiator as KeyExchangeInitiator<KeyFormat>>::FinalStep as StateTR<
-            <<Self::Initiator as KeyExchangeInitiator<KeyFormat>>::InitialStep as StateTR<()>>::Next,
-        >>::Output,
-    ) -> Self::FinalStep;
+        ke1m: <Self::Proposer as IStateTR>::Output,
+    ) -> Self;
 }
 
-// KE3State, or the shared secret, is the type that's characteristic of this
-// key exchange mode
-impl<KeyFormat: KeyPair> KeyExchangeInitiator<KeyFormat> for KE3State
+pub trait InitiatorFinalStep<FirstStep, KeyFormat>:
+    IStateTR<Initial = <FirstStep as IStateTR>::Next>
 where
-    KeyFormat::Repr: 'static,
+    KeyFormat: KeyPair,
+    FirstStep: InitiatorFirstStep,
 {
-    type InitialStep = BoxStR<'static, (), KE1State, KE1Message, ProtocolError>;
-    type FinalStep = BoxStR<'static, KE1State, KE3State, KE3Message, ProtocolError>;
+    type Proposer: ResponderFirstStep<KeyFormat, Proposer = FirstStep>;
 
-    type Responder = Self;
-
-    fn start<R: RngCore + CryptoRng>(
-        l1_component: Vec<u8>,
-        rng: &'static mut R,
-    ) -> Self::InitialStep {
-        boxed_state(move |_| generate_ke1::<_, KeyFormat>(l1_component, rng))
-    }
-
-    fn finish(
+    fn new(
         l2_component: Vec<u8>,
-        ke2m: KE2Message,
+        ke2m: <Self::Proposer as IStateTR>::Output,
         server_s_pk: <KeyFormat as KeyPair>::Repr,
         client_s_sk: <KeyFormat as KeyPair>::Repr,
-    ) -> Self::FinalStep {
-        boxed_state(move |ke1_state: KE1State| {
-            generate_ke3::<KeyFormat>(l2_component, ke2m, &ke1_state, server_s_pk, client_s_sk)
-        })
+    ) -> Self;
+}
+
+pub trait ResponderFinalStep<FirstStep, KeyFormat>:
+    IStateTR<Initial = <FirstStep as IStateTR>::Next, Output = ()>
+where
+    KeyFormat: KeyPair,
+    FirstStep: ResponderFirstStep<KeyFormat>,
+{
+    type Proposer: InitiatorFinalStep<FirstStep::Proposer, KeyFormat, Proposer = FirstStep>;
+
+    fn new(
+        // This unsightly constraint is the
+        // precisely qualified version of `Self::Proposer::Output`
+        ke3m: <Self::Proposer as IStateTR>::Output,
+    ) -> Self;
+}
+
+////////////////////////////
+// implementation for 3DH //
+////////////////////////////
+
+pub struct ThreeDHInitiator1<KeyFormat> {
+    l1_component: Vec<u8>,
+    _key_format: PhantomData<KeyFormat>,
+}
+
+// To be masked and replaced in #[cfg(test)]
+impl<KeyFormat> RngGetter for ThreeDHInitiator1<KeyFormat> {
+    type RNG = rand_core::OsRng;
+    fn rng() -> Self::RNG {
+        rand_core::OsRng
     }
 }
 
-impl<KeyFormat: KeyPair> KeyExchangeResponder<KeyFormat> for KE3State
+impl<KeyFormat> IStateTR for ThreeDHInitiator1<KeyFormat>
 where
-    KeyFormat::Repr: 'static,
+    KeyFormat: KeyPair,
 {
-    type InitialStep = BoxStR<'static, (), KE2State, KE2Message, ProtocolError>;
-    type FinalStep = BoxStR<'static, KE2State, KE3State, (), ProtocolError>;
+    type Initial = ();
+    type Output = KE1Message;
+    type Next = KE1State;
+    type Error = ProtocolError;
 
-    type Initiator = Self;
+    fn generate(self, _init_state: ()) -> Result<(KE1State, KE1Message), ProtocolError> {
+        let mut rng = <Self as RngGetter>::rng();
+        generate_ke1::<_, KeyFormat>(self.l1_component, &mut rng)
+    }
+}
 
-    fn start<R: CryptoRng + RngCore>(
+impl<KeyFormat> InitiatorFirstStep for ThreeDHInitiator1<KeyFormat>
+where
+    KeyFormat: KeyPair,
+{
+    fn new(l1_component: Vec<u8>) -> Self {
+        ThreeDHInitiator1 {
+            l1_component,
+            _key_format: PhantomData,
+        }
+    }
+}
+
+pub struct ThreeDHResponder1<KeyFormat: KeyPair> {
+    l1_component: Vec<u8>,
+    l2_component: Vec<u8>,
+    client_s_pk: <KeyFormat as KeyPair>::Repr,
+    server_s_sk: <KeyFormat as KeyPair>::Repr,
+    ke1m: KE1Message,
+}
+
+impl<KeyFormat> RngGetter for ThreeDHResponder1<KeyFormat>
+where
+    KeyFormat: KeyPair,
+{
+    type RNG = rand_core::OsRng;
+    fn rng() -> Self::RNG {
+        rand_core::OsRng
+    }
+}
+
+impl<KeyFormat> IStateTR for ThreeDHResponder1<KeyFormat>
+where
+    KeyFormat: KeyPair,
+{
+    type Initial = ();
+    type Next = KE2State;
+    type Output = KE2Message;
+    type Error = ProtocolError;
+    fn generate(self, _init_state: ()) -> Result<(KE2State, KE2Message), ProtocolError> {
+        let mut rng = <Self as RngGetter>::rng();
+        generate_ke2::<_, KeyFormat>(
+            &mut rng,
+            self.l1_component,
+            self.l2_component,
+            <KeyFormat as KeyPair>::Repr::from_bytes(&self.ke1m.client_e_pk)?,
+            self.client_s_pk,
+            self.server_s_sk,
+            self.ke1m.client_nonce,
+        )
+    }
+}
+
+impl<KeyFormat> ResponderFirstStep<KeyFormat> for ThreeDHResponder1<KeyFormat>
+where
+    KeyFormat: KeyPair,
+{
+    type Proposer = ThreeDHInitiator1<KeyFormat>;
+
+    fn new(
         l1_component: Vec<u8>,
         l2_component: Vec<u8>,
         client_s_pk: <KeyFormat as KeyPair>::Repr,
         server_s_sk: <KeyFormat as KeyPair>::Repr,
         ke1m: KE1Message,
-        rng: &'static mut R,
-    ) -> Self::InitialStep {
-        boxed_state(move |_| {
-            generate_ke2::<_, KeyFormat>(
-                rng,
-                l1_component,
-                l2_component,
-                <KeyFormat as KeyPair>::Repr::from_bytes(&ke1m.client_e_pk)?,
-                client_s_pk,
-                server_s_sk,
-                ke1m.client_nonce,
-            )
-        })
+    ) -> Self {
+        ThreeDHResponder1 {
+            l1_component,
+            l2_component,
+            client_s_pk,
+            server_s_sk,
+            ke1m,
+        }
     }
+}
 
-    // server to client
-    fn finish(ke3m: KE3Message) -> Self::FinalStep {
-        boxed_state(move |ke2_state: KE2State| {
-            let shared_secret = finish_ke(ke3m, &ke2_state)?;
-            Ok((KE3State { shared_secret }, ()))
-        })
+pub struct ThreeDHInitiator2<KeyFormat: KeyPair> {
+    l2_component: Vec<u8>,
+    ke2m: KE2Message,
+    server_s_pk: <KeyFormat as KeyPair>::Repr,
+    client_s_sk: <KeyFormat as KeyPair>::Repr,
+}
+
+impl<KeyFormat> IStateTR for ThreeDHInitiator2<KeyFormat>
+where
+    KeyFormat: KeyPair,
+{
+    type Initial = KE1State;
+    type Next = KE3State;
+    type Output = KE3Message;
+    type Error = ProtocolError;
+
+    fn generate(self, init_state: KE1State) -> Result<(KE3State, KE3Message), ProtocolError> {
+        generate_ke3::<KeyFormat>(
+            self.l2_component,
+            self.ke2m,
+            &init_state,
+            self.server_s_pk,
+            self.client_s_sk,
+        )
+    }
+}
+
+impl<KeyFormat> InitiatorFinalStep<ThreeDHInitiator1<KeyFormat>, KeyFormat>
+    for ThreeDHInitiator2<KeyFormat>
+where
+    KeyFormat: KeyPair,
+{
+    type Proposer = ThreeDHResponder1<KeyFormat>;
+
+    fn new(
+        l2_component: Vec<u8>,
+        ke2m: KE2Message,
+        server_s_pk: <KeyFormat as KeyPair>::Repr,
+        client_s_sk: <KeyFormat as KeyPair>::Repr,
+    ) -> Self {
+        ThreeDHInitiator2 {
+            l2_component,
+            ke2m,
+            server_s_pk,
+            client_s_sk,
+        }
+    }
+}
+
+pub struct ThreeDHResponder2<KeyFormat> {
+    _key_format: PhantomData<KeyFormat>,
+    ke3m: KE3Message,
+}
+
+impl<KeyFormat> IStateTR for ThreeDHResponder2<KeyFormat>
+where
+    KeyFormat: KeyPair,
+{
+    type Initial = KE2State;
+    type Next = KE3State;
+    type Output = ();
+    type Error = ProtocolError;
+    fn generate(self, s: KE2State) -> Result<(KE3State, ()), ProtocolError> {
+        let shared_secret = finish_ke(self.ke3m, &s)?;
+        Ok((KE3State { shared_secret }, ()))
+    }
+}
+
+impl<KeyFormat> ResponderFinalStep<ThreeDHResponder1<KeyFormat>, KeyFormat>
+    for ThreeDHResponder2<KeyFormat>
+where
+    KeyFormat: KeyPair,
+{
+    type Proposer = ThreeDHInitiator2<KeyFormat>;
+
+    fn new(ke3m: KE3Message) -> Self {
+        ThreeDHResponder2 {
+            _key_format: PhantomData,
+            ke3m,
+        }
     }
 }

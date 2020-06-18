@@ -403,7 +403,5 @@ mod oprf;
 mod group;
 pub mod slow_hash;
 
-mod indexed_state;
-
 #[cfg(test)]
 mod tests;

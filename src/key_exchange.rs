@@ -33,14 +33,14 @@ pub(crate) const KE2_MESSAGE_LEN: usize = NONCE_LEN + 2 * KEY_LEN;
 static STR_3DH: &[u8] = b"3DH keys";
 
 #[derive(PartialEq, Eq)]
-pub(crate) struct KE1State {
+pub struct KE1State {
     client_e_sk: Vec<u8>,
     client_nonce: Vec<u8>,
     hashed_l1: Vec<u8>,
 }
 
 #[derive(PartialEq, Eq)]
-pub(crate) struct KE1Message {
+pub struct KE1Message {
     pub(crate) client_nonce: Vec<u8>,
     pub(crate) client_e_pk: Vec<u8>,
 }
@@ -122,13 +122,13 @@ pub(crate) fn generate_ke1<R: RngCore + CryptoRng, KeyFormat: KeyPair>(
     ))
 }
 
-pub(crate) struct KE2State {
+pub struct KE2State {
     km3: Vec<u8>,
     hashed_transcript: Vec<u8>,
     shared_secret: Vec<u8>,
 }
 
-pub(crate) struct KE2Message {
+pub struct KE2Message {
     server_nonce: Vec<u8>,
     server_e_pk: Vec<u8>,
     mac: Vec<u8>,
@@ -297,11 +297,11 @@ pub(crate) fn generate_ke2<R: RngCore + CryptoRng, KeyFormat: KeyPair>(
     ))
 }
 
-pub(crate) struct KE3State {
+pub struct KE3State {
     pub(crate) shared_secret: Vec<u8>,
 }
 
-pub(crate) struct KE3Message {
+pub struct KE3Message {
     mac: Vec<u8>,
 }
 
