@@ -23,6 +23,15 @@ pub trait RngGetter {
     fn rng() -> Self::RNG;
 }
 
+// blanket implementation for RngGetter
+// To be masked and replaced in #[cfg(test)] or through specialization
+impl<T> RngGetter for T {
+    type RNG = rand_core::OsRng;
+    fn rng() -> Self::RNG {
+        rand_core::OsRng
+    }
+}
+
 pub trait InitiatorFirstStep: IStateTR<Initial = ()> + RngGetter {
     fn new(l1_component: Vec<u8>) -> Self;
 }
@@ -82,14 +91,6 @@ pub struct ThreeDHInitiator1<KeyFormat> {
     _key_format: PhantomData<KeyFormat>,
 }
 
-// To be masked and replaced in #[cfg(test)]
-impl<KeyFormat> RngGetter for ThreeDHInitiator1<KeyFormat> {
-    type RNG = rand_core::OsRng;
-    fn rng() -> Self::RNG {
-        rand_core::OsRng
-    }
-}
-
 impl<KeyFormat> IStateTR for ThreeDHInitiator1<KeyFormat>
 where
     KeyFormat: KeyPair,
@@ -123,16 +124,6 @@ pub struct ThreeDHResponder1<KeyFormat: KeyPair> {
     client_s_pk: <KeyFormat as KeyPair>::Repr,
     server_s_sk: <KeyFormat as KeyPair>::Repr,
     ke1m: KE1Message,
-}
-
-impl<KeyFormat> RngGetter for ThreeDHResponder1<KeyFormat>
-where
-    KeyFormat: KeyPair,
-{
-    type RNG = rand_core::OsRng;
-    fn rng() -> Self::RNG {
-        rand_core::OsRng
-    }
 }
 
 impl<KeyFormat> IStateTR for ThreeDHResponder1<KeyFormat>

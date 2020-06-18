@@ -28,6 +28,9 @@ pub enum InternalPakeError {
     HmacError,
     #[error("Computing the slow hashing function failed")]
     SlowHashError,
+    #[cfg(feature = "noise")]
+    #[error("Noise library operation failed")]
+    NoiseError,
 }
 
 /// Represents an error in password checking

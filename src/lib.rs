@@ -405,3 +405,6 @@ pub mod slow_hash;
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(feature = "noise")]
+mod noise;

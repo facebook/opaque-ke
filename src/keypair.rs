@@ -16,6 +16,7 @@ use proptest::prelude::*;
 #[cfg(test)]
 use rand::{rngs::StdRng, SeedableRng};
 use rand_core::{CryptoRng, RngCore};
+#[cfg(test)]
 use std::fmt::Debug;
 use x25519_dalek::{PublicKey, StaticSecret};
 
@@ -175,9 +176,9 @@ where
 }
 
 /// A minimalist key type built around [u8;32]
-#[derive(Debug, PartialEq, Eq, Clone)]
-#[repr(transparent)]
-pub struct Key(Vec<u8>);
+#[cfg_attr(test, derive(Debug))]
+#[derive(PartialEq, Eq, Clone)]
+pub struct Key(pub Vec<u8>);
 
 impl Deref for Key {
     type Target = Vec<u8>;
@@ -204,7 +205,8 @@ impl SizedBytes for Key {
 try_from_and_to_bytes_using_sized_bytes!(Key);
 
 /// A representation of an X25519 keypair according to RFC7748
-#[derive(Debug, PartialEq, Eq)]
+#[cfg_attr(test, derive(Debug))]
+#[derive(PartialEq, Eq)]
 pub struct X25519KeyPair {
     pk: Key,
     sk: Key,

@@ -10,16 +10,20 @@ edition = "2018"
 readme = "README.md"
 
 [features]
+default = []
 slow-hash = ["scrypt"]
+noise = ["snow", "core_extensions"]
 
 [dependencies]
 aead = "0.3.1"
+core_extensions = {version = "0.1.16", optional = true }
 curve25519-dalek = "2.1.0"
 generic-array = "0.14.2"
 hkdf = "0.9.0-alpha.0"
 hmac = "0.8.0"
 rand_core = "0.5.1"
 scrypt = { version = "0.3.0", optional = true }
+snow = { version = "0.6.1", optional = true }
 sha2 = "0.9.0"
 thiserror = "1.0.19"
 x25519-dalek = "0.6.0"
