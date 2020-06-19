@@ -6,6 +6,7 @@
 use crate::{
     ciphersuite::CipherSuite,
     group::Group,
+    key_exchange::{KE1Message, NONCE_LEN},
     keypair::{KeyPair, SizedBytes, X25519KeyPair},
     opaque::*,
     rkr_encryption::{RKRCipher as _, RKRCiphertext},
@@ -16,7 +17,7 @@ use curve25519_dalek::ristretto::RistrettoPoint;
 use chacha20poly1305::ChaCha20Poly1305;
 use rand_core::{OsRng, RngCore};
 
-use sha2::Digest;
+use sha2::{Digest, Sha256};
 use std::convert::TryFrom;
 
 struct Default;
@@ -129,4 +130,47 @@ fn register_third_message_roundtrip() {
         RegisterThirdMessage::<ChaCha20Poly1305, X25519KeyPair>::try_from(&message[..]).unwrap();
     let r3_bytes = r3.to_bytes();
     assert_eq!(message, r3_bytes);
+}
+
+#[test]
+fn client_login_roundtrip() {
+    let pw = b"hunter2";
+    let mut rng = OsRng;
+    let sc = <RistrettoPoint as Group>::random_scalar(&mut rng);
+
+    let client_e_kp = Default::generate_random_keypair(&mut rng).unwrap();
+    let mut client_nonce = [0u8; NONCE_LEN];
+    rng.fill_bytes(&mut client_nonce);
+
+    let l1_data = [&sc.to_bytes()[..], &client_nonce, client_e_kp.public()].concat();
+    let mut hasher = Sha256::new();
+    hasher.update(l1_data);
+    let hashed_l1 = hasher.finalize();
+
+    // serialization order: scalar, password, ke1_state
+    let bytes: Vec<u8> = [
+        &sc.as_bytes()[..],
+        &pw[..],
+        client_e_kp.public(),
+        &client_nonce,
+        hashed_l1.as_slice(),
+    ]
+    .concat();
+    let reg = ClientLogin::<Default>::try_from(&bytes[..]).unwrap();
+    let reg_bytes = reg.to_bytes();
+    assert_eq!(reg_bytes, bytes);
+}
+
+#[test]
+fn login_first_message_roundtrip() {
+    let mut rng = OsRng;
+
+    let client_e_kp = Default::generate_random_keypair(&mut rng).unwrap();
+    let mut client_nonce = [0u8; NONCE_LEN];
+    rng.fill_bytes(&mut client_nonce);
+
+    let ke1m: Vec<u8> = [&client_nonce[..], &client_e_kp.public()].concat();
+    let reg = KE1Message::try_from(&ke1m[..]).unwrap();
+    let reg_bytes = reg.to_bytes();
+    assert_eq!(reg_bytes, ke1m);
 }
