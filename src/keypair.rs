@@ -39,7 +39,7 @@ pub trait SizedBytes: Sized + PartialEq {
 }
 
 /// A Keypair trait with public-private verification
-pub trait KeyPair: Sized + Debug {
+pub trait KeyPair: Sized {
     /// The single key representation must have a specific byte size itself
     type Repr: SizedBytes + Clone;
 
@@ -68,10 +68,12 @@ pub trait KeyPair: Sized + Debug {
 
     /// Computes the diffie hellman function on a public key and private key
     fn diffie_hellman(pk: Self::Repr, sk: Self::Repr) -> Vec<u8>;
+}
 
+#[cfg(test)]
+trait KeyPairExt: KeyPair + Debug {
     /// Test-only strategy returning a proptest Strategy based on
     /// generate_random
-    #[cfg(test)]
     fn uniform_keypair_strategy() -> BoxedStrategy<Self> {
         // The no_shrink is because keypairs should be fixed -- shrinking would cause a different
         // keypair to be generated, which appears to not be very useful.
@@ -84,6 +86,10 @@ pub trait KeyPair: Sized + Debug {
             .boxed()
     }
 }
+
+// blanket implementation
+#[cfg(test)]
+impl<KP> KeyPairExt for KP where KP: KeyPair + Debug {}
 
 /// This is a blanket implementation of SizedBytes for any instance of KeyPair
 /// with any length of keys. This encodes that we serialize the public key
