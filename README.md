@@ -1,4 +1,4 @@
-##  The OPAQUE key exchange protocol
+##  The OPAQUE key exchange protocol ![Build Status](https://github.com/novifinancial/opaque-ke/workflows/Rust%20CI/badge.svg)
 
 [OPAQUE](https://eprint.iacr.org/2018/163.pdf) is an asymmetric password-authenticated key exchange protocol. It allows a client to authenticate to a server using a password, without ever having to expose the plaintext password to the server.
 
