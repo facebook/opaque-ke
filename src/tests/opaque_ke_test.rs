@@ -391,7 +391,7 @@ fn test_r3() -> Result<(), PakeError> {
     .unwrap()
     .finish(
         RegisterSecondMessage::try_from(&parameters.r2[..]).unwrap(),
-        &Key::try_from(parameters.server_s_pk).unwrap(),
+        &Key::try_from(&parameters.server_s_pk[..]).unwrap(),
         &mut finish_registration_rng,
     )
     .unwrap();
@@ -456,7 +456,7 @@ fn test_l2() -> Result<(), PakeError> {
     let mut server_e_sk_rng = CycleRng::new(parameters.server_e_sk);
     let (l2, server_login) = ServerLogin::start::<AesgcmX255193dhNoSlowHash, _>(
         ServerRegistration::try_from(&parameters.password_file[..]).unwrap(),
-        &Key::try_from(parameters.server_s_sk).unwrap(),
+        &Key::try_from(&parameters.server_s_sk[..]).unwrap(),
         LoginFirstMessage::<EdwardsPoint>::try_from(&parameters.l1[..]).unwrap(),
         &mut server_e_sk_rng,
     )
@@ -481,7 +481,7 @@ fn test_l3() -> Result<(), PakeError> {
             .finish(
                 LoginSecondMessage::<Aes256Gcm, EdwardsPoint>::try_from(&parameters.l2[..])
                     .unwrap(),
-                &Key::try_from(parameters.server_s_pk)?,
+                &Key::try_from(&parameters.server_s_pk[..])?,
                 &mut client_e_sk_rng,
             )
             .unwrap();

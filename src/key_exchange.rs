@@ -6,8 +6,12 @@
 use crate::{
     errors::{utils::check_slice_size, InternalPakeError, PakeError, ProtocolError},
     keypair::{Key, KeyPair, SizedBytes},
+    sized_bytes_using_constant_and_try_from,
 };
-use generic_array::GenericArray;
+use generic_array::{
+    typenum::{U64, U96},
+    GenericArray,
+};
 use hkdf::Hkdf;
 use hmac::{Hmac, Mac, NewMac};
 use rand_core::{CryptoRng, RngCore};
@@ -28,19 +32,21 @@ pub(crate) const KE2_MESSAGE_LEN: usize = NONCE_LEN + 2 * KEY_LEN;
 
 static STR_3DH: &[u8] = b"3DH keys";
 
+#[derive(PartialEq, Eq)]
 pub(crate) struct KE1State {
     client_e_sk: Key,
     client_nonce: Vec<u8>,
     hashed_l1: Vec<u8>,
 }
 
+#[derive(PartialEq, Eq)]
 pub(crate) struct KE1Message {
     pub(crate) client_nonce: Vec<u8>,
     pub(crate) client_e_pk: Key,
 }
 
 impl TryFrom<&[u8]> for KE1State {
-    type Error = ProtocolError;
+    type Error = InternalPakeError;
 
     fn try_from(bytes: &[u8]) -> Result<Self, Self::Error> {
         let checked_bytes = check_slice_size(bytes, KE1_STATE_LEN, "ke1_state")?;
@@ -65,6 +71,8 @@ impl KE1State {
     }
 }
 
+sized_bytes_using_constant_and_try_from!(KE1State, U96);
+
 impl KE1Message {
     pub fn to_bytes(&self) -> Vec<u8> {
         [&self.client_nonce[..], &self.client_e_pk.to_arr()].concat()
@@ -72,7 +80,7 @@ impl KE1Message {
 }
 
 impl TryFrom<&[u8]> for KE1Message {
-    type Error = ProtocolError;
+    type Error = InternalPakeError;
 
     fn try_from(ke1_message_bytes: &[u8]) -> Result<Self, Self::Error> {
         let checked_bytes =
@@ -84,6 +92,8 @@ impl TryFrom<&[u8]> for KE1Message {
         })
     }
 }
+
+sized_bytes_using_constant_and_try_from!(KE1Message, U64);
 
 pub(crate) fn generate_ke1<R: RngCore + CryptoRng, KeyFormat: KeyPair<Repr = Key>>(
     l1_component: Vec<u8>,

@@ -91,6 +91,60 @@ trait KeyPairExt: KeyPair + Debug {
 #[cfg(test)]
 impl<KP> KeyPairExt for KP where KP: KeyPair + Debug {}
 
+/// This assumes you have defined:
+/// - an `impl TryFrom<&[u8b], Error = InternalPakeError>` for a non-generic `T`
+/// - an `fn to_bytes(&self) -> Vec<u8>` in an `impl T` block
+/// and it both of the above to produce a sensible SizedBytes implementation
+///
+/// Because SizedBytes has a strong notion of size, and TryFrom/to_bytes does
+/// not, it's better to use the macro below rather than this one, where possible.
+#[macro_export]
+macro_rules! sized_bytes_using_constant_and_try_from {
+    ($sized_type: ident, $len: ident) => {
+        impl SizedBytes for $sized_type {
+            type Len = $len;
+
+            fn to_arr(&self) -> generic_array::GenericArray<u8, Self::Len> {
+                generic_array::GenericArray::clone_from_slice(&self.to_bytes())
+            }
+
+            fn from_bytes(bytes: &[u8]) -> Result<Self, InternalPakeError> {
+                let checked_bytes = check_slice_size(
+                    bytes,
+                    <Self::Len as generic_array::typenum::Unsigned>::to_usize(),
+                    "bytes",
+                )?;
+                std::convert::TryFrom::try_from(checked_bytes)
+            }
+        }
+    };
+}
+
+/// This assumes you have defined a SizedBytes instance for a `T`, and defines:
+/// - an `impl TryFrom<&[u8b], Error = InternalPakeError>` for a non-generic `T`
+/// - an `fn to_bytes(&self) -> Vec<u8>` in an `impl T` block
+///
+/// Because SizedBytes has a strong notion of size, and TryFrom/to_bytes does
+/// not, it's better to use this macro than the one above, where possible.
+macro_rules! try_from_and_to_bytes_using_sized_bytes {
+    ($sized_type: ident) => {
+        impl TryFrom<&[u8]> for $sized_type {
+            type Error = InternalPakeError;
+
+            fn try_from(bytes: &[u8]) -> Result<Self, InternalPakeError> {
+                <$sized_type as SizedBytes>::from_bytes(bytes)
+            }
+        }
+
+        #[allow(dead_code)]
+        impl $sized_type {
+            fn to_bytes(&self) -> Vec<u8> {
+                self.to_arr().to_vec()
+            }
+        }
+    };
+}
+
 /// This is a blanket implementation of SizedBytes for any instance of KeyPair
 /// with any length of keys. This encodes that we serialize the public key
 /// first, followed by the private key in binary formats (and expect it in this
@@ -133,14 +187,6 @@ impl Deref for Key {
     }
 }
 
-impl TryFrom<Vec<u8>> for Key {
-    type Error = InternalPakeError;
-
-    fn try_from(key_bytes: Vec<u8>) -> Result<Self, Self::Error> {
-        Key::from_bytes(&key_bytes[..])
-    }
-}
-
 impl SizedBytes for Key {
     type Len = U32;
 
@@ -154,6 +200,8 @@ impl SizedBytes for Key {
         Ok(Key(checked_bytes.to_vec()))
     }
 }
+
+try_from_and_to_bytes_using_sized_bytes!(Key);
 
 /// A representation of an X25519 keypair according to RFC7748
 #[derive(Debug, PartialEq, Eq)]
