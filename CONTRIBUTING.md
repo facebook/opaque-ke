@@ -26,5 +26,5 @@ disclosure of security bugs. In those cases, please go through the process
 outlined on that page and do not file a public issue.
 
 ## License
-By contributing to Ristretto255.js, you agree that your contributions will be
+By contributing to opaque-ke, you agree that your contributions will be
 licensed under the LICENSE file in the root directory of this source tree.
