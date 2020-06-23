@@ -1,0 +1,171 @@
+// Copyright (c) Facebook, Inc. and its affiliates.
+//
+// This source code is licensed under the MIT license found in the
+// LICENSE file in the root directory of this source tree.
+
+use crate::errors::{InternalPakeError, PakeError};
+use generic_array::{
+    typenum::{Unsigned, U32},
+    GenericArray,
+};
+use hkdf::Hkdf;
+use hmac::{Hmac, Mac, NewMac};
+use rand_core::{CryptoRng, RngCore};
+use sha2::{Digest, Sha256};
+
+// Constant string used as salt for HKDF computation
+const STR_ENVU: &[u8] = b"EnvU";
+
+/// The length of the "export key" output by the client registration
+/// and login finish steps
+pub(crate) type ExportKeySize = <Sha256 as Digest>::OutputSize;
+
+/// This struct is a straightforward instantiation of the trait separating the
+/// three components in Vecs
+pub(crate) struct Envelope {
+    nonce: Vec<u8>,
+    ciphertext: Vec<u8>,
+    hmac: Vec<u8>,
+}
+
+type NonceLen = U32;
+
+impl Envelope {
+    /// The additional number of bytes added to the plaintext
+    pub(crate) fn additional_size() -> usize {
+        Self::nonce_size() + <Sha256 as Digest>::OutputSize::to_usize()
+    }
+
+    fn hmac_key_size() -> usize {
+        <Sha256 as Digest>::OutputSize::to_usize()
+    }
+
+    fn hmac_size() -> usize {
+        <Sha256 as Digest>::OutputSize::to_usize()
+    }
+
+    fn nonce_size() -> usize {
+        NonceLen::to_usize()
+    }
+
+    fn export_key_size() -> usize {
+        ExportKeySize::to_usize()
+    }
+
+    pub(crate) fn new(
+        nonce: Vec<u8>,
+        ciphertext: Vec<u8>,
+        hmac: &GenericArray<u8, <Sha256 as Digest>::OutputSize>,
+    ) -> Self {
+        Self {
+            nonce,
+            ciphertext,
+            hmac: hmac.to_vec(),
+        }
+    }
+
+    /// The format of the output is:
+    /// nonce            | ciphertext       | hmac
+    /// nonce_size bytes  | variable length  | hmac_size bytes
+    pub(crate) fn from_bytes(bytes: &[u8]) -> Result<Self, InternalPakeError> {
+        let ciphertext_start = Self::nonce_size();
+        let ciphertext_end = bytes.len() - Self::hmac_size();
+
+        Ok(Self::new(
+            bytes[..ciphertext_start].to_vec(),
+            bytes[ciphertext_start..ciphertext_end].to_vec(),
+            GenericArray::from_slice(&bytes[ciphertext_end..]),
+        ))
+    }
+
+    pub(crate) fn to_bytes(&self) -> Vec<u8> {
+        [&self.nonce[..], &self.ciphertext[..], &self.hmac[..]].concat()
+    }
+
+    pub(crate) fn seal<R: RngCore + CryptoRng>(
+        key: &[u8],
+        plaintext: &[u8],
+        aad: &[u8],
+        rng: &mut R,
+    ) -> Result<(Self, GenericArray<u8, ExportKeySize>), PakeError> {
+        let mut nonce = vec![0u8; Self::nonce_size()];
+        rng.fill_bytes(&mut nonce);
+
+        let h = Hkdf::<Sha256>::new(Some(&nonce), &key);
+        let mut okm = vec![0u8; plaintext.len() + Self::hmac_key_size() + Self::export_key_size()];
+        h.expand(STR_ENVU, &mut okm)
+            .map_err(|_| InternalPakeError::HkdfError)?;
+        let xor_key = &okm[..plaintext.len()];
+        let hmac_key = &okm[plaintext.len()..plaintext.len() + Self::hmac_key_size()];
+        let export_key = &okm[plaintext.len() + Self::hmac_key_size()..];
+
+        let ciphertext: Vec<u8> = xor_key
+            .to_vec()
+            .iter()
+            .zip(plaintext.to_vec().iter())
+            .map(|(&x1, &x2)| x1 ^ x2)
+            .collect();
+
+        let mut hmac =
+            Hmac::<Sha256>::new_varkey(&hmac_key).map_err(|_| InternalPakeError::HmacError)?;
+        hmac.update(&ciphertext);
+        hmac.update(&aad);
+
+        Ok((
+            Self::new(nonce, ciphertext.to_vec(), &hmac.finalize().into_bytes()),
+            *GenericArray::from_slice(&export_key),
+        ))
+    }
+
+    pub(crate) fn open(
+        &self,
+        key: &[u8],
+        aad: &[u8],
+    ) -> Result<(Vec<u8>, GenericArray<u8, ExportKeySize>), PakeError> {
+        let h = Hkdf::<Sha256>::new(Some(&self.nonce), &key);
+        let mut okm =
+            vec![0u8; self.ciphertext.len() + Self::hmac_key_size() + Self::export_key_size()];
+        h.expand(STR_ENVU, &mut okm)
+            .map_err(|_| InternalPakeError::HkdfError)?;
+        let xor_key = &okm[..self.ciphertext.len()];
+        let hmac_key = &okm[self.ciphertext.len()..self.ciphertext.len() + Self::hmac_key_size()];
+        let export_key = &okm[self.ciphertext.len() + Self::hmac_key_size()..];
+
+        let mut hmac =
+            Hmac::<Sha256>::new_varkey(&hmac_key).map_err(|_| InternalPakeError::HmacError)?;
+        hmac.update(&self.ciphertext);
+        hmac.update(aad);
+        if hmac.verify(&self.hmac).is_err() {
+            return Err(PakeError::SealOpenHmacError);
+        }
+
+        let plaintext: Vec<u8> = xor_key
+            .to_vec()
+            .iter()
+            .zip(self.ciphertext.iter())
+            .map(|(&x1, &x2)| x1 ^ x2)
+            .collect();
+        Ok((plaintext, *GenericArray::from_slice(&export_key)))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use rand_core::OsRng;
+
+    #[test]
+    fn seal_and_open() {
+        let mut rng = OsRng;
+        let mut key = [0u8; 32];
+        rng.fill_bytes(&mut key);
+
+        let mut msg = [0u8; 100];
+        rng.fill_bytes(&mut msg);
+
+        let (ciphertext, export_key_1) = Envelope::seal(&key, &msg, b"aad", &mut rng).unwrap();
+        let (plaintext, export_key_2) = ciphertext.open(&key, b"aad").unwrap();
+        assert_eq!(&msg.to_vec(), &plaintext);
+        assert_eq!(&export_key_1.to_vec(), &export_key_2.to_vec());
+    }
+}

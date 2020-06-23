@@ -8,11 +8,11 @@ use crate::{
     errors::*,
     group::Group,
     key_exchange::NONCE_LEN,
-    keypair::{Key, KeyPair},
+    keypair::{Key, KeyPair, X25519KeyPair},
     opaque::*,
+    slow_hash::NoOpHash,
     tests::mock_rng::CycleRng,
 };
-use aes_gcm::Aes256Gcm;
 use curve25519_dalek::edwards::EdwardsPoint;
 use rand_core::{OsRng, RngCore};
 use serde_json::Value;
@@ -21,12 +21,11 @@ use std::convert::TryFrom;
 // Tests
 // =====
 
-struct AesgcmX255193dhNoSlowHash;
-impl CipherSuite for AesgcmX255193dhNoSlowHash {
-    type Aead = Aes256Gcm;
+struct X255193dhNoSlowHash;
+impl CipherSuite for X255193dhNoSlowHash {
     type Group = EdwardsPoint;
-    type KeyFormat = crate::keypair::X25519KeyPair;
-    type SlowHash = crate::slow_hash::NoOpHash;
+    type KeyFormat = X25519KeyPair;
+    type SlowHash = NoOpHash;
 }
 
 pub struct TestVectorParameters {
@@ -63,35 +62,35 @@ pub struct TestVectorParameters {
 
 static TEST_VECTOR: &str = r#"
 {
-    "client_s_pk": "f7b150789db3322c8c7b8c4a10ce42baa5ee846de83eaf04c17ffbd0d9e5cd60",
-    "client_s_sk": "601ed276a42ec5795b3471f1a64e312f192e17ff252ce6053c8ecaf210138273",
-    "client_e_pk": "57260d4e231035f0f3e1fb836fe5d9ddb498c956cacb5fab1d6b287e1422376c",
-    "client_e_sk": "e89d0fa4e387a9bd7c26466704ec30e62f58892bf3dfd1fd25133be52f34ea68",
-    "server_s_pk": "a2b4e12d0621ebfb2631e00f5c872ab749e1a33915f16fb11203658b2189cc5e",
-    "server_s_sk": "90b6ca2ea8a37306060c7cd0998d4cdae59e972af7760312f7cf77099e78f940",
-    "server_e_pk": "64ce4a453eb8c27b1d81f6acdc01d36d3ae6cea506432e9509917b195ad90073",
-    "server_e_sk": "883148cc1ba70acb1eb909d99e09493b5d4b3fe6b12c75e2f5aeea6c5d4b267f",
+    "client_s_pk": "4374a0bf4f5f4353c20337574bdc69e6cff18a36e3fd8fe89fe47e02bab06e37",
+    "client_s_sk": "f0804c53de3fce8c9a6bcccb3380a1427c578a2f834de89fc98447c322776955",
+    "client_e_pk": "b45316eaa2d87ac1ed5c28b54ed43578fc54d4beb673b748159cea7536215819",
+    "client_e_sk": "60ff0381b8d8e6913d75e7a3caf2ede4e755d33337a6d904239fa6b00338cb56",
+    "server_s_pk": "c76f269ba1e0fb19597907ddd9e0fc9a4ac11e499e77b5ae480deb825dc2e044",
+    "server_s_sk": "384e6efd4236c76e7e84ae13327b867d85881f27df7f65e409c66a8f1f2c8354",
+    "server_e_pk": "92d4883730b19e767fc2f8224dac4a913f404e6d05a9baaf1f34ec9078dfb648",
+    "server_e_sk": "e88a6ec8d5644b66c20d6a915a94b27a17787196ab9f9bc0ee600d11d739b576",
     "password": "70617373776f7264",
-    "blinding_factor_raw": "b85e0df2ad0495771edf09a04b1073045e6472e2f86a41e9bab3143ebfb8eb08a3462503eb3750bf006dc82c93b37e07cdf3768018c22b431cf5146a9caeda1c",
-    "blinding_factor": "fac0ed1c38bc8945a91dc4d944af22c466cbffc24fc3d97b8a91798d1ec8b60f",
+    "blinding_factor_raw": "0412c9968a8e6ea19dd42eca36c35ff784d6e83944d833bdb919f8af6166ce00b742fe149fb6d9ba7d130edc983802bf91b510157d221e800e76c3aed1740159",
+    "blinding_factor": "0c9957936385474a1862bc9da3d60d6655b030fd6fc8de1fc7842163007f5a03",
     "pepper": "706570706572",
-    "oprf_key": "d5cedff72509af4702a985bb31af8dbe88d72c4eee13a09e3f52a76766fa6f0b",
-    "envelope_nonce": "c87e44792a9dfd8858db676e",
-    "client_nonce": "1f023acc6155a06166ee7e5b7ef0360277ed5da3a46adcd4a0a5bce938a67a23",
-    "server_nonce": "d448cb1f58c38605fc29069ac688ec9c667c99d0316b38cd1b2609c1bc14aa90",
-    "r1": "e46efe7d673805b6135a5293ecab13082b322c45f029595efa4b8d1d53ccd897",
-    "r2": "a2a3df89cf85976c4aa5add752736419f728805722571a9646983587ce4c55fb",
-    "r3": "374c49768e4399d4cd46e8b3bc2050e2f6737e3a2f8aee6fddc82e117f340f79a7f10c84445657c6bb4940bd02bc08ca0f107618d810ec94639e8ae43af48ab66f1f75e8bbc169eed0035e347310978bc87e44792a9dfd8858db676ef7b150789db3322c8c7b8c4a10ce42baa5ee846de83eaf04c17ffbd0d9e5cd60",
-    "l1": "e46efe7d673805b6135a5293ecab13082b322c45f029595efa4b8d1d53ccd8971f023acc6155a06166ee7e5b7ef0360277ed5da3a46adcd4a0a5bce938a67a2357260d4e231035f0f3e1fb836fe5d9ddb498c956cacb5fab1d6b287e1422376c",
-    "l2": "a2a3df89cf85976c4aa5add752736419f728805722571a9646983587ce4c55fb374c49768e4399d4cd46e8b3bc2050e2f6737e3a2f8aee6fddc82e117f340f79a7f10c84445657c6bb4940bd02bc08ca0f107618d810ec94639e8ae43af48ab66f1f75e8bbc169eed0035e347310978bc87e44792a9dfd8858db676e883148cc1ba70acb1eb909d99e09493b5d4b3fe6b12c75e2f5aeea6c5d4b267f64ce4a453eb8c27b1d81f6acdc01d36d3ae6cea506432e9509917b195ad90073d81a1104fbd599ef56228bdbe9bf7be4a38ae907a8717ca0883b9d69b2efc529",
-    "l3": "a01332643e8aa7113f6f160205a9b3bd0705f3b33d8e4ea8eab9eae6685a6adb",
-    "client_registration_state": "fac0ed1c38bc8945a91dc4d944af22c466cbffc24fc3d97b8a91798d1ec8b60f70617373776f7264",
-    "client_login_state": "fac0ed1c38bc8945a91dc4d944af22c466cbffc24fc3d97b8a91798d1ec8b60fe89d0fa4e387a9bd7c26466704ec30e62f58892bf3dfd1fd25133be52f34ea681f023acc6155a06166ee7e5b7ef0360277ed5da3a46adcd4a0a5bce938a67a23dd1a7c2b4e9f9be94bd36f3b6c7f23aa9f1e6b3fda9030412a918d1288b4af1970617373776f7264",
-    "server_registration_state": "d5cedff72509af4702a985bb31af8dbe88d72c4eee13a09e3f52a76766fa6f0b",
-    "server_login_state": "809f95143f8f7fc1d0b42f578a83f714f58cfd96d9499aacee730ad296b37b19c18c903396e85da607d02542d4d07456e5357ff2e2eade3aaa42e532d4e9364f66317ab0460307e33d6151e99c7406f2fa1d309f507b46e43f732924d1dc8d0d",
-    "password_file": "d5cedff72509af4702a985bb31af8dbe88d72c4eee13a09e3f52a76766fa6f0bf7b150789db3322c8c7b8c4a10ce42baa5ee846de83eaf04c17ffbd0d9e5cd60374c49768e4399d4cd46e8b3bc2050e2f6737e3a2f8aee6fddc82e117f340f79a7f10c84445657c6bb4940bd02bc08ca0f107618d810ec94639e8ae43af48ab66f1f75e8bbc169eed0035e347310978bc87e44792a9dfd8858db676e",
-    "opaque_key": "682f2868a3e1460fed5a16767bd8778c33b4aecac6607270f848aa61c95a1a68",
-    "shared_secret": "66317ab0460307e33d6151e99c7406f2fa1d309f507b46e43f732924d1dc8d0d"
+    "oprf_key": "764fc3396026a513ede0332f2d0801b7c02516241b473362844a9aea613e3800",
+    "envelope_nonce": "acca14c1d5f7f5843812ad61",
+    "client_nonce": "db2c06ad77d6d6b73170cb26c082c3fea77c64201b021f3d22f477bd5fd4cf9b",
+    "server_nonce": "861dbe0a824fc9a6ebc90a798dd5827888c30c8f8f79c361fb487db5b9a65586",
+    "r1": "3b12967295493838ce743c3fa5e3da39d13589aacad2cb67792df9e99dbefff3",
+    "r2": "4cce303b33ed400fc60cdaa9d314021c9a9a1c29faab56ede9fc580bdb0287c3",
+    "r3": "acca14c1d5f7f5843812ad61f0804c53de3fce8c9a6bcccb3380a1427c578a2f4df43147c5396441be3dee47f441e6cb56eca2cf7e25cc94ef233b2f1d3b0e64142d3d40fc61226627bca32c331dc00b9e9e795a1cfb0377d3a79f565307e1074374a0bf4f5f4353c20337574bdc69e6cff18a36e3fd8fe89fe47e02bab06e37",
+    "l1": "3b12967295493838ce743c3fa5e3da39d13589aacad2cb67792df9e99dbefff3db2c06ad77d6d6b73170cb26c082c3fea77c64201b021f3d22f477bd5fd4cf9bb45316eaa2d87ac1ed5c28b54ed43578fc54d4beb673b748159cea7536215819",
+    "l2": "4cce303b33ed400fc60cdaa9d314021c9a9a1c29faab56ede9fc580bdb0287c3acca14c1d5f7f5843812ad61f0804c53de3fce8c9a6bcccb3380a1427c578a2f4df43147c5396441be3dee47f441e6cb56eca2cf7e25cc94ef233b2f1d3b0e64142d3d40fc61226627bca32c331dc00b9e9e795a1cfb0377d3a79f565307e107e88a6ec8d5644b66c20d6a915a94b27a17787196ab9f9bc0ee600d11d739b57692d4883730b19e767fc2f8224dac4a913f404e6d05a9baaf1f34ec9078dfb648c87b63566267c0941b269f8ad36228ae24a2cd9eb8f90e8f6bc26140c2f93bb4",
+    "l3": "a20bb3efbdbccb23cd6206ef0483cf52a1e3b2f700c4c9aac0c9bab2f4326265",
+    "client_registration_state": "0c9957936385474a1862bc9da3d60d6655b030fd6fc8de1fc7842163007f5a0370617373776f7264",
+    "client_login_state": "0c9957936385474a1862bc9da3d60d6655b030fd6fc8de1fc7842163007f5a0360ff0381b8d8e6913d75e7a3caf2ede4e755d33337a6d904239fa6b00338cb56db2c06ad77d6d6b73170cb26c082c3fea77c64201b021f3d22f477bd5fd4cf9bb898ccd56020538145fc2192532bde9f8da0183a1dc486ae3086aa3b72c6728570617373776f7264",
+    "server_registration_state": "764fc3396026a513ede0332f2d0801b7c02516241b473362844a9aea613e3800",
+    "server_login_state": "75780c16fc843510e2222f195859b3f84c224e378f6afc6685827c30c11add9c3435530551d074a98f30d8e0f078efde0693738808a2c6358a4d34b64004a6c544b77d404067257aab5829b59a5f8a306c586c5a73018a9837c8b9a33d9fed6e",
+    "password_file": "764fc3396026a513ede0332f2d0801b7c02516241b473362844a9aea613e38004374a0bf4f5f4353c20337574bdc69e6cff18a36e3fd8fe89fe47e02bab06e37acca14c1d5f7f5843812ad61f0804c53de3fce8c9a6bcccb3380a1427c578a2f4df43147c5396441be3dee47f441e6cb56eca2cf7e25cc94ef233b2f1d3b0e64142d3d40fc61226627bca32c331dc00b9e9e795a1cfb0377d3a79f565307e107",
+    "opaque_key": "653ec91b97e928868c8977b4339530a5c1298dd9c69f1a1752a56785eca6e82c",
+    "shared_secret": "44b77d404067257aab5829b59a5f8a306c586c5a73018a9837c8b9a33d9fed6e"
 }
 "#;
 
@@ -219,14 +218,14 @@ fn stringify_test_vectors(p: &TestVectorParameters) -> String {
     s
 }
 
-fn generate_parameters() -> TestVectorParameters {
+fn generate_parameters<CS: CipherSuite>() -> TestVectorParameters {
     let mut rng = OsRng;
 
     // Inputs
-    let server_s_kp = AesgcmX255193dhNoSlowHash::generate_random_keypair(&mut rng).unwrap();
-    let server_e_kp = AesgcmX255193dhNoSlowHash::generate_random_keypair(&mut rng).unwrap();
-    let client_s_kp = AesgcmX255193dhNoSlowHash::generate_random_keypair(&mut rng).unwrap();
-    let client_e_kp = AesgcmX255193dhNoSlowHash::generate_random_keypair(&mut rng).unwrap();
+    let server_s_kp = CS::generate_random_keypair(&mut rng).unwrap();
+    let server_e_kp = CS::generate_random_keypair(&mut rng).unwrap();
+    let client_s_kp = CS::generate_random_keypair(&mut rng).unwrap();
+    let client_e_kp = CS::generate_random_keypair(&mut rng).unwrap();
     let password = b"password";
     let pepper = b"pepper";
     let mut blinding_factor_raw = [0u8; 64];
@@ -241,22 +240,21 @@ fn generate_parameters() -> TestVectorParameters {
     rng.fill_bytes(&mut server_nonce);
 
     let mut blinding_factor_registration_rng = CycleRng::new(blinding_factor_raw.to_vec());
-    let (r1, client_registration) = ClientRegistration::<AesgcmX255193dhNoSlowHash>::start(
+    let (r1, client_registration) = ClientRegistration::<CS>::start(
         password,
         Some(pepper),
         &mut blinding_factor_registration_rng,
     )
     .unwrap();
     let r1_bytes = r1.to_bytes().to_vec();
-    let blinding_factor_bytes = client_registration.blinding_factor.to_bytes();
+    let blinding_factor_bytes =
+        CS::Group::scalar_as_bytes(&client_registration.blinding_factor).clone();
     let client_registration_state = client_registration.to_bytes().to_vec();
 
     let mut oprf_key_rng = CycleRng::new(oprf_key_raw.to_vec());
-    let (r2, server_registration) =
-        ServerRegistration::<AesgcmX255193dhNoSlowHash>::start(r1, &mut oprf_key_rng).unwrap();
+    let (r2, server_registration) = ServerRegistration::<CS>::start(r1, &mut oprf_key_rng).unwrap();
     let r2_bytes = r2.to_bytes().to_vec();
-    let oprf_key = server_registration.oprf_key;
-    let oprf_key_bytes = EdwardsPoint::scalar_as_bytes(&oprf_key);
+    let oprf_key_bytes = CS::Group::scalar_as_bytes(&server_registration.oprf_key).clone();
     let server_registration_state = server_registration.to_bytes().to_vec();
 
     let mut client_s_sk_and_nonce: Vec<u8> = Vec::new();
@@ -278,12 +276,8 @@ fn generate_parameters() -> TestVectorParameters {
     client_login_start.extend_from_slice(&client_nonce);
 
     let mut client_login_start_rng = CycleRng::new(client_login_start);
-    let (l1, client_login) = ClientLogin::<AesgcmX255193dhNoSlowHash>::start(
-        password,
-        Some(pepper),
-        &mut client_login_start_rng,
-    )
-    .unwrap();
+    let (l1, client_login) =
+        ClientLogin::<CS>::start(password, Some(pepper), &mut client_login_start_rng).unwrap();
     let l1_bytes = l1.to_bytes().to_vec();
     let client_login_state = client_login.to_bytes().to_vec();
 
@@ -339,7 +333,7 @@ fn generate_parameters() -> TestVectorParameters {
 
 #[test]
 fn generate_test_vectors() {
-    let parameters = generate_parameters();
+    let parameters = generate_parameters::<X255193dhNoSlowHash>();
     println!("{}", stringify_test_vectors(&parameters));
 }
 
@@ -347,7 +341,7 @@ fn generate_test_vectors() {
 fn test_r1() -> Result<(), PakeError> {
     let parameters = populate_test_vectors(&serde_json::from_str(TEST_VECTOR).unwrap());
     let mut blinding_factor_rng = CycleRng::new(parameters.blinding_factor_raw);
-    let (r1, client_registration) = ClientRegistration::<AesgcmX255193dhNoSlowHash>::start(
+    let (r1, client_registration) = ClientRegistration::<X255193dhNoSlowHash>::start(
         &parameters.password,
         Some(&parameters.pepper),
         &mut blinding_factor_rng,
@@ -365,7 +359,7 @@ fn test_r1() -> Result<(), PakeError> {
 fn test_r2() -> Result<(), PakeError> {
     let parameters = populate_test_vectors(&serde_json::from_str(TEST_VECTOR).unwrap());
     let mut oprf_key_rng = CycleRng::new(parameters.oprf_key);
-    let (r2, server_registration) = ServerRegistration::<AesgcmX255193dhNoSlowHash>::start(
+    let (r2, server_registration) = ServerRegistration::<X255193dhNoSlowHash>::start(
         RegisterFirstMessage::try_from(&parameters.r1[..]).unwrap(),
         &mut oprf_key_rng,
     )
@@ -385,7 +379,7 @@ fn test_r3() -> Result<(), PakeError> {
     let client_s_sk_and_nonce: Vec<u8> =
         [parameters.client_s_sk, parameters.envelope_nonce].concat();
     let mut finish_registration_rng = CycleRng::new(client_s_sk_and_nonce);
-    let (r3, opaque_key_registration) = ClientRegistration::<AesgcmX255193dhNoSlowHash>::try_from(
+    let (r3, opaque_key_registration) = ClientRegistration::<X255193dhNoSlowHash>::try_from(
         &parameters.client_registration_state[..],
     )
     .unwrap()
@@ -409,7 +403,7 @@ fn test_r3() -> Result<(), PakeError> {
 fn test_password_file() -> Result<(), PakeError> {
     let parameters = populate_test_vectors(&serde_json::from_str(TEST_VECTOR).unwrap());
 
-    let server_registration = ServerRegistration::<AesgcmX255193dhNoSlowHash>::try_from(
+    let server_registration = ServerRegistration::<X255193dhNoSlowHash>::try_from(
         &parameters.server_registration_state[..],
     )
     .unwrap();
@@ -435,7 +429,7 @@ fn test_l1() -> Result<(), PakeError> {
     ]
     .concat();
     let mut client_login_start_rng = CycleRng::new(client_login_start);
-    let (l1, client_login) = ClientLogin::<AesgcmX255193dhNoSlowHash>::start(
+    let (l1, client_login) = ClientLogin::<X255193dhNoSlowHash>::start(
         &parameters.password,
         Some(&parameters.pepper),
         &mut client_login_start_rng,
@@ -454,7 +448,7 @@ fn test_l2() -> Result<(), PakeError> {
     let parameters = populate_test_vectors(&serde_json::from_str(TEST_VECTOR).unwrap());
 
     let mut server_e_sk_rng = CycleRng::new(parameters.server_e_sk);
-    let (l2, server_login) = ServerLogin::start::<AesgcmX255193dhNoSlowHash, _>(
+    let (l2, server_login) = ServerLogin::start::<X255193dhNoSlowHash, _>(
         ServerRegistration::try_from(&parameters.password_file[..]).unwrap(),
         &Key::try_from(&parameters.server_s_sk[..]).unwrap(),
         LoginFirstMessage::<EdwardsPoint>::try_from(&parameters.l1[..]).unwrap(),
@@ -476,10 +470,10 @@ fn test_l3() -> Result<(), PakeError> {
 
     let mut client_e_sk_rng = CycleRng::new(parameters.client_e_sk.to_vec());
     let (l3, shared_secret, opaque_key_login) =
-        ClientLogin::<AesgcmX255193dhNoSlowHash>::try_from(&parameters.client_login_state[..])
+        ClientLogin::<X255193dhNoSlowHash>::try_from(&parameters.client_login_state[..])
             .unwrap()
             .finish(
-                LoginSecondMessage::<Aes256Gcm, EdwardsPoint>::try_from(&parameters.l2[..])
+                LoginSecondMessage::<EdwardsPoint, X25519KeyPair>::try_from(&parameters.l2[..])
                     .unwrap(),
                 &Key::try_from(&parameters.server_s_pk[..])?,
                 &mut client_e_sk_rng,
@@ -522,19 +516,19 @@ fn test_complete_flow(
 ) -> Result<(), ProtocolError> {
     let mut client_rng = OsRng;
     let mut server_rng = OsRng;
-    let server_kp = AesgcmX255193dhNoSlowHash::generate_random_keypair(&mut server_rng)?;
-    let (register_m1, client_state) = ClientRegistration::<AesgcmX255193dhNoSlowHash>::start(
+    let server_kp = X255193dhNoSlowHash::generate_random_keypair(&mut server_rng)?;
+    let (register_m1, client_state) = ClientRegistration::<X255193dhNoSlowHash>::start(
         registration_password,
         None,
         &mut client_rng,
     )?;
     let (register_m2, server_state) =
-        ServerRegistration::<AesgcmX255193dhNoSlowHash>::start(register_m1, &mut server_rng)?;
+        ServerRegistration::<X255193dhNoSlowHash>::start(register_m1, &mut server_rng)?;
     let (register_m3, registration_opaque_key) =
         client_state.finish(register_m2, server_kp.public(), &mut client_rng)?;
     let p_file = server_state.finish(register_m3)?;
     let (login_m1, client_login_state) =
-        ClientLogin::<AesgcmX255193dhNoSlowHash>::start(login_password, None, &mut client_rng)?;
+        ClientLogin::<X255193dhNoSlowHash>::start(login_password, None, &mut client_rng)?;
     let (login_m2, server_login_state) =
         ServerLogin::start(p_file, &server_kp.private(), login_m1, &mut server_rng)?;
 

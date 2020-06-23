@@ -15,12 +15,10 @@ use generic_array::typenum::{U32, U64};
 use rand_core::{CryptoRng, RngCore};
 
 /// Configures the underlying primitives used in OPAQUE
-/// * Aead: an authenticated encryption scheme
 /// * Group: a finite cyclic group along with a point representation
 /// * KeyFormat: a keypair type composed of public and private components
 /// * SlowHash: a slow hashing function, typically used for password hashing
 pub trait CipherSuite {
-    type Aead: aead::NewAead<KeySize = U32> + aead::Aead;
     type Group: Group<ScalarLen = U32, UniformBytesLen = U64>;
     type KeyFormat: KeyPair<Repr = Key> + PartialEq;
     type SlowHash: SlowHash;

@@ -5,16 +5,15 @@
 
 use crate::{
     ciphersuite::CipherSuite,
+    envelope::Envelope,
     group::Group,
     key_exchange::{KE1Message, NONCE_LEN},
     keypair::{KeyPair, SizedBytes, X25519KeyPair},
     opaque::*,
-    rkr_encryption::{RKRCipher as _, RKRCiphertext},
 };
 
 use curve25519_dalek::ristretto::RistrettoPoint;
-
-use chacha20poly1305::ChaCha20Poly1305;
+use generic_array::typenum::Unsigned;
 use rand_core::{OsRng, RngCore};
 
 use sha2::{Digest, Sha256};
@@ -22,7 +21,6 @@ use std::convert::TryFrom;
 
 struct Default;
 impl CipherSuite for Default {
-    type Aead = ChaCha20Poly1305;
     type Group = RistrettoPoint;
     type KeyFormat = crate::keypair::X25519KeyPair;
     type SlowHash = crate::slow_hash::NoOpHash;
@@ -67,16 +65,18 @@ fn server_registration_roundtrip() {
     assert_eq!(reg_bytes, oprf_bytes);
     // If we do have envelope and client pk, the server registration contains
     // the whole kit
-    let rkr_size = RKRCiphertext::<ChaCha20Poly1305>::rkr_with_nonce_size();
-    let mut mock_rkr_bytes = vec![0u8; rkr_size];
-    rng.fill_bytes(&mut mock_rkr_bytes);
-    println!("{}", mock_rkr_bytes.len());
+    let key_len =
+        <<<Default as CipherSuite>::KeyFormat as KeyPair>::Repr as SizedBytes>::Len::to_usize();
+    let envelope_size = key_len + Envelope::additional_size();
+    let mut mock_envelope_bytes = vec![0u8; envelope_size];
+    rng.fill_bytes(&mut mock_envelope_bytes);
+    println!("{}", mock_envelope_bytes.len());
     let mock_client_kp = Default::generate_random_keypair(&mut rng).unwrap();
     // serialization order: scalar, public key, envelope
     let mut bytes = Vec::<u8>::new();
     bytes.extend_from_slice(sc.as_bytes());
     bytes.extend_from_slice(&mock_client_kp.public().to_arr());
-    bytes.extend_from_slice(&mock_rkr_bytes);
+    bytes.extend_from_slice(&mock_envelope_bytes);
     let reg = ServerRegistration::<Default>::try_from(&bytes[..]).unwrap();
     let reg_bytes = reg.to_bytes();
     assert_eq!(reg_bytes, bytes);
@@ -108,26 +108,16 @@ fn register_third_message_roundtrip() {
     let skp = Default::generate_random_keypair(&mut rng).unwrap();
     let pubkey_bytes = skp.public().to_arr();
 
-    let mut encryption_key = [0u8; 32];
-    rng.fill_bytes(&mut encryption_key);
-    let mut hmac_key = [0u8; 32];
-    rng.fill_bytes(&mut hmac_key);
+    let mut key = [0u8; 32];
+    rng.fill_bytes(&mut key);
 
     let mut msg = [0u8; 32];
     rng.fill_bytes(&mut msg);
 
-    let ciphertext = RKRCiphertext::<ChaCha20Poly1305>::encrypt(
-        &encryption_key,
-        &hmac_key,
-        &msg,
-        &pubkey_bytes,
-        &mut rng,
-    )
-    .unwrap();
+    let (ciphertext, _) = Envelope::seal(&key, &msg, &pubkey_bytes, &mut rng).unwrap();
 
     let message: Vec<u8> = [&ciphertext.to_bytes(), &pubkey_bytes[..]].concat();
-    let r3 =
-        RegisterThirdMessage::<ChaCha20Poly1305, X25519KeyPair>::try_from(&message[..]).unwrap();
+    let r3 = RegisterThirdMessage::<X25519KeyPair>::try_from(&message[..]).unwrap();
     let r3_bytes = r3.to_bytes();
     assert_eq!(message, r3_bytes);
 }

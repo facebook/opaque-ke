@@ -37,19 +37,19 @@ pub enum PakeError {
     ///
     #[error("Internal error during PRF verification: {0}")]
     CryptoError(InternalPakeError),
-    /// This error occurs when the symmetric encryption fails
-    #[error("Symmetric encryption failed.")]
-    EncryptionError,
-    /// This error occurs when the symmetric decryption fails
-    #[error("Symmetric decryption failed.")]
-    DecryptionError,
-    /// This error occurs when the symmetric decryption's hmac check fails
-    #[error("HMAC check in symmetric decryption failed.")]
-    DecryptionHmacError,
+    /// This error occurs when the envelope seal fails
+    #[error("Constructing the envelope seal failed.")]
+    SealError,
+    /// This error occurs when the envelope seal open fails
+    #[error("Opening the envelope seal failed.")]
+    SealOpenError,
+    /// This error occurs when the envelope seal open hmac check fails
+    #[error("HMAC check in seal open failed.")]
+    SealOpenHmacError,
     /// This error occurs when the server object that is being called finish() on is malformed
     #[error("Incomplete set of keys passed into finish() function")]
     IncompleteKeysError,
-    #[error("The provided server public key doesn't match the encrypted one")]
+    #[error("The provided server public key doesn't match the sealed one")]
     IncompatibleServerStaticPublicKeyError,
     #[error("Error in key exchange protocol when attempting to validate MACs")]
     KeyExchangeMacValidationError,
