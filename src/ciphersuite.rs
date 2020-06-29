@@ -11,7 +11,7 @@ use crate::{
     keypair::{Key, KeyPair},
     slow_hash::SlowHash,
 };
-use generic_array::typenum::{U32, U64};
+use generic_array::typenum::U32;
 use rand_core::{CryptoRng, RngCore};
 
 /// Configures the underlying primitives used in OPAQUE
@@ -19,7 +19,7 @@ use rand_core::{CryptoRng, RngCore};
 /// * KeyFormat: a keypair type composed of public and private components
 /// * SlowHash: a slow hashing function, typically used for password hashing
 pub trait CipherSuite {
-    type Group: Group<ScalarLen = U32, UniformBytesLen = U64>;
+    type Group: Group<ScalarLen = U32>;
     type KeyFormat: KeyPair<Repr = Key> + PartialEq;
     type SlowHash: SlowHash;
 

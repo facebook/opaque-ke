@@ -10,14 +10,10 @@ use curve25519_dalek::{
     ristretto::{CompressedRistretto, RistrettoPoint},
     scalar::Scalar,
 };
-use generic_array::{
-    typenum::{U32, U64},
-    ArrayLength, GenericArray,
-};
+use generic_array::{typenum::U32, ArrayLength, GenericArray};
+use hkdf::Hkdf;
 use rand_core::{CryptoRng, RngCore};
-
-use sha2::{Digest, Sha256};
-
+use sha2::{Digest, Sha256, Sha512};
 use std::ops::Mul;
 use zeroize::Zeroize;
 
@@ -52,8 +48,7 @@ pub trait Group: Sized + for<'a> Mul<&'a <Self as Group>::Scalar, Output = Self>
     /// impl is allowed to perform additional hashes if it needs to, but this
     /// may not be necessary as this function is going to be called with the
     /// output of a kdf.
-    type UniformBytesLen: ArrayLength<u8>;
-    fn hash_to_curve(uniform_bytes: &GenericArray<u8, Self::UniformBytesLen>) -> Self;
+    fn hash_to_curve(input: &[u8], pepper: Option<&[u8]>) -> Self;
 }
 
 /// The implementation of such a subgroup for Ristretto
@@ -92,12 +87,14 @@ impl Group for RistrettoPoint {
         *GenericArray::from_slice(c.as_bytes())
     }
 
-    type UniformBytesLen = U64;
-    fn hash_to_curve(uniform_bytes: &GenericArray<u8, Self::UniformBytesLen>) -> Self {
+    fn hash_to_curve(input: &[u8], pepper: Option<&[u8]>) -> Self {
         // This is because RistrettoPoint is on an obsolete sha2 version
         let mut bits = [0u8; 64];
-        let mut hasher = sha2::Sha512::new();
-        hasher.update(uniform_bytes);
+        let mut hasher = Sha512::new();
+        hasher.update(input);
+        if let Some(value) = pepper {
+            hasher.update(value)
+        }
         bits.copy_from_slice(&hasher.finalize());
 
         RistrettoPoint::from_uniform_bytes(&bits)
@@ -140,8 +137,8 @@ impl Group for EdwardsPoint {
         *GenericArray::from_slice(c.as_bytes())
     }
 
-    type UniformBytesLen = U64;
-    fn hash_to_curve(uniform_bytes: &GenericArray<u8, Self::UniformBytesLen>) -> Self {
+    fn hash_to_curve(input: &[u8], pepper: Option<&[u8]>) -> Self {
+        let (hashed_input, _) = Hkdf::<Sha256>::extract(pepper, &input);
         let mut result = [0u8; 32];
         let mut counter = 0;
         let mut wrapped_point: Option<EdwardsPoint> = None;
@@ -149,7 +146,7 @@ impl Group for EdwardsPoint {
         while wrapped_point.is_none() {
             result.copy_from_slice(
                 &Sha256::new()
-                    .chain(&uniform_bytes[..32])
+                    .chain(&hashed_input[..32])
                     .chain(&[counter])
                     .finalize()[..32],
             );

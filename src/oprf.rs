@@ -4,7 +4,7 @@
 // LICENSE file in the root directory of this source tree.
 
 use crate::{errors::InternalPakeError, group::Group};
-use generic_array::{typenum::U64, GenericArray};
+use generic_array::GenericArray;
 use hkdf::Hkdf;
 use rand_core::{CryptoRng, RngCore};
 use sha2::{Digest, Sha256};
@@ -18,15 +18,13 @@ pub(crate) struct OprfClientBytes<Grp: Group> {
 /// message is sent from the client (who holds the input) to the server (who holds the OPRF key).
 /// The client can also pass in an optional "pepper" string to be mixed in with the input through
 /// an HKDF computation.
-pub(crate) fn generate_oprf1<R: RngCore + CryptoRng, G: Group<UniformBytesLen = U64>>(
+pub(crate) fn generate_oprf1<R: RngCore + CryptoRng, G: Group>(
     input: &[u8],
     pepper: Option<&[u8]>,
     blinding_factor_rng: &mut R,
 ) -> Result<OprfClientBytes<G>, InternalPakeError> {
-    let (hashed_input, _) = Hkdf::<Sha256>::extract(pepper, &input);
-    let curve_input: Vec<u8> = [hashed_input.as_slice(), &[0u8; 32]].concat();
     let blinding_factor = G::random_scalar(blinding_factor_rng);
-    let alpha = G::hash_to_curve(GenericArray::from_slice(&curve_input)) * &blinding_factor;
+    let alpha = G::hash_to_curve(input, pepper) * &blinding_factor;
     Ok(OprfClientBytes {
         alpha,
         blinding_factor,
@@ -71,9 +69,7 @@ mod tests {
         input: &[u8],
         oprf_key: &[u8; 32],
     ) -> GenericArray<u8, <RistrettoPoint as Group>::ElemLen> {
-        let (hashed_input, _) = Hkdf::<Sha256>::extract(None, &input);
-        let curve_input: Vec<u8> = [hashed_input.as_slice(), &[0u8; 32]].concat();
-        let point = RistrettoPoint::hash_to_curve(GenericArray::from_slice(&curve_input));
+        let point = RistrettoPoint::hash_to_curve(&input, None);
         let scalar =
             RistrettoPoint::from_scalar_slice(GenericArray::from_slice(&oprf_key[..])).unwrap();
         let res = point * scalar;
@@ -114,14 +110,10 @@ mod tests {
         } = generate_oprf1::<_, RistrettoPoint>(&input, None, &mut rng).unwrap();
         let res = generate_oprf3::<RistrettoPoint>(&input, alpha, &blinding_factor).unwrap();
 
-        let (hashed_input, _) = Hkdf::<Sha256>::extract(None, &input);
-        let mut curve_input: Vec<u8> = Vec::new();
-        curve_input.extend_from_slice(&hashed_input);
-        curve_input.extend_from_slice(&[0u8; 32]);
         // This is because RistrettoPoint is on an obsolete sha2 version
         let mut bits = [0u8; 64];
         let mut hasher = sha2::Sha512::new();
-        hasher.update(&curve_input[..]);
+        hasher.update(&input[..]);
         bits.copy_from_slice(&hasher.finalize());
 
         let point = RistrettoPoint::from_uniform_bytes(&bits);
