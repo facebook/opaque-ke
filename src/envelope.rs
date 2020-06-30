@@ -20,8 +20,16 @@ const STR_ENVU: &[u8] = b"EnvU";
 /// and login finish steps
 pub(crate) type ExportKeySize = <Sha256 as Digest>::OutputSize;
 
-/// This struct is a straightforward instantiation of the trait separating the
-/// three components in Vecs
+/// This struct is an instantiation of the envelope as described in
+/// https://tools.ietf.org/html/draft-krawczyk-cfrg-opaque-06#section-4
+///
+/// Note that earlier versions of this specification described an
+/// implementation of this envelope using an encryption scheme that
+/// satisfied random-key robustness
+/// (https://tools.ietf.org/html/draft-krawczyk-cfrg-opaque-05#section-4).
+/// The specification update has simplified this assumption by taking
+/// an XOR-based approach without compromising on security, and to avoid
+/// the confusion around the implementation of an RKR-secure encryption.
 pub(crate) struct Envelope {
     nonce: Vec<u8>,
     ciphertext: Vec<u8>,
@@ -65,7 +73,7 @@ impl Envelope {
     }
 
     /// The format of the output is:
-    /// nonce            | ciphertext       | hmac
+    /// nonce             | ciphertext       | hmac
     /// nonce_size bytes  | variable length  | hmac_size bytes
     pub(crate) fn from_bytes(bytes: &[u8]) -> Result<Self, InternalPakeError> {
         let ciphertext_start = Self::nonce_size();
@@ -82,6 +90,8 @@ impl Envelope {
         [&self.nonce[..], &self.ciphertext[..], &self.hmac[..]].concat()
     }
 
+    /// Uses a key to convert the plaintext into an envelope, authenticated by the aad field.
+    /// Note that a new nonce is sampled for each call to seal.
     pub(crate) fn seal<R: RngCore + CryptoRng>(
         key: &[u8],
         plaintext: &[u8],
@@ -100,7 +110,6 @@ impl Envelope {
         let export_key = &okm[plaintext.len() + Self::hmac_key_size()..];
 
         let ciphertext: Vec<u8> = xor_key
-            .to_vec()
             .iter()
             .zip(plaintext.to_vec().iter())
             .map(|(&x1, &x2)| x1 ^ x2)
@@ -117,6 +126,8 @@ impl Envelope {
         ))
     }
 
+    /// Attempts to decrypt the envelope using a key, which is successful only if the key and
+    /// aad used to construct the envelope are the same.
     pub(crate) fn open(
         &self,
         key: &[u8],
