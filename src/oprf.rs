@@ -7,12 +7,7 @@ use crate::{errors::InternalPakeError, group::Group};
 use generic_array::{typenum::U64, GenericArray};
 use hkdf::Hkdf;
 use rand_core::{CryptoRng, RngCore};
-
 use sha2::{Digest, Sha256};
-
-// Low-level API
-// =============
-// This file contains an implementation of an oblivious pseudorandom function (OPRF), as well as password hashing and encryption functions.
 
 pub(crate) struct OprfClientBytes<Grp: Group> {
     pub(crate) alpha: Grp,
