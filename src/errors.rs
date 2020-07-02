@@ -28,15 +28,6 @@ pub enum InternalPakeError {
     HmacError,
     #[error("Computing the slow hashing function failed")]
     SlowHashError,
-}
-
-/// Represents an error in password checking
-#[derive(Debug, Error)]
-pub enum PakeError {
-    /// This error results from an internal error during PRF construction
-    ///
-    #[error("Internal error during PRF verification: {0}")]
-    CryptoError(InternalPakeError),
     /// This error occurs when the envelope seal fails
     #[error("Constructing the envelope seal failed.")]
     SealError,
@@ -46,6 +37,15 @@ pub enum PakeError {
     /// This error occurs when the envelope seal open hmac check fails
     #[error("HMAC check in seal open failed.")]
     SealOpenHmacError,
+}
+
+/// Represents an error in password checking
+#[derive(Debug, Error)]
+pub enum PakeError {
+    /// This error results from an internal error during PRF construction
+    ///
+    #[error("Internal error during PRF verification: {0}")]
+    CryptoError(InternalPakeError),
     /// This error occurs when the server object that is being called finish() on is malformed
     #[error("Incomplete set of keys passed into finish() function")]
     IncompleteKeysError,

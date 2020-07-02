@@ -731,8 +731,8 @@ impl<CS: CipherSuite> ClientLogin<CS> {
             .envelope
             .open(&password_derived_key, &server_s_pk.to_arr())
             .map_err(|e| match e {
-                PakeError::SealOpenHmacError => PakeError::InvalidLoginError,
-                err => err,
+                InternalPakeError::SealOpenHmacError => PakeError::InvalidLoginError,
+                err => PakeError::from(err),
             })?;
 
         let (ke3_state, ke3_message) = generate_ke3::<CS::KeyFormat>(
@@ -817,8 +817,10 @@ impl ServerLogin {
         let l1_bytes = &l1.to_bytes();
         let beta = oprf::generate_oprf2(l1.alpha, &password_file.oprf_key)?;
 
-        let client_s_pk = password_file.client_s_pk.ok_or(PakeError::SealError)?;
-        let envelope = password_file.envelope.ok_or(PakeError::SealError)?;
+        let client_s_pk = password_file
+            .client_s_pk
+            .ok_or(InternalPakeError::SealError)?;
+        let envelope = password_file.envelope.ok_or(InternalPakeError::SealError)?;
 
         let l2_component: Vec<u8> = [beta.to_bytes().as_slice(), &envelope.to_bytes()].concat();
 

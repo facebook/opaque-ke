@@ -3,7 +3,7 @@
 // This source code is licensed under the MIT license found in the
 // LICENSE file in the root directory of this source tree.
 
-use crate::errors::{InternalPakeError, PakeError};
+use crate::errors::InternalPakeError;
 use generic_array::{
     typenum::{Unsigned, U32},
     GenericArray,
@@ -97,7 +97,7 @@ impl Envelope {
         plaintext: &[u8],
         aad: &[u8],
         rng: &mut R,
-    ) -> Result<(Self, GenericArray<u8, ExportKeySize>), PakeError> {
+    ) -> Result<(Self, GenericArray<u8, ExportKeySize>), InternalPakeError> {
         let mut nonce = vec![0u8; Self::nonce_size()];
         rng.fill_bytes(&mut nonce);
 
@@ -132,7 +132,7 @@ impl Envelope {
         &self,
         key: &[u8],
         aad: &[u8],
-    ) -> Result<(Vec<u8>, GenericArray<u8, ExportKeySize>), PakeError> {
+    ) -> Result<(Vec<u8>, GenericArray<u8, ExportKeySize>), InternalPakeError> {
         let h = Hkdf::<Sha256>::new(Some(&self.nonce), &key);
         let mut okm =
             vec![0u8; self.ciphertext.len() + Self::hmac_key_size() + Self::export_key_size()];
@@ -147,7 +147,7 @@ impl Envelope {
         hmac.update(&self.ciphertext);
         hmac.update(aad);
         if hmac.verify(&self.hmac).is_err() {
-            return Err(PakeError::SealOpenHmacError);
+            return Err(InternalPakeError::SealOpenHmacError);
         }
 
         let plaintext: Vec<u8> = xor_key
