@@ -10,10 +10,7 @@ use crate::{
     envelope::{Envelope, ExportKeySize},
     errors::{utils::check_slice_size, InternalPakeError, PakeError, ProtocolError},
     group::Group,
-    key_exchange::{
-        finish_ke, generate_ke1, generate_ke2, generate_ke3, KE1Message, KE1State, KE2Message,
-        KE2State, KE3Message, KE1_STATE_LEN, KE2_MESSAGE_LEN,
-    },
+    key_exchange::traits::{KeyExchange, ToBytes},
     keypair::{Key, KeyPair, SizedBytes},
     oprf,
     oprf::OprfClientBytes,
@@ -133,27 +130,29 @@ where
 }
 
 /// The message sent by the user to the server, to initiate registration
-pub struct LoginFirstMessage<Grp> {
+pub struct LoginFirstMessage<CS: CipherSuite> {
     /// blinded password information
-    alpha: Grp,
-    ke1_message: KE1Message,
+    alpha: CS::Group,
+    ke1_message: <CS::KeyExchange as KeyExchange>::KE1Message,
 }
 
-impl<Grp: Group> TryFrom<&[u8]> for LoginFirstMessage<Grp> {
+impl<CS: CipherSuite> TryFrom<&[u8]> for LoginFirstMessage<CS> {
     type Error = ProtocolError;
     fn try_from(first_message_bytes: &[u8]) -> Result<Self, Self::Error> {
         // Check that the message is actually containing an element of the
         // correct subgroup
-        let elem_len = Grp::ElemLen::to_usize();
+        let elem_len = <CS::Group as Group>::ElemLen::to_usize();
         let arr = GenericArray::from_slice(&first_message_bytes[..elem_len]);
-        let alpha = Grp::from_element_slice(arr)?;
+        let alpha = CS::Group::from_element_slice(arr)?;
 
-        let ke1_message = KE1Message::try_from(&first_message_bytes[elem_len..])?;
+        let ke1_message = <CS::KeyExchange as KeyExchange>::KE1Message::try_from(
+            first_message_bytes[elem_len..].to_vec(),
+        )?;
         Ok(Self { alpha, ke1_message })
     }
 }
 
-impl<Grp: Group> LoginFirstMessage<Grp> {
+impl<CS: CipherSuite> LoginFirstMessage<CS> {
     /// byte representation for the login request
     pub fn to_bytes(&self) -> Vec<u8> {
         [&self.alpha.to_arr()[..], &self.ke1_message.to_bytes()].concat()
@@ -162,19 +161,25 @@ impl<Grp: Group> LoginFirstMessage<Grp> {
 
 /// The answer sent by the server to the user, upon reception of the
 /// login attempt.
-pub struct LoginSecondMessage<Grp, KeyFormat> {
+pub struct LoginSecondMessage<Grp, KeyFormat, KE>
+where
+    KeyFormat: KeyPair<Repr = Key>,
+    KE: KeyExchange,
+{
     _key_format: PhantomData<KeyFormat>,
+    _key_exchange: PhantomData<KE>,
     /// the server's oprf output
     beta: Grp,
     /// the user's sealed information,
     envelope: Envelope,
-    ke2_message: KE2Message,
+    ke2_message: KE::KE2Message,
 }
 
-impl<Grp, KeyFormat> LoginSecondMessage<Grp, KeyFormat>
+impl<Grp, KeyFormat, KE> LoginSecondMessage<Grp, KeyFormat, KE>
 where
     Grp: Group,
-    KeyFormat: KeyPair,
+    KeyFormat: KeyPair<Repr = Key>,
+    KE: KeyExchange,
 {
     /// byte representation for the login response
     pub fn to_bytes(&self) -> Vec<u8> {
@@ -187,19 +192,21 @@ where
     }
 }
 
-impl<Grp, KeyFormat> TryFrom<&[u8]> for LoginSecondMessage<Grp, KeyFormat>
+impl<Grp, KeyFormat, KE> TryFrom<&[u8]> for LoginSecondMessage<Grp, KeyFormat, KE>
 where
     Grp: Group,
-    KeyFormat: KeyPair,
+    KeyFormat: KeyPair<Repr = Key>,
+    KE: KeyExchange,
 {
     type Error = ProtocolError;
     fn try_from(second_message_bytes: &[u8]) -> Result<Self, Self::Error> {
         let key_len = <KeyFormat::Repr as SizedBytes>::Len::to_usize();
         let envelope_size = key_len + Envelope::additional_size();
         let elem_len = Grp::ElemLen::to_usize();
+        let ke2_message_size = KE::ke2_message_size();
         let checked_slice = check_slice_size(
             second_message_bytes,
-            elem_len + envelope_size + KE2_MESSAGE_LEN,
+            elem_len + envelope_size + ke2_message_size,
             "login_second_message_bytes",
         )?;
 
@@ -210,10 +217,13 @@ where
         let beta = Grp::from_element_slice(arr)?;
 
         let envelope = Envelope::from_bytes(&checked_slice[elem_len..elem_len + envelope_size])?;
-        let ke2_message = KE2Message::try_from(&checked_slice[elem_len + envelope_size..])?;
+
+        let ke2_message =
+            KE::KE2Message::try_from(checked_slice[elem_len + envelope_size..].to_vec())?;
 
         Ok(Self {
             _key_format: PhantomData,
+            _key_exchange: PhantomData,
             beta,
             envelope,
             ke2_message,
@@ -223,20 +233,20 @@ where
 
 /// The answer sent by the client to the server, upon reception of the
 /// sealed envelope
-pub struct LoginThirdMessage {
-    ke3_message: KE3Message,
+pub struct LoginThirdMessage<CS: CipherSuite> {
+    ke3_message: <CS::KeyExchange as KeyExchange>::KE3Message,
 }
 
-impl TryFrom<&[u8]> for LoginThirdMessage {
+impl<CS: CipherSuite> TryFrom<&[u8]> for LoginThirdMessage<CS> {
     type Error = ProtocolError;
 
     fn try_from(bytes: &[u8]) -> Result<Self, Self::Error> {
-        let ke3_message = KE3Message::try_from(&bytes[..])?;
+        let ke3_message = <CS::KeyExchange as KeyExchange>::KE3Message::try_from(bytes.to_vec())?;
         Ok(Self { ke3_message })
     }
 }
 
-impl LoginThirdMessage {
+impl<CS: CipherSuite> LoginThirdMessage<CS> {
     /// byte representation for the login finalization
     pub fn to_bytes(&self) -> Vec<u8> {
         self.ke3_message.to_bytes()
@@ -299,6 +309,7 @@ impl<CS: CipherSuite> ClientRegistration<CS> {
     /// impl CipherSuite for Default {
     ///     type Group = curve25519_dalek::ristretto::RistrettoPoint;
     ///     type KeyFormat = opaque_ke::keypair::X25519KeyPair;
+    ///     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
     ///     type SlowHash = opaque_ke::slow_hash::NoOpHash;
     /// }
     /// let mut rng = OsRng;
@@ -349,6 +360,7 @@ impl<CS: CipherSuite> ClientRegistration<CS> {
     /// impl CipherSuite for Default {
     ///     type Group = curve25519_dalek::ristretto::RistrettoPoint;
     ///     type KeyFormat = opaque_ke::keypair::X25519KeyPair;
+    ///     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
     ///     type SlowHash = opaque_ke::slow_hash::NoOpHash;
     /// }
     /// let mut client_rng = OsRng;
@@ -513,6 +525,7 @@ where
     /// impl CipherSuite for Default {
     ///     type Group = curve25519_dalek::ristretto::RistrettoPoint;
     ///     type KeyFormat = opaque_ke::keypair::X25519KeyPair;
+    ///     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
     ///     type SlowHash = opaque_ke::slow_hash::NoOpHash;
     /// }
     /// let mut client_rng = OsRng;
@@ -559,6 +572,7 @@ where
     /// impl CipherSuite for Default {
     ///     type Group = curve25519_dalek::ristretto::RistrettoPoint;
     ///     type KeyFormat = opaque_ke::keypair::X25519KeyPair;
+    ///     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
     ///     type SlowHash = opaque_ke::slow_hash::NoOpHash;
     /// }
     /// let mut client_rng = OsRng;
@@ -596,7 +610,7 @@ pub struct ClientLogin<CS: CipherSuite> {
     blinding_factor: <CS::Group as Group>::Scalar,
     /// The user's password
     password: Vec<u8>,
-    ke1_state: KE1State,
+    ke1_state: <CS::KeyExchange as KeyExchange>::KE1State,
 }
 
 impl<CS: CipherSuite> TryFrom<&[u8]> for ClientLogin<CS> {
@@ -605,8 +619,11 @@ impl<CS: CipherSuite> TryFrom<&[u8]> for ClientLogin<CS> {
         let scalar_len = <CS::Group as Group>::ScalarLen::to_usize();
         let blinding_factor_bytes = GenericArray::from_slice(&bytes[..scalar_len]);
         let blinding_factor = CS::Group::from_scalar_slice(blinding_factor_bytes)?;
-        let ke1_state = KE1State::try_from(&bytes[scalar_len..scalar_len + KE1_STATE_LEN])?;
-        let password = bytes[scalar_len + KE1_STATE_LEN..].to_vec();
+        let ke1_state_size = <CS::KeyExchange as KeyExchange>::ke1_state_size();
+        let ke1_state = <CS::KeyExchange as KeyExchange>::KE1State::try_from(
+            bytes[scalar_len..scalar_len + ke1_state_size].to_vec(),
+        )?;
+        let password = bytes[scalar_len + ke1_state_size..].to_vec();
         Ok(Self {
             _key_format: PhantomData,
             blinding_factor,
@@ -629,7 +646,11 @@ impl<CS: CipherSuite> ClientLogin<CS> {
     }
 }
 
-type ClientLoginFinishResult = (LoginThirdMessage, Vec<u8>, GenericArray<u8, ExportKeySize>);
+type ClientLoginFinishResult<CS> = (
+    LoginThirdMessage<CS>,
+    Vec<u8>,
+    GenericArray<u8, ExportKeySize>,
+);
 
 impl<CS: CipherSuite> ClientLogin<CS> {
     /// Returns an initial "blinded" password request to send to the server, as well as a ClientLogin
@@ -648,6 +669,7 @@ impl<CS: CipherSuite> ClientLogin<CS> {
     /// impl CipherSuite for Default {
     ///     type Group = curve25519_dalek::ristretto::RistrettoPoint;
     ///     type KeyFormat = opaque_ke::keypair::X25519KeyPair;
+    ///     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
     ///     type SlowHash = opaque_ke::slow_hash::NoOpHash;
     /// }
     /// let mut client_rng = OsRng;
@@ -658,14 +680,14 @@ impl<CS: CipherSuite> ClientLogin<CS> {
         password: &[u8],
         pepper: Option<&[u8]>,
         rng: &mut R,
-    ) -> Result<(LoginFirstMessage<CS::Group>, Self), ProtocolError> {
+    ) -> Result<(LoginFirstMessage<CS>, Self), ProtocolError> {
         let OprfClientBytes {
             alpha,
             blinding_factor,
         } = oprf::generate_oprf1::<R, CS::Group>(&password, pepper, rng)?;
 
         let (ke1_state, ke1_message) =
-            generate_ke1::<_, CS::KeyFormat>(alpha.to_arr().to_vec(), rng)?;
+            CS::KeyExchange::generate_ke1::<_, CS::KeyFormat>(alpha.to_arr().to_vec(), rng)?;
 
         let l1 = LoginFirstMessage { alpha, ke1_message };
 
@@ -699,6 +721,7 @@ impl<CS: CipherSuite> ClientLogin<CS> {
     /// impl CipherSuite for Default {
     ///     type Group = curve25519_dalek::ristretto::RistrettoPoint;
     ///     type KeyFormat = opaque_ke::keypair::X25519KeyPair;
+    ///     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
     ///     type SlowHash = opaque_ke::slow_hash::NoOpHash;
     /// }
     /// let mut client_rng = OsRng;
@@ -715,10 +738,10 @@ impl<CS: CipherSuite> ClientLogin<CS> {
     /// ```
     pub fn finish<R: RngCore + CryptoRng>(
         self,
-        l2: LoginSecondMessage<CS::Group, CS::KeyFormat>,
-        server_s_pk: &<CS::KeyFormat as KeyPair>::Repr,
+        l2: LoginSecondMessage<CS::Group, CS::KeyFormat, CS::KeyExchange>,
+        server_s_pk: &<<CS as CipherSuite>::KeyFormat as KeyPair>::Repr,
         _client_e_sk_rng: &mut R,
-    ) -> Result<ClientLoginFinishResult, ProtocolError> {
+    ) -> Result<ClientLoginFinishResult<CS>, ProtocolError> {
         let l2_bytes: Vec<u8> = [&l2.beta.to_arr()[..], &l2.envelope.to_bytes()].concat();
 
         let password_derived_key = get_password_derived_key::<CS::Group, CS::SlowHash>(
@@ -735,7 +758,7 @@ impl<CS: CipherSuite> ClientLogin<CS> {
                 err => PakeError::from(err),
             })?;
 
-        let (ke3_state, ke3_message) = generate_ke3::<CS::KeyFormat>(
+        let (shared_secret, ke3_message) = CS::KeyExchange::generate_ke3::<CS::KeyFormat>(
             l2_bytes,
             l2.ke2_message,
             &self.ke1_state,
@@ -745,32 +768,38 @@ impl<CS: CipherSuite> ClientLogin<CS> {
 
         Ok((
             LoginThirdMessage { ke3_message },
-            ke3_state.shared_secret,
+            shared_secret,
             *export_key,
         ))
     }
 }
 
 /// The state elements the server holds to record a login
-pub struct ServerLogin {
-    ke2_state: KE2State,
+pub struct ServerLogin<CS: CipherSuite> {
+    ke2_state: <CS::KeyExchange as KeyExchange>::KE2State,
+    _cs: PhantomData<CS>,
 }
 
-impl TryFrom<&[u8]> for ServerLogin {
+impl<CS: CipherSuite> TryFrom<&[u8]> for ServerLogin<CS> {
     type Error = ProtocolError;
     fn try_from(bytes: &[u8]) -> Result<Self, Self::Error> {
         Ok(Self {
-            ke2_state: KE2State::try_from(&bytes[..])?,
+            _cs: PhantomData,
+            ke2_state: <CS::KeyExchange as KeyExchange>::KE2State::try_from(bytes.to_vec())?,
         })
     }
 }
 
 type ServerLoginStartResult<CS> = (
-    LoginSecondMessage<<CS as CipherSuite>::Group, <CS as CipherSuite>::KeyFormat>,
-    ServerLogin,
+    LoginSecondMessage<
+        <CS as CipherSuite>::Group,
+        <CS as CipherSuite>::KeyFormat,
+        <CS as CipherSuite>::KeyExchange,
+    >,
+    ServerLogin<CS>,
 );
 
-impl ServerLogin {
+impl<CS: CipherSuite> ServerLogin<CS> {
     /// byte representation for the server's login state
     pub fn to_bytes(&self) -> Vec<u8> {
         self.ke2_state.to_bytes()
@@ -795,6 +824,7 @@ impl ServerLogin {
     /// impl CipherSuite for Default {
     ///     type Group = curve25519_dalek::ristretto::RistrettoPoint;
     ///     type KeyFormat = opaque_ke::keypair::X25519KeyPair;
+    ///     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
     ///     type SlowHash = opaque_ke::slow_hash::NoOpHash;
     /// }
     /// let mut client_rng = OsRng;
@@ -809,10 +839,10 @@ impl ServerLogin {
     /// let (login_m2, server_login_state) = ServerLogin::start(p_file, &server_kp.private(), login_m1, &mut server_rng)?;
     /// # Ok::<(), ProtocolError>(())
     /// ```
-    pub fn start<CS: CipherSuite, R: RngCore + CryptoRng>(
+    pub fn start<R: RngCore + CryptoRng>(
         password_file: ServerRegistration<CS>,
         server_s_sk: &Key,
-        l1: LoginFirstMessage<CS::Group>,
+        l1: LoginFirstMessage<CS>,
         rng: &mut R,
     ) -> Result<ServerLoginStartResult<CS>, ProtocolError> {
         let l1_bytes = &l1.to_bytes();
@@ -825,24 +855,30 @@ impl ServerLogin {
 
         let l2_component: Vec<u8> = [&beta.to_arr()[..], &envelope.to_bytes()].concat();
 
-        let (ke2_state, ke2_message) = generate_ke2::<_, CS::KeyFormat>(
+        let (ke2_state, ke2_message) = CS::KeyExchange::generate_ke2::<_, CS::KeyFormat>(
             rng,
             l1_bytes.to_vec(),
             l2_component,
-            l1.ke1_message.client_e_pk,
+            l1.ke1_message,
             client_s_pk,
             server_s_sk.clone(),
-            l1.ke1_message.client_nonce.to_vec(),
         )?;
 
         let l2 = LoginSecondMessage {
             _key_format: PhantomData,
+            _key_exchange: PhantomData,
             beta,
             envelope,
             ke2_message,
         };
 
-        Ok((l2, Self { ke2_state }))
+        Ok((
+            l2,
+            Self {
+                _cs: PhantomData,
+                ke2_state,
+            },
+        ))
     }
 
     /// From the client's second & final message, check the client's
@@ -864,6 +900,7 @@ impl ServerLogin {
     /// impl CipherSuite for Default {
     ///     type Group = curve25519_dalek::ristretto::RistrettoPoint;
     ///     type KeyFormat = opaque_ke::keypair::X25519KeyPair;
+    ///     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
     ///     type SlowHash = opaque_ke::slow_hash::NoOpHash;
     /// }
     /// let mut client_rng = OsRng;
@@ -880,13 +917,15 @@ impl ServerLogin {
     /// let mut server_transport = server_login_state.finish(login_m3)?;
     /// # Ok::<(), ProtocolError>(())
     /// ```
-    pub fn finish(&self, message: LoginThirdMessage) -> Result<Vec<u8>, ProtocolError> {
-        finish_ke(message.ke3_message, &self.ke2_state).map_err(|e| match e {
-            ProtocolError::VerificationError(PakeError::KeyExchangeMacValidationError) => {
-                ProtocolError::VerificationError(PakeError::InvalidLoginError)
-            }
-            err => err,
-        })
+    pub fn finish(&self, message: LoginThirdMessage<CS>) -> Result<Vec<u8>, ProtocolError> {
+        <CS::KeyExchange as KeyExchange>::finish_ke(message.ke3_message, &self.ke2_state).map_err(
+            |e| match e {
+                ProtocolError::VerificationError(PakeError::KeyExchangeMacValidationError) => {
+                    ProtocolError::VerificationError(PakeError::InvalidLoginError)
+                }
+                err => err,
+            },
+        )
     }
 }
 

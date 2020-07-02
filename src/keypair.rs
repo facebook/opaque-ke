@@ -114,7 +114,7 @@ macro_rules! sized_bytes_using_constant_and_try_from {
                     <Self::Len as generic_array::typenum::Unsigned>::to_usize(),
                     "bytes",
                 )?;
-                std::convert::TryFrom::try_from(checked_bytes)
+                std::convert::TryFrom::try_from(checked_bytes.to_vec())
             }
         }
     };

@@ -7,7 +7,7 @@ use crate::{
     ciphersuite::CipherSuite,
     errors::*,
     group::Group,
-    key_exchange::NONCE_LEN,
+    key_exchange::tripledh::{TripleDH, NONCE_LEN},
     keypair::{Key, KeyPair, X25519KeyPair},
     opaque::*,
     slow_hash::NoOpHash,
@@ -25,6 +25,7 @@ struct X255193dhNoSlowHash;
 impl CipherSuite for X255193dhNoSlowHash {
     type Group = EdwardsPoint;
     type KeyFormat = X25519KeyPair;
+    type KeyExchange = TripleDH;
     type SlowHash = NoOpHash;
 }
 
@@ -282,7 +283,7 @@ fn generate_parameters<CS: CipherSuite>() -> TestVectorParameters {
     let client_login_state = client_login.to_bytes().to_vec();
 
     let mut server_e_sk_rng = CycleRng::new(server_e_kp.private().to_vec());
-    let (l2, server_login) = ServerLogin::start(
+    let (l2, server_login) = ServerLogin::<CS>::start(
         password_file,
         server_s_kp.private(),
         l1,
@@ -448,10 +449,10 @@ fn test_l2() -> Result<(), PakeError> {
     let parameters = populate_test_vectors(&serde_json::from_str(TEST_VECTOR).unwrap());
 
     let mut server_e_sk_rng = CycleRng::new(parameters.server_e_sk);
-    let (l2, server_login) = ServerLogin::start::<X255193dhNoSlowHash, _>(
+    let (l2, server_login) = ServerLogin::<X255193dhNoSlowHash>::start(
         ServerRegistration::try_from(&parameters.password_file[..]).unwrap(),
         &Key::try_from(&parameters.server_s_sk[..]).unwrap(),
-        LoginFirstMessage::<EdwardsPoint>::try_from(&parameters.l1[..]).unwrap(),
+        LoginFirstMessage::<X255193dhNoSlowHash>::try_from(&parameters.l1[..]).unwrap(),
         &mut server_e_sk_rng,
     )
     .unwrap();
@@ -473,8 +474,10 @@ fn test_l3() -> Result<(), PakeError> {
         ClientLogin::<X255193dhNoSlowHash>::try_from(&parameters.client_login_state[..])
             .unwrap()
             .finish(
-                LoginSecondMessage::<EdwardsPoint, X25519KeyPair>::try_from(&parameters.l2[..])
-                    .unwrap(),
+                LoginSecondMessage::<EdwardsPoint, X25519KeyPair, TripleDH>::try_from(
+                    &parameters.l2[..],
+                )
+                .unwrap(),
                 &Key::try_from(&parameters.server_s_pk[..])?,
                 &mut client_e_sk_rng,
             )
@@ -497,10 +500,11 @@ fn test_l3() -> Result<(), PakeError> {
 fn test_server_login_finish() -> Result<(), ProtocolError> {
     let parameters = populate_test_vectors(&serde_json::from_str(TEST_VECTOR).unwrap());
 
-    let shared_secret = ServerLogin::try_from(&parameters.server_login_state[..])
-        .unwrap()
-        .finish(LoginThirdMessage::try_from(&parameters.l3[..])?)
-        .unwrap();
+    let shared_secret =
+        ServerLogin::<X255193dhNoSlowHash>::try_from(&parameters.server_login_state[..])
+            .unwrap()
+            .finish(LoginThirdMessage::try_from(&parameters.l3[..])?)
+            .unwrap();
 
     assert_eq!(
         hex::encode(parameters.shared_secret),
@@ -529,8 +533,12 @@ fn test_complete_flow(
     let p_file = server_state.finish(register_m3)?;
     let (login_m1, client_login_state) =
         ClientLogin::<X255193dhNoSlowHash>::start(login_password, None, &mut client_rng)?;
-    let (login_m2, server_login_state) =
-        ServerLogin::start(p_file, &server_kp.private(), login_m1, &mut server_rng)?;
+    let (login_m2, server_login_state) = ServerLogin::<X255193dhNoSlowHash>::start(
+        p_file,
+        &server_kp.private(),
+        login_m1,
+        &mut server_rng,
+    )?;
 
     let client_login_result =
         client_login_state.finish(login_m2, &server_kp.public(), &mut client_rng);

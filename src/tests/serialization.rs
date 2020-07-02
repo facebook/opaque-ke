@@ -7,7 +7,10 @@ use crate::{
     ciphersuite::CipherSuite,
     envelope::Envelope,
     group::Group,
-    key_exchange::{KE1Message, NONCE_LEN},
+    key_exchange::{
+        traits::{KeyExchange, ToBytes},
+        tripledh::{TripleDH, NONCE_LEN},
+    },
     keypair::{KeyPair, SizedBytes, X25519KeyPair},
     opaque::*,
 };
@@ -23,6 +26,7 @@ struct Default;
 impl CipherSuite for Default {
     type Group = RistrettoPoint;
     type KeyFormat = crate::keypair::X25519KeyPair;
+    type KeyExchange = TripleDH;
     type SlowHash = crate::slow_hash::NoOpHash;
 }
 
@@ -160,7 +164,7 @@ fn login_first_message_roundtrip() {
     rng.fill_bytes(&mut client_nonce);
 
     let ke1m: Vec<u8> = [&client_nonce[..], &client_e_kp.public()].concat();
-    let reg = KE1Message::try_from(&ke1m[..]).unwrap();
+    let reg = <TripleDH as KeyExchange>::KE1Message::try_from(ke1m[..].to_vec()).unwrap();
     let reg_bytes = reg.to_bytes();
     assert_eq!(reg_bytes, ke1m);
 }
