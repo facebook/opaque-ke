@@ -4,29 +4,51 @@
 // LICENSE file in the root directory of this source tree.
 
 use crate::{errors::InternalPakeError, group::Group};
-use generic_array::{typenum::U64, GenericArray};
+use digest::{BlockInput, FixedOutput, Reset, Update};
+use generic_array::{typenum::U32, ArrayLength, GenericArray};
 use hkdf::Hkdf;
 use rand_core::{CryptoRng, RngCore};
-use sha2::{Digest, Sha256};
 
 pub(crate) struct OprfClientBytes<Grp: Group> {
     pub(crate) alpha: Grp,
     pub(crate) blinding_factor: Grp::Scalar,
 }
 
+/// The `HkDFDigest` trait specifies the interface required for a parameter of `hkdf::Hkdf`.
+///
+/// It's a convenience wrapper around [`Blockinput`], [`Update`], [`FixedOutput`], [`Reset`],
+/// [`Clone`], and [`Default`] traits.
+pub trait HkdfDigest: Update + BlockInput + FixedOutput + Reset + Default + Clone
+where
+    Self::BlockSize: ArrayLength<u8>,
+    Self::OutputSize: ArrayLength<u8>,
+{
+}
+
+impl<T> HkdfDigest for T
+where
+    T: Update + BlockInput + FixedOutput + Reset + Default + Clone,
+    T::BlockSize: ArrayLength<u8>,
+    T::OutputSize: ArrayLength<u8>,
+{
+}
+
 /// Computes the first step for the multiplicative blinding version of DH-OPRF. This
 /// message is sent from the client (who holds the input) to the server (who holds the OPRF key).
 /// The client can also pass in an optional "pepper" string to be mixed in with the input through
 /// an HKDF computation.
-pub(crate) fn generate_oprf1<R: RngCore + CryptoRng, G: Group<UniformBytesLen = U64>>(
+pub(crate) fn generate_oprf1<
+    R: RngCore + CryptoRng,
+    D: HkdfDigest,
+    G: Group<UniformBytesLen = D::OutputSize>,
+>(
     input: &[u8],
     pepper: Option<&[u8]>,
     blinding_factor_rng: &mut R,
 ) -> Result<OprfClientBytes<G>, InternalPakeError> {
-    let (hashed_input, _) = Hkdf::<Sha256>::extract(pepper, &input);
-    let curve_input: Vec<u8> = [hashed_input.as_slice(), &[0u8; 32]].concat();
+    let (hashed_input, _) = Hkdf::<D>::extract(pepper, &input);
     let blinding_factor = G::random_scalar(blinding_factor_rng);
-    let alpha = G::hash_to_curve(GenericArray::from_slice(&curve_input)) * &blinding_factor;
+    let alpha = G::hash_to_curve(GenericArray::from_slice(&hashed_input)) * &blinding_factor;
     Ok(OprfClientBytes {
         alpha,
         blinding_factor,
@@ -48,10 +70,10 @@ pub(crate) fn generate_oprf3<G: Group>(
     input: &[u8],
     point: G,
     blinding_factor: &G::Scalar,
-) -> Result<GenericArray<u8, <Sha256 as Digest>::OutputSize>, InternalPakeError> {
+) -> Result<GenericArray<u8, U32>, InternalPakeError> {
     let unblinded = point * &G::scalar_invert(&blinding_factor);
     let ikm: Vec<u8> = [&unblinded.to_arr()[..], input].concat();
-    let (prk, _) = Hkdf::<Sha256>::extract(None, &ikm);
+    let (prk, _) = Hkdf::<sha2::Sha256>::extract(None, &ikm);
     Ok(prk)
 }
 
@@ -66,14 +88,14 @@ mod tests {
     use generic_array::{arr, GenericArray};
     use hkdf::Hkdf;
     use rand_core::OsRng;
+    use sha2::{Digest, Sha256, Sha512};
 
     fn prf(
         input: &[u8],
         oprf_key: &[u8; 32],
     ) -> GenericArray<u8, <RistrettoPoint as Group>::ElemLen> {
-        let (hashed_input, _) = Hkdf::<Sha256>::extract(None, &input);
-        let curve_input: Vec<u8> = [hashed_input.as_slice(), &[0u8; 32]].concat();
-        let point = RistrettoPoint::hash_to_curve(GenericArray::from_slice(&curve_input));
+        let (hashed_input, _) = Hkdf::<Sha512>::extract(None, &input);
+        let point = RistrettoPoint::hash_to_curve(GenericArray::from_slice(&hashed_input));
         let scalar =
             RistrettoPoint::from_scalar_slice(GenericArray::from_slice(&oprf_key[..])).unwrap();
         let res = point * scalar;
@@ -90,7 +112,7 @@ mod tests {
         let OprfClientBytes {
             alpha,
             blinding_factor,
-        } = generate_oprf1::<_, RistrettoPoint>(&input[..], None, &mut rng)?;
+        } = generate_oprf1::<_, Sha512, RistrettoPoint>(&input[..], None, &mut rng)?;
         let salt_bytes = arr![
             u8; 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23,
             24, 25, 26, 27, 28, 29, 30, 31, 32,
@@ -111,17 +133,15 @@ mod tests {
         let OprfClientBytes {
             alpha,
             blinding_factor,
-        } = generate_oprf1::<_, RistrettoPoint>(&input, None, &mut rng).unwrap();
+        } = generate_oprf1::<_, Sha512, RistrettoPoint>(&input, None, &mut rng).unwrap();
         let res = generate_oprf3::<RistrettoPoint>(&input, alpha, &blinding_factor).unwrap();
 
-        let (hashed_input, _) = Hkdf::<Sha256>::extract(None, &input);
-        let mut curve_input: Vec<u8> = Vec::new();
-        curve_input.extend_from_slice(&hashed_input);
-        curve_input.extend_from_slice(&[0u8; 32]);
+        let (hashed_input, _) = Hkdf::<Sha512>::extract(None, &input);
+
         // This is because RistrettoPoint is on an obsolete sha2 version
         let mut bits = [0u8; 64];
         let mut hasher = sha2::Sha512::new();
-        hasher.update(&curve_input[..]);
+        Digest::update(&mut hasher, &hashed_input[..]);
         bits.copy_from_slice(&hasher.finalize());
 
         let point = RistrettoPoint::from_uniform_bytes(&bits);

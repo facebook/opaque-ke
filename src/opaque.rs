@@ -290,6 +290,7 @@ impl<CS: CipherSuite> ClientRegistration<CS> {
     /// use opaque_ke::ciphersuite::CipherSuite;
     /// struct Default;
     /// impl CipherSuite for Default {
+    ///     type Digest = sha2::Sha512;
     ///     type Group = curve25519_dalek::ristretto::RistrettoPoint;
     ///     type KeyFormat = opaque_ke::keypair::X25519KeyPair;
     ///     type SlowHash = opaque_ke::slow_hash::NoOpHash;
@@ -306,7 +307,11 @@ impl<CS: CipherSuite> ClientRegistration<CS> {
         let OprfClientBytes {
             alpha,
             blinding_factor,
-        } = oprf::generate_oprf1::<R, CS::Group>(&password, pepper, blinding_factor_rng)?;
+        } = oprf::generate_oprf1::<R, CS::Digest, CS::Group>(
+            &password,
+            pepper,
+            blinding_factor_rng,
+        )?;
 
         Ok((
             RegisterFirstMessage::<CS::Group> { alpha },
@@ -340,6 +345,7 @@ impl<CS: CipherSuite> ClientRegistration<CS> {
     /// use opaque_ke::ciphersuite::CipherSuite;
     /// struct Default;
     /// impl CipherSuite for Default {
+    ///     type Digest = sha2::Sha512;
     ///     type Group = curve25519_dalek::ristretto::RistrettoPoint;
     ///     type KeyFormat = opaque_ke::keypair::X25519KeyPair;
     ///     type SlowHash = opaque_ke::slow_hash::NoOpHash;
@@ -503,6 +509,7 @@ where
     /// use opaque_ke::ciphersuite::CipherSuite;
     /// struct Default;
     /// impl CipherSuite for Default {
+    ///     type Digest = sha2::Sha512;
     ///     type Group = curve25519_dalek::ristretto::RistrettoPoint;
     ///     type KeyFormat = opaque_ke::keypair::X25519KeyPair;
     ///     type SlowHash = opaque_ke::slow_hash::NoOpHash;
@@ -549,6 +556,7 @@ where
     /// use opaque_ke::ciphersuite::CipherSuite;
     /// struct Default;
     /// impl CipherSuite for Default {
+    ///     type Digest = sha2::Sha512;
     ///     type Group = curve25519_dalek::ristretto::RistrettoPoint;
     ///     type KeyFormat = opaque_ke::keypair::X25519KeyPair;
     ///     type SlowHash = opaque_ke::slow_hash::NoOpHash;
@@ -637,6 +645,7 @@ impl<CS: CipherSuite> ClientLogin<CS> {
     /// use opaque_ke::ciphersuite::CipherSuite;
     /// struct Default;
     /// impl CipherSuite for Default {
+    ///     type Digest = sha2::Sha512;
     ///     type Group = curve25519_dalek::ristretto::RistrettoPoint;
     ///     type KeyFormat = opaque_ke::keypair::X25519KeyPair;
     ///     type SlowHash = opaque_ke::slow_hash::NoOpHash;
@@ -653,7 +662,7 @@ impl<CS: CipherSuite> ClientLogin<CS> {
         let OprfClientBytes {
             alpha,
             blinding_factor,
-        } = oprf::generate_oprf1::<R, CS::Group>(&password, pepper, rng)?;
+        } = oprf::generate_oprf1::<R, CS::Digest, CS::Group>(&password, pepper, rng)?;
 
         let (ke1_state, ke1_message) =
             generate_ke1::<_, CS::KeyFormat>(alpha.to_arr().to_vec(), rng)?;
@@ -688,6 +697,7 @@ impl<CS: CipherSuite> ClientLogin<CS> {
     /// use opaque_ke::ciphersuite::CipherSuite;
     /// struct Default;
     /// impl CipherSuite for Default {
+    ///     type Digest = sha2::Sha512;
     ///     type Group = curve25519_dalek::ristretto::RistrettoPoint;
     ///     type KeyFormat = opaque_ke::keypair::X25519KeyPair;
     ///     type SlowHash = opaque_ke::slow_hash::NoOpHash;
@@ -783,6 +793,7 @@ impl ServerLogin {
     /// use opaque_ke::ciphersuite::CipherSuite;
     /// struct Default;
     /// impl CipherSuite for Default {
+    ///     type Digest = sha2::Sha512;
     ///     type Group = curve25519_dalek::ristretto::RistrettoPoint;
     ///     type KeyFormat = opaque_ke::keypair::X25519KeyPair;
     ///     type SlowHash = opaque_ke::slow_hash::NoOpHash;
@@ -852,6 +863,7 @@ impl ServerLogin {
     /// use opaque_ke::ciphersuite::CipherSuite;
     /// struct Default;
     /// impl CipherSuite for Default {
+    ///     type Digest = sha2::Sha512;
     ///     type Group = curve25519_dalek::ristretto::RistrettoPoint;
     ///     type KeyFormat = opaque_ke::keypair::X25519KeyPair;
     ///     type SlowHash = opaque_ke::slow_hash::NoOpHash;

@@ -23,6 +23,7 @@ use std::convert::TryFrom;
 
 struct X255193dhNoSlowHash;
 impl CipherSuite for X255193dhNoSlowHash {
+    type Digest = sha2::Sha256;
     type Group = EdwardsPoint;
     type KeyFormat = X25519KeyPair;
     type SlowHash = NoOpHash;
