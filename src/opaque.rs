@@ -251,7 +251,7 @@ impl LoginThirdMessage {
 /// The state elements the client holds to register itself
 pub struct ClientRegistration<CS: CipherSuite> {
     /// a blinding factor
-    pub(crate) blinding_factor: <<CS as CipherSuite>::Group as Group>::Scalar,
+    pub(crate) blinding_factor: <CS::Group as Group>::Scalar,
     /// the client's password
     password: Vec<u8>,
 }
@@ -261,7 +261,7 @@ impl<CS: CipherSuite> TryFrom<&[u8]> for ClientRegistration<CS> {
     fn try_from(bytes: &[u8]) -> Result<Self, Self::Error> {
         // Check that the message is actually containing an element of the
         // correct subgroup
-        let scalar_len = <<CS as CipherSuite>::Group as Group>::ScalarLen::to_usize();
+        let scalar_len = <CS::Group as Group>::ScalarLen::to_usize();
         let blinding_factor_bytes = GenericArray::from_slice(&bytes[..scalar_len]);
         let blinding_factor = CS::Group::from_scalar_slice(blinding_factor_bytes)?;
         let password = bytes[scalar_len..].to_vec();
@@ -365,7 +365,7 @@ impl<CS: CipherSuite> ClientRegistration<CS> {
     pub fn finish<R: CryptoRng + RngCore>(
         self,
         r2: RegisterSecondMessage<CS::Group>,
-        server_s_pk: &<<CS as CipherSuite>::KeyFormat as KeyPair>::Repr,
+        server_s_pk: &<CS::KeyFormat as KeyPair>::Repr,
         rng: &mut R,
     ) -> Result<ClientRegistrationFinishResult<CS::KeyFormat>, ProtocolError> {
         let client_static_keypair = CS::KeyFormat::generate_random(rng)?;
@@ -424,24 +424,24 @@ impl<CS: CipherSuite> Drop for ClientLogin<CS> {
 /// The state elements the server holds to record a registration
 pub struct ServerRegistration<CS: CipherSuite> {
     envelope: Option<Envelope>,
-    client_s_pk: Option<<<CS as CipherSuite>::KeyFormat as KeyPair>::Repr>,
-    pub(crate) oprf_key: <<CS as CipherSuite>::Group as Group>::Scalar,
+    client_s_pk: Option<<CS::KeyFormat as KeyPair>::Repr>,
+    pub(crate) oprf_key: <CS::Group as Group>::Scalar,
 }
 
 impl<CS: CipherSuite> TryFrom<&[u8]> for ServerRegistration<CS>
 where
-    <<<CS as CipherSuite>::KeyFormat as KeyPair>::Repr as SizedBytes>::Len:
-        std::ops::Add<<<<CS as CipherSuite>::KeyFormat as KeyPair>::Repr as SizedBytes>::Len>,
+    <<CS::KeyFormat as KeyPair>::Repr as SizedBytes>::Len:
+        std::ops::Add<<<CS::KeyFormat as KeyPair>::Repr as SizedBytes>::Len>,
     generic_array::typenum::Sum<
-        <<<CS as CipherSuite>::KeyFormat as KeyPair>::Repr as SizedBytes>::Len,
-        <<<CS as CipherSuite>::KeyFormat as KeyPair>::Repr as SizedBytes>::Len,
+        <<CS::KeyFormat as KeyPair>::Repr as SizedBytes>::Len,
+        <<CS::KeyFormat as KeyPair>::Repr as SizedBytes>::Len,
     >: generic_array::ArrayLength<u8>,
 {
     type Error = ProtocolError;
     fn try_from(server_registration_bytes: &[u8]) -> Result<Self, Self::Error> {
         let key_len =
-            <<<CS as CipherSuite>::KeyFormat as KeyPair>::Repr as SizedBytes>::Len::to_usize();
-        let scalar_len = <<CS as CipherSuite>::Group as Group>::ScalarLen::to_usize();
+            <<CS::KeyFormat as KeyPair>::Repr as SizedBytes>::Len::to_usize();
+        let scalar_len = <CS::Group as Group>::ScalarLen::to_usize();
         let envelope_size = key_len + Envelope::additional_size();
 
         if server_registration_bytes.len() == scalar_len {
@@ -461,7 +461,7 @@ where
         )?;
         let oprf_key_bytes = GenericArray::from_slice(&checked_bytes[..scalar_len]);
         let oprf_key = CS::Group::from_scalar_slice(oprf_key_bytes)?;
-        let unchecked_client_s_pk = <<CS as CipherSuite>::KeyFormat as KeyPair>::Repr::from_bytes(
+        let unchecked_client_s_pk = <CS::KeyFormat as KeyPair>::Repr::from_bytes(
             &checked_bytes[scalar_len..scalar_len + key_len],
         )?;
         let client_s_pk = CS::KeyFormat::check_public_key(unchecked_client_s_pk)?;
@@ -477,11 +477,11 @@ where
 
 impl<CS: CipherSuite> ServerRegistration<CS>
 where
-    <<<CS as CipherSuite>::KeyFormat as KeyPair>::Repr as SizedBytes>::Len:
-        std::ops::Add<<<<CS as CipherSuite>::KeyFormat as KeyPair>::Repr as SizedBytes>::Len>,
+    <<CS::KeyFormat as KeyPair>::Repr as SizedBytes>::Len:
+        std::ops::Add<<<CS::KeyFormat as KeyPair>::Repr as SizedBytes>::Len>,
     generic_array::typenum::Sum<
-        <<<CS as CipherSuite>::KeyFormat as KeyPair>::Repr as SizedBytes>::Len,
-        <<<CS as CipherSuite>::KeyFormat as KeyPair>::Repr as SizedBytes>::Len,
+        <<CS::KeyFormat as KeyPair>::Repr as SizedBytes>::Len,
+        <<CS::KeyFormat as KeyPair>::Repr as SizedBytes>::Len,
     >: generic_array::ArrayLength<u8>,
 {
     pub fn to_bytes(&self) -> Vec<u8> {
@@ -594,7 +594,7 @@ pub struct ClientLogin<CS: CipherSuite> {
     _key_format: PhantomData<CS::KeyFormat>,
     /// A blinding factor, which is used to mask (and unmask) secret
     /// information before transmission
-    blinding_factor: <<CS as CipherSuite>::Group as Group>::Scalar,
+    blinding_factor: <CS::Group as Group>::Scalar,
     /// The user's password
     password: Vec<u8>,
     ke1_state: KE1State,
@@ -603,7 +603,7 @@ pub struct ClientLogin<CS: CipherSuite> {
 impl<CS: CipherSuite> TryFrom<&[u8]> for ClientLogin<CS> {
     type Error = ProtocolError;
     fn try_from(bytes: &[u8]) -> Result<Self, Self::Error> {
-        let scalar_len = <<CS as CipherSuite>::Group as Group>::ScalarLen::to_usize();
+        let scalar_len = <CS::Group as Group>::ScalarLen::to_usize();
         let blinding_factor_bytes = GenericArray::from_slice(&bytes[..scalar_len]);
         let blinding_factor = CS::Group::from_scalar_slice(blinding_factor_bytes)?;
         let ke1_state = KE1State::try_from(&bytes[scalar_len..scalar_len + KE1_STATE_LEN])?;
@@ -716,7 +716,7 @@ impl<CS: CipherSuite> ClientLogin<CS> {
     pub fn finish<R: RngCore + CryptoRng>(
         self,
         l2: LoginSecondMessage<CS::Group, CS::KeyFormat>,
-        server_s_pk: &<<CS as CipherSuite>::KeyFormat as KeyPair>::Repr,
+        server_s_pk: &<CS::KeyFormat as KeyPair>::Repr,
         _client_e_sk_rng: &mut R,
     ) -> Result<ClientLoginFinishResult, ProtocolError> {
         let l2_bytes: Vec<u8> = [l2.beta.to_bytes().as_slice(), &l2.envelope.to_bytes()].concat();
