@@ -85,7 +85,7 @@ fn server_registration_roundtrip() {
 #[test]
 fn register_first_message_roundtrip() {
     let pt = random_ristretto_point();
-    let pt_bytes = pt.to_bytes();
+    let pt_bytes = pt.to_arr();
     let r1 = RegisterFirstMessage::<RistrettoPoint>::try_from(pt_bytes.as_slice()).unwrap();
     let r1_bytes = r1.to_bytes();
     assert_eq!(pt_bytes, r1_bytes);
@@ -94,7 +94,7 @@ fn register_first_message_roundtrip() {
 #[test]
 fn register_second_message_roundtrip() {
     let pt = random_ristretto_point();
-    let pt_bytes = pt.to_bytes();
+    let pt_bytes = pt.to_arr();
 
     let message = pt_bytes.to_vec();
     let r2 = RegisterSecondMessage::<RistrettoPoint>::try_from(&message[..]).unwrap();

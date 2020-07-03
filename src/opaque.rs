@@ -46,7 +46,7 @@ impl<Grp: Group> TryFrom<&[u8]> for RegisterFirstMessage<Grp> {
 
 impl<Grp: Group> RegisterFirstMessage<Grp> {
     pub fn to_bytes(&self) -> GenericArray<u8, Grp::ElemLen> {
-        self.alpha.to_bytes()
+        self.alpha.to_arr()
     }
 }
 
@@ -82,7 +82,7 @@ where
     Grp: Group,
 {
     pub fn to_bytes(&self) -> Vec<u8> {
-        self.beta.to_bytes().to_vec()
+        self.beta.to_arr().to_vec()
     }
 }
 
@@ -101,11 +101,7 @@ where
     KeyFormat: KeyPair,
 {
     pub fn to_bytes(&self) -> Vec<u8> {
-        [
-            &self.envelope.to_bytes(),
-            self.client_s_pk.to_arr().as_slice(),
-        ]
-        .concat()
+        [&self.envelope.to_bytes(), &self.client_s_pk.to_arr()[..]].concat()
     }
 }
 
@@ -156,11 +152,7 @@ impl<Grp: Group> TryFrom<&[u8]> for LoginFirstMessage<Grp> {
 
 impl<Grp: Group> LoginFirstMessage<Grp> {
     pub fn to_bytes(&self) -> Vec<u8> {
-        [
-            self.alpha.to_bytes().as_slice(),
-            &self.ke1_message.to_bytes(),
-        ]
-        .concat()
+        [&self.alpha.to_arr()[..], &self.ke1_message.to_bytes()].concat()
     }
 }
 
@@ -182,7 +174,7 @@ where
 {
     pub fn to_bytes(&self) -> Vec<u8> {
         [
-            &self.beta.to_bytes()[..],
+            &self.beta.to_arr()[..],
             &self.envelope.to_bytes()[..],
             &self.ke2_message.to_bytes()[..],
         ]
@@ -275,7 +267,7 @@ impl<CS: CipherSuite> TryFrom<&[u8]> for ClientRegistration<CS> {
 impl<CS: CipherSuite> ClientRegistration<CS> {
     pub fn to_bytes(&self) -> Vec<u8> {
         let output: Vec<u8> = [
-            CS::Group::scalar_as_bytes(&self.blinding_factor).as_slice(),
+            &CS::Group::scalar_as_bytes(&self.blinding_factor)[..],
             &self.password,
         ]
         .concat();
@@ -439,8 +431,7 @@ where
 {
     type Error = ProtocolError;
     fn try_from(server_registration_bytes: &[u8]) -> Result<Self, Self::Error> {
-        let key_len =
-            <<CS::KeyFormat as KeyPair>::Repr as SizedBytes>::Len::to_usize();
+        let key_len = <<CS::KeyFormat as KeyPair>::Repr as SizedBytes>::Len::to_usize();
         let scalar_len = <CS::Group as Group>::ScalarLen::to_usize();
         let envelope_size = key_len + Envelope::additional_size();
 
@@ -620,7 +611,7 @@ impl<CS: CipherSuite> TryFrom<&[u8]> for ClientLogin<CS> {
 impl<CS: CipherSuite> ClientLogin<CS> {
     pub fn to_bytes(&self) -> Vec<u8> {
         let output: Vec<u8> = [
-            CS::Group::scalar_as_bytes(&self.blinding_factor).as_slice(),
+            &CS::Group::scalar_as_bytes(&self.blinding_factor)[..],
             &self.ke1_state.to_bytes(),
             &self.password,
         ]
@@ -665,7 +656,7 @@ impl<CS: CipherSuite> ClientLogin<CS> {
         } = oprf::generate_oprf1::<R, CS::Group>(&password, pepper, rng)?;
 
         let (ke1_state, ke1_message) =
-            generate_ke1::<_, CS::KeyFormat>(alpha.to_bytes().to_vec(), rng)?;
+            generate_ke1::<_, CS::KeyFormat>(alpha.to_arr().to_vec(), rng)?;
 
         let l1 = LoginFirstMessage { alpha, ke1_message };
 
@@ -719,7 +710,7 @@ impl<CS: CipherSuite> ClientLogin<CS> {
         server_s_pk: &<CS::KeyFormat as KeyPair>::Repr,
         _client_e_sk_rng: &mut R,
     ) -> Result<ClientLoginFinishResult, ProtocolError> {
-        let l2_bytes: Vec<u8> = [l2.beta.to_bytes().as_slice(), &l2.envelope.to_bytes()].concat();
+        let l2_bytes: Vec<u8> = [&l2.beta.to_arr()[..], &l2.envelope.to_bytes()].concat();
 
         let password_derived_key = get_password_derived_key::<CS::Group, CS::SlowHash>(
             self.password.clone(),
@@ -822,7 +813,7 @@ impl ServerLogin {
             .ok_or(InternalPakeError::SealError)?;
         let envelope = password_file.envelope.ok_or(InternalPakeError::SealError)?;
 
-        let l2_component: Vec<u8> = [beta.to_bytes().as_slice(), &envelope.to_bytes()].concat();
+        let l2_component: Vec<u8> = [&beta.to_arr()[..], &envelope.to_bytes()].concat();
 
         let (ke2_state, ke2_message) = generate_ke2::<_, CS::KeyFormat>(
             rng,

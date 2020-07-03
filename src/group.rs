@@ -46,7 +46,7 @@ pub trait Group: Sized + for<'a> Mul<&'a <Self as Group>::Scalar, Output = Self>
         element_bits: &GenericArray<u8, Self::ElemLen>,
     ) -> Result<Self, InternalPakeError>;
     /// Serializes the `self` group element
-    fn to_bytes(&self) -> GenericArray<u8, Self::ElemLen>;
+    fn to_arr(&self) -> GenericArray<u8, Self::ElemLen>;
 
     /// Hashes points presumed to be uniformly random to the curve. The
     /// impl is allowed to perform additional hashes if it needs to, but this
@@ -87,7 +87,7 @@ impl Group for RistrettoPoint {
             .ok_or_else(|| InternalPakeError::PointError)
     }
     // serialization of a group element
-    fn to_bytes(&self) -> GenericArray<u8, Self::ElemLen> {
+    fn to_arr(&self) -> GenericArray<u8, Self::ElemLen> {
         let c = self.compress();
         *GenericArray::from_slice(c.as_bytes())
     }
@@ -135,7 +135,7 @@ impl Group for EdwardsPoint {
             .ok_or_else(|| InternalPakeError::PointError)
     }
     // serialization of a group element
-    fn to_bytes(&self) -> GenericArray<u8, Self::ElemLen> {
+    fn to_arr(&self) -> GenericArray<u8, Self::ElemLen> {
         let c = self.compress();
         *GenericArray::from_slice(c.as_bytes())
     }
