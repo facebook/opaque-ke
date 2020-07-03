@@ -21,7 +21,6 @@ use std::convert::TryFrom;
 
 struct Default;
 impl CipherSuite for Default {
-    type Digest = sha2::Sha512;
     type Group = RistrettoPoint;
     type KeyFormat = crate::keypair::X25519KeyPair;
     type SlowHash = crate::slow_hash::NoOpHash;

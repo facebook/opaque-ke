@@ -7,24 +7,22 @@
 
 use crate::{
     errors::InternalPakeError,
-    group::Group,
     keypair::{Key, KeyPair},
-    oprf::HkdfDigest,
+    map_to_curve::GroupWithMapToCurve,
     slow_hash::SlowHash,
 };
-use digest::FixedOutput;
-use generic_array::typenum::{U32};
+
 use rand_core::{CryptoRng, RngCore};
 
 /// Configures the underlying primitives used in OPAQUE
-/// * `Digest`: a digest suitable for use in an Hkdf, with an output length equal
-///     to the input of the hash-to-curve function of the `Group` parameter.
-/// * `Group`: a finite cyclic group along with a point representation
+/// * `Group`: a finite cyclic group along with a point representation, along
+///   with an extension trait PasswordToCurve that allows some customization on
+///   how to hash a password to a curve point. See `group::Group` and
+///   `map_to_curve::GroupWithMapToCurve`.
 /// * `KeyFormat`: a keypair type composed of public and private components
 /// * `SlowHash`: a slow hashing function, typically used for password hashing
 pub trait CipherSuite {
-    type Digest: HkdfDigest;
-    type Group: Group<ScalarLen = U32, UniformBytesLen = <Self::Digest as FixedOutput>::OutputSize>;
+    type Group: GroupWithMapToCurve;
     type KeyFormat: KeyPair<Repr = Key> + PartialEq;
     type SlowHash: SlowHash;
 

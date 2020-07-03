@@ -3,9 +3,8 @@
 // This source code is licensed under the MIT license found in the
 // LICENSE file in the root directory of this source tree.
 
-use crate::{errors::InternalPakeError, group::Group};
-use digest::{BlockInput, FixedOutput, Reset, Update};
-use generic_array::{typenum::U32, ArrayLength, GenericArray};
+use crate::{errors::InternalPakeError, group::Group, map_to_curve::GroupWithMapToCurve};
+use generic_array::{typenum::U32, GenericArray};
 use hkdf::Hkdf;
 use rand_core::{CryptoRng, RngCore};
 
@@ -14,41 +13,18 @@ pub(crate) struct OprfClientBytes<Grp: Group> {
     pub(crate) blinding_factor: Grp::Scalar,
 }
 
-/// The `HkDFDigest` trait specifies the interface required for a parameter of `hkdf::Hkdf`.
-///
-/// It's a convenience wrapper around [`Blockinput`], [`Update`], [`FixedOutput`], [`Reset`],
-/// [`Clone`], and [`Default`] traits.
-pub trait HkdfDigest: Update + BlockInput + FixedOutput + Reset + Default + Clone
-where
-    Self::BlockSize: ArrayLength<u8>,
-    Self::OutputSize: ArrayLength<u8>,
-{
-}
-
-impl<T> HkdfDigest for T
-where
-    T: Update + BlockInput + FixedOutput + Reset + Default + Clone,
-    T::BlockSize: ArrayLength<u8>,
-    T::OutputSize: ArrayLength<u8>,
-{
-}
-
 /// Computes the first step for the multiplicative blinding version of DH-OPRF. This
 /// message is sent from the client (who holds the input) to the server (who holds the OPRF key).
 /// The client can also pass in an optional "pepper" string to be mixed in with the input through
 /// an HKDF computation.
-pub(crate) fn generate_oprf1<
-    R: RngCore + CryptoRng,
-    D: HkdfDigest,
-    G: Group<UniformBytesLen = D::OutputSize>,
->(
+pub(crate) fn generate_oprf1<R: RngCore + CryptoRng, G: GroupWithMapToCurve>(
     input: &[u8],
     pepper: Option<&[u8]>,
     blinding_factor_rng: &mut R,
 ) -> Result<OprfClientBytes<G>, InternalPakeError> {
-    let (hashed_input, _) = Hkdf::<D>::extract(pepper, &input);
+    let mapped_point = G::map_to_curve(input, pepper);
     let blinding_factor = G::random_scalar(blinding_factor_rng);
-    let alpha = G::hash_to_curve(GenericArray::from_slice(&hashed_input)) * &blinding_factor;
+    let alpha = mapped_point * &blinding_factor;
     Ok(OprfClientBytes {
         alpha,
         blinding_factor,
@@ -112,7 +88,7 @@ mod tests {
         let OprfClientBytes {
             alpha,
             blinding_factor,
-        } = generate_oprf1::<_, Sha512, RistrettoPoint>(&input[..], None, &mut rng)?;
+        } = generate_oprf1::<_, RistrettoPoint>(&input[..], None, &mut rng)?;
         let salt_bytes = arr![
             u8; 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23,
             24, 25, 26, 27, 28, 29, 30, 31, 32,
@@ -133,7 +109,7 @@ mod tests {
         let OprfClientBytes {
             alpha,
             blinding_factor,
-        } = generate_oprf1::<_, Sha512, RistrettoPoint>(&input, None, &mut rng).unwrap();
+        } = generate_oprf1::<_, RistrettoPoint>(&input, None, &mut rng).unwrap();
         let res = generate_oprf3::<RistrettoPoint>(&input, alpha, &blinding_factor).unwrap();
 
         let (hashed_input, _) = Hkdf::<Sha512>::extract(None, &input);

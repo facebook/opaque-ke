@@ -21,7 +21,6 @@
 //! use opaque_ke::ciphersuite::CipherSuite;
 //! struct Default;
 //! impl CipherSuite for Default {
-//!     type Digest = sha2::Sha512;
 //!     type Group = curve25519_dalek::ristretto::RistrettoPoint;
 //!     type KeyFormat = opaque_ke::keypair::X25519KeyPair;
 //!     type SlowHash = opaque_ke::slow_hash::NoOpHash;
@@ -42,7 +41,6 @@
 //! # use opaque_ke::ciphersuite::CipherSuite;
 //! # struct Default;
 //! # impl CipherSuite for Default {
-//! #     type Digest = sha2::Sha512;
 //! #     type Group = curve25519_dalek::ristretto::RistrettoPoint;
 //! #     type KeyFormat = opaque_ke::keypair::X25519KeyPair;
 //! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
@@ -74,7 +72,6 @@
 //! # use opaque_ke::ciphersuite::CipherSuite;
 //! # struct Default;
 //! # impl CipherSuite for Default {
-//! #     type Digest = sha2::Sha512;
 //! #     type Group = curve25519_dalek::ristretto::RistrettoPoint;
 //! #     type KeyFormat = opaque_ke::keypair::X25519KeyPair;
 //! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
@@ -103,7 +100,6 @@
 //! # use opaque_ke::ciphersuite::CipherSuite;
 //! # struct Default;
 //! # impl CipherSuite for Default {
-//! #     type Digest = sha2::Sha512;
 //! #     type Group = curve25519_dalek::ristretto::RistrettoPoint;
 //! #     type KeyFormat = opaque_ke::keypair::X25519KeyPair;
 //! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
@@ -135,7 +131,6 @@
 //! # use opaque_ke::ciphersuite::CipherSuite;
 //! # struct Default;
 //! # impl CipherSuite for Default {
-//! #     type Digest = sha2::Sha512;
 //! #     type Group = curve25519_dalek::ristretto::RistrettoPoint;
 //! #     type KeyFormat = opaque_ke::keypair::X25519KeyPair;
 //! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
@@ -169,7 +164,6 @@
 //! # use opaque_ke::ciphersuite::CipherSuite;
 //! # struct Default;
 //! # impl CipherSuite for Default {
-//! #     type Digest = sha2::Sha512;
 //! #     type Group = curve25519_dalek::ristretto::RistrettoPoint;
 //! #     type KeyFormat = opaque_ke::keypair::X25519KeyPair;
 //! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
@@ -211,7 +205,6 @@
 //! # use opaque_ke::ciphersuite::CipherSuite;
 //! # struct Default;
 //! # impl CipherSuite for Default {
-//! #     type Digest = sha2::Sha512;
 //! #     type Group = curve25519_dalek::ristretto::RistrettoPoint;
 //! #     type KeyFormat = opaque_ke::keypair::X25519KeyPair;
 //! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
@@ -240,7 +233,6 @@
 //! # use opaque_ke::ciphersuite::CipherSuite;
 //! # struct Default;
 //! # impl CipherSuite for Default {
-//! #     type Digest = sha2::Sha512;
 //! #     type Group = curve25519_dalek::ristretto::RistrettoPoint;
 //! #     type KeyFormat = opaque_ke::keypair::X25519KeyPair;
 //! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
@@ -284,7 +276,6 @@
 //! # use opaque_ke::ciphersuite::CipherSuite;
 //! # struct Default;
 //! # impl CipherSuite for Default {
-//! #     type Digest = sha2::Sha512;
 //! #     type Group = curve25519_dalek::ristretto::RistrettoPoint;
 //! #     type KeyFormat = opaque_ke::keypair::X25519KeyPair;
 //! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
@@ -340,7 +331,6 @@
 //! # use opaque_ke::ciphersuite::CipherSuite;
 //! # struct Default;
 //! # impl CipherSuite for Default {
-//! #     type Digest = sha2::Sha512;
 //! #     type Group = curve25519_dalek::ristretto::RistrettoPoint;
 //! #     type KeyFormat = opaque_ke::keypair::X25519KeyPair;
 //! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
@@ -390,9 +380,13 @@ pub mod opaque;
 
 pub mod ciphersuite;
 mod envelope;
+
 mod group;
+mod map_to_curve;
+
 mod key_exchange;
 pub mod keypair;
+
 mod oprf;
 pub mod slow_hash;
 
