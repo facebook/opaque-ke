@@ -94,7 +94,7 @@ impl Group for RistrettoPoint {
 
     type UniformBytesLen = U64;
     fn hash_to_curve(uniform_bytes: &GenericArray<u8, Self::UniformBytesLen>) -> Self {
-        // This is because RistrettoPoint is on an obsolete sha2 version
+        // This is because RistrettoPoint is on an obsolete sha2 version, see https://github.com/dalek-cryptography/curve25519-dalek/pull/327
         let mut bits = [0u8; 64];
         let mut hasher = sha2::Sha512::new();
         hasher.update(uniform_bytes);
