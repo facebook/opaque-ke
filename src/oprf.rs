@@ -50,7 +50,7 @@ pub(crate) fn generate_oprf3<G: Group>(
     blinding_factor: &G::Scalar,
 ) -> Result<GenericArray<u8, <Sha256 as Digest>::OutputSize>, InternalPakeError> {
     let unblinded = point * &G::scalar_invert(&blinding_factor);
-    let ikm: Vec<u8> = [&unblinded.to_bytes(), input].concat();
+    let ikm: Vec<u8> = [&unblinded.to_arr()[..], input].concat();
     let (prk, _) = Hkdf::<Sha256>::extract(None, &ikm);
     Ok(prk)
 }
@@ -77,7 +77,7 @@ mod tests {
         let scalar =
             RistrettoPoint::from_scalar_slice(GenericArray::from_slice(&oprf_key[..])).unwrap();
         let res = point * scalar;
-        let ikm: Vec<u8> = [res.to_bytes().as_slice(), &input].concat();
+        let ikm: Vec<u8> = [&res.to_arr()[..], &input].concat();
 
         let (prk, _) = Hkdf::<Sha256>::extract(None, &ikm);
         prk
@@ -126,7 +126,7 @@ mod tests {
 
         let point = RistrettoPoint::from_uniform_bytes(&bits);
         let mut ikm: Vec<u8> = Vec::new();
-        ikm.extend_from_slice(&point.to_bytes());
+        ikm.extend_from_slice(&point.to_arr());
         ikm.extend_from_slice(&input);
         let (prk, _) = Hkdf::<Sha256>::extract(None, &ikm);
 
