@@ -247,14 +247,13 @@ fn generate_parameters<CS: CipherSuite>() -> TestVectorParameters {
     )
     .unwrap();
     let r1_bytes = r1.to_bytes().to_vec();
-    let blinding_factor_bytes =
-        CS::Group::scalar_as_bytes(&client_registration.blinding_factor).clone();
+    let blinding_factor_bytes = *CS::Group::scalar_as_bytes(&client_registration.blinding_factor);
     let client_registration_state = client_registration.to_bytes().to_vec();
 
     let mut oprf_key_rng = CycleRng::new(oprf_key_raw.to_vec());
     let (r2, server_registration) = ServerRegistration::<CS>::start(r1, &mut oprf_key_rng).unwrap();
     let r2_bytes = r2.to_bytes().to_vec();
-    let oprf_key_bytes = CS::Group::scalar_as_bytes(&server_registration.oprf_key).clone();
+    let oprf_key_bytes = *CS::Group::scalar_as_bytes(&server_registration.oprf_key);
     let server_registration_state = server_registration.to_bytes().to_vec();
 
     let mut client_s_sk_and_nonce: Vec<u8> = Vec::new();
