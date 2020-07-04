@@ -11,14 +11,16 @@ use generic_array::{
 use hkdf::Hkdf;
 use hmac::{Hmac, Mac, NewMac};
 use rand_core::{CryptoRng, RngCore};
-use sha2::{Digest, Sha256};
+use sha2::Sha256;
 
 // Constant string used as salt for HKDF computation
 const STR_ENVU: &[u8] = b"EnvU";
 
 /// The length of the "export key" output by the client registration
 /// and login finish steps
-pub(crate) type ExportKeySize = <Sha256 as Digest>::OutputSize;
+pub(crate) type ExportKeySize = U32;
+
+const NONCE_LEN: usize = 32;
 
 /// This struct is an instantiation of the envelope as described in
 /// https://tools.ietf.org/html/draft-krawczyk-cfrg-opaque-06#section-4
@@ -33,42 +35,32 @@ pub(crate) type ExportKeySize = <Sha256 as Digest>::OutputSize;
 pub(crate) struct Envelope {
     nonce: Vec<u8>,
     ciphertext: Vec<u8>,
-    hmac: Vec<u8>,
+    hmac: GenericArray<u8, U32>,
 }
-
-type NonceLen = U32;
 
 impl Envelope {
     /// The additional number of bytes added to the plaintext
     pub(crate) fn additional_size() -> usize {
-        Self::nonce_size() + <Sha256 as Digest>::OutputSize::to_usize()
+        NONCE_LEN + U32::to_usize()
     }
 
     fn hmac_key_size() -> usize {
-        <Sha256 as Digest>::OutputSize::to_usize()
+        U32::to_usize()
     }
 
     fn hmac_size() -> usize {
-        <Sha256 as Digest>::OutputSize::to_usize()
-    }
-
-    fn nonce_size() -> usize {
-        NonceLen::to_usize()
+        U32::to_usize()
     }
 
     fn export_key_size() -> usize {
         ExportKeySize::to_usize()
     }
 
-    pub(crate) fn new(
-        nonce: Vec<u8>,
-        ciphertext: Vec<u8>,
-        hmac: &GenericArray<u8, <Sha256 as Digest>::OutputSize>,
-    ) -> Self {
+    pub(crate) fn new(nonce: Vec<u8>, ciphertext: Vec<u8>, hmac: GenericArray<u8, U32>) -> Self {
         Self {
             nonce,
             ciphertext,
-            hmac: hmac.to_vec(),
+            hmac,
         }
     }
 
@@ -76,13 +68,13 @@ impl Envelope {
     /// nonce             | ciphertext       | hmac
     /// nonce_size bytes  | variable length  | hmac_size bytes
     pub(crate) fn from_bytes(bytes: &[u8]) -> Result<Self, InternalPakeError> {
-        let ciphertext_start = Self::nonce_size();
+        let ciphertext_start = NONCE_LEN;
         let ciphertext_end = bytes.len() - Self::hmac_size();
 
         Ok(Self::new(
             bytes[..ciphertext_start].to_vec(),
             bytes[ciphertext_start..ciphertext_end].to_vec(),
-            GenericArray::from_slice(&bytes[ciphertext_end..]),
+            GenericArray::clone_from_slice(&bytes[ciphertext_end..]),
         ))
     }
 
@@ -98,7 +90,7 @@ impl Envelope {
         aad: &[u8],
         rng: &mut R,
     ) -> Result<(Self, GenericArray<u8, ExportKeySize>), InternalPakeError> {
-        let mut nonce = vec![0u8; Self::nonce_size()];
+        let mut nonce = vec![0u8; NONCE_LEN];
         rng.fill_bytes(&mut nonce);
 
         let h = Hkdf::<Sha256>::new(Some(&nonce), &key);
@@ -121,7 +113,7 @@ impl Envelope {
         hmac.update(&aad);
 
         Ok((
-            Self::new(nonce, ciphertext.to_vec(), &hmac.finalize().into_bytes()),
+            Self::new(nonce, ciphertext.to_vec(), hmac.finalize().into_bytes()),
             *GenericArray::from_slice(&export_key),
         ))
     }

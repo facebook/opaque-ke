@@ -7,19 +7,22 @@
 
 use crate::{
     errors::InternalPakeError,
-    group::Group,
     keypair::{Key, KeyPair},
+    map_to_curve::GroupWithMapToCurve,
     slow_hash::SlowHash,
 };
-use generic_array::typenum::{U32, U64};
+
 use rand_core::{CryptoRng, RngCore};
 
 /// Configures the underlying primitives used in OPAQUE
-/// * Group: a finite cyclic group along with a point representation
-/// * KeyFormat: a keypair type composed of public and private components
-/// * SlowHash: a slow hashing function, typically used for password hashing
+/// * `Group`: a finite cyclic group along with a point representation, along
+///   with an extension trait PasswordToCurve that allows some customization on
+///   how to hash a password to a curve point. See `group::Group` and
+///   `map_to_curve::GroupWithMapToCurve`.
+/// * `KeyFormat`: a keypair type composed of public and private components
+/// * `SlowHash`: a slow hashing function, typically used for password hashing
 pub trait CipherSuite {
-    type Group: Group<ScalarLen = U32, UniformBytesLen = U64>;
+    type Group: GroupWithMapToCurve;
     type KeyFormat: KeyPair<Repr = Key> + PartialEq;
     type SlowHash: SlowHash;
 

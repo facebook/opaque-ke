@@ -9,7 +9,7 @@ use crate::{
     sized_bytes_using_constant_and_try_from,
 };
 use generic_array::{
-    typenum::{U64, U96},
+    typenum::{U32, U64, U96},
     GenericArray,
 };
 use hkdf::Hkdf;
@@ -199,9 +199,9 @@ struct TripleDHComponents {
 
 // Consists of a shared secret, followed by two mac keys
 type TripleDHDerivationResult = (
-    GenericArray<u8, <Sha256 as Digest>::OutputSize>,
-    GenericArray<u8, <Sha256 as Digest>::OutputSize>,
-    GenericArray<u8, <Sha256 as Digest>::OutputSize>,
+    GenericArray<u8, U32>,
+    GenericArray<u8, U32>,
+    GenericArray<u8, U32>,
 );
 
 // Internal function which takes the public and private components of the client and server keypairs, along

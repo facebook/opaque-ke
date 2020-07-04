@@ -140,7 +140,7 @@ impl Group for EdwardsPoint {
         *GenericArray::from_slice(c.as_bytes())
     }
 
-    type UniformBytesLen = U64;
+    type UniformBytesLen = U32;
     fn hash_to_curve(uniform_bytes: &GenericArray<u8, Self::UniformBytesLen>) -> Self {
         let mut result = [0u8; 32];
         let mut counter = 0;

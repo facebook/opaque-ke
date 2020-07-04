@@ -380,9 +380,13 @@ pub mod opaque;
 
 pub mod ciphersuite;
 mod envelope;
+
 mod group;
+mod map_to_curve;
+
 mod key_exchange;
 pub mod keypair;
+
 mod oprf;
 pub mod slow_hash;
 
