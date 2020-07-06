@@ -4,56 +4,59 @@
 // LICENSE file in the root directory of this source tree.
 
 //! A list of error types which are produced during an execution of the protocol
-
+use displaydoc::Display;
 use thiserror::Error;
 
 /// Represents an error in the manipulation of internal cryptographic data
-#[derive(Debug, Error)]
+#[derive(Debug, Display, Error)]
 pub enum InternalPakeError {
-    #[error("Invalid length for {name}: expected {len}, but is actually {actual_len}.")]
+    /// Invalid length for {name}: expected {len}, but is actually {actual_len}.
     SizeError {
+        /// name
         name: &'static str,
+        /// length
         len: usize,
+        /// actual
         actual_len: usize,
     },
-    #[error("Could not decompress point.")]
+    /// Could not decompress point.
     PointError,
-    #[error("Key belongs to a small subgroup!")]
+    /// Key belongs to a small subgroup!
     SubGroupError,
-    #[error("hashing to a key failed")]
+    /// hashing to a key failed
     HashingFailure,
-    #[error("Computing HKDF failed while deriving subkeys")]
+    /// Computing HKDF failed while deriving subkeys
     HkdfError,
-    #[error("Computing HMAC failed while supplying a secret key")]
+    /// Computing HMAC failed while supplying a secret key
     HmacError,
-    #[error("Computing the slow hashing function failed")]
+    /// Computing the slow hashing function failed
     SlowHashError,
     /// This error occurs when the envelope seal fails
-    #[error("Constructing the envelope seal failed.")]
+    /// Constructing the envelope seal failed.
     SealError,
     /// This error occurs when the envelope seal open fails
-    #[error("Opening the envelope seal failed.")]
+    /// Opening the envelope seal failed.
     SealOpenError,
     /// This error occurs when the envelope seal open hmac check fails
-    #[error("HMAC check in seal open failed.")]
+    /// HMAC check in seal open failed.
     SealOpenHmacError,
 }
 
 /// Represents an error in password checking
-#[derive(Debug, Error)]
+#[derive(Debug, Display, Error)]
 pub enum PakeError {
     /// This error results from an internal error during PRF construction
     ///
-    #[error("Internal error during PRF verification: {0}")]
+    /// Internal error during PRF verification: {0}
     CryptoError(InternalPakeError),
     /// This error occurs when the server object that is being called finish() on is malformed
-    #[error("Incomplete set of keys passed into finish() function")]
+    /// Incomplete set of keys passed into finish() function
     IncompleteKeysError,
-    #[error("The provided server public key doesn't match the sealed one")]
+    /// The provided server public key doesn't match the sealed one
     IncompatibleServerStaticPublicKeyError,
-    #[error("Error in key exchange protocol when attempting to validate MACs")]
+    /// Error in key exchange protocol when attempting to validate MACs
     KeyExchangeMacValidationError,
-    #[error("Error in validating credentials")]
+    /// Error in validating credentials
     InvalidLoginError,
 }
 
@@ -66,17 +69,17 @@ impl From<InternalPakeError> for PakeError {
 }
 
 /// Represents an error in protocol handling
-#[derive(Debug, Error)]
+#[derive(Debug, Display, Error)]
 pub enum ProtocolError {
     /// This error results from an error during password verification
     ///
-    #[error("Internal error during password verification: {0}")]
+    /// Internal error during password verification: {0}
     VerificationError(PakeError),
     /// This error occurs when the server answer cannot be handled
-    #[error("Server response cannot be handled.")]
+    /// Server response cannot be handled.
     ServerError,
     /// This error occurs when the client request cannot be handled
-    #[error("Client request cannot be handled.")]
+    /// Client request cannot be handled.
     ClientError,
 }
 
