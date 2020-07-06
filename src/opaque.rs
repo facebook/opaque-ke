@@ -45,6 +45,7 @@ impl<Grp: Group> TryFrom<&[u8]> for RegisterFirstMessage<Grp> {
 }
 
 impl<Grp: Group> RegisterFirstMessage<Grp> {
+    /// byte representation for the registration request
     pub fn to_bytes(&self) -> GenericArray<u8, Grp::ElemLen> {
         self.alpha.to_arr()
     }
@@ -81,6 +82,7 @@ impl<Grp> RegisterSecondMessage<Grp>
 where
     Grp: Group,
 {
+    /// byte representation for the registration response message
     pub fn to_bytes(&self) -> Vec<u8> {
         self.beta.to_arr().to_vec()
     }
@@ -100,6 +102,7 @@ impl<KeyFormat> RegisterThirdMessage<KeyFormat>
 where
     KeyFormat: KeyPair,
 {
+    /// byte representation for the registration upload message
     pub fn to_bytes(&self) -> Vec<u8> {
         [&self.envelope.to_bytes(), &self.client_s_pk.to_arr()[..]].concat()
     }
@@ -151,6 +154,7 @@ impl<Grp: Group> TryFrom<&[u8]> for LoginFirstMessage<Grp> {
 }
 
 impl<Grp: Group> LoginFirstMessage<Grp> {
+    /// byte representation for the login request
     pub fn to_bytes(&self) -> Vec<u8> {
         [&self.alpha.to_arr()[..], &self.ke1_message.to_bytes()].concat()
     }
@@ -172,6 +176,7 @@ where
     Grp: Group,
     KeyFormat: KeyPair,
 {
+    /// byte representation for the login response
     pub fn to_bytes(&self) -> Vec<u8> {
         [
             &self.beta.to_arr()[..],
@@ -232,6 +237,7 @@ impl TryFrom<&[u8]> for LoginThirdMessage {
 }
 
 impl LoginThirdMessage {
+    /// byte representation for the login finalization
     pub fn to_bytes(&self) -> Vec<u8> {
         self.ke3_message.to_bytes()
     }
@@ -265,6 +271,7 @@ impl<CS: CipherSuite> TryFrom<&[u8]> for ClientRegistration<CS> {
 }
 
 impl<CS: CipherSuite> ClientRegistration<CS> {
+    /// byte representation for the client's registration state
     pub fn to_bytes(&self) -> Vec<u8> {
         let output: Vec<u8> = [
             &CS::Group::scalar_as_bytes(&self.blinding_factor)[..],
@@ -475,6 +482,7 @@ where
         <<CS::KeyFormat as KeyPair>::Repr as SizedBytes>::Len,
     >: generic_array::ArrayLength<u8>,
 {
+    /// byte representation for the server's registration state
     pub fn to_bytes(&self) -> Vec<u8> {
         let mut output: Vec<u8> = CS::Group::scalar_as_bytes(&self.oprf_key).to_vec();
         match &self.client_s_pk {
@@ -609,6 +617,7 @@ impl<CS: CipherSuite> TryFrom<&[u8]> for ClientLogin<CS> {
 }
 
 impl<CS: CipherSuite> ClientLogin<CS> {
+    /// byte representation for the client's login state
     pub fn to_bytes(&self) -> Vec<u8> {
         let output: Vec<u8> = [
             &CS::Group::scalar_as_bytes(&self.blinding_factor)[..],
@@ -762,6 +771,7 @@ type ServerLoginStartResult<CS> = (
 );
 
 impl ServerLogin {
+    /// byte representation for the server's login state
     pub fn to_bytes(&self) -> Vec<u8> {
         self.ke2_state.to_bytes()
     }

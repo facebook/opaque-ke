@@ -372,6 +372,9 @@
 //! match `client_shared_secret`. Otherwise, on failure, the `finish` algorithm outputs the error `InvalidLoginError`.
 //!
 
+#![deny(missing_docs)]
+#![deny(unsafe_code)]
+
 // Error types
 pub mod errors;
 
