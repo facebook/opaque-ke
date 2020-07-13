@@ -13,7 +13,8 @@
 //! OPAQUE is a protocol between a client and a server. They must first agree on a collection of primitives
 //! to be kept consistent throughout protocol execution. These include:
 //! * a finite cyclic group along with a point representation,
-//! * a keypair type, and
+//! * a keypair type,
+//! * a key exchange protocol, and
 //! * a slow hashing function.
 //!
 //! We will use the following choices in this example:
@@ -23,6 +24,7 @@
 //! impl CipherSuite for Default {
 //!     type Group = curve25519_dalek::ristretto::RistrettoPoint;
 //!     type KeyFormat = opaque_ke::keypair::X25519KeyPair;
+//!     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
 //!     type SlowHash = opaque_ke::slow_hash::NoOpHash;
 //! }
 //! ```
@@ -43,6 +45,7 @@
 //! # impl CipherSuite for Default {
 //! #     type Group = curve25519_dalek::ristretto::RistrettoPoint;
 //! #     type KeyFormat = opaque_ke::keypair::X25519KeyPair;
+//! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
 //! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
 //! # }
 //! use rand_core::{OsRng, RngCore};
@@ -74,6 +77,7 @@
 //! # impl CipherSuite for Default {
 //! #     type Group = curve25519_dalek::ristretto::RistrettoPoint;
 //! #     type KeyFormat = opaque_ke::keypair::X25519KeyPair;
+//! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
 //! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
 //! # }
 //! use rand_core::{OsRng, RngCore};
@@ -102,6 +106,7 @@
 //! # impl CipherSuite for Default {
 //! #     type Group = curve25519_dalek::ristretto::RistrettoPoint;
 //! #     type KeyFormat = opaque_ke::keypair::X25519KeyPair;
+//! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
 //! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
 //! # }
 //! # use rand_core::{OsRng, RngCore};
@@ -133,6 +138,7 @@
 //! # impl CipherSuite for Default {
 //! #     type Group = curve25519_dalek::ristretto::RistrettoPoint;
 //! #     type KeyFormat = opaque_ke::keypair::X25519KeyPair;
+//! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
 //! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
 //! # }
 //! # use rand_core::{OsRng, RngCore};
@@ -166,6 +172,7 @@
 //! # impl CipherSuite for Default {
 //! #     type Group = curve25519_dalek::ristretto::RistrettoPoint;
 //! #     type KeyFormat = opaque_ke::keypair::X25519KeyPair;
+//! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
 //! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
 //! # }
 //! # use rand_core::{OsRng, RngCore};
@@ -207,6 +214,7 @@
 //! # impl CipherSuite for Default {
 //! #     type Group = curve25519_dalek::ristretto::RistrettoPoint;
 //! #     type KeyFormat = opaque_ke::keypair::X25519KeyPair;
+//! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
 //! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
 //! # }
 //! # use rand_core::{OsRng, RngCore};
@@ -235,6 +243,7 @@
 //! # impl CipherSuite for Default {
 //! #     type Group = curve25519_dalek::ristretto::RistrettoPoint;
 //! #     type KeyFormat = opaque_ke::keypair::X25519KeyPair;
+//! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
 //! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
 //! # }
 //! # use rand_core::{OsRng, RngCore};
@@ -278,6 +287,7 @@
 //! # impl CipherSuite for Default {
 //! #     type Group = curve25519_dalek::ristretto::RistrettoPoint;
 //! #     type KeyFormat = opaque_ke::keypair::X25519KeyPair;
+//! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
 //! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
 //! # }
 //! # use rand_core::{OsRng, RngCore};
@@ -333,6 +343,7 @@
 //! # impl CipherSuite for Default {
 //! #     type Group = curve25519_dalek::ristretto::RistrettoPoint;
 //! #     type KeyFormat = opaque_ke::keypair::X25519KeyPair;
+//! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
 //! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
 //! # }
 //! # use rand_core::{OsRng, RngCore};
@@ -387,7 +398,7 @@ mod envelope;
 mod group;
 mod map_to_curve;
 
-mod key_exchange;
+pub mod key_exchange;
 pub mod keypair;
 
 mod oprf;
