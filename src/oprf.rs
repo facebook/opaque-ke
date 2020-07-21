@@ -3,8 +3,11 @@
 // This source code is licensed under the MIT license found in the
 // LICENSE file in the root directory of this source tree.
 
-use crate::{errors::InternalPakeError, group::Group, map_to_curve::GroupWithMapToCurve};
-use generic_array::{typenum::U32, GenericArray};
+use crate::{
+    errors::InternalPakeError, group::Group, hash::Hash, map_to_curve::GroupWithMapToCurve,
+};
+use digest::Digest;
+use generic_array::GenericArray;
 use hkdf::Hkdf;
 use rand_core::{CryptoRng, RngCore};
 
@@ -42,14 +45,14 @@ pub(crate) fn generate_oprf2<G: Group>(
 
 /// Computes the third step for the multiplicative blinding version of DH-OPRF, in which
 /// the client unblinds the server's message.
-pub(crate) fn generate_oprf3<G: Group>(
+pub(crate) fn generate_oprf3<G: Group, H: Hash>(
     input: &[u8],
     point: G,
     blinding_factor: &G::Scalar,
-) -> Result<GenericArray<u8, U32>, InternalPakeError> {
+) -> Result<GenericArray<u8, <H as Digest>::OutputSize>, InternalPakeError> {
     let unblinded = point * &G::scalar_invert(&blinding_factor);
     let ikm: Vec<u8> = [&unblinded.to_arr()[..], input].concat();
-    let (prk, _) = Hkdf::<sha2::Sha256>::extract(None, &ikm);
+    let (prk, _) = Hkdf::<H>::extract(None, &ikm);
     Ok(prk)
 }
 
@@ -94,7 +97,7 @@ mod tests {
     use generic_array::{arr, GenericArray};
     use hkdf::Hkdf;
     use rand_core::OsRng;
-    use sha2::{Digest, Sha256, Sha512};
+    use sha2::{Sha256, Sha512};
 
     fn prf(
         input: &[u8],
@@ -125,7 +128,7 @@ mod tests {
         ];
         let salt = RistrettoPoint::from_scalar_slice(&salt_bytes)?;
         let beta = generate_oprf2::<RistrettoPoint>(alpha, &salt)?;
-        let res = generate_oprf3::<RistrettoPoint>(input, beta, &blinding_factor)?;
+        let res = generate_oprf3::<RistrettoPoint, sha2::Sha256>(input, beta, &blinding_factor)?;
         let res2 = prf(&input[..], &salt.as_bytes());
         assert_eq!(res, res2);
         Ok(())
@@ -140,15 +143,12 @@ mod tests {
             alpha,
             blinding_factor,
         } = generate_oprf1::<_, RistrettoPoint>(&input, None, &mut rng).unwrap();
-        let res = generate_oprf3::<RistrettoPoint>(&input, alpha, &blinding_factor).unwrap();
+        let res = generate_oprf3::<RistrettoPoint, sha2::Sha256>(&input, alpha, &blinding_factor)
+            .unwrap();
 
         let (hashed_input, _) = Hkdf::<Sha512>::extract(None, &input);
-
-        // This is because RistrettoPoint is on an obsolete sha2 version
         let mut bits = [0u8; 64];
-        let mut hasher = sha2::Sha512::new();
-        Digest::update(&mut hasher, &hashed_input[..]);
-        bits.copy_from_slice(&hasher.finalize());
+        bits.copy_from_slice(&hashed_input);
 
         let point = RistrettoPoint::from_uniform_bytes(&bits);
         let mut ikm: Vec<u8> = Vec::new();

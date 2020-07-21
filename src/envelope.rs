@@ -4,6 +4,8 @@
 // LICENSE file in the root directory of this source tree.
 
 use crate::errors::InternalPakeError;
+use crate::hash::Hash;
+use digest::Digest;
 use generic_array::{
     typenum::{Unsigned, U32},
     GenericArray,
@@ -11,7 +13,6 @@ use generic_array::{
 use hkdf::Hkdf;
 use hmac::{Hmac, Mac, NewMac};
 use rand_core::{CryptoRng, RngCore};
-use sha2::Sha256;
 
 // Constant string used as salt for HKDF computation
 const STR_ENVU: &[u8] = b"EnvU";
@@ -32,31 +33,40 @@ const NONCE_LEN: usize = 32;
 /// The specification update has simplified this assumption by taking
 /// an XOR-based approach without compromising on security, and to avoid
 /// the confusion around the implementation of an RKR-secure encryption.
-pub(crate) struct Envelope {
+pub(crate) struct Envelope<D: Hash> {
     nonce: Vec<u8>,
     ciphertext: Vec<u8>,
-    hmac: GenericArray<u8, U32>,
+    hmac: GenericArray<u8, <D as Digest>::OutputSize>,
 }
 
-impl Envelope {
+pub(crate) struct OpenedEnvelope {
+    pub(crate) plaintext: Vec<u8>,
+    pub(crate) export_key: GenericArray<u8, ExportKeySize>,
+}
+
+impl<D: Hash> Envelope<D> {
     /// The additional number of bytes added to the plaintext
     pub(crate) fn additional_size() -> usize {
-        NONCE_LEN + U32::to_usize()
+        NONCE_LEN + <D as Digest>::OutputSize::to_usize()
     }
 
     fn hmac_key_size() -> usize {
-        U32::to_usize()
+        <D as Digest>::OutputSize::to_usize()
     }
 
     fn hmac_size() -> usize {
-        U32::to_usize()
+        <D as Digest>::OutputSize::to_usize()
     }
 
     fn export_key_size() -> usize {
         ExportKeySize::to_usize()
     }
 
-    pub(crate) fn new(nonce: Vec<u8>, ciphertext: Vec<u8>, hmac: GenericArray<u8, U32>) -> Self {
+    pub(crate) fn new(
+        nonce: Vec<u8>,
+        ciphertext: Vec<u8>,
+        hmac: GenericArray<u8, <D as Digest>::OutputSize>,
+    ) -> Self {
         Self {
             nonce,
             ciphertext,
@@ -93,7 +103,7 @@ impl Envelope {
         let mut nonce = vec![0u8; NONCE_LEN];
         rng.fill_bytes(&mut nonce);
 
-        let h = Hkdf::<Sha256>::new(Some(&nonce), &key);
+        let h = Hkdf::<D>::new(Some(&nonce), &key);
         let mut okm = vec![0u8; plaintext.len() + Self::hmac_key_size() + Self::export_key_size()];
         h.expand(STR_ENVU, &mut okm)
             .map_err(|_| InternalPakeError::HkdfError)?;
@@ -108,7 +118,7 @@ impl Envelope {
             .collect();
 
         let mut hmac =
-            Hmac::<Sha256>::new_varkey(&hmac_key).map_err(|_| InternalPakeError::HmacError)?;
+            Hmac::<D>::new_varkey(&hmac_key).map_err(|_| InternalPakeError::HmacError)?;
         hmac.update(&ciphertext);
         hmac.update(&aad);
 
@@ -120,12 +130,8 @@ impl Envelope {
 
     /// Attempts to decrypt the envelope using a key, which is successful only if the key and
     /// aad used to construct the envelope are the same.
-    pub(crate) fn open(
-        &self,
-        key: &[u8],
-        aad: &[u8],
-    ) -> Result<(Vec<u8>, GenericArray<u8, ExportKeySize>), InternalPakeError> {
-        let h = Hkdf::<Sha256>::new(Some(&self.nonce), &key);
+    pub(crate) fn open(&self, key: &[u8], aad: &[u8]) -> Result<OpenedEnvelope, InternalPakeError> {
+        let h = Hkdf::<D>::new(Some(&self.nonce), &key);
         let mut okm =
             vec![0u8; self.ciphertext.len() + Self::hmac_key_size() + Self::export_key_size()];
         h.expand(STR_ENVU, &mut okm)
@@ -135,7 +141,7 @@ impl Envelope {
         let export_key = &okm[self.ciphertext.len() + Self::hmac_key_size()..];
 
         let mut hmac =
-            Hmac::<Sha256>::new_varkey(&hmac_key).map_err(|_| InternalPakeError::HmacError)?;
+            Hmac::<D>::new_varkey(&hmac_key).map_err(|_| InternalPakeError::HmacError)?;
         hmac.update(&self.ciphertext);
         hmac.update(aad);
         if hmac.verify(&self.hmac).is_err() {
@@ -147,7 +153,10 @@ impl Envelope {
             .zip(self.ciphertext.iter())
             .map(|(&x1, &x2)| x1 ^ x2)
             .collect();
-        Ok((plaintext, *GenericArray::from_slice(&export_key)))
+        Ok(OpenedEnvelope {
+            plaintext,
+            export_key: *GenericArray::from_slice(&export_key),
+        })
     }
 }
 
@@ -165,9 +174,10 @@ mod tests {
         let mut msg = [0u8; 100];
         rng.fill_bytes(&mut msg);
 
-        let (ciphertext, export_key_1) = Envelope::seal(&key, &msg, b"aad", &mut rng).unwrap();
-        let (plaintext, export_key_2) = ciphertext.open(&key, b"aad").unwrap();
-        assert_eq!(&msg.to_vec(), &plaintext);
-        assert_eq!(&export_key_1.to_vec(), &export_key_2.to_vec());
+        let (envelope, export_key_1) =
+            Envelope::<sha2::Sha256>::seal(&key, &msg, b"aad", &mut rng).unwrap();
+        let opened_envelope = envelope.open(&key, b"aad").unwrap();
+        assert_eq!(&msg.to_vec(), &opened_envelope.plaintext);
+        assert_eq!(&export_key_1.to_vec(), &opened_envelope.export_key.to_vec());
     }
 }

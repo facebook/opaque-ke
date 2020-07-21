@@ -13,14 +13,13 @@ use curve25519_dalek::{
     ristretto::{CompressedRistretto, RistrettoPoint},
     scalar::Scalar,
 };
+use digest::Digest;
 use generic_array::{
     typenum::{U32, U64},
     ArrayLength, GenericArray,
 };
 use rand_core::{CryptoRng, RngCore};
-
-use sha2::{Digest, Sha256};
-
+use sha2::Sha256;
 use std::ops::Mul;
 use zeroize::Zeroize;
 
@@ -56,6 +55,7 @@ pub trait Group: Sized + for<'a> Mul<&'a <Self as Group>::Scalar, Output = Self>
     /// may not be necessary as this function is going to be called with the
     /// output of a kdf.
     type UniformBytesLen: ArrayLength<u8>;
+
     /// Hashes a slice of pseudo-random bytes of the correct length to a curve point
     fn hash_to_curve(uniform_bytes: &GenericArray<u8, Self::UniformBytesLen>) -> Self;
 }
@@ -98,11 +98,8 @@ impl Group for RistrettoPoint {
 
     type UniformBytesLen = U64;
     fn hash_to_curve(uniform_bytes: &GenericArray<u8, Self::UniformBytesLen>) -> Self {
-        // This is because RistrettoPoint is on an obsolete sha2 version, see https://github.com/dalek-cryptography/curve25519-dalek/pull/327
         let mut bits = [0u8; 64];
-        let mut hasher = sha2::Sha512::new();
-        hasher.update(uniform_bytes);
-        bits.copy_from_slice(&hasher.finalize());
+        bits.copy_from_slice(&uniform_bytes);
 
         RistrettoPoint::from_uniform_bytes(&bits)
     }
@@ -146,16 +143,17 @@ impl Group for EdwardsPoint {
 
     type UniformBytesLen = U32;
     fn hash_to_curve(uniform_bytes: &GenericArray<u8, Self::UniformBytesLen>) -> Self {
-        let mut result = [0u8; 32];
+        const HASH_SIZE: usize = 32;
+        let mut result = [0u8; HASH_SIZE];
         let mut counter = 0;
         let mut wrapped_point: Option<EdwardsPoint> = None;
 
         while wrapped_point.is_none() {
             result.copy_from_slice(
                 &Sha256::new()
-                    .chain(&uniform_bytes[..32])
+                    .chain(&uniform_bytes[..HASH_SIZE])
                     .chain(&[counter])
-                    .finalize()[..32],
+                    .finalize()[..HASH_SIZE],
             );
             wrapped_point = CompressedEdwardsY::from_slice(&result).decompress();
             counter += 1;

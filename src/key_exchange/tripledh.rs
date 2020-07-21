@@ -6,10 +6,12 @@
 //! An implementation of the Triple Diffie-Hellman key exchange protocol
 use crate::{
     errors::{utils::check_slice_size, InternalPakeError, PakeError, ProtocolError},
+    hash::Hash,
     key_exchange::traits::{KeyExchange, ToBytes},
     keypair::{Key, KeyPair, SizedBytes},
     sized_bytes_using_constant_and_try_from,
 };
+use digest::Digest;
 use generic_array::{
     typenum::{U64, U96},
     GenericArray,
@@ -18,7 +20,6 @@ use hkdf::Hkdf;
 use hmac::{Hmac, Mac, NewMac};
 use rand_core::{CryptoRng, RngCore};
 
-use sha2::{Digest, Sha256};
 use std::convert::TryFrom;
 
 const KEY_LEN: usize = 32;
@@ -29,9 +30,9 @@ const KE2_MESSAGE_LEN: usize = NONCE_LEN + 2 * KEY_LEN;
 static STR_3DH: &[u8] = b"3DH keys";
 
 /// The Triple Diffie-Hellman key exchange implementation
-pub struct TripleDH {}
+pub struct TripleDH;
 
-impl KeyExchange for TripleDH {
+impl<D: Hash> KeyExchange<D> for TripleDH {
     type KE1State = KE1State;
     type KE2State = KE2State;
     type KE1Message = KE1Message;
@@ -52,7 +53,7 @@ impl KeyExchange for TripleDH {
         };
 
         let l1_data: Vec<u8> = [&l1_component[..], &ke1_message.to_bytes()].concat();
-        let mut hasher = Sha256::new();
+        let mut hasher = D::new();
         hasher.update(&l1_data);
         let hashed_l1 = hasher.finalize();
 
@@ -78,7 +79,7 @@ impl KeyExchange for TripleDH {
         let mut server_nonce = [0u8; NONCE_LEN];
         rng.fill_bytes(&mut server_nonce);
 
-        let (shared_secret, km2, km3) = derive_3dh_keys::<KeyFormat>(
+        let (shared_secret, km2, km3) = derive_3dh_keys::<KeyFormat, D>(
             TripleDHComponents {
                 pk1: ke1_message.client_e_pk.clone(),
                 sk1: server_e_kp.private().clone(),
@@ -93,7 +94,7 @@ impl KeyExchange for TripleDH {
             KeyFormat::public_from_private(&server_s_sk),
         )?;
 
-        let mut hasher = Sha256::new();
+        let mut hasher = D::new();
         hasher.update(&l1_bytes);
         let hashed_l1 = hasher.finalize();
 
@@ -105,11 +106,11 @@ impl KeyExchange for TripleDH {
         ]
         .concat();
 
-        let mut hasher2 = Sha256::new();
+        let mut hasher2 = D::new();
         hasher2.update(&transcript2);
         let hashed_transcript = hasher2.finalize();
 
-        let mut mac = Hmac::<Sha256>::new_varkey(&km2).map_err(|_| InternalPakeError::HmacError)?;
+        let mut mac = Hmac::<D>::new_varkey(&km2).map_err(|_| InternalPakeError::HmacError)?;
         mac.update(&hashed_transcript);
 
         Ok((
@@ -133,7 +134,7 @@ impl KeyExchange for TripleDH {
         server_s_pk: KeyFormat::Repr,
         client_s_sk: KeyFormat::Repr,
     ) -> Result<(Vec<u8>, Self::KE3Message), ProtocolError> {
-        let (shared_secret, km2, km3) = derive_3dh_keys::<KeyFormat>(
+        let (shared_secret, km2, km3) = derive_3dh_keys::<KeyFormat, D>(
             TripleDHComponents {
                 pk1: ke2_message.server_e_pk.clone(),
                 sk1: ke1_state.client_e_sk.clone(),
@@ -156,12 +157,12 @@ impl KeyExchange for TripleDH {
         ]
         .concat();
 
-        let mut hasher = Sha256::new();
+        let mut hasher = D::new();
         hasher.update(&transcript);
         let hashed_transcript = hasher.finalize();
 
         let mut server_mac =
-            Hmac::<Sha256>::new_varkey(&km2).map_err(|_| InternalPakeError::HmacError)?;
+            Hmac::<D>::new_varkey(&km2).map_err(|_| InternalPakeError::HmacError)?;
         server_mac.update(&hashed_transcript);
 
         if ke2_message.mac != server_mac.finalize().into_bytes().to_vec() {
@@ -171,7 +172,7 @@ impl KeyExchange for TripleDH {
         }
 
         let mut client_mac =
-            Hmac::<Sha256>::new_varkey(&km3).map_err(|_| InternalPakeError::HmacError)?;
+            Hmac::<D>::new_varkey(&km3).map_err(|_| InternalPakeError::HmacError)?;
         client_mac.update(&hashed_transcript);
 
         Ok((
@@ -187,7 +188,7 @@ impl KeyExchange for TripleDH {
         ke2_state: &Self::KE2State,
     ) -> Result<Vec<u8>, ProtocolError> {
         let mut client_mac =
-            Hmac::<Sha256>::new_varkey(&ke2_state.km3).map_err(|_| InternalPakeError::HmacError)?;
+            Hmac::<D>::new_varkey(&ke2_state.km3).map_err(|_| InternalPakeError::HmacError)?;
         client_mac.update(&ke2_state.hashed_transcript);
 
         if ke3_message.mac != client_mac.finalize().into_bytes().to_vec() {
@@ -350,21 +351,21 @@ struct TripleDHComponents {
 }
 
 // Consists of a shared secret, followed by two mac keys
-type TripleDHDerivationResult = (
-    GenericArray<u8, <Sha256 as Digest>::OutputSize>,
-    GenericArray<u8, <Sha256 as Digest>::OutputSize>,
-    GenericArray<u8, <Sha256 as Digest>::OutputSize>,
+type TripleDHDerivationResult<D> = (
+    GenericArray<u8, <D as Hash>::OutputSize>,
+    GenericArray<u8, <D as Hash>::OutputSize>,
+    GenericArray<u8, <D as Hash>::OutputSize>,
 );
 
 // Internal function which takes the public and private components of the client and server keypairs, along
 // with some auxiliary metadata, to produce the shared secret and two MAC keys
-fn derive_3dh_keys<KeyFormat: KeyPair<Repr = Key>>(
+fn derive_3dh_keys<KeyFormat: KeyPair<Repr = Key>, D: Hash>(
     dh: TripleDHComponents,
     client_nonce: &[u8],
     server_nonce: &[u8],
     client_s_pk: KeyFormat::Repr,
     server_s_pk: KeyFormat::Repr,
-) -> Result<TripleDHDerivationResult, ProtocolError> {
+) -> Result<TripleDHDerivationResult<D>, ProtocolError> {
     let ikm: Vec<u8> = [
         &KeyFormat::diffie_hellman(dh.pk1, dh.sk1)[..],
         &KeyFormat::diffie_hellman(dh.pk2, dh.sk2)[..],
@@ -383,13 +384,13 @@ fn derive_3dh_keys<KeyFormat: KeyPair<Repr = Key>>(
 
     const OUTPUT_SIZE: usize = 32;
     let mut okm = [0u8; 3 * OUTPUT_SIZE];
-    let h = Hkdf::<Sha256>::new(None, &ikm);
+    let h = Hkdf::<D>::new(None, &ikm);
     h.expand(&info, &mut okm)
         .map_err(|_| InternalPakeError::HkdfError)?;
     Ok((
-        *GenericArray::from_slice(&okm[..OUTPUT_SIZE]),
-        *GenericArray::from_slice(&okm[OUTPUT_SIZE..2 * OUTPUT_SIZE]),
-        *GenericArray::from_slice(&okm[2 * OUTPUT_SIZE..]),
+        GenericArray::clone_from_slice(&okm[..OUTPUT_SIZE]),
+        GenericArray::clone_from_slice(&okm[OUTPUT_SIZE..2 * OUTPUT_SIZE]),
+        GenericArray::clone_from_slice(&okm[2 * OUTPUT_SIZE..]),
     ))
 }
 

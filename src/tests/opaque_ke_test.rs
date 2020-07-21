@@ -26,6 +26,7 @@ impl CipherSuite for X255193dhNoSlowHash {
     type Group = EdwardsPoint;
     type KeyFormat = X25519KeyPair;
     type KeyExchange = TripleDH;
+    type Hash = sha2::Sha256;
     type SlowHash = NoOpHash;
 }
 
@@ -470,18 +471,19 @@ fn test_l3() -> Result<(), PakeError> {
     let parameters = populate_test_vectors(&serde_json::from_str(TEST_VECTOR).unwrap());
 
     let mut client_e_sk_rng = CycleRng::new(parameters.client_e_sk.to_vec());
-    let (l3, shared_secret, opaque_key_login) =
-        ClientLogin::<X255193dhNoSlowHash>::try_from(&parameters.client_login_state[..])
-            .unwrap()
-            .finish(
-                LoginSecondMessage::<EdwardsPoint, X25519KeyPair, TripleDH>::try_from(
-                    &parameters.l2[..],
-                )
-                .unwrap(),
-                &Key::try_from(&parameters.server_s_pk[..])?,
-                &mut client_e_sk_rng,
-            )
-            .unwrap();
+    let (l3, shared_secret, opaque_key_login) = ClientLogin::<X255193dhNoSlowHash>::try_from(
+        &parameters.client_login_state[..],
+    )
+    .unwrap()
+    .finish(
+        LoginSecondMessage::<EdwardsPoint, X25519KeyPair, TripleDH, sha2::Sha256>::try_from(
+            &parameters.l2[..],
+        )
+        .unwrap(),
+        &Key::try_from(&parameters.server_s_pk[..])?,
+        &mut client_e_sk_rng,
+    )
+    .unwrap();
 
     assert_eq!(
         hex::encode(&parameters.shared_secret),
