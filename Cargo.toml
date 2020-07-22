@@ -10,7 +10,9 @@ edition = "2018"
 readme = "README.md"
 
 [features]
+default = []
 slow-hash = ["scrypt"]
+bench = []
 
 [dependencies]
 aead = "0.3.1"
@@ -28,8 +30,13 @@ zeroize = "1.1"
 
 [dev-dependencies]
 base64 = "0.12.1"
+criterion = "0.3.3"
 hex = "0.4.2"
 lazy_static = "1.4.0"
 serde_json = "1.0.55"
 proptest = "0.10.0"
 rand = "0.7"
+
+[[bench]]
+name = "oprf"
+harness = false

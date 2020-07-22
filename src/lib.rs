@@ -383,7 +383,7 @@
 //! match `client_shared_secret`. Otherwise, on failure, the `finish` algorithm outputs the error `InvalidLoginError`.
 //!
 
-#![deny(missing_docs)]
+#![cfg_attr(not(feature = "bench"), deny(missing_docs))]
 #![deny(unsafe_code)]
 
 // Error types
@@ -401,7 +401,11 @@ pub mod map_to_curve;
 pub mod key_exchange;
 pub mod keypair;
 
+#[cfg(feature = "bench")]
+pub mod oprf;
+#[cfg(not(feature = "bench"))]
 mod oprf;
+
 pub mod slow_hash;
 
 #[cfg(test)]
