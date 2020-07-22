@@ -1,10 +1,20 @@
+// Copyright (c) Facebook, Inc. and its affiliates.
+//
+// This source code is licensed under the MIT license found in the
+// LICENSE file in the root directory of this source tree.
+
+//! Defines the GroupWithMapToCurve trait to specify how to map a password to a
+//! curve point
+
 use crate::group::Group;
 use curve25519_dalek::{edwards::EdwardsPoint, ristretto::RistrettoPoint};
 
 use generic_array::GenericArray;
 use hkdf::Hkdf;
 
+/// A subtrait of Group specifying how to has a password into a point
 pub trait GroupWithMapToCurve: Group {
+    /// transforms a password and optional pepper into a curve point
     fn map_to_curve(password: &[u8], pepper: Option<&[u8]>) -> Self;
 }
 

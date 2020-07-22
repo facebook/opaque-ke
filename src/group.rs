@@ -3,6 +3,9 @@
 // This source code is licensed under the MIT license found in the
 // LICENSE file in the root directory of this source tree.
 
+//! Defines the Group trait to specify the underlying prime order group used in
+//! OPAQUE's OPRF
+
 use crate::errors::InternalPakeError;
 
 use curve25519_dalek::{
@@ -53,6 +56,7 @@ pub trait Group: Sized + for<'a> Mul<&'a <Self as Group>::Scalar, Output = Self>
     /// may not be necessary as this function is going to be called with the
     /// output of a kdf.
     type UniformBytesLen: ArrayLength<u8>;
+    /// Hashes a slice of pseudo-random bytes of the correct length to a curve point
     fn hash_to_curve(uniform_bytes: &GenericArray<u8, Self::UniformBytesLen>) -> Self;
 }
 
