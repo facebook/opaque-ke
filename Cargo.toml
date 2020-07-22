@@ -40,3 +40,4 @@ rand = "0.7"
 [[bench]]
 name = "oprf"
 harness = false
+required-features = ["bench"]
