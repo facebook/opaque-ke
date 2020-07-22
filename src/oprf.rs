@@ -8,9 +8,9 @@ use generic_array::{typenum::U32, GenericArray};
 use hkdf::Hkdf;
 use rand_core::{CryptoRng, RngCore};
 
-pub(crate) struct OprfClientBytes<Grp: Group> {
-    pub(crate) alpha: Grp,
-    pub(crate) blinding_factor: Grp::Scalar,
+pub struct OprfClientBytes<Grp: Group> {
+    pub alpha: Grp,
+    pub blinding_factor: Grp::Scalar,
 }
 
 /// Computes the first step for the multiplicative blinding version of DH-OPRF. This
@@ -51,6 +51,36 @@ pub(crate) fn generate_oprf3<G: Group>(
     let ikm: Vec<u8> = [&unblinded.to_arr()[..], input].concat();
     let (prk, _) = Hkdf::<sha2::Sha256>::extract(None, &ikm);
     Ok(prk)
+}
+
+// Benchmarking shims
+#[cfg(feature = "bench")]
+#[inline]
+pub fn generate_oprf1_shim<R: RngCore + CryptoRng, G: GroupWithMapToCurve>(
+    input: &[u8],
+    pepper: Option<&[u8]>,
+    blinding_factor_rng: &mut R,
+) -> Result<OprfClientBytes<G>, InternalPakeError> {
+    generate_oprf1(input, pepper, blinding_factor_rng)
+}
+
+#[cfg(feature = "bench")]
+#[inline]
+pub fn generate_oprf2_shim<G: Group>(
+    point: G,
+    oprf_key: &G::Scalar,
+) -> Result<G, InternalPakeError> {
+    generate_oprf2(point, oprf_key)
+}
+
+#[cfg(feature = "bench")]
+#[inline]
+pub fn generate_oprf3_shim<G: Group>(
+    input: &[u8],
+    point: G,
+    blinding_factor: &G::Scalar,
+) -> Result<GenericArray<u8, U32>, InternalPakeError> {
+    generate_oprf3(input, point, blinding_factor)
 }
 
 // Tests
