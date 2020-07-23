@@ -103,7 +103,7 @@ impl Envelope {
 
         let ciphertext: Vec<u8> = xor_key
             .iter()
-            .zip(plaintext.to_vec().iter())
+            .zip(plaintext.iter())
             .map(|(&x1, &x2)| x1 ^ x2)
             .collect();
 
@@ -143,7 +143,6 @@ impl Envelope {
         }
 
         let plaintext: Vec<u8> = xor_key
-            .to_vec()
             .iter()
             .zip(self.ciphertext.iter())
             .map(|(&x1, &x2)| x1 ^ x2)
