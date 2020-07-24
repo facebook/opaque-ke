@@ -119,7 +119,8 @@ where
             envelope_size + key_len,
             "third_message",
         )?;
-        let unchecked_client_s_pk = KeyFormat::Repr::from_bytes(&checked_bytes[envelope_size..])?;
+        let unchecked_client_s_pk =
+            <KeyFormat::Repr as TryFrom<&[u8]>>::try_from(&checked_bytes[envelope_size..])?;
         let client_s_pk = KeyFormat::check_public_key(unchecked_client_s_pk)?;
 
         Ok(Self {
@@ -471,7 +472,7 @@ where
         )?;
         let oprf_key_bytes = GenericArray::from_slice(&checked_bytes[..scalar_len]);
         let oprf_key = CS::Group::from_scalar_slice(oprf_key_bytes)?;
-        let unchecked_client_s_pk = <CS::KeyFormat as KeyPair>::Repr::from_bytes(
+        let unchecked_client_s_pk = <CS::KeyFormat as KeyPair>::Repr::try_from(
             &checked_bytes[scalar_len..scalar_len + key_len],
         )?;
         let client_s_pk = CS::KeyFormat::check_public_key(unchecked_client_s_pk)?;
@@ -763,7 +764,7 @@ impl<CS: CipherSuite> ClientLogin<CS> {
             l2.ke2_message,
             &self.ke1_state,
             server_s_pk.clone(),
-            Key::from_bytes(client_s_sk)?,
+            <Key as TryFrom<&[u8]>>::try_from(client_s_sk)?,
         )?;
 
         Ok((

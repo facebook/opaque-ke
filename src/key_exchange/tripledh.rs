@@ -8,12 +8,8 @@ use crate::{
     errors::{utils::check_slice_size, InternalPakeError, PakeError, ProtocolError},
     key_exchange::traits::{KeyExchange, ToBytes},
     keypair::{Key, KeyPair, SizedBytes},
-    sized_bytes_using_constant_and_try_from,
 };
-use generic_array::{
-    typenum::{U64, U96},
-    GenericArray,
-};
+use generic_array::GenericArray;
 use hkdf::Hkdf;
 use hmac::{Hmac, Mac, NewMac};
 use rand_core::{CryptoRng, RngCore};
@@ -230,7 +226,7 @@ impl TryFrom<Vec<u8>> for KE1State {
         let checked_bytes = check_slice_size(&bytes, KE1_STATE_LEN, "ke1_state")?;
 
         Ok(Self {
-            client_e_sk: Key::from_bytes(&checked_bytes[..KEY_LEN])?,
+            client_e_sk: Key::try_from(&checked_bytes[..KEY_LEN])?,
             client_nonce: checked_bytes[KEY_LEN..KEY_LEN + NONCE_LEN].to_vec(),
             hashed_l1: checked_bytes[KEY_LEN + NONCE_LEN..].to_vec(),
         })
@@ -249,8 +245,6 @@ impl ToBytes for KE1State {
     }
 }
 
-sized_bytes_using_constant_and_try_from!(KE1State, U96);
-
 impl ToBytes for KE1Message {
     fn to_bytes(&self) -> Vec<u8> {
         [&self.client_nonce[..], &self.client_e_pk.to_arr()].concat()
@@ -266,12 +260,10 @@ impl TryFrom<Vec<u8>> for KE1Message {
 
         Ok(Self {
             client_nonce: checked_bytes[..NONCE_LEN].to_vec(),
-            client_e_pk: Key::from_bytes(&checked_bytes[NONCE_LEN..])?,
+            client_e_pk: Key::try_from(&checked_bytes[NONCE_LEN..])?,
         })
     }
 }
-
-sized_bytes_using_constant_and_try_from!(KE1Message, U64);
 
 /// The server state produced after the second key exchange message
 pub struct KE2State {
@@ -333,7 +325,7 @@ impl TryFrom<Vec<u8>> for KE2Message {
 
         Ok(Self {
             server_nonce: checked_bytes[..NONCE_LEN].to_vec(),
-            server_e_pk: Key::from_bytes(&checked_bytes[NONCE_LEN..NONCE_LEN + KEY_LEN])?,
+            server_e_pk: Key::try_from(&checked_bytes[NONCE_LEN..NONCE_LEN + KEY_LEN])?,
             mac: checked_bytes[NONCE_LEN + KEY_LEN..].to_vec(),
         })
     }

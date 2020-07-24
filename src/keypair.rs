@@ -5,12 +5,13 @@
 
 //! Contains the keypair types that must be supplied for the OPAQUE API
 
-use crate::errors::{utils::check_slice_size, InternalPakeError};
+use crate::errors::InternalPakeError;
 use generic_array::{
-    sequence::Concat,
-    typenum::{Sum, Unsigned, U32},
+    sequence::{Concat, Split},
+    typenum::{Diff, Sum, Unsigned, U32},
     ArrayLength, GenericArray,
 };
+use opaque_derive::TryFromForSizedBytes;
 #[cfg(test)]
 use proptest::prelude::*;
 #[cfg(test)]
@@ -21,11 +22,17 @@ use x25519_dalek::{PublicKey, StaticSecret};
 
 use std::convert::TryFrom;
 
-use std::ops::{Add, Deref};
+use std::ops::{Add, Deref, Sub};
 
 /// A trait for sized key material that can be represented within a fixed byte
-/// array size, used to represent our DH key types
+/// array size, used to represent our DH key types. This trait being
+/// implemented with Error = InternalPakeError allows you to derive
+/// `TryFrom<&[u8], Error = InternalPakeError>`.
+// TODO(fga): insert doc-example here
 pub trait SizedBytes: Sized + PartialEq {
+    /// The error on decoding such a value from sized bytes.
+    type Error: std::error::Error;
+
     /// The typed representation of the byte length
     type Len: ArrayLength<u8>;
 
@@ -34,14 +41,14 @@ pub trait SizedBytes: Sized + PartialEq {
     /// but the size information is then lost from the type.
     fn to_arr(&self) -> GenericArray<u8, Self::Len>;
 
-    /// How to parse such sized material from a byte slice.
-    fn from_bytes(key_bytes: &[u8]) -> Result<Self, InternalPakeError>;
+    /// How to parse such sized material from a correctly-sized byte slice.
+    fn from_arr(arr: &GenericArray<u8, Self::Len>) -> Result<Self, Self::Error>;
 }
 
 /// A Keypair trait with public-private verification
 pub trait KeyPair: Sized {
     /// The single key representation must have a specific byte size itself
-    type Repr: SizedBytes + Clone;
+    type Repr: SizedBytes + Clone + for<'a> TryFrom<&'a [u8], Error = InternalPakeError>;
 
     /// The public key component
     fn public(&self) -> &Self::Repr;
@@ -51,7 +58,10 @@ pub trait KeyPair: Sized {
 
     /// A constructor that receives public and private key independently as
     /// bytes
-    fn new(public: Self::Repr, private: Self::Repr) -> Result<Self, InternalPakeError>;
+    fn new(
+        public: Self::Repr,
+        private: Self::Repr,
+    ) -> Result<Self, <Self::Repr as SizedBytes>::Error>;
 
     /// Generating a random key pair given a cryptographic rng
     fn generate_random<R: RngCore + CryptoRng>(rng: &mut R) -> Result<Self, InternalPakeError>;
@@ -91,71 +101,20 @@ trait KeyPairExt: KeyPair + Debug {
 #[cfg(test)]
 impl<KP> KeyPairExt for KP where KP: KeyPair + Debug {}
 
-/// This assumes you have defined:
-/// - an `impl TryFrom<&[u8b], Error = InternalPakeError>` for a non-generic `T`
-/// - an `fn to_bytes(&self) -> Vec<u8>` in an `impl T` block
-/// and it both of the above to produce a sensible SizedBytes implementation
-///
-/// Because SizedBytes has a strong notion of size, and TryFrom/to_bytes does
-/// not, it's better to use the macro below rather than this one, where possible.
-#[macro_export]
-macro_rules! sized_bytes_using_constant_and_try_from {
-    ($sized_type: ident, $len: ident) => {
-        impl SizedBytes for $sized_type {
-            type Len = $len;
-
-            fn to_arr(&self) -> generic_array::GenericArray<u8, Self::Len> {
-                generic_array::GenericArray::clone_from_slice(&self.to_bytes())
-            }
-
-            fn from_bytes(bytes: &[u8]) -> Result<Self, InternalPakeError> {
-                let checked_bytes = check_slice_size(
-                    bytes,
-                    <Self::Len as generic_array::typenum::Unsigned>::to_usize(),
-                    "bytes",
-                )?;
-                std::convert::TryFrom::try_from(checked_bytes.to_vec())
-            }
-        }
-    };
-}
-
-/// This assumes you have defined a SizedBytes instance for a `T`, and defines:
-/// - an `impl TryFrom<&[u8b], Error = InternalPakeError>` for a non-generic `T`
-/// - an `fn to_bytes(&self) -> Vec<u8>` in an `impl T` block
-///
-/// Because SizedBytes has a strong notion of size, and TryFrom/to_bytes does
-/// not, it's better to use this macro than the one above, where possible.
-macro_rules! try_from_and_to_bytes_using_sized_bytes {
-    ($sized_type: ident) => {
-        impl TryFrom<&[u8]> for $sized_type {
-            type Error = InternalPakeError;
-
-            fn try_from(bytes: &[u8]) -> Result<Self, InternalPakeError> {
-                <$sized_type as SizedBytes>::from_bytes(bytes)
-            }
-        }
-
-        #[allow(dead_code)]
-        impl $sized_type {
-            fn to_bytes(&self) -> Vec<u8> {
-                self.to_arr().to_vec()
-            }
-        }
-    };
-}
-
 /// This is a blanket implementation of SizedBytes for any instance of KeyPair
-/// with any length of keys. This encodes that we serialize the public key
-/// first, followed by the private key in binary formats (and expect it in this
-/// order upon decoding).
+/// with any length of keys. This encodes that both keys have the same size,
+/// and that we serialize the public key first, followed by the private key in
+/// binary formats (and expect it in this order upon decoding).
 impl<T, KP> SizedBytes for KP
 where
-    T: SizedBytes + Clone,
+    T: SizedBytes + Clone + for<'a> TryFrom<&'a [u8], Error = InternalPakeError>,
     KP: KeyPair<Repr = T> + PartialEq,
     T::Len: Add<T::Len>,
     Sum<T::Len, T::Len>: ArrayLength<u8>,
+    Sum<T::Len, T::Len>: Sub<T::Len, Output = T::Len>,
+    Diff<Sum<T::Len, T::Len>, T::Len>: ArrayLength<u8>,
 {
+    type Error = <T as SizedBytes>::Error;
     type Len = Sum<T::Len, T::Len>;
 
     fn to_arr(&self) -> GenericArray<u8, Self::Len> {
@@ -164,18 +123,17 @@ where
         public.concat(private)
     }
 
-    fn from_bytes(key_bytes: &[u8]) -> Result<Self, InternalPakeError> {
-        let checked_bytes =
-            check_slice_size(key_bytes, <Self::Len as Unsigned>::to_usize(), "key_bytes")?;
-        let single_key_len = <<KP::Repr as SizedBytes>::Len as Unsigned>::to_usize();
-        let public = <T as SizedBytes>::from_bytes(&checked_bytes[..single_key_len])?;
-        let private = <T as SizedBytes>::from_bytes(&checked_bytes[single_key_len..])?;
+    fn from_arr(arr: &GenericArray<u8, Self::Len>) -> Result<Self, Self::Error> {
+        let (public_key, private_key): (GenericArray<u8, T::Len>, GenericArray<u8, _>) =
+            GenericArray::split(arr.clone());
+        let public = <T as SizedBytes>::from_arr(&public_key)?;
+        let private = <T as SizedBytes>::from_arr(&private_key)?;
         KP::new(public, private)
     }
 }
 
 /// A minimalist key type built around [u8;32]
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone, TryFromForSizedBytes)]
 #[repr(transparent)]
 pub struct Key(Vec<u8>);
 
@@ -188,20 +146,17 @@ impl Deref for Key {
 }
 
 impl SizedBytes for Key {
+    type Error = InternalPakeError;
     type Len = U32;
 
     fn to_arr(&self) -> GenericArray<u8, Self::Len> {
         GenericArray::clone_from_slice(&self.0[..])
     }
 
-    fn from_bytes(key_bytes: &[u8]) -> Result<Self, InternalPakeError> {
-        let checked_bytes =
-            check_slice_size(key_bytes, <Self::Len as Unsigned>::to_usize(), "key_bytes")?;
-        Ok(Key(checked_bytes.to_vec()))
+    fn from_arr(arr: &GenericArray<u8, Self::Len>) -> Result<Self, InternalPakeError> {
+        Ok(Key(arr.to_vec()))
     }
 }
-
-try_from_and_to_bytes_using_sized_bytes!(Key);
 
 /// A representation of an X25519 keypair according to RFC7748
 #[derive(Debug, PartialEq, Eq)]

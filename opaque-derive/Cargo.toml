@@ -1,0 +1,18 @@
+[package]
+name = "opaque-derive"
+version = "0.1.0"
+repository = "https://github.com/novifinancial/opaque-ke"
+authors = ["Kevin Lewi <klewi@fb.com>", "François Garillot <fga@fb.com>"]
+license = "MIT"
+edition = "2018"
+
+[lib]
+proc-macro = true
+
+[dependencies]
+syn = { version = "1.0.34", features = ["derive"] }
+quote = "1.0.7"
+proc-macro2 = "1.0.18"
+
+[dev-dependencies]
+anyhow = "1.0.31"
