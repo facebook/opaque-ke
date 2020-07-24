@@ -17,6 +17,7 @@ use crate::{
     slow_hash::SlowHash,
 };
 use generic_array::{typenum::Unsigned, GenericArray};
+use opaque_derive::{SizedBytes, TryFromForSizedBytes};
 use rand_core::{CryptoRng, RngCore};
 use std::{convert::TryFrom, marker::PhantomData};
 use zeroize::Zeroize;
@@ -25,70 +26,18 @@ use zeroize::Zeroize;
 // =========
 
 /// The message sent by the client to the server, to initiate registration
+#[derive(PartialEq, SizedBytes, TryFromForSizedBytes)]
 pub struct RegisterFirstMessage<Grp> {
     /// blinded password information
     alpha: Grp,
 }
 
-impl<Grp: Group> TryFrom<&[u8]> for RegisterFirstMessage<Grp> {
-    type Error = ProtocolError;
-    fn try_from(first_message_bytes: &[u8]) -> Result<Self, Self::Error> {
-        // Check that the message is actually containing an element of the
-        // correct subgroup
-        let checked_slice = check_slice_size(
-            first_message_bytes,
-            Grp::Len::to_usize(),
-            "first_message_bytes",
-        )?;
-
-        let arr = GenericArray::from_slice(checked_slice);
-        let alpha = Grp::from_arr(arr)?;
-        Ok(Self { alpha })
-    }
-}
-
-impl<Grp: Group> RegisterFirstMessage<Grp> {
-    /// byte representation for the registration request
-    pub fn to_bytes(&self) -> GenericArray<u8, <Grp as SizedBytes>::Len> {
-        self.alpha.to_arr()
-    }
-}
-
 /// The answer sent by the server to the user, upon reception of the
 /// registration attempt
+#[derive(PartialEq, SizedBytes, TryFromForSizedBytes)]
 pub struct RegisterSecondMessage<Grp> {
     /// The server's oprf output
     beta: Grp,
-}
-
-impl<Grp> TryFrom<&[u8]> for RegisterSecondMessage<Grp>
-where
-    Grp: Group,
-{
-    type Error = ProtocolError;
-
-    fn try_from(second_message_bytes: &[u8]) -> Result<Self, Self::Error> {
-        let checked_slice = check_slice_size(
-            second_message_bytes,
-            Grp::Len::to_usize(),
-            "second_message_bytes",
-        )?;
-        // Check that the message is actually containing an element of the
-        // correct subgroup
-        let arr = GenericArray::from_slice(&checked_slice);
-        let beta = Grp::from_arr(arr)?;
-        Ok(Self { beta })
-    }
-}
-
-impl<Grp> RegisterSecondMessage<Grp>
-where
-    Grp: Group,
-{
-    /// byte representation for the registration response message
-    pub fn to_bytes(&self) -> Vec<u8> {
-        self.beta.to_arr().to_vec()
-    }
 }
 
 /// The final message from the client, containing sealed cryptographic
@@ -627,8 +576,6 @@ where
 
 /// The state elements the client holds to perform a login
 pub struct ClientLogin<CS: CipherSuite> {
-    /// A choice of the keypair type
-    _key_format: PhantomData<CS::KeyFormat>,
     /// A blinding factor, which is used to mask (and unmask) secret
     /// information before transmission
     blinding_factor: <CS::Group as Group>::Scalar,
@@ -656,7 +603,6 @@ impl<CS: CipherSuite> TryFrom<&[u8]> for ClientLogin<CS> {
         )?;
         let password = bytes[scalar_len + ke1_state_size..].to_vec();
         Ok(Self {
-            _key_format: PhantomData,
             blinding_factor,
             password,
             ke1_state,
@@ -725,7 +671,6 @@ impl<CS: CipherSuite> ClientLogin<CS> {
         Ok((
             l1,
             Self {
-                _key_format: PhantomData,
                 blinding_factor,
                 password: password.to_vec(),
                 ke1_state,
@@ -770,7 +715,7 @@ impl<CS: CipherSuite> ClientLogin<CS> {
     pub fn finish<R: RngCore + CryptoRng>(
         self,
         l2: LoginSecondMessage<CS::Group, CS::KeyFormat, CS::KeyExchange>,
-        server_s_pk: &<<CS as CipherSuite>::KeyFormat as KeyPair>::Repr,
+        server_s_pk: &<CS::KeyFormat as KeyPair>::Repr,
         _client_e_sk_rng: &mut R,
     ) -> Result<ClientLoginFinishResult<CS>, ProtocolError> {
         let l2_bytes: Vec<u8> = [&l2.beta.to_arr()[..], &l2.envelope.to_bytes()].concat();

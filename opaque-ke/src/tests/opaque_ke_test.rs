@@ -8,7 +8,7 @@ use crate::{
     errors::*,
     group::Group,
     key_exchange::tripledh::{TripleDH, NONCE_LEN},
-    keypair::{Key, KeyPair, X25519KeyPair},
+    keypair::{Key, KeyPair, SizedBytes, X25519KeyPair},
     opaque::*,
     slow_hash::NoOpHash,
     tests::mock_rng::CycleRng,
@@ -247,14 +247,14 @@ fn generate_parameters<CS: CipherSuite>() -> TestVectorParameters {
         &mut blinding_factor_registration_rng,
     )
     .unwrap();
-    let r1_bytes = r1.to_bytes().to_vec();
+    let r1_bytes = r1.to_arr().to_vec();
     let blinding_factor_bytes =
         <CS::Group as Group>::to_scalar_slice(&client_registration.blinding_factor).clone();
     let client_registration_state = client_registration.to_bytes().to_vec();
 
     let mut oprf_key_rng = CycleRng::new(oprf_key_raw.to_vec());
     let (r2, server_registration) = ServerRegistration::<CS>::start(r1, &mut oprf_key_rng).unwrap();
-    let r2_bytes = r2.to_bytes().to_vec();
+    let r2_bytes = r2.to_arr().to_vec();
     let oprf_key_bytes =
         <CS::Group as Group>::to_scalar_slice(&server_registration.oprf_key).clone();
     let server_registration_state = server_registration.to_bytes().to_vec();
@@ -349,7 +349,7 @@ fn test_r1() -> Result<(), PakeError> {
         &mut blinding_factor_rng,
     )
     .unwrap();
-    assert_eq!(hex::encode(&parameters.r1), hex::encode(r1.to_bytes()));
+    assert_eq!(hex::encode(&parameters.r1), hex::encode(r1.to_arr()));
     assert_eq!(
         hex::encode(&parameters.client_registration_state),
         hex::encode(client_registration.to_bytes())
@@ -366,7 +366,7 @@ fn test_r2() -> Result<(), PakeError> {
         &mut oprf_key_rng,
     )
     .unwrap();
-    assert_eq!(hex::encode(parameters.r2), hex::encode(r2.to_bytes()));
+    assert_eq!(hex::encode(parameters.r2), hex::encode(r2.to_arr()));
     assert_eq!(
         hex::encode(&parameters.server_registration_state),
         hex::encode(server_registration.to_bytes())
