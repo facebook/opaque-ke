@@ -102,10 +102,9 @@ mod tests {
     ) -> GenericArray<u8, <RistrettoPoint as SizedBytes>::Len> {
         let (hashed_input, _) = Hkdf::<Sha512>::extract(None, &input);
         let point = RistrettoPoint::hash_to_curve(GenericArray::from_slice(&hashed_input));
-        let scalar = <<RistrettoPoint as Group>::Scalar as SizedBytes>::from_arr(
-            GenericArray::from_slice(&oprf_key[..]),
-        )
-        .unwrap();
+        let scalar =
+            <RistrettoPoint as Group>::scalar_from_slice(GenericArray::from_slice(&oprf_key[..]))
+                .unwrap();
         let res = point * scalar;
         let ikm: Vec<u8> = [&res.to_arr()[..], &input].concat();
 
@@ -125,7 +124,7 @@ mod tests {
             u8; 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23,
             24, 25, 26, 27, 28, 29, 30, 31, 32,
         ];
-        let salt = <<RistrettoPoint as Group>::Scalar as SizedBytes>::from_arr(&salt_bytes)?;
+        let salt = <RistrettoPoint as Group>::scalar_from_slice(&salt_bytes)?;
         let beta = generate_oprf2::<RistrettoPoint>(alpha, &salt)?;
         let res = generate_oprf3::<RistrettoPoint>(input, beta, &blinding_factor)?;
         let res2 = prf(&input[..], &salt.as_bytes());

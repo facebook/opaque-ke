@@ -36,6 +36,20 @@ pub trait Group:
     /// The multiplicative inverse of this scalar
     fn scalar_invert(scalar: &Self::Scalar) -> Self::Scalar;
 
+    // Proxy functions for Self::Scalar
+    /// Deserialize a scalar from a correctly-sized slice, proxy for Scalar::form_arr
+    fn scalar_from_slice(
+        arr: &GenericArray<u8, <Self::Scalar as SizedBytes>::Len>,
+    ) -> Result<Self::Scalar, InternalPakeError> {
+        <Self::Scalar as SizedBytes>::from_arr(arr)
+    }
+    /// Serialize a scalar to a correctly-sized slice, proxy for Scalar::to_arr
+    fn to_scalar_slice(
+        scalar: &Self::Scalar,
+    ) -> GenericArray<u8, <Self::Scalar as SizedBytes>::Len> {
+        <Self::Scalar as SizedBytes>::to_arr(&scalar)
+    }
+
     /// Hashes points presumed to be uniformly random to the curve. The
     /// impl is allowed to perform additional hashes if it needs to, but this
     /// may not be necessary as this function is going to be called with the

@@ -295,8 +295,7 @@ impl<CS: CipherSuite> TryFrom<&[u8]> for ClientRegistration<CS> {
         // correct subgroup
         let scalar_len = <<CS::Group as Group>::Scalar as SizedBytes>::Len::to_usize();
         let blinding_factor_bytes = GenericArray::from_slice(&bytes[..scalar_len]);
-        let blinding_factor =
-            <<CS::Group as Group>::Scalar as SizedBytes>::from_arr(blinding_factor_bytes)?;
+        let blinding_factor = <CS::Group as Group>::scalar_from_slice(blinding_factor_bytes)?;
         let password = bytes[scalar_len..].to_vec();
         Ok(Self {
             blinding_factor,
@@ -495,7 +494,7 @@ where
             "server_registration_bytes",
         )?;
         let oprf_key_bytes = GenericArray::from_slice(&checked_bytes[..scalar_len]);
-        let oprf_key = <<CS::Group as Group>::Scalar as SizedBytes>::from_arr(oprf_key_bytes)?;
+        let oprf_key = <CS::Group as Group>::scalar_from_slice(oprf_key_bytes)?;
         let unchecked_client_s_pk = <CS::KeyFormat as KeyPair>::Repr::try_from(
             &checked_bytes[scalar_len..scalar_len + key_len],
         )?;
@@ -521,8 +520,7 @@ where
 {
     /// byte representation for the server's registration state
     pub fn to_bytes(&self) -> Vec<u8> {
-        let mut output: Vec<u8> =
-            <<CS::Group as Group>::Scalar as SizedBytes>::to_arr(&self.oprf_key).to_vec();
+        let mut output: Vec<u8> = <CS::Group as Group>::to_scalar_slice(&self.oprf_key).to_vec();
         match &self.client_s_pk {
             Some(v) => output.extend_from_slice(&v.to_arr()),
             None => {}
@@ -644,8 +642,7 @@ impl<CS: CipherSuite> TryFrom<&[u8]> for ClientLogin<CS> {
     fn try_from(bytes: &[u8]) -> Result<Self, Self::Error> {
         let scalar_len = <<CS::Group as Group>::Scalar as SizedBytes>::Len::to_usize();
         let blinding_factor_bytes = GenericArray::from_slice(&bytes[..scalar_len]);
-        let blinding_factor =
-            <<CS::Group as Group>::Scalar as SizedBytes>::from_arr(blinding_factor_bytes)?;
+        let blinding_factor = <CS::Group>::scalar_from_slice(blinding_factor_bytes)?;
         let ke1_state_size = <CS::KeyExchange as KeyExchange>::ke1_state_size();
 
         let checked_ke1_slice = check_slice_size(
@@ -671,7 +668,7 @@ impl<CS: CipherSuite> ClientLogin<CS> {
     /// byte representation for the client's login state
     pub fn to_bytes(&self) -> Vec<u8> {
         let output: Vec<u8> = [
-            &<<CS::Group as Group>::Scalar as SizedBytes>::to_arr(&self.blinding_factor)[..],
+            &<CS::Group as Group>::to_scalar_slice(&self.blinding_factor)[..],
             &self.ke1_state.to_arr(),
             &self.password,
         ]
