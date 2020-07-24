@@ -5,6 +5,7 @@ repository = "https://github.com/novifinancial/opaque-ke"
 authors = ["Kevin Lewi <klewi@fb.com>", "François Garillot <fga@fb.com>"]
 license = "MIT"
 edition = "2018"
+publish = false
 
 [lib]
 proc-macro = true

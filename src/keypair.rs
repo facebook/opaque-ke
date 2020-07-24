@@ -11,7 +11,7 @@ use generic_array::{
     typenum::{Diff, Sum, Unsigned, U32},
     ArrayLength, GenericArray,
 };
-use opaque_derive::TryFromForSizedBytes;
+use opaque_derive::{SizedBytes, TryFromForSizedBytes};
 #[cfg(test)]
 use proptest::prelude::*;
 #[cfg(test)]
@@ -30,9 +30,6 @@ use std::ops::{Add, Deref, Sub};
 /// `TryFrom<&[u8], Error = InternalPakeError>`.
 // TODO(fga): insert doc-example here
 pub trait SizedBytes: Sized + PartialEq {
-    /// The error on decoding such a value from sized bytes.
-    type Error: std::error::Error;
-
     /// The typed representation of the byte length
     type Len: ArrayLength<u8>;
 
@@ -42,7 +39,7 @@ pub trait SizedBytes: Sized + PartialEq {
     fn to_arr(&self) -> GenericArray<u8, Self::Len>;
 
     /// How to parse such sized material from a correctly-sized byte slice.
-    fn from_arr(arr: &GenericArray<u8, Self::Len>) -> Result<Self, Self::Error>;
+    fn from_arr(arr: &GenericArray<u8, Self::Len>) -> Result<Self, InternalPakeError>;
 }
 
 /// A Keypair trait with public-private verification
@@ -58,10 +55,7 @@ pub trait KeyPair: Sized {
 
     /// A constructor that receives public and private key independently as
     /// bytes
-    fn new(
-        public: Self::Repr,
-        private: Self::Repr,
-    ) -> Result<Self, <Self::Repr as SizedBytes>::Error>;
+    fn new(public: Self::Repr, private: Self::Repr) -> Result<Self, InternalPakeError>;
 
     /// Generating a random key pair given a cryptographic rng
     fn generate_random<R: RngCore + CryptoRng>(rng: &mut R) -> Result<Self, InternalPakeError>;
@@ -114,7 +108,6 @@ where
     Sum<T::Len, T::Len>: Sub<T::Len, Output = T::Len>,
     Diff<Sum<T::Len, T::Len>, T::Len>: ArrayLength<u8>,
 {
-    type Error = <T as SizedBytes>::Error;
     type Len = Sum<T::Len, T::Len>;
 
     fn to_arr(&self) -> GenericArray<u8, Self::Len> {
@@ -123,7 +116,7 @@ where
         public.concat(private)
     }
 
-    fn from_arr(arr: &GenericArray<u8, Self::Len>) -> Result<Self, Self::Error> {
+    fn from_arr(arr: &GenericArray<u8, Self::Len>) -> Result<Self, InternalPakeError> {
         let (public_key, private_key): (GenericArray<u8, T::Len>, GenericArray<u8, _>) =
             GenericArray::split(arr.clone());
         let public = <T as SizedBytes>::from_arr(&public_key)?;
@@ -146,7 +139,6 @@ impl Deref for Key {
 }
 
 impl SizedBytes for Key {
-    type Error = InternalPakeError;
     type Len = U32;
 
     fn to_arr(&self) -> GenericArray<u8, Self::Len> {
