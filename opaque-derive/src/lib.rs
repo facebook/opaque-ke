@@ -20,23 +20,28 @@ use syn::{
 pub fn try_from_for_sized_bytes(source: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let ast: DeriveInput = syn::parse(source).expect("Incorrect macro input");
     let name = &ast.ident;
-    let gen = quote! {
-    impl<'a> TryFrom<&'a [u8]> for #name {
-        type Error = InternalPakeError;
 
-        fn try_from(bytes: &[u8]) -> Result<Self, InternalPakeError> {
-            let expected_len = <<Self as SizedBytes>::Len as generic_array::typenum::Unsigned>::to_usize();
-            if bytes.len() != expected_len {
-                return Err(InternalPakeError::SizeError {
-                    name: "bytes",
-                    len: expected_len,
-                    actual_len: bytes.len(),
-                });
+    // Add a bound `T: SizedBytes` to every type parameter T.
+    let generics = add_trait_bounds(ast.generics);
+    let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
+
+    let gen = quote! {
+        impl #impl_generics TryFrom<&[u8]> for #name #ty_generics #where_clause {
+            type Error = InternalPakeError;
+
+            fn try_from(bytes: &[u8]) -> Result<Self, InternalPakeError> {
+                let expected_len = <<Self as SizedBytes>::Len as generic_array::typenum::Unsigned>::to_usize();
+                if bytes.len() != expected_len {
+                    return Err(InternalPakeError::SizeError {
+                        name: "bytes",
+                        len: expected_len,
+                        actual_len: bytes.len(),
+                    });
+                }
+                let arr = GenericArray::from_slice(bytes);
+                <Self as SizedBytes>::from_arr(arr)
             }
-            let arr = GenericArray::from_slice(bytes);
-            <Self as SizedBytes>::from_arr(arr)
         }
-    }
     };
     gen.into()
 }
@@ -163,7 +168,8 @@ fn byte_splitting(constr: &proc_macro2::Ident, data: &Data) -> TokenStream {
         Data::Struct(ref data) => {
             match data.fields {
                 Fields::Named(ref fields) => {
-                    let setup: TokenStream = fields
+                    if fields.named.len() > 1 {
+                        let setup: TokenStream = fields
                         .named
                         .iter()
                         .map(|f| {
@@ -175,22 +181,34 @@ fn byte_splitting(constr: &proc_macro2::Ident, data: &Data) -> TokenStream {
                         })
                         .collect();
 
-                    let conclude: TokenStream = fields
-                        .named
-                        .iter()
-                        .map(|f| {
-                            let name = &f.ident;
-                            quote_spanned! {f.span()=>
-                                #name,
-                            }
-                        })
-                        .collect();
-                    quote! {
-                        let _tail = arr;
-                        #setup
-                        Ok(#constr {
-                            #conclude
-                        })
+                        let conclude: TokenStream = fields
+                            .named
+                            .iter()
+                            .map(|f| {
+                                let name = &f.ident;
+                                quote_spanned! {f.span()=>
+                                    #name,
+                                }
+                            })
+                            .collect();
+                        quote! {
+                            let _tail = arr;
+                            #setup
+                            Ok(#constr {
+                                #conclude
+                            })
+                        }
+                    } else {
+                        // We short-circuit the splitting construction if we
+                        // have but one field
+                        let f = fields.named.iter().find(|_| true).unwrap();
+                        let name = &f.ident;
+                        quote_spanned! {f.span() =>
+                                        let #name = SizedBytes::from_arr(arr)?;
+                                        Ok(#constr {
+                                            #name,
+                                        })
+                        }
                     }
                 }
                 Fields::Unnamed(ref fields) => {
@@ -255,7 +273,6 @@ pub fn derive_sized_bytes(input: proc_macro::TokenStream) -> proc_macro::TokenSt
     let from_arr_impl = byte_splitting(name, &input.data);
 
     quote! (
-        // The generated impl.
         impl #impl_generics SizedBytes for #name #ty_generics #where_clause {
 
             type Len = #types_sum;
