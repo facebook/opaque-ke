@@ -2,10 +2,10 @@
 name = "opaque-derive"
 version = "0.1.0"
 repository = "https://github.com/novifinancial/opaque-ke"
+description = "An implementation of a derive macro for an internal trait of the OPAQUE password-authenticated key exchange protocol"
 authors = ["Kevin Lewi <klewi@fb.com>", "François Garillot <fga@fb.com>"]
 license = "MIT"
 edition = "2018"
-publish = false
 
 [lib]
 proc-macro = true

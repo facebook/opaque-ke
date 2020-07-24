@@ -26,11 +26,17 @@ jobs:
           override: true
           components: rustfmt, clippy
 
-      - name: Run cargo test
+      - name: Run cargo test on opaque-derive
         uses: actions-rs/cargo@v1
         with:
           command: test
-          args: --no-default-features --features ${{ matrix.backend_feature }}
+          args: --manifest-path opaque-derive/Cargo.toml
+
+      - name: Run cargo test on opaque-ke
+        uses: actions-rs/cargo@v1
+        with:
+          command: test
+          args: --manifest-path opaque-ke/Cargo.toml --no-default-features --features ${{ matrix.backend_feature }}
 
   clippy:
     name: cargo clippy
