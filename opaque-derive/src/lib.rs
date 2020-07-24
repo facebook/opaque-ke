@@ -25,7 +25,7 @@ pub fn try_from_for_sized_bytes(source: proc_macro::TokenStream) -> proc_macro::
         type Error = InternalPakeError;
 
         fn try_from(bytes: &[u8]) -> Result<Self, InternalPakeError> {
-            let expected_len = <Self as SizedBytes>::Len::to_usize();
+            let expected_len = <<Self as SizedBytes>::Len as generic_array::typenum::Unsigned>::to_usize();
             if bytes.len() != expected_len {
                 return Err(InternalPakeError::SizeError {
                     name: "bytes",
@@ -254,7 +254,7 @@ pub fn derive_sized_bytes(input: proc_macro::TokenStream) -> proc_macro::TokenSt
     // Generate an expression to ingest each field.
     let from_arr_impl = byte_splitting(name, &input.data);
 
-    let res = quote! (
+    quote! (
         // The generated impl.
         impl #impl_generics SizedBytes for #name #ty_generics #where_clause {
 
@@ -268,9 +268,6 @@ pub fn derive_sized_bytes(input: proc_macro::TokenStream) -> proc_macro::TokenSt
                 #from_arr_impl
             }
         }
-    );
-
-    eprintln!("TOKENS: {}", proc_macro::TokenStream::from(res.clone()));
-
-    res.into()
+    )
+    .into()
 }

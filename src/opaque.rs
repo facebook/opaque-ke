@@ -10,7 +10,7 @@ use crate::{
     envelope::{Envelope, ExportKeySize},
     errors::{utils::check_slice_size, InternalPakeError, PakeError, ProtocolError},
     group::Group,
-    key_exchange::traits::{KeyExchange, ToBytes},
+    key_exchange::traits::KeyExchange,
     keypair::{Key, KeyPair, SizedBytes},
     oprf,
     oprf::OprfClientBytes,
@@ -35,15 +35,21 @@ impl<Grp: Group> TryFrom<&[u8]> for RegisterFirstMessage<Grp> {
     fn try_from(first_message_bytes: &[u8]) -> Result<Self, Self::Error> {
         // Check that the message is actually containing an element of the
         // correct subgroup
-        let arr = GenericArray::from_slice(first_message_bytes);
-        let alpha = Grp::from_element_slice(arr)?;
+        let checked_slice = check_slice_size(
+            first_message_bytes,
+            Grp::Len::to_usize(),
+            "first_message_bytes",
+        )?;
+
+        let arr = GenericArray::from_slice(checked_slice);
+        let alpha = Grp::from_arr(arr)?;
         Ok(Self { alpha })
     }
 }
 
 impl<Grp: Group> RegisterFirstMessage<Grp> {
     /// byte representation for the registration request
-    pub fn to_bytes(&self) -> GenericArray<u8, Grp::ElemLen> {
+    pub fn to_bytes(&self) -> GenericArray<u8, <Grp as SizedBytes>::Len> {
         self.alpha.to_arr()
     }
 }
@@ -64,13 +70,13 @@ where
     fn try_from(second_message_bytes: &[u8]) -> Result<Self, Self::Error> {
         let checked_slice = check_slice_size(
             second_message_bytes,
-            Grp::ElemLen::to_usize(),
+            Grp::Len::to_usize(),
             "second_message_bytes",
         )?;
         // Check that the message is actually containing an element of the
         // correct subgroup
         let arr = GenericArray::from_slice(&checked_slice);
-        let beta = Grp::from_element_slice(arr)?;
+        let beta = Grp::from_arr(arr)?;
         Ok(Self { beta })
     }
 }
@@ -142,12 +148,18 @@ impl<CS: CipherSuite> TryFrom<&[u8]> for LoginFirstMessage<CS> {
     fn try_from(first_message_bytes: &[u8]) -> Result<Self, Self::Error> {
         // Check that the message is actually containing an element of the
         // correct subgroup
-        let elem_len = <CS::Group as Group>::ElemLen::to_usize();
+        let elem_len = <CS::Group as SizedBytes>::Len::to_usize();
         let arr = GenericArray::from_slice(&first_message_bytes[..elem_len]);
-        let alpha = CS::Group::from_element_slice(arr)?;
+        let alpha = CS::Group::from_arr(arr)?;
 
-        let ke1_message = <CS::KeyExchange as KeyExchange>::KE1Message::try_from(
-            first_message_bytes[elem_len..].to_vec(),
+        let checked_ke1_slice = check_slice_size(
+            &first_message_bytes[elem_len..],
+            <<CS::KeyExchange as KeyExchange>::KE1Message as SizedBytes>::Len::to_usize(),
+            "ke1_bytes",
+        )?;
+
+        let ke1_message = <CS::KeyExchange as KeyExchange>::KE1Message::from_arr(
+            GenericArray::from_slice(checked_ke1_slice),
         )?;
         Ok(Self { alpha, ke1_message })
     }
@@ -156,7 +168,7 @@ impl<CS: CipherSuite> TryFrom<&[u8]> for LoginFirstMessage<CS> {
 impl<CS: CipherSuite> LoginFirstMessage<CS> {
     /// byte representation for the login request
     pub fn to_bytes(&self) -> Vec<u8> {
-        [&self.alpha.to_arr()[..], &self.ke1_message.to_bytes()].concat()
+        [&self.alpha.to_arr()[..], &self.ke1_message.to_arr()].concat()
     }
 }
 
@@ -168,7 +180,6 @@ where
     KE: KeyExchange,
 {
     _key_format: PhantomData<KeyFormat>,
-    _key_exchange: PhantomData<KE>,
     /// the server's oprf output
     beta: Grp,
     /// the user's sealed information,
@@ -187,7 +198,7 @@ where
         [
             &self.beta.to_arr()[..],
             &self.envelope.to_bytes()[..],
-            &self.ke2_message.to_bytes()[..],
+            &self.ke2_message.to_arr()[..],
         ]
         .concat()
     }
@@ -203,7 +214,7 @@ where
     fn try_from(second_message_bytes: &[u8]) -> Result<Self, Self::Error> {
         let key_len = <KeyFormat::Repr as SizedBytes>::Len::to_usize();
         let envelope_size = key_len + Envelope::additional_size();
-        let elem_len = Grp::ElemLen::to_usize();
+        let elem_len = Grp::Len::to_usize();
         let ke2_message_size = KE::ke2_message_size();
         let checked_slice = check_slice_size(
             second_message_bytes,
@@ -215,16 +226,20 @@ where
         // correct subgroup
         let beta_bytes = &checked_slice[..elem_len];
         let arr = GenericArray::from_slice(beta_bytes);
-        let beta = Grp::from_element_slice(arr)?;
+        let beta = Grp::from_arr(arr)?;
 
         let envelope = Envelope::from_bytes(&checked_slice[elem_len..elem_len + envelope_size])?;
 
-        let ke2_message =
-            KE::KE2Message::try_from(checked_slice[elem_len + envelope_size..].to_vec())?;
+        let checked_ke2_slice = check_slice_size(
+            &checked_slice[elem_len + envelope_size..],
+            <KE::KE2Message as SizedBytes>::Len::to_usize(),
+            "ke2_bytes",
+        )?;
+
+        let ke2_message = KE::KE2Message::from_arr(GenericArray::from_slice(checked_ke2_slice))?;
 
         Ok(Self {
             _key_format: PhantomData,
-            _key_exchange: PhantomData,
             beta,
             envelope,
             ke2_message,
@@ -242,7 +257,15 @@ impl<CS: CipherSuite> TryFrom<&[u8]> for LoginThirdMessage<CS> {
     type Error = ProtocolError;
 
     fn try_from(bytes: &[u8]) -> Result<Self, Self::Error> {
-        let ke3_message = <CS::KeyExchange as KeyExchange>::KE3Message::try_from(bytes.to_vec())?;
+        let checked_ke3_slice = check_slice_size(
+            &bytes,
+            <<CS::KeyExchange as KeyExchange>::KE3Message as SizedBytes>::Len::to_usize(),
+            "ke3_bytes",
+        )?;
+
+        let ke3_message = <CS::KeyExchange as KeyExchange>::KE3Message::from_arr(
+            GenericArray::from_slice(checked_ke3_slice),
+        )?;
         Ok(Self { ke3_message })
     }
 }
@@ -250,7 +273,7 @@ impl<CS: CipherSuite> TryFrom<&[u8]> for LoginThirdMessage<CS> {
 impl<CS: CipherSuite> LoginThirdMessage<CS> {
     /// byte representation for the login finalization
     pub fn to_bytes(&self) -> Vec<u8> {
-        self.ke3_message.to_bytes()
+        self.ke3_message.to_arr().to_vec()
     }
 }
 
@@ -270,9 +293,10 @@ impl<CS: CipherSuite> TryFrom<&[u8]> for ClientRegistration<CS> {
     fn try_from(bytes: &[u8]) -> Result<Self, Self::Error> {
         // Check that the message is actually containing an element of the
         // correct subgroup
-        let scalar_len = <CS::Group as Group>::ScalarLen::to_usize();
+        let scalar_len = <<CS::Group as Group>::Scalar as SizedBytes>::Len::to_usize();
         let blinding_factor_bytes = GenericArray::from_slice(&bytes[..scalar_len]);
-        let blinding_factor = CS::Group::from_scalar_slice(blinding_factor_bytes)?;
+        let blinding_factor =
+            <<CS::Group as Group>::Scalar as SizedBytes>::from_arr(blinding_factor_bytes)?;
         let password = bytes[scalar_len..].to_vec();
         Ok(Self {
             blinding_factor,
@@ -285,7 +309,7 @@ impl<CS: CipherSuite> ClientRegistration<CS> {
     /// byte representation for the client's registration state
     pub fn to_bytes(&self) -> Vec<u8> {
         let output: Vec<u8> = [
-            &CS::Group::scalar_as_bytes(&self.blinding_factor)[..],
+            &<CS::Group as Group>::Scalar::to_arr(&self.blinding_factor)[..],
             &self.password,
         ]
         .concat();
@@ -452,12 +476,12 @@ where
     type Error = ProtocolError;
     fn try_from(server_registration_bytes: &[u8]) -> Result<Self, Self::Error> {
         let key_len = <<CS::KeyFormat as KeyPair>::Repr as SizedBytes>::Len::to_usize();
-        let scalar_len = <CS::Group as Group>::ScalarLen::to_usize();
+        let scalar_len = <<CS::Group as Group>::Scalar as SizedBytes>::Len::to_usize();
         let envelope_size = key_len + Envelope::additional_size();
 
         if server_registration_bytes.len() == scalar_len {
             return Ok(Self {
-                oprf_key: CS::Group::from_scalar_slice(GenericArray::from_slice(
+                oprf_key: <CS::Group as Group>::Scalar::from_arr(GenericArray::from_slice(
                     server_registration_bytes,
                 ))?,
                 client_s_pk: None,
@@ -471,7 +495,7 @@ where
             "server_registration_bytes",
         )?;
         let oprf_key_bytes = GenericArray::from_slice(&checked_bytes[..scalar_len]);
-        let oprf_key = CS::Group::from_scalar_slice(oprf_key_bytes)?;
+        let oprf_key = <<CS::Group as Group>::Scalar as SizedBytes>::from_arr(oprf_key_bytes)?;
         let unchecked_client_s_pk = <CS::KeyFormat as KeyPair>::Repr::try_from(
             &checked_bytes[scalar_len..scalar_len + key_len],
         )?;
@@ -497,7 +521,8 @@ where
 {
     /// byte representation for the server's registration state
     pub fn to_bytes(&self) -> Vec<u8> {
-        let mut output: Vec<u8> = CS::Group::scalar_as_bytes(&self.oprf_key).to_vec();
+        let mut output: Vec<u8> =
+            <<CS::Group as Group>::Scalar as SizedBytes>::to_arr(&self.oprf_key).to_vec();
         match &self.client_s_pk {
             Some(v) => output.extend_from_slice(&v.to_arr()),
             None => {}
@@ -617,12 +642,20 @@ pub struct ClientLogin<CS: CipherSuite> {
 impl<CS: CipherSuite> TryFrom<&[u8]> for ClientLogin<CS> {
     type Error = ProtocolError;
     fn try_from(bytes: &[u8]) -> Result<Self, Self::Error> {
-        let scalar_len = <CS::Group as Group>::ScalarLen::to_usize();
+        let scalar_len = <<CS::Group as Group>::Scalar as SizedBytes>::Len::to_usize();
         let blinding_factor_bytes = GenericArray::from_slice(&bytes[..scalar_len]);
-        let blinding_factor = CS::Group::from_scalar_slice(blinding_factor_bytes)?;
+        let blinding_factor =
+            <<CS::Group as Group>::Scalar as SizedBytes>::from_arr(blinding_factor_bytes)?;
         let ke1_state_size = <CS::KeyExchange as KeyExchange>::ke1_state_size();
-        let ke1_state = <CS::KeyExchange as KeyExchange>::KE1State::try_from(
-            bytes[scalar_len..scalar_len + ke1_state_size].to_vec(),
+
+        let checked_ke1_slice = check_slice_size(
+            &bytes[scalar_len..scalar_len + ke1_state_size],
+            <<CS::KeyExchange as KeyExchange>::KE1State as SizedBytes>::Len::to_usize(),
+            "ke1_bytes",
+        )?;
+
+        let ke1_state = <CS::KeyExchange as KeyExchange>::KE1State::from_arr(
+            GenericArray::from_slice(checked_ke1_slice),
         )?;
         let password = bytes[scalar_len + ke1_state_size..].to_vec();
         Ok(Self {
@@ -638,8 +671,8 @@ impl<CS: CipherSuite> ClientLogin<CS> {
     /// byte representation for the client's login state
     pub fn to_bytes(&self) -> Vec<u8> {
         let output: Vec<u8> = [
-            &CS::Group::scalar_as_bytes(&self.blinding_factor)[..],
-            &self.ke1_state.to_bytes(),
+            &<<CS::Group as Group>::Scalar as SizedBytes>::to_arr(&self.blinding_factor)[..],
+            &self.ke1_state.to_arr(),
             &self.password,
         ]
         .concat();
@@ -778,15 +811,20 @@ impl<CS: CipherSuite> ClientLogin<CS> {
 /// The state elements the server holds to record a login
 pub struct ServerLogin<CS: CipherSuite> {
     ke2_state: <CS::KeyExchange as KeyExchange>::KE2State,
-    _cs: PhantomData<CS>,
 }
 
 impl<CS: CipherSuite> TryFrom<&[u8]> for ServerLogin<CS> {
     type Error = ProtocolError;
     fn try_from(bytes: &[u8]) -> Result<Self, Self::Error> {
+        let checked_slice = check_slice_size(
+            bytes,
+            <<CS::KeyExchange as KeyExchange>::KE2State as SizedBytes>::Len::to_usize(),
+            "ke2_state",
+        )?;
         Ok(Self {
-            _cs: PhantomData,
-            ke2_state: <CS::KeyExchange as KeyExchange>::KE2State::try_from(bytes.to_vec())?,
+            ke2_state: <CS::KeyExchange as KeyExchange>::KE2State::from_arr(
+                &GenericArray::from_slice(checked_slice),
+            )?,
         })
     }
 }
@@ -803,7 +841,7 @@ type ServerLoginStartResult<CS> = (
 impl<CS: CipherSuite> ServerLogin<CS> {
     /// byte representation for the server's login state
     pub fn to_bytes(&self) -> Vec<u8> {
-        self.ke2_state.to_bytes()
+        self.ke2_state.to_arr().to_vec()
     }
 
     /// From the client's "blinded"" password, returns a challenge to be
@@ -867,19 +905,12 @@ impl<CS: CipherSuite> ServerLogin<CS> {
 
         let l2 = LoginSecondMessage {
             _key_format: PhantomData,
-            _key_exchange: PhantomData,
             beta,
             envelope,
             ke2_message,
         };
 
-        Ok((
-            l2,
-            Self {
-                _cs: PhantomData,
-                ke2_state,
-            },
-        ))
+        Ok((l2, Self { ke2_state }))
     }
 
     /// From the client's second & final message, check the client's

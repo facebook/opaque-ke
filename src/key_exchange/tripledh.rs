@@ -5,19 +5,21 @@
 
 //! An implementation of the Triple Diffie-Hellman key exchange protocol
 use crate::{
-    errors::{utils::check_slice_size, InternalPakeError, PakeError, ProtocolError},
-    key_exchange::traits::{KeyExchange, ToBytes},
+    errors::{InternalPakeError, PakeError, ProtocolError},
+    key_exchange::traits::KeyExchange,
     keypair::{Key, KeyPair, SizedBytes},
 };
-use generic_array::GenericArray;
+use generic_array::{typenum::U32, GenericArray};
 use hkdf::Hkdf;
 use hmac::{Hmac, Mac, NewMac};
+use opaque_derive::{SizedBytes, TryFromForSizedBytes};
 use rand_core::{CryptoRng, RngCore};
 
 use sha2::{Digest, Sha256};
 use std::convert::TryFrom;
 
 const KEY_LEN: usize = 32;
+pub(crate) type NonceLen = U32;
 pub(crate) const NONCE_LEN: usize = 32;
 const KE1_STATE_LEN: usize = KEY_LEN + KEY_LEN + NONCE_LEN;
 const KE2_MESSAGE_LEN: usize = NONCE_LEN + 2 * KEY_LEN;
@@ -43,11 +45,11 @@ impl KeyExchange for TripleDH {
         rng.fill_bytes(&mut client_nonce);
 
         let ke1_message = KE1Message {
-            client_nonce: client_nonce.to_vec(),
+            client_nonce: GenericArray::clone_from_slice(&client_nonce),
             client_e_pk: client_e_kp.public().clone(),
         };
 
-        let l1_data: Vec<u8> = [&l1_component[..], &ke1_message.to_bytes()].concat();
+        let l1_data: Vec<u8> = [&l1_component[..], &ke1_message.to_arr()].concat();
         let mut hasher = Sha256::new();
         hasher.update(&l1_data);
         let hashed_l1 = hasher.finalize();
@@ -55,8 +57,8 @@ impl KeyExchange for TripleDH {
         Ok((
             KE1State {
                 client_e_sk: client_e_kp.private().clone(),
-                client_nonce: client_nonce.to_vec(),
-                hashed_l1: hashed_l1.to_vec(),
+                client_nonce: GenericArray::clone_from_slice(&client_nonce),
+                hashed_l1,
             },
             ke1_message,
         ))
@@ -84,7 +86,7 @@ impl KeyExchange for TripleDH {
                 sk3: server_e_kp.private().clone(),
             },
             &ke1_message.client_nonce,
-            &server_nonce,
+            GenericArray::<_, <Sha256 as Digest>::OutputSize>::from_slice(&server_nonce),
             client_s_pk,
             KeyFormat::public_from_private(&server_s_sk),
         )?;
@@ -110,14 +112,14 @@ impl KeyExchange for TripleDH {
 
         Ok((
             KE2State {
-                km3: km3.to_vec(),
-                hashed_transcript: hashed_transcript.to_vec(),
-                shared_secret: shared_secret.to_vec(),
+                km3,
+                hashed_transcript,
+                shared_secret,
             },
             KE2Message {
-                server_nonce: server_nonce.to_vec(),
+                server_nonce: GenericArray::clone_from_slice(&server_nonce),
                 server_e_pk: server_e_kp.public().clone(),
-                mac: mac.finalize().into_bytes().to_vec(),
+                mac: mac.finalize().into_bytes(),
             },
         ))
     }
@@ -160,7 +162,7 @@ impl KeyExchange for TripleDH {
             Hmac::<Sha256>::new_varkey(&km2).map_err(|_| InternalPakeError::HmacError)?;
         server_mac.update(&hashed_transcript);
 
-        if ke2_message.mac != server_mac.finalize().into_bytes().to_vec() {
+        if ke2_message.mac != server_mac.finalize().into_bytes() {
             return Err(ProtocolError::VerificationError(
                 PakeError::KeyExchangeMacValidationError,
             ));
@@ -173,7 +175,7 @@ impl KeyExchange for TripleDH {
         Ok((
             shared_secret.to_vec(),
             KE3Message {
-                mac: client_mac.finalize().into_bytes().to_vec(),
+                mac: client_mac.finalize().into_bytes(),
             },
         ))
     }
@@ -186,7 +188,7 @@ impl KeyExchange for TripleDH {
             Hmac::<Sha256>::new_varkey(&ke2_state.km3).map_err(|_| InternalPakeError::HmacError)?;
         client_mac.update(&ke2_state.hashed_transcript);
 
-        if ke3_message.mac != client_mac.finalize().into_bytes().to_vec() {
+        if ke3_message.mac != client_mac.finalize().into_bytes() {
             return Err(ProtocolError::VerificationError(
                 PakeError::KeyExchangeMacValidationError,
             ));
@@ -205,130 +207,34 @@ impl KeyExchange for TripleDH {
 }
 
 /// The client state produced after the first key exchange message
-#[derive(PartialEq, Eq)]
+#[derive(PartialEq, Eq, SizedBytes, TryFromForSizedBytes)]
 pub struct KE1State {
     client_e_sk: Key,
-    client_nonce: Vec<u8>,
-    hashed_l1: Vec<u8>,
+    client_nonce: GenericArray<u8, NonceLen>,
+    hashed_l1: GenericArray<u8, <Sha256 as Digest>::OutputSize>,
 }
 
 /// The first key exchange message
-#[derive(PartialEq, Eq)]
+#[derive(PartialEq, Eq, SizedBytes, TryFromForSizedBytes)]
 pub struct KE1Message {
-    pub(crate) client_nonce: Vec<u8>,
+    pub(crate) client_nonce: GenericArray<u8, NonceLen>,
     pub(crate) client_e_pk: Key,
 }
 
-impl TryFrom<Vec<u8>> for KE1State {
-    type Error = InternalPakeError;
-
-    fn try_from(bytes: Vec<u8>) -> Result<Self, Self::Error> {
-        let checked_bytes = check_slice_size(&bytes, KE1_STATE_LEN, "ke1_state")?;
-
-        Ok(Self {
-            client_e_sk: Key::try_from(&checked_bytes[..KEY_LEN])?,
-            client_nonce: checked_bytes[KEY_LEN..KEY_LEN + NONCE_LEN].to_vec(),
-            hashed_l1: checked_bytes[KEY_LEN + NONCE_LEN..].to_vec(),
-        })
-    }
-}
-
-impl ToBytes for KE1State {
-    fn to_bytes(&self) -> Vec<u8> {
-        let output: Vec<u8> = [
-            &self.client_e_sk.to_arr(),
-            &self.client_nonce[..],
-            &self.hashed_l1[..],
-        ]
-        .concat();
-        output
-    }
-}
-
-impl ToBytes for KE1Message {
-    fn to_bytes(&self) -> Vec<u8> {
-        [&self.client_nonce[..], &self.client_e_pk.to_arr()].concat()
-    }
-}
-
-impl TryFrom<Vec<u8>> for KE1Message {
-    type Error = InternalPakeError;
-
-    fn try_from(ke1_message_bytes: Vec<u8>) -> Result<Self, Self::Error> {
-        let checked_bytes =
-            check_slice_size(&ke1_message_bytes, NONCE_LEN + KEY_LEN, "ke1_message")?;
-
-        Ok(Self {
-            client_nonce: checked_bytes[..NONCE_LEN].to_vec(),
-            client_e_pk: Key::try_from(&checked_bytes[NONCE_LEN..])?,
-        })
-    }
-}
-
 /// The server state produced after the second key exchange message
+#[derive(PartialEq, Eq, SizedBytes, TryFromForSizedBytes)]
 pub struct KE2State {
-    km3: Vec<u8>,
-    hashed_transcript: Vec<u8>,
-    shared_secret: Vec<u8>,
+    km3: GenericArray<u8, <Sha256 as Digest>::OutputSize>,
+    hashed_transcript: GenericArray<u8, <Sha256 as Digest>::OutputSize>,
+    shared_secret: GenericArray<u8, <Sha256 as Digest>::OutputSize>,
 }
 
 /// The second key exchange message
+#[derive(PartialEq, Eq, SizedBytes, TryFromForSizedBytes)]
 pub struct KE2Message {
-    server_nonce: Vec<u8>,
+    server_nonce: GenericArray<u8, NonceLen>,
     server_e_pk: Key,
-    mac: Vec<u8>,
-}
-
-impl ToBytes for KE2State {
-    fn to_bytes(&self) -> Vec<u8> {
-        let output: Vec<u8> = [
-            &self.km3[..],
-            &self.hashed_transcript[..],
-            &self.shared_secret[..],
-        ]
-        .concat();
-        output
-    }
-}
-
-impl TryFrom<Vec<u8>> for KE2State {
-    type Error = ProtocolError;
-
-    fn try_from(ke1_message_bytes: Vec<u8>) -> Result<Self, Self::Error> {
-        let checked_bytes = check_slice_size(&ke1_message_bytes, 3 * KEY_LEN, "ke2_state")?;
-
-        Ok(Self {
-            km3: checked_bytes[..KEY_LEN].to_vec(),
-            hashed_transcript: checked_bytes[KEY_LEN..2 * KEY_LEN].to_vec(),
-            shared_secret: checked_bytes[2 * KEY_LEN..].to_vec(),
-        })
-    }
-}
-
-impl ToBytes for KE2Message {
-    fn to_bytes(&self) -> Vec<u8> {
-        let output: Vec<u8> = [
-            &self.server_nonce[..],
-            &self.server_e_pk.to_arr(),
-            &self.mac[..],
-        ]
-        .concat();
-        output
-    }
-}
-
-impl TryFrom<Vec<u8>> for KE2Message {
-    type Error = ProtocolError;
-
-    fn try_from(ke2_message_bytes: Vec<u8>) -> Result<Self, Self::Error> {
-        let checked_bytes = check_slice_size(&ke2_message_bytes, KE2_MESSAGE_LEN, "ke2_message")?;
-
-        Ok(Self {
-            server_nonce: checked_bytes[..NONCE_LEN].to_vec(),
-            server_e_pk: Key::try_from(&checked_bytes[NONCE_LEN..NONCE_LEN + KEY_LEN])?,
-            mac: checked_bytes[NONCE_LEN + KEY_LEN..].to_vec(),
-        })
-    }
+    mac: GenericArray<u8, <Sha256 as Digest>::OutputSize>,
 }
 
 // The triple of public and private components used in the 3DH computation
@@ -386,24 +292,7 @@ fn derive_3dh_keys<KeyFormat: KeyPair<Repr = Key>>(
 }
 
 /// The third key exchange message
+#[derive(PartialEq, SizedBytes, TryFromForSizedBytes)]
 pub struct KE3Message {
-    mac: Vec<u8>,
-}
-
-impl ToBytes for KE3Message {
-    fn to_bytes(&self) -> Vec<u8> {
-        self.mac.clone()
-    }
-}
-
-impl TryFrom<Vec<u8>> for KE3Message {
-    type Error = ProtocolError;
-
-    fn try_from(bytes: Vec<u8>) -> Result<Self, Self::Error> {
-        let checked_bytes = check_slice_size(&bytes, KEY_LEN, "ke3_message")?;
-
-        Ok(Self {
-            mac: checked_bytes.to_vec(),
-        })
-    }
+    mac: GenericArray<u8, <Sha256 as Digest>::OutputSize>,
 }

@@ -8,7 +8,7 @@ use crate::{
     envelope::Envelope,
     group::Group,
     key_exchange::{
-        traits::{KeyExchange, ToBytes},
+        traits::KeyExchange,
         tripledh::{TripleDH, NONCE_LEN},
     },
     keypair::{KeyPair, SizedBytes, X25519KeyPair},
@@ -16,7 +16,7 @@ use crate::{
 };
 
 use curve25519_dalek::ristretto::RistrettoPoint;
-use generic_array::typenum::Unsigned;
+use generic_array::{typenum::Unsigned, GenericArray};
 use rand_core::{OsRng, RngCore};
 
 use sha2::{Digest, Sha256};
@@ -164,7 +164,8 @@ fn login_first_message_roundtrip() {
     rng.fill_bytes(&mut client_nonce);
 
     let ke1m: Vec<u8> = [&client_nonce[..], &client_e_kp.public()].concat();
-    let reg = <TripleDH as KeyExchange>::KE1Message::try_from(ke1m[..].to_vec()).unwrap();
-    let reg_bytes = reg.to_bytes();
+    let reg =
+        <TripleDH as KeyExchange>::KE1Message::from_arr(GenericArray::from_slice(&ke1m)).unwrap();
+    let reg_bytes = reg.to_arr().to_vec();
     assert_eq!(reg_bytes, ke1m);
 }

@@ -74,7 +74,7 @@ impl Envelope {
         Ok(Self::new(
             bytes[..ciphertext_start].to_vec(),
             bytes[ciphertext_start..ciphertext_end].to_vec(),
-            GenericArray::clone_from_slice(&bytes[ciphertext_end..]),
+            *GenericArray::from_slice(&bytes[ciphertext_end..]),
         ))
     }
 

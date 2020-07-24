@@ -6,11 +6,7 @@
 //! Contains the keypair types that must be supplied for the OPAQUE API
 
 use crate::errors::InternalPakeError;
-use generic_array::{
-    sequence::{Concat, Split},
-    typenum::{Diff, Sum, Unsigned, U32},
-    ArrayLength, GenericArray,
-};
+use generic_array::{typenum::U32, ArrayLength, GenericArray};
 use opaque_derive::{SizedBytes, TryFromForSizedBytes};
 #[cfg(test)]
 use proptest::prelude::*;
@@ -22,7 +18,7 @@ use x25519_dalek::{PublicKey, StaticSecret};
 
 use std::convert::TryFrom;
 
-use std::ops::{Add, Deref, Sub};
+use std::ops::Deref;
 
 /// A trait for sized key material that can be represented within a fixed byte
 /// array size, used to represent our DH key types. This trait being
@@ -40,6 +36,17 @@ pub trait SizedBytes: Sized + PartialEq {
 
     /// How to parse such sized material from a correctly-sized byte slice.
     fn from_arr(arr: &GenericArray<u8, Self::Len>) -> Result<Self, InternalPakeError>;
+}
+
+/// The blanket implementation of SizedBytes for GenericArray
+impl<N: ArrayLength<u8>> SizedBytes for GenericArray<u8, N> {
+    type Len = N;
+    fn to_arr(&self) -> GenericArray<u8, Self::Len> {
+        self.clone()
+    }
+    fn from_arr(arr: &GenericArray<u8, Self::Len>) -> Result<Self, InternalPakeError> {
+        Ok(arr.clone())
+    }
 }
 
 /// A Keypair trait with public-private verification
@@ -95,36 +102,6 @@ trait KeyPairExt: KeyPair + Debug {
 #[cfg(test)]
 impl<KP> KeyPairExt for KP where KP: KeyPair + Debug {}
 
-/// This is a blanket implementation of SizedBytes for any instance of KeyPair
-/// with any length of keys. This encodes that both keys have the same size,
-/// and that we serialize the public key first, followed by the private key in
-/// binary formats (and expect it in this order upon decoding).
-impl<T, KP> SizedBytes for KP
-where
-    T: SizedBytes + Clone + for<'a> TryFrom<&'a [u8], Error = InternalPakeError>,
-    KP: KeyPair<Repr = T> + PartialEq,
-    T::Len: Add<T::Len>,
-    Sum<T::Len, T::Len>: ArrayLength<u8>,
-    Sum<T::Len, T::Len>: Sub<T::Len, Output = T::Len>,
-    Diff<Sum<T::Len, T::Len>, T::Len>: ArrayLength<u8>,
-{
-    type Len = Sum<T::Len, T::Len>;
-
-    fn to_arr(&self) -> GenericArray<u8, Self::Len> {
-        let private = self.private().to_arr();
-        let public = self.public().to_arr();
-        public.concat(private)
-    }
-
-    fn from_arr(arr: &GenericArray<u8, Self::Len>) -> Result<Self, InternalPakeError> {
-        let (public_key, private_key): (GenericArray<u8, T::Len>, GenericArray<u8, _>) =
-            GenericArray::split(arr.clone());
-        let public = <T as SizedBytes>::from_arr(&public_key)?;
-        let private = <T as SizedBytes>::from_arr(&private_key)?;
-        KP::new(public, private)
-    }
-}
-
 /// A minimalist key type built around [u8;32]
 #[derive(Debug, PartialEq, Eq, Clone, TryFromForSizedBytes)]
 #[repr(transparent)]
@@ -142,7 +119,7 @@ impl SizedBytes for Key {
     type Len = U32;
 
     fn to_arr(&self) -> GenericArray<u8, Self::Len> {
-        GenericArray::clone_from_slice(&self.0[..])
+        *GenericArray::from_slice(&self.0[..])
     }
 
     fn from_arr(arr: &GenericArray<u8, Self::Len>) -> Result<Self, InternalPakeError> {
@@ -151,7 +128,7 @@ impl SizedBytes for Key {
 }
 
 /// A representation of an X25519 keypair according to RFC7748
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, SizedBytes)]
 pub struct X25519KeyPair {
     pk: Key,
     sk: Key,

@@ -4,19 +4,17 @@
 // LICENSE file in the root directory of this source tree.
 
 use crate::{
-    errors::{InternalPakeError, ProtocolError},
-    keypair::{Key, KeyPair},
+    errors::ProtocolError,
+    keypair::{Key, KeyPair, SizedBytes},
 };
 use rand_core::{CryptoRng, RngCore};
 
-use std::convert::TryFrom;
-
 pub trait KeyExchange {
-    type KE1State: TryFrom<Vec<u8>, Error = InternalPakeError> + ToBytes;
-    type KE2State: TryFrom<Vec<u8>, Error = ProtocolError> + ToBytes;
-    type KE1Message: TryFrom<Vec<u8>, Error = InternalPakeError> + ToBytes;
-    type KE2Message: TryFrom<Vec<u8>, Error = ProtocolError> + ToBytes;
-    type KE3Message: TryFrom<Vec<u8>, Error = ProtocolError> + ToBytes;
+    type KE1State: SizedBytes;
+    type KE2State: SizedBytes;
+    type KE1Message: SizedBytes;
+    type KE2Message: SizedBytes;
+    type KE3Message: SizedBytes;
 
     fn generate_ke1<R: RngCore + CryptoRng, KeyFormat: KeyPair<Repr = Key>>(
         l1_component: Vec<u8>,
@@ -48,8 +46,4 @@ pub trait KeyExchange {
     fn ke1_state_size() -> usize;
 
     fn ke2_message_size() -> usize;
-}
-
-pub trait ToBytes {
-    fn to_bytes(&self) -> Vec<u8>;
 }
