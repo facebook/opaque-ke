@@ -27,6 +27,7 @@ impl CipherSuite for Default {
     type Group = RistrettoPoint;
     type KeyFormat = crate::keypair::X25519KeyPair;
     type KeyExchange = TripleDH;
+    type Hash = sha2::Sha256;
     type SlowHash = crate::slow_hash::NoOpHash;
 }
 
@@ -71,7 +72,7 @@ fn server_registration_roundtrip() {
     // the whole kit
     let key_len =
         <<<Default as CipherSuite>::KeyFormat as KeyPair>::Repr as SizedBytes>::Len::to_usize();
-    let envelope_size = key_len + Envelope::additional_size();
+    let envelope_size = key_len + Envelope::<sha2::Sha256>::additional_size();
     let mut mock_envelope_bytes = vec![0u8; envelope_size];
     rng.fill_bytes(&mut mock_envelope_bytes);
     println!("{}", mock_envelope_bytes.len());
@@ -118,10 +119,11 @@ fn register_third_message_roundtrip() {
     let mut msg = [0u8; 32];
     rng.fill_bytes(&mut msg);
 
-    let (ciphertext, _) = Envelope::seal(&key, &msg, &pubkey_bytes, &mut rng).unwrap();
+    let (ciphertext, _) =
+        Envelope::<sha2::Sha256>::seal(&key, &msg, &pubkey_bytes, &mut rng).unwrap();
 
     let message: Vec<u8> = [&ciphertext.to_bytes(), &pubkey_bytes[..]].concat();
-    let r3 = RegisterThirdMessage::<X25519KeyPair>::try_from(&message[..]).unwrap();
+    let r3 = RegisterThirdMessage::<X25519KeyPair, sha2::Sha256>::try_from(&message[..]).unwrap();
     let r3_bytes = r3.to_bytes();
     assert_eq!(message, r3_bytes);
 }
@@ -164,7 +166,8 @@ fn login_first_message_roundtrip() {
     rng.fill_bytes(&mut client_nonce);
 
     let ke1m: Vec<u8> = [&client_nonce[..], &client_e_kp.public()].concat();
-    let reg = <TripleDH as KeyExchange>::KE1Message::try_from(ke1m[..].to_vec()).unwrap();
+    let reg =
+        <TripleDH as KeyExchange<sha2::Sha256>>::KE1Message::try_from(ke1m[..].to_vec()).unwrap();
     let reg_bytes = reg.to_bytes();
     assert_eq!(reg_bytes, ke1m);
 }

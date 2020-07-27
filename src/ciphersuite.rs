@@ -7,6 +7,7 @@
 
 use crate::{
     errors::InternalPakeError,
+    hash::Hash,
     key_exchange::traits::KeyExchange,
     keypair::{Key, KeyPair},
     map_to_curve::GroupWithMapToCurve,
@@ -22,7 +23,8 @@ use rand_core::{CryptoRng, RngCore};
 ///   `map_to_curve::GroupWithMapToCurve`.
 /// * `KeyFormat`: a keypair type composed of public and private components
 /// * `KeyExchange`: The key exchange protocol to use in the login step
-/// * `SlowHash`: a slow hashing function, typically used for password hashing
+/// * `Hash`: The main hashing function to use
+/// * `SlowHash`: A slow hashing function, typically used for password hashing
 pub trait CipherSuite {
     /// A finite cyclic group along with a point representation along with
     /// an extension trait PasswordToCurve that allows some customization on
@@ -32,10 +34,11 @@ pub trait CipherSuite {
     /// A keypair type composed of public and private components
     type KeyFormat: KeyPair<Repr = Key> + PartialEq;
     /// A key exchange protocol
-    type KeyExchange: KeyExchange;
+    type KeyExchange: KeyExchange<Self::Hash>;
+    /// The main hash function use (for HKDF computations and hashing transcripts)
+    type Hash: Hash;
     /// A slow hashing function, typically used for password hashing
-    type SlowHash: SlowHash;
-
+    type SlowHash: SlowHash<Self::Hash>;
     /// Generating a random key pair given a cryptographic rng
     fn generate_random_keypair<R: RngCore + CryptoRng>(
         rng: &mut R,
