@@ -412,6 +412,7 @@ pub mod opaque;
 pub mod ciphersuite;
 mod envelope;
 mod hash;
+mod serialization;
 
 pub mod group;
 pub mod map_to_curve;
