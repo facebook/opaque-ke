@@ -3,9 +3,11 @@
 // This source code is licensed under the MIT license found in the
 // LICENSE file in the root directory of this source tree.
 
-use crate::errors::{InternalPakeError, ProtocolError};
-use crate::hash::Hash;
-use crate::serialization::{serialize, tokenize};
+use crate::{
+    errors::{InternalPakeError, ProtocolError},
+    hash::Hash,
+    serialization::{serialize, tokenize},
+};
 use digest::Digest;
 use generic_array::{
     typenum::{Unsigned, U32},
