@@ -5,8 +5,7 @@
 
 //! Trait specifying a slow hashing function
 
-use crate::errors::InternalPakeError;
-use crate::hash::Hash;
+use crate::{errors::InternalPakeError, hash::Hash};
 use digest::Digest;
 use generic_array::GenericArray;
 

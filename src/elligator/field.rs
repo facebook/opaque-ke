@@ -7,15 +7,12 @@
 //! Field arithmetic modulo \\(p = 2\^{255} - 19\\), using \\(64\\)-bit
 //! limbs with \\(128\\)-bit products.
 
-use core::fmt::Debug;
-use core::ops::Neg;
-use core::ops::{Add, AddAssign};
-use core::ops::{Mul, MulAssign};
+use core::{
+    fmt::Debug,
+    ops::{Add, AddAssign, Mul, MulAssign, Neg},
+};
 
-use subtle::Choice;
-use subtle::ConditionallyNegatable;
-use subtle::ConditionallySelectable;
-use subtle::ConstantTimeEq;
+use subtle::{Choice, ConditionallyNegatable, ConditionallySelectable, ConstantTimeEq};
 
 use zeroize::Zeroize;
 

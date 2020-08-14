@@ -412,7 +412,6 @@ pub mod opaque;
 pub mod ciphersuite;
 mod envelope;
 mod hash;
-mod serialization;
 
 mod elligator;
 pub mod group;
@@ -428,6 +427,8 @@ pub mod oprf;
 mod oprf;
 
 pub mod slow_hash;
+
+mod serialization;
 
 #[cfg(test)]
 mod tests;
