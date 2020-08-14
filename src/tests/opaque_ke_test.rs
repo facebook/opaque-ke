@@ -558,10 +558,12 @@ fn test_complete_flow(
             hex::encode(login_opaque_key)
         );
     } else {
-        let res = match client_login_result {
-            Err(ProtocolError::VerificationError(PakeError::InvalidLoginError)) => true,
-            _ => false,
-        };
+        let res = matches!(
+            client_login_result,
+            Err(ProtocolError::VerificationError(
+                PakeError::InvalidLoginError
+            ))
+        );
         assert!(res);
     }
 

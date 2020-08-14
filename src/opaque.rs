@@ -15,19 +15,13 @@ use crate::{
     keypair::{Key, KeyPair, SizedBytes},
     oprf,
     oprf::OprfClientBytes,
-    serialization::{serialize, tokenize},
+    serialization::{serialize, tokenize, ProtocolMessageType},
     slow_hash::SlowHash,
 };
 use generic_array::{typenum::Unsigned, GenericArray};
 use rand_core::{CryptoRng, RngCore};
 use std::{convert::TryFrom, marker::PhantomData};
 use zeroize::Zeroize;
-
-const REGISTRATION_REQUEST: u8 = 0x01;
-const REGISTRATION_RESPONSE: u8 = 0x02;
-const REGISTRATION_UPLOAD: u8 = 0x03;
-const CREDENTIAL_REQUEST: u8 = 0x04;
-const CREDENTIAL_RESPONSE: u8 = 0x05;
 
 const CREDENTIAL_TYPE_SKU: u8 = 0x01;
 const CREDENTIAL_TYPE_PKS: u8 = 0x03;
@@ -67,14 +61,14 @@ impl<Grp: Group> RegisterFirstMessage<Grp> {
         registration_request.extend_from_slice(&serialize((&self.to_bytes()).to_vec(), 2));
 
         let mut output: Vec<u8> = Vec::new();
-        output.push(REGISTRATION_REQUEST);
+        output.push(ProtocolMessageType::from(self) as u8 + 1);
         output.extend_from_slice(&serialize(registration_request, 3));
         output
     }
 
     /// Deserialization from bytes
     pub fn deserialize(input: &[u8]) -> Result<Self, ProtocolError> {
-        if input[0] != REGISTRATION_REQUEST {
+        if input[0] != ProtocolMessageType::RegistrationRequest as u8 + 1 {
             return Err(PakeError::SerializationError.into());
         }
 
@@ -141,14 +135,14 @@ where
         registration_response.extend_from_slice(&serialize(vec![CREDENTIAL_TYPE_PKS], 1));
 
         let mut output: Vec<u8> = Vec::new();
-        output.push(REGISTRATION_RESPONSE);
+        output.push(ProtocolMessageType::from(self) as u8 + 1);
         output.extend_from_slice(&serialize(registration_response, 3));
         output
     }
 
     /// Deserialization from bytes
     pub fn deserialize(input: &[u8]) -> Result<Self, ProtocolError> {
-        if input[0] != REGISTRATION_RESPONSE {
+        if input[0] != ProtocolMessageType::RegistrationResponse as u8 + 1 {
             return Err(PakeError::SerializationError.into());
         }
 
@@ -220,14 +214,14 @@ where
         registration_upload.extend_from_slice(&serialize(self.client_s_pk.to_arr().to_vec(), 2));
 
         let mut output: Vec<u8> = Vec::new();
-        output.push(REGISTRATION_UPLOAD);
+        output.push(ProtocolMessageType::from(self) as u8 + 1);
         output.extend_from_slice(&serialize(registration_upload, 3));
         output
     }
 
     /// Deserialization from bytes
     pub fn deserialize(input: &[u8]) -> Result<Self, ProtocolError> {
-        if input[0] != REGISTRATION_UPLOAD {
+        if input[0] != ProtocolMessageType::RegistrationUpload as u8 + 1 {
             return Err(PakeError::SerializationError.into());
         }
 
@@ -286,7 +280,7 @@ impl<CS: CipherSuite> LoginFirstMessage<CS> {
         credential_request.extend_from_slice(&serialize((&self.alpha.to_arr()).to_vec(), 2));
 
         let mut output: Vec<u8> = Vec::new();
-        output.push(CREDENTIAL_REQUEST);
+        output.push(ProtocolMessageType::from(self) as u8 + 1);
         output.extend_from_slice(&serialize(credential_request, 3));
         output.extend_from_slice(&self.ke1_message.to_bytes());
         output
@@ -294,7 +288,7 @@ impl<CS: CipherSuite> LoginFirstMessage<CS> {
 
     /// Deserialization from bytes
     pub fn deserialize(input: &[u8]) -> Result<Self, ProtocolError> {
-        if input[0] != CREDENTIAL_REQUEST {
+        if input[0] != ProtocolMessageType::CredentialRequest as u8 + 1 {
             return Err(PakeError::SerializationError.into());
         }
 
@@ -344,7 +338,7 @@ where
         credential_response.extend_from_slice(&serialize(Vec::new(), 2));
 
         let mut output: Vec<u8> = Vec::new();
-        output.push(CREDENTIAL_RESPONSE);
+        output.push(ProtocolMessageType::from(self) as u8 + 1);
         output.extend_from_slice(&serialize(credential_response, 3));
         output.extend_from_slice(&self.ke2_message.to_bytes());
         output
@@ -352,7 +346,7 @@ where
 
     /// Deserialization from bytes
     pub fn deserialize(input: &[u8]) -> Result<Self, ProtocolError> {
-        if input[0] != CREDENTIAL_RESPONSE {
+        if input[0] != ProtocolMessageType::CredentialResponse as u8 + 1 {
             return Err(PakeError::SerializationError.into());
         }
 
