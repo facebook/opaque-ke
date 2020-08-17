@@ -5,4 +5,3 @@
 
 pub mod mock_rng;
 mod opaque_ke_test;
-mod serialization;
