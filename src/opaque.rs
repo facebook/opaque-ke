@@ -15,12 +15,15 @@ use crate::{
     keypair::{Key, KeyPair, SizedBytes},
     oprf,
     oprf::OprfClientBytes,
+    serialization::{serialize, tokenize},
     slow_hash::SlowHash,
 };
 use generic_array::{typenum::Unsigned, GenericArray};
 use rand_core::{CryptoRng, RngCore};
 use std::{convert::TryFrom, marker::PhantomData};
 use zeroize::Zeroize;
+
+const REGISTRATION_REQUEST: u8 = 0x01;
 
 // Messages
 // =========
@@ -33,10 +36,10 @@ pub struct RegisterFirstMessage<Grp> {
 
 impl<Grp: Group> TryFrom<&[u8]> for RegisterFirstMessage<Grp> {
     type Error = ProtocolError;
-    fn try_from(first_message_bytes: &[u8]) -> Result<Self, Self::Error> {
+    fn try_from(input: &[u8]) -> Result<Self, Self::Error> {
         // Check that the message is actually containing an element of the
         // correct subgroup
-        let arr = GenericArray::from_slice(first_message_bytes);
+        let arr = GenericArray::from_slice(&input);
         let alpha = Grp::from_element_slice(arr)?;
         Ok(Self { alpha })
     }
@@ -44,8 +47,43 @@ impl<Grp: Group> TryFrom<&[u8]> for RegisterFirstMessage<Grp> {
 
 impl<Grp: Group> RegisterFirstMessage<Grp> {
     /// byte representation for the registration request
-    pub fn to_bytes(&self) -> GenericArray<u8, Grp::ElemLen> {
+    fn to_bytes(&self) -> GenericArray<u8, Grp::ElemLen> {
         self.alpha.to_arr()
+    }
+}
+
+impl<Grp: Group> RegisterFirstMessage<Grp> {
+    /// Serialization into bytes
+    pub fn serialize(&self) -> Vec<u8> {
+        let mut registration_request: Vec<u8> = Vec::new();
+        registration_request.extend_from_slice(&serialize(Vec::new(), 2));
+        registration_request.extend_from_slice(&serialize((&self.to_bytes()).to_vec(), 2));
+
+        let mut output: Vec<u8> = Vec::new();
+        output.push(REGISTRATION_REQUEST);
+        output.extend_from_slice(&serialize(registration_request, 3));
+        output
+    }
+
+    /// Deserialization from bytes
+    pub fn deserialize(input: &[u8]) -> Result<Self, ProtocolError> {
+        if input[0] != REGISTRATION_REQUEST {
+            return Err(PakeError::SerializationError.into());
+        }
+
+        let (data, remainder) = tokenize(input[1..].to_vec(), 3)?;
+        if !remainder.is_empty() {
+            return Err(PakeError::SerializationError.into());
+        }
+
+        let (_, remainder) = tokenize(data, 2)?;
+        let (alpha_bytes, remainder) = tokenize(remainder, 2)?;
+
+        if !remainder.is_empty() {
+            return Err(PakeError::SerializationError.into());
+        }
+
+        Self::try_from(&alpha_bytes[..])
     }
 }
 

@@ -80,7 +80,7 @@ static TEST_VECTOR: &str = r#"
     "envelope_nonce": "acca14c1d5f7f5843812ad61",
     "client_nonce": "db2c06ad77d6d6b73170cb26c082c3fea77c64201b021f3d22f477bd5fd4cf9b",
     "server_nonce": "861dbe0a824fc9a6ebc90a798dd5827888c30c8f8f79c361fb487db5b9a65586",
-    "r1": "3b12967295493838ce743c3fa5e3da39d13589aacad2cb67792df9e99dbefff3",
+    "r1": "01000024000000203b12967295493838ce743c3fa5e3da39d13589aacad2cb67792df9e99dbefff3",
     "r2": "4cce303b33ed400fc60cdaa9d314021c9a9a1c29faab56ede9fc580bdb0287c3",
     "r3": "acca14c1d5f7f5843812ad61f0804c53de3fce8c9a6bcccb3380a1427c578a2f4df43147c5396441be3dee47f441e6cb56eca2cf7e25cc94ef233b2f1d3b0e64142d3d40fc61226627bca32c331dc00b9e9e795a1cfb0377d3a79f565307e1074374a0bf4f5f4353c20337574bdc69e6cff18a36e3fd8fe89fe47e02bab06e37",
     "l1": "3b12967295493838ce743c3fa5e3da39d13589aacad2cb67792df9e99dbefff3db2c06ad77d6d6b73170cb26c082c3fea77c64201b021f3d22f477bd5fd4cf9bb45316eaa2d87ac1ed5c28b54ed43578fc54d4beb673b748159cea7536215819",
@@ -248,7 +248,7 @@ fn generate_parameters<CS: CipherSuite>() -> TestVectorParameters {
         &mut blinding_factor_registration_rng,
     )
     .unwrap();
-    let r1_bytes = r1.to_bytes().to_vec();
+    let r1_bytes = r1.serialize().to_vec();
     let blinding_factor_bytes =
         CS::Group::scalar_as_bytes(&client_registration.blinding_factor).clone();
     let client_registration_state = client_registration.to_bytes().to_vec();
@@ -349,7 +349,7 @@ fn test_r1() -> Result<(), PakeError> {
         &mut blinding_factor_rng,
     )
     .unwrap();
-    assert_eq!(hex::encode(&parameters.r1), hex::encode(r1.to_bytes()));
+    assert_eq!(hex::encode(&parameters.r1), hex::encode(r1.serialize()));
     assert_eq!(
         hex::encode(&parameters.client_registration_state),
         hex::encode(client_registration.to_bytes())
@@ -362,7 +362,7 @@ fn test_r2() -> Result<(), PakeError> {
     let parameters = populate_test_vectors(&serde_json::from_str(TEST_VECTOR).unwrap());
     let mut oprf_key_rng = CycleRng::new(parameters.oprf_key);
     let (r2, server_registration) = ServerRegistration::<X255193dhNoSlowHash>::start(
-        RegisterFirstMessage::try_from(&parameters.r1[..]).unwrap(),
+        RegisterFirstMessage::deserialize(&parameters.r1[..]).unwrap(),
         &mut oprf_key_rng,
     )
     .unwrap();
