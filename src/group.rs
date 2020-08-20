@@ -131,9 +131,14 @@ impl Group for EdwardsPoint {
     fn from_element_slice(
         element_bits: &GenericArray<u8, Self::ElemLen>,
     ) -> Result<Self, InternalPakeError> {
-        CompressedEdwardsY::from_slice(element_bits)
+        let point = CompressedEdwardsY::from_slice(element_bits)
             .decompress()
-            .ok_or_else(|| InternalPakeError::PointError)
+            .ok_or_else(|| InternalPakeError::PointError)?;
+
+        if point.is_small_order() {
+            return Err(InternalPakeError::SubGroupError);
+        }
+        Ok(point)
     }
     // serialization of a group element
     fn to_arr(&self) -> GenericArray<u8, Self::ElemLen> {
@@ -162,5 +167,64 @@ impl Group for EdwardsPoint {
         wrapped_point
             .expect("guarded by loop exit condition")
             .mul_by_cofactor()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use anyhow::{anyhow, Result};
+
+    const EIGHT_TORSION: [[u8; 32]; 8] = [
+        [
+            1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0,
+        ],
+        [
+            199, 23, 106, 112, 61, 77, 216, 79, 186, 60, 11, 118, 13, 16, 103, 15, 42, 32, 83, 250,
+            44, 57, 204, 198, 78, 199, 253, 119, 146, 172, 3, 122,
+        ],
+        [
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 128,
+        ],
+        [
+            38, 232, 149, 143, 194, 178, 39, 176, 69, 195, 244, 137, 242, 239, 152, 240, 213, 223,
+            172, 5, 211, 198, 51, 57, 177, 56, 2, 136, 109, 83, 252, 5,
+        ],
+        [
+            236, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+            255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 127,
+        ],
+        [
+            38, 232, 149, 143, 194, 178, 39, 176, 69, 195, 244, 137, 242, 239, 152, 240, 213, 223,
+            172, 5, 211, 198, 51, 57, 177, 56, 2, 136, 109, 83, 252, 133,
+        ],
+        [
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0,
+        ],
+        [
+            199, 23, 106, 112, 61, 77, 216, 79, 186, 60, 11, 118, 13, 16, 103, 15, 42, 32, 83, 250,
+            44, 57, 204, 198, 78, 199, 253, 119, 146, 172, 3, 250,
+        ],
+    ];
+
+    fn deserialize_point(pt: &[u8]) -> Result<EdwardsPoint> {
+        let mut bytes = [0u8; 32];
+        bytes.copy_from_slice(&pt[..32]);
+
+        curve25519_dalek::edwards::CompressedEdwardsY(bytes)
+            .decompress()
+            .ok_or_else(|| anyhow!("Point decompression failed!"))
+    }
+
+    #[test]
+    fn test_small_subgroup_edwards() {
+        for i in 0..8 {
+            let pt = &EIGHT_TORSION[i][..];
+            assert!(deserialize_point(&pt).is_ok());
+            assert!(EdwardsPoint::from_element_slice(GenericArray::from_slice(&pt)).is_err());
+        }
     }
 }
