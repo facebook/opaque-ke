@@ -316,7 +316,7 @@ impl<CS: CipherSuite> LoginFirstMessage<CS> {
 /// login attempt.
 pub struct LoginSecondMessage<Grp, KeyFormat, KE, D>
 where
-    KeyFormat: KeyPair<Repr = Key>,
+    KeyFormat: KeyPair,
     KE: KeyExchange<D>,
     D: Hash,
 {
@@ -332,7 +332,7 @@ where
 impl<Grp, KeyFormat, KE, D> LoginSecondMessage<Grp, KeyFormat, KE, D>
 where
     Grp: Group,
-    KeyFormat: KeyPair<Repr = Key>,
+    KeyFormat: KeyPair,
     KE: KeyExchange<D>,
     D: Hash,
 {
@@ -374,7 +374,7 @@ where
 impl<Grp, KeyFormat, KE, D> TryFrom<&[u8]> for LoginSecondMessage<Grp, KeyFormat, KE, D>
 where
     Grp: Group,
-    KeyFormat: KeyPair<Repr = Key>,
+    KeyFormat: KeyPair,
     KE: KeyExchange<D>,
     D: Hash,
 {
