@@ -23,6 +23,7 @@ pub enum ProtocolMessageType {
     CredentialResponse,
 }
 
+#[allow(dead_code)]
 pub enum CredentialType {
     SkU,
     PkU,
