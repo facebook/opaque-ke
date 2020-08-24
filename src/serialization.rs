@@ -128,21 +128,27 @@ mod tests {
         let mut input = Vec::new();
         input.extend_from_slice(&header);
         input.extend_from_slice(pt_bytes.as_slice());
+
         let r1 = RegisterFirstMessage::<RistrettoPoint>::deserialize(input.as_slice()).unwrap();
         let r1_bytes = r1.serialize();
-        assert_eq!(header[..], r1_bytes[..header.len()]);
-        assert_eq!(pt_bytes[..], r1_bytes[header.len()..]);
+        assert_eq!(input, r1_bytes);
     }
 
     #[test]
     fn register_second_message_roundtrip() {
         let pt = random_ristretto_point();
         let pt_bytes = pt.to_arr();
+        let header = [2, 0, 0, 40, 0, 32];
+        let tail = [0, 0, 1, 1, 1, 3];
 
-        let message = pt_bytes.to_vec();
-        let r2 = RegisterSecondMessage::<RistrettoPoint>::try_from(&message[..]).unwrap();
-        let r2_bytes = r2.to_bytes();
-        assert_eq!(message, r2_bytes);
+        let mut input = Vec::new();
+        input.extend_from_slice(&header);
+        input.extend_from_slice(pt_bytes.as_slice());
+        input.extend_from_slice(&tail);
+
+        let r2 = RegisterSecondMessage::<RistrettoPoint>::deserialize(input.as_slice()).unwrap();
+        let r2_bytes = r2.serialize();
+        assert_eq!(input, r2_bytes);
     }
 
     #[test]
@@ -151,20 +157,101 @@ mod tests {
         let skp = Default::generate_random_keypair(&mut rng).unwrap();
         let pubkey_bytes = skp.public().to_arr();
 
+        let header = [3, 0, 0, 136];
+        let intermediate = [0, 32];
+
         let mut key = [0u8; 32];
         rng.fill_bytes(&mut key);
 
         let mut msg = [0u8; 32];
         rng.fill_bytes(&mut msg);
 
-        let (ciphertext, _) =
+        let (envelope, _) =
             Envelope::<sha2::Sha256>::seal(&key, &msg, &pubkey_bytes, &mut rng).unwrap();
 
-        let message: Vec<u8> = [&ciphertext.to_bytes(), &pubkey_bytes[..]].concat();
+        let mut input = Vec::new();
+        input.extend_from_slice(&header);
+        input.extend_from_slice(&envelope.serialize());
+        input.extend_from_slice(&intermediate);
+        input.extend_from_slice(&pubkey_bytes[..]);
+
         let r3 =
-            RegisterThirdMessage::<X25519KeyPair, sha2::Sha256>::try_from(&message[..]).unwrap();
-        let r3_bytes = r3.to_bytes();
-        assert_eq!(message, r3_bytes);
+            RegisterThirdMessage::<X25519KeyPair, sha2::Sha256>::deserialize(&input[..]).unwrap();
+        let r3_bytes = r3.serialize();
+        assert_eq!(input, r3_bytes);
+    }
+
+    #[test]
+    fn login_first_message_roundtrip() {
+        let pt = random_ristretto_point();
+        let pt_bytes = pt.to_arr().to_vec();
+        let header = [4, 0, 0, 36, 0, 0, 0, 32];
+
+        let mut rng = OsRng;
+
+        let client_e_kp = Default::generate_random_keypair(&mut rng).unwrap();
+        let mut client_nonce = [0u8; NONCE_LEN];
+        rng.fill_bytes(&mut client_nonce);
+
+        let ke1m: Vec<u8> = [&client_nonce[..], &client_e_kp.public()].concat();
+
+        let mut input = Vec::new();
+        input.extend_from_slice(&header);
+        input.extend_from_slice(pt_bytes.as_slice());
+        input.extend_from_slice(&ke1m[..]);
+
+        let l1 = LoginFirstMessage::<Default>::deserialize(input.as_slice()).unwrap();
+        let l1_bytes = l1.serialize();
+        assert_eq!(input, l1_bytes);
+    }
+
+    #[test]
+    fn login_second_message_roundtrip() {
+        let pt = random_ristretto_point();
+        let pt_bytes = pt.to_arr().to_vec();
+        let header = [5, 0, 0, 134, 0, 32];
+
+        let mut rng = OsRng;
+        let skp = Default::generate_random_keypair(&mut rng).unwrap();
+        let pubkey_bytes = skp.public().to_arr();
+
+        let intermediate1 = [0, 96];
+        let intermediate2 = [0, 0];
+
+        let mut key = [0u8; 32];
+        rng.fill_bytes(&mut key);
+
+        let mut msg = [0u8; 32];
+        rng.fill_bytes(&mut msg);
+
+        let (envelope, _) =
+            Envelope::<sha2::Sha256>::seal(&key, &msg, &pubkey_bytes, &mut rng).unwrap();
+
+        let server_e_kp = Default::generate_random_keypair(&mut rng).unwrap();
+        let mut mac = [0u8; 32];
+        rng.fill_bytes(&mut mac);
+        let mut server_nonce = [0u8; NONCE_LEN];
+        rng.fill_bytes(&mut server_nonce);
+
+        let ke2m: Vec<u8> = [&server_nonce[..], &server_e_kp.public(), &mac[..]].concat();
+
+        let mut input = Vec::new();
+        input.extend_from_slice(&header);
+        input.extend_from_slice(pt_bytes.as_slice());
+        input.extend_from_slice(&intermediate1[..]);
+        input.extend_from_slice(&envelope.to_bytes());
+        input.extend_from_slice(&intermediate2[..]);
+        input.extend_from_slice(&ke2m[..]);
+
+        let l2 = LoginSecondMessage::<
+            RistrettoPoint,
+            crate::keypair::X25519KeyPair,
+            TripleDH,
+            sha2::Sha256,
+        >::deserialize(input.as_slice())
+        .unwrap();
+        let l2_bytes = l2.serialize();
+        assert_eq!(input, l2_bytes);
     }
 
     #[test]
@@ -197,7 +284,7 @@ mod tests {
     }
 
     #[test]
-    fn login_first_message_roundtrip() {
+    fn ke1_message_roundtrip() {
         let mut rng = OsRng;
 
         let client_e_kp = Default::generate_random_keypair(&mut rng).unwrap();
