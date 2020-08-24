@@ -15,16 +15,13 @@ use crate::{
     keypair::{KeyPair, SizedBytes},
     oprf,
     oprf::OprfClientBytes,
-    serialization::{serialize, tokenize, ProtocolMessageType},
+    serialization::{serialize, tokenize, CredentialType, ProtocolMessageType},
     slow_hash::SlowHash,
 };
 use generic_array::{typenum::Unsigned, GenericArray};
 use rand_core::{CryptoRng, RngCore};
 use std::{convert::TryFrom, marker::PhantomData};
 use zeroize::Zeroize;
-
-const CREDENTIAL_TYPE_SKU: u8 = 0x01;
-const CREDENTIAL_TYPE_PKS: u8 = 0x03;
 
 // Messages
 // =========
@@ -136,8 +133,8 @@ where
         registration_response.extend_from_slice(&serialize(Vec::new(), 2));
 
         // TODO: The following should not be hardcoded, but instead be customizable
-        registration_response.extend_from_slice(&serialize(vec![CREDENTIAL_TYPE_SKU], 1));
-        registration_response.extend_from_slice(&serialize(vec![CREDENTIAL_TYPE_PKS], 1));
+        registration_response.extend_from_slice(&[1u8, CredentialType::SkU as u8 + 1]);
+        registration_response.extend_from_slice(&[1u8, CredentialType::PkS as u8 + 1]);
 
         let mut output: Vec<u8> = Vec::new();
         output.push(ProtocolMessageType::from(self) as u8 + 1);
