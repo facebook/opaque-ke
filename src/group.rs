@@ -221,10 +221,9 @@ mod tests {
 
     #[test]
     fn test_small_subgroup_edwards() {
-        for i in 0..8 {
-            let pt = &EIGHT_TORSION[i][..];
-            assert!(deserialize_point(&pt).is_ok());
-            assert!(EdwardsPoint::from_element_slice(GenericArray::from_slice(&pt)).is_err());
+        for pt in &EIGHT_TORSION[..] {
+            assert!(deserialize_point(&pt[..]).is_ok());
+            assert!(EdwardsPoint::from_element_slice(GenericArray::from_slice(&pt[..])).is_err());
         }
     }
 }
