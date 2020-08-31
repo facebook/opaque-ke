@@ -594,7 +594,7 @@ where
     /// let (register_m2, server_state) =
     /// ServerRegistration::<Default>::start(register_m1, &mut server_rng)?;
     /// let mut client_rng = OsRng;
-    /// let (register_m3, _opaque_key) = client_state.finish(register_m2, server_kp.public(), &mut client_rng)?;
+    /// let (register_m3, _export_key) = client_state.finish(register_m2, server_kp.public(), &mut client_rng)?;
     /// let client_record = server_state.finish(register_m3)?;
     /// # Ok::<(), ProtocolError>(())
     /// ```
@@ -743,11 +743,11 @@ impl<CS: CipherSuite> ClientLogin<CS> {
     /// # let (register_m1, client_state) = ClientRegistration::<Default>::start(b"hunter2", None, &mut client_rng)?;
     /// # let server_kp = X25519KeyPair::generate_random(&mut server_rng)?;
     /// # let (register_m2, server_state) = ServerRegistration::<Default>::start(register_m1, &mut server_rng)?;
-    /// # let (register_m3, _opaque_key) = client_state.finish(register_m2, server_kp.public(), &mut client_rng)?;
+    /// # let (register_m3, _export_key) = client_state.finish(register_m2, server_kp.public(), &mut client_rng)?;
     /// # let p_file = server_state.finish(register_m3)?;
     /// let (login_m1, client_login_state) = ClientLogin::<Default>::start(b"hunter2", None, &mut client_rng)?;
     /// let (login_m2, server_login_state) = ServerLogin::start(p_file, &server_kp.private(), login_m1, &mut server_rng)?;
-    /// let (login_m3, client_transport, _opaque_key) = client_login_state.finish(login_m2, &server_kp.public(), &mut client_rng)?;
+    /// let (login_m3, client_transport, _export_key) = client_login_state.finish(login_m2, &server_kp.public(), &mut client_rng)?;
     /// # Ok::<(), ProtocolError>(())
     /// ```
     pub fn finish<R: RngCore + CryptoRng>(
@@ -851,7 +851,7 @@ impl<CS: CipherSuite> ServerLogin<CS> {
     /// # let (register_m1, client_state) = ClientRegistration::<Default>::start(b"hunter2", None, &mut client_rng)?;
     /// # let (register_m2, server_state) =
     /// ServerRegistration::<Default>::start(register_m1, &mut server_rng)?;
-    /// # let (register_m3, _opaque_key) = client_state.finish(register_m2, server_kp.public(), &mut client_rng)?;
+    /// # let (register_m3, _export_key) = client_state.finish(register_m2, server_kp.public(), &mut client_rng)?;
     /// # let p_file = server_state.finish(register_m3)?;
     /// let (login_m1, client_login_state) = ClientLogin::<Default>::start(b"hunter2", None, &mut client_rng)?;
     /// let (login_m2, server_login_state) = ServerLogin::start(p_file, &server_kp.private(), login_m1, &mut server_rng)?;
@@ -928,11 +928,11 @@ impl<CS: CipherSuite> ServerLogin<CS> {
     /// # let (register_m1, client_state) = ClientRegistration::<Default>::start(b"hunter2", None, &mut client_rng)?;
     /// # let (register_m2, server_state) =
     /// ServerRegistration::<Default>::start(register_m1, &mut server_rng)?;
-    /// # let (register_m3, _opaque_key) = client_state.finish(register_m2, server_kp.public(), &mut client_rng)?;
+    /// # let (register_m3, _export_key) = client_state.finish(register_m2, server_kp.public(), &mut client_rng)?;
     /// # let p_file = server_state.finish(register_m3)?;
     /// let (login_m1, client_login_state) = ClientLogin::<Default>::start(b"hunter2", None, &mut client_rng)?;
     /// let (login_m2, server_login_state) = ServerLogin::start(p_file, &server_kp.private(), login_m1, &mut server_rng)?;
-    /// let (login_m3, client_transport, _opaque_key) = client_login_state.finish(login_m2, &server_kp.public(), &mut client_rng)?;
+    /// let (login_m3, client_transport, _export_key) = client_login_state.finish(login_m2, &server_kp.public(), &mut client_rng)?;
     /// let mut server_transport = server_login_state.finish(login_m3)?;
     /// # Ok::<(), ProtocolError>(())
     /// ```
