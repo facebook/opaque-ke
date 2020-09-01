@@ -58,41 +58,41 @@ pub struct TestVectorParameters {
     client_login_state: Vec<u8>,
     server_login_state: Vec<u8>,
     pub password_file: Vec<u8>,
-    pub opaque_key: Vec<u8>,
+    pub export_key: Vec<u8>,
     pub shared_secret: Vec<u8>,
 }
 
 static TEST_VECTOR: &str = r#"
 {
-    "client_s_pk": "4374a0bf4f5f4353c20337574bdc69e6cff18a36e3fd8fe89fe47e02bab06e37",
-    "client_s_sk": "f0804c53de3fce8c9a6bcccb3380a1427c578a2f834de89fc98447c322776955",
-    "client_e_pk": "b45316eaa2d87ac1ed5c28b54ed43578fc54d4beb673b748159cea7536215819",
-    "client_e_sk": "60ff0381b8d8e6913d75e7a3caf2ede4e755d33337a6d904239fa6b00338cb56",
-    "server_s_pk": "c76f269ba1e0fb19597907ddd9e0fc9a4ac11e499e77b5ae480deb825dc2e044",
-    "server_s_sk": "384e6efd4236c76e7e84ae13327b867d85881f27df7f65e409c66a8f1f2c8354",
-    "server_e_pk": "92d4883730b19e767fc2f8224dac4a913f404e6d05a9baaf1f34ec9078dfb648",
-    "server_e_sk": "e88a6ec8d5644b66c20d6a915a94b27a17787196ab9f9bc0ee600d11d739b576",
+    "client_s_pk": "b2341df425f90244c72d8e19b249ca0d6d1a3a3dfe6ee1773e1b782a81efef29",
+    "client_s_sk": "701e8cd1263abd2f2a22d4dc94b1d5fe3c9cb14030e7e7c154745825b059fd7f",
+    "client_e_pk": "97cb1eb93a69542597517b110ccca457d5ce8d8bfcbfb2a9258bb7b4bd7f716e",
+    "client_e_sk": "80616968ed8daae02c02d3ba41a70104ed0deecd2276e058994d601a1351b359",
+    "server_s_pk": "e12d737e520eaf8504fbf302c2945011bff360bdf02ee102f2ebd6a883c80e02",
+    "server_s_sk": "9075d3d3c5b6bc2f6218e7672c0532c619ce09dddf196006c5ffdaf628a3d760",
+    "server_e_pk": "f73d27d7ca78ded52209bc3bae000f9d95b147360edac1e97c148a3a7396a279",
+    "server_e_sk": "a0e59a07908fc793c590fd83343003a54330e24af908ed31c921e6e6504c3248",
     "password": "70617373776f7264",
-    "blinding_factor_raw": "0412c9968a8e6ea19dd42eca36c35ff784d6e83944d833bdb919f8af6166ce00b742fe149fb6d9ba7d130edc983802bf91b510157d221e800e76c3aed1740159",
-    "blinding_factor": "0c9957936385474a1862bc9da3d60d6655b030fd6fc8de1fc7842163007f5a03",
+    "blinding_factor_raw": "ca2d8ae51794579bd0f46044d7daccf222b4590053536b48575bc169f7478fd0a0b580fb0aae948c26ba403a2e7b98f563e434a0aad93f4105419c474453c34e",
+    "blinding_factor": "5a9a073b1a1efedebdb404bc073ae74b316920d68ab628bed0c500cae95d6e02",
     "pepper": "706570706572",
-    "oprf_key": "764fc3396026a513ede0332f2d0801b7c02516241b473362844a9aea613e3800",
-    "envelope_nonce": "acca14c1d5f7f5843812ad61",
-    "client_nonce": "db2c06ad77d6d6b73170cb26c082c3fea77c64201b021f3d22f477bd5fd4cf9b",
-    "server_nonce": "861dbe0a824fc9a6ebc90a798dd5827888c30c8f8f79c361fb487db5b9a65586",
-    "r1": "3b12967295493838ce743c3fa5e3da39d13589aacad2cb67792df9e99dbefff3",
-    "r2": "4cce303b33ed400fc60cdaa9d314021c9a9a1c29faab56ede9fc580bdb0287c3",
-    "r3": "acca14c1d5f7f5843812ad61f0804c53de3fce8c9a6bcccb3380a1427c578a2f4df43147c5396441be3dee47f441e6cb56eca2cf7e25cc94ef233b2f1d3b0e64142d3d40fc61226627bca32c331dc00b9e9e795a1cfb0377d3a79f565307e1074374a0bf4f5f4353c20337574bdc69e6cff18a36e3fd8fe89fe47e02bab06e37",
-    "l1": "3b12967295493838ce743c3fa5e3da39d13589aacad2cb67792df9e99dbefff3db2c06ad77d6d6b73170cb26c082c3fea77c64201b021f3d22f477bd5fd4cf9bb45316eaa2d87ac1ed5c28b54ed43578fc54d4beb673b748159cea7536215819",
-    "l2": "4cce303b33ed400fc60cdaa9d314021c9a9a1c29faab56ede9fc580bdb0287c3acca14c1d5f7f5843812ad61f0804c53de3fce8c9a6bcccb3380a1427c578a2f4df43147c5396441be3dee47f441e6cb56eca2cf7e25cc94ef233b2f1d3b0e64142d3d40fc61226627bca32c331dc00b9e9e795a1cfb0377d3a79f565307e107e88a6ec8d5644b66c20d6a915a94b27a17787196ab9f9bc0ee600d11d739b57692d4883730b19e767fc2f8224dac4a913f404e6d05a9baaf1f34ec9078dfb648c87b63566267c0941b269f8ad36228ae24a2cd9eb8f90e8f6bc26140c2f93bb4",
-    "l3": "a20bb3efbdbccb23cd6206ef0483cf52a1e3b2f700c4c9aac0c9bab2f4326265",
-    "client_registration_state": "0c9957936385474a1862bc9da3d60d6655b030fd6fc8de1fc7842163007f5a0370617373776f7264",
-    "client_login_state": "0c9957936385474a1862bc9da3d60d6655b030fd6fc8de1fc7842163007f5a0360ff0381b8d8e6913d75e7a3caf2ede4e755d33337a6d904239fa6b00338cb56db2c06ad77d6d6b73170cb26c082c3fea77c64201b021f3d22f477bd5fd4cf9bb898ccd56020538145fc2192532bde9f8da0183a1dc486ae3086aa3b72c6728570617373776f7264",
-    "server_registration_state": "764fc3396026a513ede0332f2d0801b7c02516241b473362844a9aea613e3800",
-    "server_login_state": "75780c16fc843510e2222f195859b3f84c224e378f6afc6685827c30c11add9c3435530551d074a98f30d8e0f078efde0693738808a2c6358a4d34b64004a6c544b77d404067257aab5829b59a5f8a306c586c5a73018a9837c8b9a33d9fed6e",
-    "password_file": "764fc3396026a513ede0332f2d0801b7c02516241b473362844a9aea613e38004374a0bf4f5f4353c20337574bdc69e6cff18a36e3fd8fe89fe47e02bab06e37acca14c1d5f7f5843812ad61f0804c53de3fce8c9a6bcccb3380a1427c578a2f4df43147c5396441be3dee47f441e6cb56eca2cf7e25cc94ef233b2f1d3b0e64142d3d40fc61226627bca32c331dc00b9e9e795a1cfb0377d3a79f565307e107",
-    "opaque_key": "653ec91b97e928868c8977b4339530a5c1298dd9c69f1a1752a56785eca6e82c",
-    "shared_secret": "44b77d404067257aab5829b59a5f8a306c586c5a73018a9837c8b9a33d9fed6e"
+    "oprf_key": "203fabe2af9c8dc668b81db1ece9c2412c94c276495f33202479886de1b12907",
+    "envelope_nonce": "b0076712e01fecdb12301d5d7da92236e47f20494e68defb32084f1ab6c3d4f8",
+    "client_nonce": "b9f09e9b0606fa88c4194011d5c204861b73c43cbf1ea0d08c03ec2fd6d05572",
+    "server_nonce": "a213c02274e7f20fc3b571d25e98854c5dae2cfde6c9bf228a66bf3eff3e2a97",
+    "r1": "7b7734033104b0b2726a0fc945e39d764b9d34a2658b4964e9e4227e9844bcb1",
+    "r2": "270c46234717792b166a11c8d215542b685925543a8f326bcdf79e2b26c42001",
+    "r3": "b0076712e01fecdb12301d5d7da92236e47f20494e68defb32084f1ab6c3d4f876b6e60dd2e246d54c3b85c80adb378f7fd5490b5efcb5be372f2dcc889378d0b8024cad3160a8c6a2d332fc2efe94fcb0b8def46bf4fdf2036167b4e5414e6eb2341df425f90244c72d8e19b249ca0d6d1a3a3dfe6ee1773e1b782a81efef29",
+    "l1": "7b7734033104b0b2726a0fc945e39d764b9d34a2658b4964e9e4227e9844bcb1b9f09e9b0606fa88c4194011d5c204861b73c43cbf1ea0d08c03ec2fd6d0557297cb1eb93a69542597517b110ccca457d5ce8d8bfcbfb2a9258bb7b4bd7f716e",
+    "l2": "270c46234717792b166a11c8d215542b685925543a8f326bcdf79e2b26c42001b0076712e01fecdb12301d5d7da92236e47f20494e68defb32084f1ab6c3d4f876b6e60dd2e246d54c3b85c80adb378f7fd5490b5efcb5be372f2dcc889378d0b8024cad3160a8c6a2d332fc2efe94fcb0b8def46bf4fdf2036167b4e5414e6ea0e59a07908fc793c590fd83343003a54330e24af908ed31c921e6e6504c3248f73d27d7ca78ded52209bc3bae000f9d95b147360edac1e97c148a3a7396a27955afc9bdd9729801043518f40e8b71e1a45468b13d8e80d71e38be36da7116f1",
+    "l3": "bb4ade16958bae3818d9d91fb72e9c6eba16dd4cbf51eed5eb3c09bfba200a40",
+    "client_registration_state": "5a9a073b1a1efedebdb404bc073ae74b316920d68ab628bed0c500cae95d6e0270617373776f7264",
+    "client_login_state": "5a9a073b1a1efedebdb404bc073ae74b316920d68ab628bed0c500cae95d6e0280616968ed8daae02c02d3ba41a70104ed0deecd2276e058994d601a1351b359b9f09e9b0606fa88c4194011d5c204861b73c43cbf1ea0d08c03ec2fd6d055725132efb9cd93c58e53a5660b54470d3f30804e87caa28dcc2c4c8e8c1e2b827a70617373776f7264",
+    "server_registration_state": "203fabe2af9c8dc668b81db1ece9c2412c94c276495f33202479886de1b12907",
+    "server_login_state": "ebc0953924d55ad66aa801a7c85f47f35889b90002451a04fb7134b8a2a5a33c1390cf9c145ac9df436527ec6d8e8d6c0160ebdd411802aace7eb6032589b3cb72b17f13bd41cbfbdfa8d74bc94ec1abcc77b9a3da8fbad918ca0a5f84a81443",
+    "password_file": "203fabe2af9c8dc668b81db1ece9c2412c94c276495f33202479886de1b12907b2341df425f90244c72d8e19b249ca0d6d1a3a3dfe6ee1773e1b782a81efef29b0076712e01fecdb12301d5d7da92236e47f20494e68defb32084f1ab6c3d4f876b6e60dd2e246d54c3b85c80adb378f7fd5490b5efcb5be372f2dcc889378d0b8024cad3160a8c6a2d332fc2efe94fcb0b8def46bf4fdf2036167b4e5414e6e",
+    "export_key": "69691c8a3fb5b78e5430cb1b42fd8262b444291d361e43535a0d2a49550b67a4",
+    "shared_secret": "72b17f13bd41cbfbdfa8d74bc94ec1abcc77b9a3da8fbad918ca0a5f84a81443"
 }
 "#;
 
@@ -131,7 +131,7 @@ fn populate_test_vectors(values: &Value) -> TestVectorParameters {
         server_registration_state: decode(&values, "server_registration_state").unwrap(),
         server_login_state: decode(&values, "server_login_state").unwrap(),
         password_file: decode(&values, "password_file").unwrap(),
-        opaque_key: decode(&values, "opaque_key").unwrap(),
+        export_key: decode(&values, "export_key").unwrap(),
         shared_secret: decode(&values, "shared_secret").unwrap(),
     }
 }
@@ -214,7 +214,7 @@ fn stringify_test_vectors(p: &TestVectorParameters) -> String {
         )
         .as_str(),
     );
-    s.push_str(format!("\"opaque_key\": \"{}\",\n", hex::encode(&p.opaque_key)).as_str());
+    s.push_str(format!("\"export_key\": \"{}\",\n", hex::encode(&p.export_key)).as_str());
     s.push_str(format!("\"shared_secret\": \"{}\"\n", hex::encode(&p.shared_secret)).as_str());
     s.push_str("}\n");
     s
@@ -234,7 +234,7 @@ fn generate_parameters<CS: CipherSuite>() -> TestVectorParameters {
     rng.fill_bytes(&mut blinding_factor_raw);
     let mut oprf_key_raw = [0u8; 32];
     rng.fill_bytes(&mut oprf_key_raw);
-    let mut envelope_nonce = [0u8; 12];
+    let mut envelope_nonce = [0u8; 32];
     rng.fill_bytes(&mut envelope_nonce);
     let mut client_nonce = [0u8; NONCE_LEN];
     rng.fill_bytes(&mut client_nonce);
@@ -264,7 +264,7 @@ fn generate_parameters<CS: CipherSuite>() -> TestVectorParameters {
     client_s_sk_and_nonce.extend_from_slice(&envelope_nonce);
 
     let mut finish_registration_rng = CycleRng::new(client_s_sk_and_nonce);
-    let (r3, opaque_key_registration) = client_registration
+    let (r3, export_key_registration) = client_registration
         .finish(r2, server_s_kp.public(), &mut finish_registration_rng)
         .unwrap();
     let r3_bytes = r3.to_bytes().to_vec();
@@ -295,7 +295,7 @@ fn generate_parameters<CS: CipherSuite>() -> TestVectorParameters {
     let server_login_state = server_login.to_bytes().to_vec();
 
     let mut client_e_sk_rng = CycleRng::new(client_e_kp.private().to_vec());
-    let (l3, client_shared_secret, _opaque_key_login) = client_login
+    let (l3, client_shared_secret, _export_key_login) = client_login
         .finish(l2, server_s_kp.public(), &mut client_e_sk_rng)
         .unwrap();
     let l3_bytes = l3.to_bytes().to_vec();
@@ -329,7 +329,7 @@ fn generate_parameters<CS: CipherSuite>() -> TestVectorParameters {
         client_login_state,
         server_login_state,
         shared_secret: client_shared_secret,
-        opaque_key: opaque_key_registration.to_vec(),
+        export_key: export_key_registration.to_vec(),
     }
 }
 
@@ -381,7 +381,7 @@ fn test_r3() -> Result<(), PakeError> {
     let client_s_sk_and_nonce: Vec<u8> =
         [parameters.client_s_sk, parameters.envelope_nonce].concat();
     let mut finish_registration_rng = CycleRng::new(client_s_sk_and_nonce);
-    let (r3, opaque_key_registration) = ClientRegistration::<X255193dhNoSlowHash>::try_from(
+    let (r3, export_key_registration) = ClientRegistration::<X255193dhNoSlowHash>::try_from(
         &parameters.client_registration_state[..],
     )
     .unwrap()
@@ -394,8 +394,8 @@ fn test_r3() -> Result<(), PakeError> {
 
     assert_eq!(hex::encode(parameters.r3), hex::encode(r3.to_bytes()));
     assert_eq!(
-        hex::encode(parameters.opaque_key),
-        hex::encode(opaque_key_registration.to_vec())
+        hex::encode(parameters.export_key),
+        hex::encode(export_key_registration.to_vec())
     );
 
     Ok(())
@@ -471,7 +471,7 @@ fn test_l3() -> Result<(), PakeError> {
     let parameters = populate_test_vectors(&serde_json::from_str(TEST_VECTOR).unwrap());
 
     let mut client_e_sk_rng = CycleRng::new(parameters.client_e_sk.to_vec());
-    let (l3, shared_secret, opaque_key_login) = ClientLogin::<X255193dhNoSlowHash>::try_from(
+    let (l3, shared_secret, export_key_login) = ClientLogin::<X255193dhNoSlowHash>::try_from(
         &parameters.client_login_state[..],
     )
     .unwrap()
@@ -491,8 +491,8 @@ fn test_l3() -> Result<(), PakeError> {
     );
     assert_eq!(hex::encode(&parameters.l3), hex::encode(l3.to_bytes()));
     assert_eq!(
-        hex::encode(&parameters.opaque_key),
-        hex::encode(opaque_key_login)
+        hex::encode(&parameters.export_key),
+        hex::encode(export_key_login)
     );
 
     Ok(())
@@ -530,7 +530,7 @@ fn test_complete_flow(
     )?;
     let (register_m2, server_state) =
         ServerRegistration::<X255193dhNoSlowHash>::start(register_m1, &mut server_rng)?;
-    let (register_m3, registration_opaque_key) =
+    let (register_m3, registration_export_key) =
         client_state.finish(register_m2, server_kp.public(), &mut client_rng)?;
     let p_file = server_state.finish(register_m3)?;
     let (login_m1, client_login_state) =
@@ -546,7 +546,7 @@ fn test_complete_flow(
         client_login_state.finish(login_m2, &server_kp.public(), &mut client_rng);
 
     if hex::encode(registration_password) == hex::encode(login_password) {
-        let (login_m3, client_shared_secret, login_opaque_key) = client_login_result?;
+        let (login_m3, client_shared_secret, login_export_key) = client_login_result?;
         let server_shared_secret = server_login_state.finish(login_m3)?;
 
         assert_eq!(
@@ -554,8 +554,8 @@ fn test_complete_flow(
             hex::encode(client_shared_secret)
         );
         assert_eq!(
-            hex::encode(registration_opaque_key),
-            hex::encode(login_opaque_key)
+            hex::encode(registration_export_key),
+            hex::encode(login_export_key)
         );
     } else {
         let res = match client_login_result {

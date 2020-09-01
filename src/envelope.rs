@@ -119,6 +119,7 @@ impl<D: Hash> Envelope<D> {
 
         let mut hmac =
             Hmac::<D>::new_varkey(&hmac_key).map_err(|_| InternalPakeError::HmacError)?;
+        hmac.update(&nonce);
         hmac.update(&ciphertext);
         hmac.update(&aad);
 
@@ -142,6 +143,7 @@ impl<D: Hash> Envelope<D> {
 
         let mut hmac =
             Hmac::<D>::new_varkey(&hmac_key).map_err(|_| InternalPakeError::HmacError)?;
+        hmac.update(&self.nonce);
         hmac.update(&self.ciphertext);
         hmac.update(aad);
         if hmac.verify(&self.hmac).is_err() {
