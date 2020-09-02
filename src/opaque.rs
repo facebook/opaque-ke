@@ -34,9 +34,14 @@ pub struct RegisterFirstMessage<Grp> {
 impl<Grp: Group> TryFrom<&[u8]> for RegisterFirstMessage<Grp> {
     type Error = ProtocolError;
     fn try_from(first_message_bytes: &[u8]) -> Result<Self, Self::Error> {
+        let checked_slice = check_slice_size(
+            first_message_bytes,
+            Grp::ElemLen::to_usize(),
+            "first_message_bytes",
+        )?;
         // Check that the message is actually containing an element of the
         // correct subgroup
-        let arr = GenericArray::from_slice(first_message_bytes);
+        let arr = GenericArray::from_slice(checked_slice);
         let alpha = Grp::from_element_slice(arr)?;
         Ok(Self { alpha })
     }
@@ -142,14 +147,24 @@ pub struct LoginFirstMessage<CS: CipherSuite> {
 impl<CS: CipherSuite> TryFrom<&[u8]> for LoginFirstMessage<CS> {
     type Error = ProtocolError;
     fn try_from(first_message_bytes: &[u8]) -> Result<Self, Self::Error> {
+        let min_expected_len = <CS::Group as Group>::ElemLen::to_usize();
+        let checked_slice = (if first_message_bytes.len() <= min_expected_len {
+            Err(InternalPakeError::SizeError {
+                name: "first_message_bytes",
+                len: min_expected_len,
+                actual_len: first_message_bytes.len(),
+            })
+        } else {
+            Ok(first_message_bytes)
+        })?;
         // Check that the message is actually containing an element of the
         // correct subgroup
         let elem_len = <CS::Group as Group>::ElemLen::to_usize();
-        let arr = GenericArray::from_slice(&first_message_bytes[..elem_len]);
+        let arr = GenericArray::from_slice(&checked_slice[..elem_len]);
         let alpha = CS::Group::from_element_slice(arr)?;
 
         let ke1_message = <CS::KeyExchange as KeyExchange<CS::Hash>>::KE1Message::try_from(
-            first_message_bytes[elem_len..].to_vec(),
+            checked_slice[elem_len..].to_vec(),
         )?;
         Ok(Self { alpha, ke1_message })
     }
@@ -275,12 +290,23 @@ pub struct ClientRegistration<CS: CipherSuite> {
 impl<CS: CipherSuite> TryFrom<&[u8]> for ClientRegistration<CS> {
     type Error = ProtocolError;
     fn try_from(bytes: &[u8]) -> Result<Self, Self::Error> {
+        let min_expected_len = <CS::Group as Group>::ScalarLen::to_usize();
+        let checked_slice = (if bytes.len() <= min_expected_len {
+            Err(InternalPakeError::SizeError {
+                name: "client_registration_bytes",
+                len: min_expected_len,
+                actual_len: bytes.len(),
+            })
+        } else {
+            Ok(bytes)
+        })?;
+
         // Check that the message is actually containing an element of the
         // correct subgroup
-        let scalar_len = <CS::Group as Group>::ScalarLen::to_usize();
-        let blinding_factor_bytes = GenericArray::from_slice(&bytes[..scalar_len]);
+        let scalar_len = min_expected_len;
+        let blinding_factor_bytes = GenericArray::from_slice(&checked_slice[..scalar_len]);
         let blinding_factor = CS::Group::from_scalar_slice(blinding_factor_bytes)?;
-        let password = bytes[scalar_len..].to_vec();
+        let password = checked_slice[scalar_len..].to_vec();
         Ok(Self {
             blinding_factor,
             password,
@@ -629,11 +655,23 @@ impl<CS: CipherSuite> TryFrom<&[u8]> for ClientLogin<CS> {
     type Error = ProtocolError;
     fn try_from(bytes: &[u8]) -> Result<Self, Self::Error> {
         let scalar_len = <CS::Group as Group>::ScalarLen::to_usize();
-        let blinding_factor_bytes = GenericArray::from_slice(&bytes[..scalar_len]);
-        let blinding_factor = CS::Group::from_scalar_slice(blinding_factor_bytes)?;
         let ke1_state_size = <CS::KeyExchange as KeyExchange<CS::Hash>>::ke1_state_size();
+
+        let min_expected_len = scalar_len + ke1_state_size;
+        let checked_slice = (if bytes.len() <= min_expected_len {
+            Err(InternalPakeError::SizeError {
+                name: "client_login_bytes",
+                len: min_expected_len,
+                actual_len: bytes.len(),
+            })
+        } else {
+            Ok(bytes)
+        })?;
+
+        let blinding_factor_bytes = GenericArray::from_slice(&checked_slice[..scalar_len]);
+        let blinding_factor = CS::Group::from_scalar_slice(blinding_factor_bytes)?;
         let ke1_state = <CS::KeyExchange as KeyExchange<CS::Hash>>::KE1State::try_from(
-            bytes[scalar_len..scalar_len + ke1_state_size].to_vec(),
+            checked_slice[scalar_len..scalar_len + ke1_state_size].to_vec(),
         )?;
         let password = bytes[scalar_len + ke1_state_size..].to_vec();
         Ok(Self {
