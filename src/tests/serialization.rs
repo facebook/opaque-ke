@@ -17,6 +17,7 @@ use crate::{
 
 use curve25519_dalek::ristretto::RistrettoPoint;
 use generic_array::typenum::Unsigned;
+use proptest::{collection::vec, prelude::*};
 use rand_core::{OsRng, RngCore};
 
 use sha2::{Digest, Sha256};
@@ -170,4 +171,58 @@ fn login_first_message_roundtrip() {
         <TripleDH as KeyExchange<sha2::Sha256>>::KE1Message::try_from(ke1m[..].to_vec()).unwrap();
     let reg_bytes = reg.to_bytes();
     assert_eq!(reg_bytes, ke1m);
+}
+
+proptest! {
+
+    #[test]
+    fn test_nocrash_register_first_message(bytes in vec(any::<u8>(), 0..200)) {
+        RegisterFirstMessage::<RistrettoPoint>::try_from(&bytes[..]).map_or(true, |_| true);
+    }
+
+    #[test]
+    fn test_nocrash_register_second_message(bytes in vec(any::<u8>(), 0..200)) {
+        RegisterSecondMessage::<RistrettoPoint>::try_from(&bytes[..]).map_or(true, |_| true);
+    }
+
+    #[test]
+    fn test_nocrash_register_third_message(bytes in vec(any::<u8>(), 0..200)) {
+        RegisterThirdMessage::<crate::keypair::X25519KeyPair, sha2::Sha512>::try_from(&bytes[..]).map_or(true, |_| true);
+    }
+
+    #[test]
+    fn test_nocrash_login_first_message(bytes in vec(any::<u8>(), 0..500)) {
+        LoginFirstMessage::<Default>::try_from(&bytes[..]).map_or(true, |_| true);
+    }
+
+    #[test]
+    fn test_nocrash_login_second_message(bytes in vec(any::<u8>(), 0..500)) {
+        LoginSecondMessage::<RistrettoPoint, crate::keypair::X25519KeyPair, TripleDH, sha2::Sha512>::try_from(&bytes[..]).map_or(true, |_| true);
+    }
+
+    #[test]
+    fn test_nocrash_login_third_message(bytes in vec(any::<u8>(), 0..500)) {
+        LoginThirdMessage::<Default>::try_from(&bytes[..]).map_or(true, |_| true);
+    }
+
+    #[test]
+    fn test_nocrash_client_registration(bytes in vec(any::<u8>(), 0..700)) {
+        ClientRegistration::<Default>::try_from(&bytes[..]).map_or(true, |_| true);
+    }
+
+    #[test]
+    fn test_nocrash_server_registration(bytes in vec(any::<u8>(), 0..700)) {
+        ServerRegistration::<Default>::try_from(&bytes[..]).map_or(true, |_| true);
+    }
+
+    #[test]
+    fn test_nocrash_client_login(bytes in vec(any::<u8>(), 0..700)) {
+        ClientLogin::<Default>::try_from(&bytes[..]).map_or(true, |_| true);
+    }
+
+    #[test]
+    fn test_nocrash_server_login(bytes in vec(any::<u8>(), 0..700)) {
+        ServerLogin::<Default>::try_from(&bytes[..]).map_or(true, |_| true);
+    }
+
 }
