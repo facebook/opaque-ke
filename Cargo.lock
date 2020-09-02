@@ -281,6 +281,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bb1f6b1ce1c140482ea30ddd3335fc0024ac7ee112895426e0a629a6c20adfe3"
 
 [[package]]
+name = "fiat-crypto"
+version = "0.1.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0f6ab97095615857b6ad00a8330fff0e443f1def9fd357cef82d0ca0677b616b"
+
+[[package]]
 name = "fnv"
 version = "1.0.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -465,6 +471,7 @@ dependencies = [
  "curve25519-dalek",
  "digest",
  "displaydoc",
+ "fiat-crypto",
  "generic-array",
  "hex",
  "hkdf",
@@ -476,6 +483,7 @@ dependencies = [
  "scrypt",
  "serde_json",
  "sha2",
+ "subtle",
  "thiserror",
  "x25519-dalek",
  "zeroize",
