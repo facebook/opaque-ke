@@ -78,12 +78,12 @@ pub fn generate_oprf2_shim<G: Group>(
 
 #[cfg(feature = "bench")]
 #[inline]
-pub fn generate_oprf3_shim<G: Group>(
+pub fn generate_oprf3_shim<G: Group, H: Hash>(
     input: &[u8],
     point: G,
     blinding_factor: &G::Scalar,
-) -> Result<GenericArray<u8, U32>, InternalPakeError> {
-    generate_oprf3(input, point, blinding_factor)
+) -> Result<GenericArray<u8, <H as Digest>::OutputSize>, InternalPakeError> {
+    generate_oprf3::<G, H>(input, point, blinding_factor)
 }
 
 // Tests

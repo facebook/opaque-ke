@@ -32,6 +32,26 @@ jobs:
           command: test
           args: --no-default-features --features ${{ matrix.backend_feature }}
 
+  benches:
+    name: cargo bench compilation
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v2
+
+      - name: Install nightly toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+          override: true
+
+      - name: Run cargo bench --no-run
+        uses: actions-rs/cargo@v1
+        with:
+          command: bench
+          args: --features "bench" --no-run
+
   clippy:
     name: cargo clippy
     runs-on: ubuntu-latest
