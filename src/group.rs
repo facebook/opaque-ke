@@ -6,6 +6,7 @@
 //! Defines the Group trait to specify the underlying prime order group used in
 //! OPAQUE's OPRF
 
+use crate::elligator;
 use crate::errors::InternalPakeError;
 
 use curve25519_dalek::{
@@ -13,13 +14,11 @@ use curve25519_dalek::{
     ristretto::{CompressedRistretto, RistrettoPoint},
     scalar::Scalar,
 };
-use digest::Digest;
 use generic_array::{
     typenum::{U32, U64},
     ArrayLength, GenericArray,
 };
 use rand_core::{CryptoRng, RngCore};
-use sha2::Sha256;
 use std::ops::Mul;
 use zeroize::Zeroize;
 
@@ -148,25 +147,7 @@ impl Group for EdwardsPoint {
 
     type UniformBytesLen = U32;
     fn hash_to_curve(uniform_bytes: &GenericArray<u8, Self::UniformBytesLen>) -> Self {
-        const HASH_SIZE: usize = 32;
-        let mut result = [0u8; HASH_SIZE];
-        let mut counter = 0;
-        let mut wrapped_point: Option<EdwardsPoint> = None;
-
-        while wrapped_point.is_none() {
-            result.copy_from_slice(
-                &Sha256::new()
-                    .chain(&uniform_bytes[..HASH_SIZE])
-                    .chain(&[counter])
-                    .finalize()[..HASH_SIZE],
-            );
-            wrapped_point = CompressedEdwardsY::from_slice(&result).decompress();
-            counter += 1;
-        }
-
-        wrapped_point
-            .expect("guarded by loop exit condition")
-            .mul_by_cofactor()
+        elligator::hash_to_point(uniform_bytes)
     }
 }
 

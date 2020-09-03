@@ -413,7 +413,9 @@ pub mod ciphersuite;
 mod envelope;
 mod hash;
 
+mod elligator;
 pub mod group;
+
 pub mod map_to_curve;
 
 pub mod key_exchange;
