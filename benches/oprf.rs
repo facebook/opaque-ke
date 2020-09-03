@@ -15,6 +15,7 @@ use opaque_ke::{
     oprf::{generate_oprf1_shim, generate_oprf2_shim, generate_oprf3_shim, OprfClientBytes},
 };
 use rand::{prelude::ThreadRng, thread_rng};
+use sha2::Sha256;
 
 fn oprf1(c: &mut Criterion) {
     let mut csprng: ThreadRng = thread_rng();
@@ -103,8 +104,8 @@ fn oprf3(c: &mut Criterion) {
 
     c.bench_function("generate_oprf3 with Ristretto", move |b| {
         b.iter(|| {
-            let _res =
-                generate_oprf3_shim::<RistrettoPoint>(input, beta, &blinding_factor).unwrap();
+            let _res = generate_oprf3_shim::<RistrettoPoint, Sha256>(input, beta, &blinding_factor)
+                .unwrap();
         })
     });
 }
@@ -126,7 +127,8 @@ fn oprf3_edwards(c: &mut Criterion) {
 
     c.bench_function("generate_oprf3 with Edwards", move |b| {
         b.iter(|| {
-            let _res = generate_oprf3_shim::<EdwardsPoint>(input, beta, &blinding_factor).unwrap();
+            let _res =
+                generate_oprf3_shim::<EdwardsPoint, Sha256>(input, beta, &blinding_factor).unwrap();
         })
     });
 }
