@@ -3,8 +3,9 @@
 // This source code is licensed under the MIT license found in the
 // LICENSE file in the root directory of this source tree.
 
-use crate::errors::InternalPakeError;
+use crate::errors::{InternalPakeError, ProtocolError};
 use crate::hash::Hash;
+use crate::serialization::{serialize, tokenize};
 use digest::Digest;
 use generic_array::{
     typenum::{Unsigned, U32},
@@ -90,6 +91,31 @@ impl<D: Hash> Envelope<D> {
 
     pub(crate) fn to_bytes(&self) -> Vec<u8> {
         [&self.nonce[..], &self.ciphertext[..], &self.hmac[..]].concat()
+    }
+
+    pub(crate) fn serialize(&self) -> Vec<u8> {
+        [
+            &self.nonce[..],
+            &serialize((&self.ciphertext).to_vec(), 2)[..],
+            &serialize(vec![], 2)[..],
+            &serialize((&self.hmac).to_vec(), 2)[..],
+        ]
+        .concat()
+    }
+
+    pub(crate) fn deserialize(input: &[u8]) -> Result<(Self, Vec<u8>), ProtocolError> {
+        let nonce = &input[..NONCE_LEN];
+        let (ciphertext, remainder) = tokenize(input[NONCE_LEN..].to_vec(), 2)?;
+        let (_, remainder) = tokenize(remainder, 2)?;
+        let (hmac, remainder) = tokenize(remainder, 2)?;
+        Ok((
+            Self::new(
+                nonce.to_vec(),
+                ciphertext,
+                GenericArray::clone_from_slice(&hmac[..]),
+            ),
+            remainder,
+        ))
     }
 
     /// Uses a key to convert the plaintext into an envelope, authenticated by the aad field.

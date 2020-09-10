@@ -412,6 +412,7 @@ pub mod opaque;
 pub mod ciphersuite;
 mod envelope;
 mod hash;
+mod serialization;
 
 mod elligator;
 pub mod group;

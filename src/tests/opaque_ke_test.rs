@@ -80,11 +80,11 @@ static TEST_VECTOR: &str = r#"
     "envelope_nonce": "b0076712e01fecdb12301d5d7da92236e47f20494e68defb32084f1ab6c3d4f8",
     "client_nonce": "b9f09e9b0606fa88c4194011d5c204861b73c43cbf1ea0d08c03ec2fd6d05572",
     "server_nonce": "a213c02274e7f20fc3b571d25e98854c5dae2cfde6c9bf228a66bf3eff3e2a97",
-    "r1": "7e2c67a156ab27490f20008fcae9e9f722d8a9f4eeac373a711259981ca05dd5",
-    "r2": "710fdd19883e869e784c84f2864fa0bfc227662404b77cc8a54d79ae7fb931ea",
-    "r3": "b0076712e01fecdb12301d5d7da92236e47f20494e68defb32084f1ab6c3d4f8923b1d26cac4e3d91cec445b3322f4cc69a727f184353cb4dfe6d55a4c7d2bb4b77fbd41eacb8434f102c8c29cd4831e708046d38615df566675421ae8eb4933b2341df425f90244c72d8e19b249ca0d6d1a3a3dfe6ee1773e1b782a81efef29",
-    "l1": "7e2c67a156ab27490f20008fcae9e9f722d8a9f4eeac373a711259981ca05dd5b9f09e9b0606fa88c4194011d5c204861b73c43cbf1ea0d08c03ec2fd6d0557297cb1eb93a69542597517b110ccca457d5ce8d8bfcbfb2a9258bb7b4bd7f716e",
-    "l2": "710fdd19883e869e784c84f2864fa0bfc227662404b77cc8a54d79ae7fb931eab0076712e01fecdb12301d5d7da92236e47f20494e68defb32084f1ab6c3d4f8923b1d26cac4e3d91cec445b3322f4cc69a727f184353cb4dfe6d55a4c7d2bb4b77fbd41eacb8434f102c8c29cd4831e708046d38615df566675421ae8eb4933a0e59a07908fc793c590fd83343003a54330e24af908ed31c921e6e6504c3248f73d27d7ca78ded52209bc3bae000f9d95b147360edac1e97c148a3a7396a27939ccf2a17a5b281068665b4865e6c6331533461a8e10a4ceffc4c6a6609c326a",
+    "r1": "01000024000000207e2c67a156ab27490f20008fcae9e9f722d8a9f4eeac373a711259981ca05dd5",
+    "r2": "020000280020710fdd19883e869e784c84f2864fa0bfc227662404b77cc8a54d79ae7fb931ea000001010103",
+    "r3": "03000088b0076712e01fecdb12301d5d7da92236e47f20494e68defb32084f1ab6c3d4f80020923b1d26cac4e3d91cec445b3322f4cc69a727f184353cb4dfe6d55a4c7d2bb400000020b77fbd41eacb8434f102c8c29cd4831e708046d38615df566675421ae8eb49330020b2341df425f90244c72d8e19b249ca0d6d1a3a3dfe6ee1773e1b782a81efef29",
+    "l1": "04000024000000207e2c67a156ab27490f20008fcae9e9f722d8a9f4eeac373a711259981ca05dd5b9f09e9b0606fa88c4194011d5c204861b73c43cbf1ea0d08c03ec2fd6d0557297cb1eb93a69542597517b110ccca457d5ce8d8bfcbfb2a9258bb7b4bd7f716e",
+    "l2": "050000860020710fdd19883e869e784c84f2864fa0bfc227662404b77cc8a54d79ae7fb931ea0060b0076712e01fecdb12301d5d7da92236e47f20494e68defb32084f1ab6c3d4f8923b1d26cac4e3d91cec445b3322f4cc69a727f184353cb4dfe6d55a4c7d2bb4b77fbd41eacb8434f102c8c29cd4831e708046d38615df566675421ae8eb49330000a0e59a07908fc793c590fd83343003a54330e24af908ed31c921e6e6504c3248f73d27d7ca78ded52209bc3bae000f9d95b147360edac1e97c148a3a7396a27939ccf2a17a5b281068665b4865e6c6331533461a8e10a4ceffc4c6a6609c326a",
     "l3": "127144e6469e001d56237a58c8c869a8173e042bf2ff19d8331441d36ada9c3f",
     "client_registration_state": "5a9a073b1a1efedebdb404bc073ae74b316920d68ab628bed0c500cae95d6e0270617373776f7264",
     "client_login_state": "5a9a073b1a1efedebdb404bc073ae74b316920d68ab628bed0c500cae95d6e0280616968ed8daae02c02d3ba41a70104ed0deecd2276e058994d601a1351b359b9f09e9b0606fa88c4194011d5c204861b73c43cbf1ea0d08c03ec2fd6d05572f258311568d792d6ebecee225c0fde4512139e29a435e9f9a0b82dc3809a83ab70617373776f7264",
@@ -248,14 +248,14 @@ fn generate_parameters<CS: CipherSuite>() -> TestVectorParameters {
         &mut blinding_factor_registration_rng,
     )
     .unwrap();
-    let r1_bytes = r1.to_bytes().to_vec();
+    let r1_bytes = r1.serialize().to_vec();
     let blinding_factor_bytes =
         CS::Group::scalar_as_bytes(&client_registration.blinding_factor).clone();
     let client_registration_state = client_registration.to_bytes().to_vec();
 
     let mut oprf_key_rng = CycleRng::new(oprf_key_raw.to_vec());
     let (r2, server_registration) = ServerRegistration::<CS>::start(r1, &mut oprf_key_rng).unwrap();
-    let r2_bytes = r2.to_bytes().to_vec();
+    let r2_bytes = r2.serialize().to_vec();
     let oprf_key_bytes = CS::Group::scalar_as_bytes(&server_registration.oprf_key).clone();
     let server_registration_state = server_registration.to_bytes().to_vec();
 
@@ -267,7 +267,7 @@ fn generate_parameters<CS: CipherSuite>() -> TestVectorParameters {
     let (r3, export_key_registration) = client_registration
         .finish(r2, server_s_kp.public(), &mut finish_registration_rng)
         .unwrap();
-    let r3_bytes = r3.to_bytes().to_vec();
+    let r3_bytes = r3.serialize().to_vec();
 
     let password_file = server_registration.finish(r3).unwrap();
     let password_file_bytes = password_file.to_bytes();
@@ -280,7 +280,7 @@ fn generate_parameters<CS: CipherSuite>() -> TestVectorParameters {
     let mut client_login_start_rng = CycleRng::new(client_login_start);
     let (l1, client_login) =
         ClientLogin::<CS>::start(password, Some(pepper), &mut client_login_start_rng).unwrap();
-    let l1_bytes = l1.to_bytes().to_vec();
+    let l1_bytes = l1.serialize().to_vec();
     let client_login_state = client_login.to_bytes().to_vec();
 
     let mut server_e_sk_rng = CycleRng::new(server_e_kp.private().to_vec());
@@ -291,7 +291,7 @@ fn generate_parameters<CS: CipherSuite>() -> TestVectorParameters {
         &mut server_e_sk_rng,
     )
     .unwrap();
-    let l2_bytes = l2.to_bytes().to_vec();
+    let l2_bytes = l2.serialize().to_vec();
     let server_login_state = server_login.to_bytes().to_vec();
 
     let mut client_e_sk_rng = CycleRng::new(client_e_kp.private().to_vec());
@@ -349,7 +349,7 @@ fn test_r1() -> Result<(), PakeError> {
         &mut blinding_factor_rng,
     )
     .unwrap();
-    assert_eq!(hex::encode(&parameters.r1), hex::encode(r1.to_bytes()));
+    assert_eq!(hex::encode(&parameters.r1), hex::encode(r1.serialize()));
     assert_eq!(
         hex::encode(&parameters.client_registration_state),
         hex::encode(client_registration.to_bytes())
@@ -362,11 +362,11 @@ fn test_r2() -> Result<(), PakeError> {
     let parameters = populate_test_vectors(&serde_json::from_str(TEST_VECTOR).unwrap());
     let mut oprf_key_rng = CycleRng::new(parameters.oprf_key);
     let (r2, server_registration) = ServerRegistration::<X255193dhNoSlowHash>::start(
-        RegisterFirstMessage::try_from(&parameters.r1[..]).unwrap(),
+        RegisterFirstMessage::deserialize(&parameters.r1[..]).unwrap(),
         &mut oprf_key_rng,
     )
     .unwrap();
-    assert_eq!(hex::encode(parameters.r2), hex::encode(r2.to_bytes()));
+    assert_eq!(hex::encode(parameters.r2), hex::encode(r2.serialize()));
     assert_eq!(
         hex::encode(&parameters.server_registration_state),
         hex::encode(server_registration.to_bytes())
@@ -386,13 +386,13 @@ fn test_r3() -> Result<(), PakeError> {
     )
     .unwrap()
     .finish(
-        RegisterSecondMessage::try_from(&parameters.r2[..]).unwrap(),
+        RegisterSecondMessage::deserialize(&parameters.r2[..]).unwrap(),
         &Key::try_from(&parameters.server_s_pk[..]).unwrap(),
         &mut finish_registration_rng,
     )
     .unwrap();
 
-    assert_eq!(hex::encode(parameters.r3), hex::encode(r3.to_bytes()));
+    assert_eq!(hex::encode(parameters.r3), hex::encode(r3.serialize()));
     assert_eq!(
         hex::encode(parameters.export_key),
         hex::encode(export_key_registration.to_vec())
@@ -410,7 +410,7 @@ fn test_password_file() -> Result<(), PakeError> {
     )
     .unwrap();
     let password_file = server_registration
-        .finish(RegisterThirdMessage::try_from(&parameters.r3[..]).unwrap())
+        .finish(RegisterThirdMessage::deserialize(&parameters.r3[..]).unwrap())
         .unwrap();
 
     assert_eq!(
@@ -437,7 +437,7 @@ fn test_l1() -> Result<(), PakeError> {
         &mut client_login_start_rng,
     )
     .unwrap();
-    assert_eq!(hex::encode(&parameters.l1), hex::encode(l1.to_bytes()));
+    assert_eq!(hex::encode(&parameters.l1), hex::encode(l1.serialize()));
     assert_eq!(
         hex::encode(&parameters.client_login_state),
         hex::encode(client_login.to_bytes())
@@ -453,12 +453,12 @@ fn test_l2() -> Result<(), PakeError> {
     let (l2, server_login) = ServerLogin::<X255193dhNoSlowHash>::start(
         ServerRegistration::try_from(&parameters.password_file[..]).unwrap(),
         &Key::try_from(&parameters.server_s_sk[..]).unwrap(),
-        LoginFirstMessage::<X255193dhNoSlowHash>::try_from(&parameters.l1[..]).unwrap(),
+        LoginFirstMessage::<X255193dhNoSlowHash>::deserialize(&parameters.l1[..]).unwrap(),
         &mut server_e_sk_rng,
     )
     .unwrap();
 
-    assert_eq!(hex::encode(&parameters.l2), hex::encode(l2.to_bytes()));
+    assert_eq!(hex::encode(&parameters.l2), hex::encode(l2.serialize()));
     assert_eq!(
         hex::encode(&parameters.server_login_state),
         hex::encode(server_login.to_bytes())
@@ -476,7 +476,7 @@ fn test_l3() -> Result<(), PakeError> {
     )
     .unwrap()
     .finish(
-        LoginSecondMessage::<EdwardsPoint, X25519KeyPair, TripleDH, sha2::Sha256>::try_from(
+        LoginSecondMessage::<EdwardsPoint, X25519KeyPair, TripleDH, sha2::Sha256>::deserialize(
             &parameters.l2[..],
         )
         .unwrap(),
