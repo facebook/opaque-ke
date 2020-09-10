@@ -58,6 +58,8 @@ pub enum PakeError {
     KeyExchangeMacValidationError,
     /// Error in validating credentials
     InvalidLoginError,
+    /// Error with serializing / deserializing protocol messages
+    SerializationError,
 }
 
 // This is meant to express future(ly) non-trivial ways of converting the
