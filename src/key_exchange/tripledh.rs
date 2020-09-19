@@ -31,14 +31,14 @@ static STR_3DH: &[u8] = b"3DH keys";
 /// The Triple Diffie-Hellman key exchange implementation
 pub struct TripleDH;
 
-impl<D: Hash> KeyExchange<D> for TripleDH {
+impl<D: Hash, KeyFormat: KeyPair<Repr = Key>> KeyExchange<D, KeyFormat> for TripleDH {
     type KE1State = KE1State<<D as FixedOutput>::OutputSize>;
     type KE2State = KE2State<<D as FixedOutput>::OutputSize>;
     type KE1Message = KE1Message;
     type KE2Message = KE2Message<<D as FixedOutput>::OutputSize>;
     type KE3Message = KE3Message<<D as FixedOutput>::OutputSize>;
 
-    fn generate_ke1<R: RngCore + CryptoRng, KeyFormat: KeyPair<Repr = Key>>(
+    fn generate_ke1<R: RngCore + CryptoRng>(
         l1_component: Vec<u8>,
         rng: &mut R,
     ) -> Result<(Self::KE1State, Self::KE1Message), ProtocolError> {
@@ -69,7 +69,7 @@ impl<D: Hash> KeyExchange<D> for TripleDH {
         ))
     }
 
-    fn generate_ke2<R: RngCore + CryptoRng, KeyFormat: KeyPair<Repr = Key>>(
+    fn generate_ke2<R: RngCore + CryptoRng>(
         rng: &mut R,
         l1_bytes: Vec<u8>,
         l2_bytes: Vec<u8>,
@@ -132,7 +132,7 @@ impl<D: Hash> KeyExchange<D> for TripleDH {
         ))
     }
 
-    fn generate_ke3<KeyFormat: KeyPair<Repr = Key>>(
+    fn generate_ke3(
         l2_component: Vec<u8>,
         ke2_message: Self::KE2Message,
         ke1_state: &Self::KE1State,

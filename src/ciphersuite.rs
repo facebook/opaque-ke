@@ -34,7 +34,7 @@ pub trait CipherSuite {
     /// A keypair type composed of public and private components
     type KeyFormat: KeyPair<Repr = Key> + PartialEq;
     /// A key exchange protocol
-    type KeyExchange: KeyExchange<Self::Hash>;
+    type KeyExchange: KeyExchange<Self::Hash, Self::KeyFormat>;
     /// The main hash function use (for HKDF computations and hashing transcripts)
     type Hash: Hash;
     /// A slow hashing function, typically used for password hashing
