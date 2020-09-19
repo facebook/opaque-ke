@@ -19,6 +19,7 @@ use generic_array::{
     ArrayLength, GenericArray,
 };
 use rand_core::{CryptoRng, RngCore};
+use std::convert::TryInto;
 use std::ops::Mul;
 use zeroize::Zeroize;
 
@@ -86,7 +87,8 @@ impl Group for RistrettoPoint {
         element_bits: &GenericArray<u8, Self::ElemLen>,
     ) -> Result<Self, InternalPakeError> {
         CompressedRistretto::from_slice(element_bits)
-            .decompress().ok_or(InternalPakeError::PointError)
+            .decompress()
+            .ok_or(InternalPakeError::PointError)
     }
     // serialization of a group element
     fn to_arr(&self) -> GenericArray<u8, Self::ElemLen> {
@@ -96,8 +98,9 @@ impl Group for RistrettoPoint {
 
     type UniformBytesLen = U64;
     fn hash_to_curve(uniform_bytes: &GenericArray<u8, Self::UniformBytesLen>) -> Self {
-        let mut bits = [0u8; 64];
-        bits.copy_from_slice(&uniform_bytes);
+        let bits: [u8; 64] = (&uniform_bytes[..])
+            .try_into()
+            .expect("GenericArray has a type-level length");
 
         RistrettoPoint::from_uniform_bytes(&bits)
     }
@@ -130,7 +133,8 @@ impl Group for EdwardsPoint {
         element_bits: &GenericArray<u8, Self::ElemLen>,
     ) -> Result<Self, InternalPakeError> {
         let point = CompressedEdwardsY::from_slice(element_bits)
-            .decompress().ok_or(InternalPakeError::PointError)?;
+            .decompress()
+            .ok_or(InternalPakeError::PointError)?;
 
         if point.is_small_order() {
             return Err(InternalPakeError::SubGroupError);
@@ -190,8 +194,9 @@ mod tests {
     ];
 
     fn deserialize_point(pt: &[u8]) -> Result<EdwardsPoint> {
-        let mut bytes = [0u8; 32];
-        bytes.copy_from_slice(&pt[..32]);
+        let bytes: [u8; 32] = (&pt[..32])
+            .try_into()
+            .expect("Slice pattern invariant broken");
 
         curve25519_dalek::edwards::CompressedEdwardsY(bytes)
             .decompress()

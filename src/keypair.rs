@@ -16,6 +16,7 @@ use proptest::prelude::*;
 #[cfg(test)]
 use rand::{rngs::StdRng, SeedableRng};
 use rand_core::{CryptoRng, RngCore};
+use std::convert::TryInto;
 use std::fmt::Debug;
 use x25519_dalek::{PublicKey, StaticSecret};
 
@@ -216,15 +217,15 @@ impl KeyPair for X25519KeyPair {
     }
 
     fn public_from_private(secret: &Self::Repr) -> Self::Repr {
-        let mut secret_data = [0u8; 32];
-        secret_data.copy_from_slice(&secret.0[..]);
+        let secret_data: [u8; 32] = (&secret.0[..])
+            .try_into()
+            .expect("Keypair::Repr invariant broken");
         let base_data = ::x25519_dalek::X25519_BASEPOINT_BYTES;
         Key(::x25519_dalek::x25519(secret_data, base_data).to_vec())
     }
 
     fn check_public_key(key: Self::Repr) -> Result<Self::Repr, InternalPakeError> {
-        let mut key_bytes = [0u8; 32];
-        key_bytes.copy_from_slice(&key);
+        let key_bytes: [u8; 32] = (&key[..]).try_into().expect("Key invariant broken");
         let point = ::curve25519_dalek::montgomery::MontgomeryPoint(key_bytes)
             .to_edwards(1)
             .ok_or(InternalPakeError::PointError)?;

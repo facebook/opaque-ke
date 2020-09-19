@@ -58,6 +58,7 @@ pub fn hash_to_point(bytes: &[u8]) -> EdwardsPoint {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::convert::TryInto;
 
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     // Signal tests from                                                                                                              //
@@ -73,8 +74,8 @@ mod tests {
     #[test]
     fn elligator_correct() {
         let bytes: Vec<u8> = (0u8..32u8).collect();
-        let mut bits_in = [0u8; 32];
-        bits_in.copy_from_slice(&bytes);
+        let bits_in: [u8; 32] = (&bytes[..]).try_into().expect("Range invariant broken");
+
         let fe = FieldElement51::from_bytes(&bits_in);
         let eg = elligator_signal(&fe);
         assert_eq!(eg.to_bytes(), ELLIGATOR_CORRECT_OUTPUT);

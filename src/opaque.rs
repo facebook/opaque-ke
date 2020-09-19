@@ -533,14 +533,12 @@ where
     /// byte representation for the server's registration state
     pub fn to_bytes(&self) -> Vec<u8> {
         let mut output: Vec<u8> = CS::Group::scalar_as_bytes(&self.oprf_key).to_vec();
-        match &self.client_s_pk {
-            Some(v) => output.extend_from_slice(&v.to_arr()),
-            None => {}
-        };
-        match &self.envelope {
-            Some(v) => output.extend_from_slice(&v.to_bytes()),
-            None => {}
-        };
+        self.client_s_pk
+            .iter()
+            .for_each(|v| output.extend_from_slice(&v));
+        self.envelope
+            .iter()
+            .for_each(|v| output.extend_from_slice(&v.to_bytes()));
         output
     }
 
@@ -641,8 +639,6 @@ where
 
 /// The state elements the client holds to perform a login
 pub struct ClientLogin<CS: CipherSuite> {
-    /// A choice of the keypair type
-    _key_format: PhantomData<CS::KeyFormat>,
     /// A blinding factor, which is used to mask (and unmask) secret
     /// information before transmission
     blinding_factor: <CS::Group as Group>::Scalar,
@@ -675,7 +671,6 @@ impl<CS: CipherSuite> TryFrom<&[u8]> for ClientLogin<CS> {
         )?;
         let password = bytes[scalar_len + ke1_state_size..].to_vec();
         Ok(Self {
-            _key_format: PhantomData,
             blinding_factor,
             password,
             ke1_state,
@@ -745,7 +740,6 @@ impl<CS: CipherSuite> ClientLogin<CS> {
         Ok((
             l1,
             Self {
-                _key_format: PhantomData,
                 blinding_factor,
                 password: password.to_vec(),
                 ke1_state,
@@ -986,7 +980,6 @@ impl<CS: CipherSuite> ServerLogin<CS> {
 }
 
 // Helper functions
-
 fn get_password_derived_key<G: Group, SH: SlowHash<D>, D: Hash>(
     password: Vec<u8>,
     beta: G,
