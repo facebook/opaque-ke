@@ -11,7 +11,10 @@ use crate::{
     keypair::{Key, KeyPair, SizedBytes},
 };
 use digest::{Digest, FixedOutput};
-use generic_array::{typenum::U32, ArrayLength, GenericArray};
+use generic_array::{
+    typenum::{Unsigned, U32},
+    ArrayLength, GenericArray,
+};
 use hkdf::Hkdf;
 use hmac::{Hmac, Mac, NewMac};
 use rand_core::{CryptoRng, RngCore};
@@ -22,7 +25,6 @@ const KEY_LEN: usize = 32;
 pub(crate) const NONCE_LEN: usize = 32;
 pub(crate) type NonceLen = U32;
 const KE1_STATE_LEN: usize = KEY_LEN + KEY_LEN + NONCE_LEN;
-const KE2_MESSAGE_LEN: usize = NONCE_LEN + 2 * KEY_LEN;
 
 static STR_3DH: &[u8] = b"3DH keys";
 
@@ -208,7 +210,7 @@ impl<D: Hash> KeyExchange<D> for TripleDH {
     }
 
     fn ke2_message_size() -> usize {
-        KE2_MESSAGE_LEN
+        NONCE_LEN + KEY_LEN + <<D as FixedOutput>::OutputSize as Unsigned>::to_usize()
     }
 }
 
@@ -335,7 +337,8 @@ impl<HashLen: ArrayLength<u8>> TryFrom<Vec<u8>> for KE2Message<HashLen> {
     type Error = ProtocolError;
 
     fn try_from(ke2_message_bytes: Vec<u8>) -> Result<Self, Self::Error> {
-        let checked_bytes = check_slice_size(&ke2_message_bytes, KE2_MESSAGE_LEN, "ke2_message")?;
+        let ke2_message_len = NONCE_LEN + KEY_LEN + HashLen::to_usize();
+        let checked_bytes = check_slice_size(&ke2_message_bytes, ke2_message_len, "ke2_message")?;
 
         Ok(Self {
             server_nonce: GenericArray::clone_from_slice(&checked_bytes[..NONCE_LEN]),
