@@ -91,35 +91,6 @@ trait KeyPairExt: KeyPair + Debug {
 #[cfg(test)]
 impl<KP> KeyPairExt for KP where KP: KeyPair + Debug {}
 
-/// This assumes you have defined:
-/// - an `impl TryFrom<&[u8b], Error = InternalPakeError>` for a non-generic `T`
-/// - an `fn to_bytes(&self) -> Vec<u8>` in an `impl T` block
-/// and it both of the above to produce a sensible SizedBytes implementation
-///
-/// Because SizedBytes has a strong notion of size, and TryFrom/to_bytes does
-/// not, it's better to use the macro below rather than this one, where possible.
-#[macro_export]
-macro_rules! sized_bytes_using_constant_and_try_from {
-    ($sized_type: ident, $len: ident) => {
-        impl SizedBytes for $sized_type {
-            type Len = $len;
-
-            fn to_arr(&self) -> generic_array::GenericArray<u8, Self::Len> {
-                generic_array::GenericArray::clone_from_slice(&self.to_bytes())
-            }
-
-            fn from_bytes(bytes: &[u8]) -> Result<Self, InternalPakeError> {
-                let checked_bytes = check_slice_size(
-                    bytes,
-                    <Self::Len as generic_array::typenum::Unsigned>::to_usize(),
-                    "bytes",
-                )?;
-                std::convert::TryFrom::try_from(checked_bytes.to_vec())
-            }
-        }
-    };
-}
-
 /// This assumes you have defined a SizedBytes instance for a `T`, and defines:
 /// - an `impl TryFrom<&[u8b], Error = InternalPakeError>` for a non-generic `T`
 /// - an `fn to_bytes(&self) -> Vec<u8>` in an `impl T` block

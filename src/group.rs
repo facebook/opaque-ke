@@ -86,8 +86,7 @@ impl Group for RistrettoPoint {
         element_bits: &GenericArray<u8, Self::ElemLen>,
     ) -> Result<Self, InternalPakeError> {
         CompressedRistretto::from_slice(element_bits)
-            .decompress()
-            .ok_or_else(|| InternalPakeError::PointError)
+            .decompress().ok_or(InternalPakeError::PointError)
     }
     // serialization of a group element
     fn to_arr(&self) -> GenericArray<u8, Self::ElemLen> {
@@ -131,8 +130,7 @@ impl Group for EdwardsPoint {
         element_bits: &GenericArray<u8, Self::ElemLen>,
     ) -> Result<Self, InternalPakeError> {
         let point = CompressedEdwardsY::from_slice(element_bits)
-            .decompress()
-            .ok_or_else(|| InternalPakeError::PointError)?;
+            .decompress().ok_or(InternalPakeError::PointError)?;
 
         if point.is_small_order() {
             return Err(InternalPakeError::SubGroupError);
