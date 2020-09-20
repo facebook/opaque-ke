@@ -19,7 +19,6 @@ use generic_array::{
     ArrayLength, GenericArray,
 };
 use rand_core::{CryptoRng, RngCore};
-use std::convert::TryInto;
 use std::ops::Mul;
 use zeroize::Zeroize;
 
@@ -98,10 +97,12 @@ impl Group for RistrettoPoint {
 
     type UniformBytesLen = U64;
     fn hash_to_curve(uniform_bytes: &GenericArray<u8, Self::UniformBytesLen>) -> Self {
-        let bits: [u8; 64] = (&uniform_bytes[..])
-            .try_into()
-            .expect("GenericArray has a type-level length");
-
+        // https://caniuse.rs/features/array_gt_32_impls
+        let bits: [u8; 64] = {
+            let mut bytes = [0u8; 64];
+            bytes.copy_from_slice(uniform_bytes);
+            bytes
+        };
         RistrettoPoint::from_uniform_bytes(&bits)
     }
 }
@@ -157,6 +158,7 @@ impl Group for EdwardsPoint {
 mod tests {
     use super::*;
     use anyhow::{anyhow, Result};
+    use std::convert::TryInto;
 
     const EIGHT_TORSION: [[u8; 32]; 8] = [
         [
