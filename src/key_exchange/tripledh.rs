@@ -8,7 +8,7 @@ use crate::{
     errors::{utils::check_slice_size, InternalPakeError, PakeError, ProtocolError},
     hash::Hash,
     key_exchange::traits::{KeyExchange, ToBytes},
-    keypair::{Key, KeyPair, SizedBytes},
+    keypair::{KeyPair, SizedBytes},
 };
 use digest::{Digest, FixedOutput};
 use generic_array::{
@@ -31,11 +31,11 @@ static STR_3DH: &[u8] = b"3DH keys";
 /// The Triple Diffie-Hellman key exchange implementation
 pub struct TripleDH;
 
-impl<D: Hash, KeyFormat: KeyPair<Repr = Key>> KeyExchange<D, KeyFormat> for TripleDH {
-    type KE1State = KE1State<<D as FixedOutput>::OutputSize>;
+impl<D: Hash, KeyFormat: KeyPair> KeyExchange<D, KeyFormat> for TripleDH {
+    type KE1State = KE1State<<D as FixedOutput>::OutputSize, KeyFormat>;
     type KE2State = KE2State<<D as FixedOutput>::OutputSize>;
-    type KE1Message = KE1Message;
-    type KE2Message = KE2Message<<D as FixedOutput>::OutputSize>;
+    type KE1Message = KE1Message<KeyFormat>;
+    type KE2Message = KE2Message<<D as FixedOutput>::OutputSize, KeyFormat>;
     type KE3Message = KE3Message<<D as FixedOutput>::OutputSize>;
 
     fn generate_ke1<R: RngCore + CryptoRng>(
@@ -158,7 +158,7 @@ impl<D: Hash, KeyFormat: KeyPair<Repr = Key>> KeyExchange<D, KeyFormat> for Trip
             &ke1_state.hashed_l1[..],
             &l2_component[..],
             &ke2_message.server_nonce[..],
-            &ke2_message.server_e_pk[..],
+            &ke2_message.server_e_pk.to_arr(),
         ]
         .concat();
 
@@ -216,20 +216,22 @@ impl<D: Hash, KeyFormat: KeyPair<Repr = Key>> KeyExchange<D, KeyFormat> for Trip
 
 /// The client state produced after the first key exchange message
 #[derive(PartialEq, Eq)]
-pub struct KE1State<HashLen: ArrayLength<u8>> {
-    client_e_sk: Key,
+pub struct KE1State<HashLen: ArrayLength<u8>, KeyFormat: KeyPair> {
+    client_e_sk: KeyFormat::Repr,
     client_nonce: GenericArray<u8, NonceLen>,
     hashed_l1: GenericArray<u8, HashLen>,
 }
 
 /// The first key exchange message
 #[derive(PartialEq, Eq)]
-pub struct KE1Message {
+pub struct KE1Message<KeyFormat: KeyPair> {
     pub(crate) client_nonce: GenericArray<u8, NonceLen>,
-    pub(crate) client_e_pk: Key,
+    pub(crate) client_e_pk: KeyFormat::Repr,
 }
 
-impl<HashLen: ArrayLength<u8>> TryFrom<Vec<u8>> for KE1State<HashLen> {
+impl<HashLen: ArrayLength<u8>, KeyFormat: KeyPair> TryFrom<Vec<u8>>
+    for KE1State<HashLen, KeyFormat>
+{
     type Error = InternalPakeError;
 
     fn try_from(bytes: Vec<u8>) -> Result<Self, Self::Error> {
@@ -240,7 +242,7 @@ impl<HashLen: ArrayLength<u8>> TryFrom<Vec<u8>> for KE1State<HashLen> {
         )?;
 
         Ok(Self {
-            client_e_sk: Key::from_bytes(&checked_bytes[..KEY_LEN])?,
+            client_e_sk: KeyFormat::Repr::from_bytes(&checked_bytes[..KEY_LEN])?,
             client_nonce: GenericArray::clone_from_slice(
                 &checked_bytes[KEY_LEN..KEY_LEN + NONCE_LEN],
             ),
@@ -249,7 +251,7 @@ impl<HashLen: ArrayLength<u8>> TryFrom<Vec<u8>> for KE1State<HashLen> {
     }
 }
 
-impl<HashLen: ArrayLength<u8>> ToBytes for KE1State<HashLen> {
+impl<HashLen: ArrayLength<u8>, KeyFormat: KeyPair> ToBytes for KE1State<HashLen, KeyFormat> {
     fn to_bytes(&self) -> Vec<u8> {
         let output: Vec<u8> = [
             &self.client_e_sk.to_arr(),
@@ -261,13 +263,13 @@ impl<HashLen: ArrayLength<u8>> ToBytes for KE1State<HashLen> {
     }
 }
 
-impl ToBytes for KE1Message {
+impl<KeyFormat: KeyPair> ToBytes for KE1Message<KeyFormat> {
     fn to_bytes(&self) -> Vec<u8> {
         [&self.client_nonce[..], &self.client_e_pk.to_arr()].concat()
     }
 }
 
-impl TryFrom<Vec<u8>> for KE1Message {
+impl<KeyFormat: KeyPair> TryFrom<Vec<u8>> for KE1Message<KeyFormat> {
     type Error = InternalPakeError;
 
     fn try_from(ke1_message_bytes: Vec<u8>) -> Result<Self, Self::Error> {
@@ -276,7 +278,7 @@ impl TryFrom<Vec<u8>> for KE1Message {
 
         Ok(Self {
             client_nonce: GenericArray::clone_from_slice(&checked_bytes[..NONCE_LEN]),
-            client_e_pk: Key::from_bytes(&checked_bytes[NONCE_LEN..])?,
+            client_e_pk: KeyFormat::Repr::from_bytes(&checked_bytes[NONCE_LEN..])?,
         })
     }
 }
@@ -289,9 +291,9 @@ pub struct KE2State<HashLen: ArrayLength<u8>> {
 }
 
 /// The second key exchange message
-pub struct KE2Message<HashLen: ArrayLength<u8>> {
+pub struct KE2Message<HashLen: ArrayLength<u8>, KeyFormat: KeyPair> {
     server_nonce: GenericArray<u8, NonceLen>,
-    server_e_pk: Key,
+    server_e_pk: KeyFormat::Repr,
     mac: GenericArray<u8, HashLen>,
 }
 
@@ -321,7 +323,7 @@ impl<HashLen: ArrayLength<u8>> TryFrom<Vec<u8>> for KE2State<HashLen> {
     }
 }
 
-impl<HashLen: ArrayLength<u8>> ToBytes for KE2Message<HashLen> {
+impl<HashLen: ArrayLength<u8>, KeyFormat: KeyPair> ToBytes for KE2Message<HashLen, KeyFormat> {
     fn to_bytes(&self) -> Vec<u8> {
         let output: Vec<u8> = [
             &self.server_nonce[..],
@@ -333,7 +335,9 @@ impl<HashLen: ArrayLength<u8>> ToBytes for KE2Message<HashLen> {
     }
 }
 
-impl<HashLen: ArrayLength<u8>> TryFrom<Vec<u8>> for KE2Message<HashLen> {
+impl<HashLen: ArrayLength<u8>, KeyFormat: KeyPair> TryFrom<Vec<u8>>
+    for KE2Message<HashLen, KeyFormat>
+{
     type Error = ProtocolError;
 
     fn try_from(ke2_message_bytes: Vec<u8>) -> Result<Self, Self::Error> {
@@ -342,20 +346,22 @@ impl<HashLen: ArrayLength<u8>> TryFrom<Vec<u8>> for KE2Message<HashLen> {
 
         Ok(Self {
             server_nonce: GenericArray::clone_from_slice(&checked_bytes[..NONCE_LEN]),
-            server_e_pk: Key::from_bytes(&checked_bytes[NONCE_LEN..NONCE_LEN + KEY_LEN])?,
+            server_e_pk: KeyFormat::Repr::from_bytes(
+                &checked_bytes[NONCE_LEN..NONCE_LEN + KEY_LEN],
+            )?,
             mac: GenericArray::clone_from_slice(&checked_bytes[NONCE_LEN + KEY_LEN..]),
         })
     }
 }
 
 // The triple of public and private components used in the 3DH computation
-struct TripleDHComponents {
-    pk1: Key,
-    sk1: Key,
-    pk2: Key,
-    sk2: Key,
-    pk3: Key,
-    sk3: Key,
+struct TripleDHComponents<KeyFormat: KeyPair> {
+    pk1: KeyFormat::Repr,
+    sk1: KeyFormat::Repr,
+    pk2: KeyFormat::Repr,
+    sk2: KeyFormat::Repr,
+    pk3: KeyFormat::Repr,
+    sk3: KeyFormat::Repr,
 }
 
 // Consists of a shared secret, followed by two mac keys
@@ -367,8 +373,8 @@ type TripleDHDerivationResult<D> = (
 
 // Internal function which takes the public and private components of the client and server keypairs, along
 // with some auxiliary metadata, to produce the shared secret and two MAC keys
-fn derive_3dh_keys<KeyFormat: KeyPair<Repr = Key>, D: Hash>(
-    dh: TripleDHComponents,
+fn derive_3dh_keys<KeyFormat: KeyPair, D: Hash>(
+    dh: TripleDHComponents<KeyFormat>,
     client_nonce: &GenericArray<u8, NonceLen>,
     server_nonce: &GenericArray<u8, NonceLen>,
     client_s_pk: KeyFormat::Repr,
