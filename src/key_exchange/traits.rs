@@ -6,13 +6,13 @@
 use crate::{
     errors::{InternalPakeError, ProtocolError},
     hash::Hash,
-    keypair::{Key, KeyPair},
+    keypair::KeyPair,
 };
 use rand_core::{CryptoRng, RngCore};
 
 use std::convert::TryFrom;
 
-pub trait KeyExchange<D: Hash, KeyFormat: KeyPair<Repr = Key>> {
+pub trait KeyExchange<D: Hash, KeyFormat: KeyPair> {
     type KE1State: TryFrom<Vec<u8>, Error = InternalPakeError> + ToBytes;
     type KE2State: TryFrom<Vec<u8>, Error = ProtocolError> + ToBytes;
     type KE1Message: TryFrom<Vec<u8>, Error = InternalPakeError> + ToBytes;
