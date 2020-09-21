@@ -16,6 +16,7 @@ use proptest::prelude::*;
 #[cfg(test)]
 use rand::{rngs::StdRng, SeedableRng};
 use rand_core::{CryptoRng, RngCore};
+use std::convert::TryInto;
 use std::fmt::Debug;
 use x25519_dalek::{PublicKey, StaticSecret};
 
@@ -90,35 +91,6 @@ trait KeyPairExt: KeyPair + Debug {
 // blanket implementation
 #[cfg(test)]
 impl<KP> KeyPairExt for KP where KP: KeyPair + Debug {}
-
-/// This assumes you have defined:
-/// - an `impl TryFrom<&[u8b], Error = InternalPakeError>` for a non-generic `T`
-/// - an `fn to_bytes(&self) -> Vec<u8>` in an `impl T` block
-/// and it both of the above to produce a sensible SizedBytes implementation
-///
-/// Because SizedBytes has a strong notion of size, and TryFrom/to_bytes does
-/// not, it's better to use the macro below rather than this one, where possible.
-#[macro_export]
-macro_rules! sized_bytes_using_constant_and_try_from {
-    ($sized_type: ident, $len: ident) => {
-        impl SizedBytes for $sized_type {
-            type Len = $len;
-
-            fn to_arr(&self) -> generic_array::GenericArray<u8, Self::Len> {
-                generic_array::GenericArray::clone_from_slice(&self.to_bytes())
-            }
-
-            fn from_bytes(bytes: &[u8]) -> Result<Self, InternalPakeError> {
-                let checked_bytes = check_slice_size(
-                    bytes,
-                    <Self::Len as generic_array::typenum::Unsigned>::to_usize(),
-                    "bytes",
-                )?;
-                std::convert::TryFrom::try_from(checked_bytes.to_vec())
-            }
-        }
-    };
-}
 
 /// This assumes you have defined a SizedBytes instance for a `T`, and defines:
 /// - an `impl TryFrom<&[u8b], Error = InternalPakeError>` for a non-generic `T`
@@ -245,15 +217,15 @@ impl KeyPair for X25519KeyPair {
     }
 
     fn public_from_private(secret: &Self::Repr) -> Self::Repr {
-        let mut secret_data = [0u8; 32];
-        secret_data.copy_from_slice(&secret.0[..]);
+        let secret_data: [u8; 32] = (&secret.0[..])
+            .try_into()
+            .expect("Keypair::Repr invariant broken");
         let base_data = ::x25519_dalek::X25519_BASEPOINT_BYTES;
         Key(::x25519_dalek::x25519(secret_data, base_data).to_vec())
     }
 
     fn check_public_key(key: Self::Repr) -> Result<Self::Repr, InternalPakeError> {
-        let mut key_bytes = [0u8; 32];
-        key_bytes.copy_from_slice(&key);
+        let key_bytes: [u8; 32] = (&key[..]).try_into().expect("Key invariant broken");
         let point = ::curve25519_dalek::montgomery::MontgomeryPoint(key_bytes)
             .to_edwards(1)
             .ok_or(InternalPakeError::PointError)?;

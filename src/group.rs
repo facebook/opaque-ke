@@ -87,7 +87,7 @@ impl Group for RistrettoPoint {
     ) -> Result<Self, InternalPakeError> {
         CompressedRistretto::from_slice(element_bits)
             .decompress()
-            .ok_or_else(|| InternalPakeError::PointError)
+            .ok_or(InternalPakeError::PointError)
     }
     // serialization of a group element
     fn to_arr(&self) -> GenericArray<u8, Self::ElemLen> {
@@ -97,9 +97,12 @@ impl Group for RistrettoPoint {
 
     type UniformBytesLen = U64;
     fn hash_to_curve(uniform_bytes: &GenericArray<u8, Self::UniformBytesLen>) -> Self {
-        let mut bits = [0u8; 64];
-        bits.copy_from_slice(&uniform_bytes);
-
+        // https://caniuse.rs/features/array_gt_32_impls
+        let bits: [u8; 64] = {
+            let mut bytes = [0u8; 64];
+            bytes.copy_from_slice(uniform_bytes);
+            bytes
+        };
         RistrettoPoint::from_uniform_bytes(&bits)
     }
 }
@@ -132,7 +135,7 @@ impl Group for EdwardsPoint {
     ) -> Result<Self, InternalPakeError> {
         let point = CompressedEdwardsY::from_slice(element_bits)
             .decompress()
-            .ok_or_else(|| InternalPakeError::PointError)?;
+            .ok_or(InternalPakeError::PointError)?;
 
         if point.is_small_order() {
             return Err(InternalPakeError::SubGroupError);
@@ -155,6 +158,7 @@ impl Group for EdwardsPoint {
 mod tests {
     use super::*;
     use anyhow::{anyhow, Result};
+    use std::convert::TryInto;
 
     const EIGHT_TORSION: [[u8; 32]; 8] = [
         [
@@ -192,8 +196,9 @@ mod tests {
     ];
 
     fn deserialize_point(pt: &[u8]) -> Result<EdwardsPoint> {
-        let mut bytes = [0u8; 32];
-        bytes.copy_from_slice(&pt[..32]);
+        let bytes: [u8; 32] = (&pt[..32])
+            .try_into()
+            .expect("Slice pattern invariant broken");
 
         curve25519_dalek::edwards::CompressedEdwardsY(bytes)
             .decompress()

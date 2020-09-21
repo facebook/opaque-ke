@@ -12,19 +12,19 @@ use rand_core::{CryptoRng, RngCore};
 
 use std::convert::TryFrom;
 
-pub trait KeyExchange<D: Hash> {
+pub trait KeyExchange<D: Hash, KeyFormat: KeyPair<Repr = Key>> {
     type KE1State: TryFrom<Vec<u8>, Error = InternalPakeError> + ToBytes;
     type KE2State: TryFrom<Vec<u8>, Error = ProtocolError> + ToBytes;
     type KE1Message: TryFrom<Vec<u8>, Error = InternalPakeError> + ToBytes;
     type KE2Message: TryFrom<Vec<u8>, Error = ProtocolError> + ToBytes;
     type KE3Message: TryFrom<Vec<u8>, Error = ProtocolError> + ToBytes;
 
-    fn generate_ke1<R: RngCore + CryptoRng, KeyFormat: KeyPair<Repr = Key>>(
+    fn generate_ke1<R: RngCore + CryptoRng>(
         l1_component: Vec<u8>,
         rng: &mut R,
     ) -> Result<(Self::KE1State, Self::KE1Message), ProtocolError>;
 
-    fn generate_ke2<R: RngCore + CryptoRng, KeyFormat: KeyPair<Repr = Key>>(
+    fn generate_ke2<R: RngCore + CryptoRng>(
         rng: &mut R,
         l1_bytes: Vec<u8>,
         l2_bytes: Vec<u8>,
@@ -33,7 +33,7 @@ pub trait KeyExchange<D: Hash> {
         server_s_sk: KeyFormat::Repr,
     ) -> Result<(Self::KE2State, Self::KE2Message), ProtocolError>;
 
-    fn generate_ke3<KeyFormat: KeyPair<Repr = Key>>(
+    fn generate_ke3(
         l2_component: Vec<u8>,
         ke2_message: Self::KE2Message,
         ke1_state: &Self::KE1State,

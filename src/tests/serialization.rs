@@ -167,8 +167,10 @@ fn login_first_message_roundtrip() {
     rng.fill_bytes(&mut client_nonce);
 
     let ke1m: Vec<u8> = [&client_nonce[..], &client_e_kp.public()].concat();
-    let reg =
-        <TripleDH as KeyExchange<sha2::Sha256>>::KE1Message::try_from(ke1m[..].to_vec()).unwrap();
+    let reg = <TripleDH as KeyExchange<sha2::Sha256, crate::keypair::X25519KeyPair>>::KE1Message::try_from(
+        ke1m[..].to_vec(),
+    )
+    .unwrap();
     let reg_bytes = reg.to_bytes();
     assert_eq!(reg_bytes, ke1m);
 }
@@ -197,7 +199,7 @@ proptest! {
 
     #[test]
     fn test_nocrash_login_second_message(bytes in vec(any::<u8>(), 0..500)) {
-        LoginSecondMessage::<RistrettoPoint, crate::keypair::X25519KeyPair, TripleDH, sha2::Sha512>::try_from(&bytes[..]).map_or(true, |_| true);
+        LoginSecondMessage::<Default>::try_from(&bytes[..]).map_or(true, |_| true);
     }
 
     #[test]
