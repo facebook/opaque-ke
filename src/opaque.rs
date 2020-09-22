@@ -12,7 +12,7 @@ use crate::{
     group::Group,
     hash::Hash,
     key_exchange::traits::{KeyExchange, ToBytes},
-    keypair::{Key, KeyPair, SizedBytes},
+    keypair::{KeyPair, SizedBytes},
     oprf,
     oprf::OprfClientBytes,
     slow_hash::SlowHash,
@@ -519,7 +519,7 @@ where
         let mut output: Vec<u8> = CS::Group::scalar_as_bytes(&self.oprf_key).to_vec();
         self.client_s_pk
             .iter()
-            .for_each(|v| output.extend_from_slice(&v));
+            .for_each(|v| output.extend_from_slice(&v.to_arr()));
         self.envelope
             .iter()
             .for_each(|v| output.extend_from_slice(&v.to_bytes()));
@@ -794,7 +794,7 @@ impl<CS: CipherSuite> ClientLogin<CS> {
             l2.ke2_message,
             &self.ke1_state,
             server_s_pk.clone(),
-            Key::from_bytes(&opened_envelope.plaintext)?,
+            <CS::KeyFormat as KeyPair>::Repr::from_bytes(&opened_envelope.plaintext)?,
         )?;
 
         Ok((
@@ -869,7 +869,7 @@ impl<CS: CipherSuite> ServerLogin<CS> {
     /// ```
     pub fn start<R: RngCore + CryptoRng>(
         password_file: ServerRegistration<CS>,
-        server_s_sk: &Key,
+        server_s_sk: &<CS::KeyFormat as KeyPair>::Repr,
         l1: LoginFirstMessage<CS>,
         rng: &mut R,
     ) -> Result<ServerLoginStartResult<CS>, ProtocolError> {
