@@ -8,7 +8,7 @@ use crate::{
     errors::*,
     group::Group,
     key_exchange::tripledh::{TripleDH, NONCE_LEN},
-    keypair::{Key, KeyPair, X25519KeyPair},
+    keypair::{Key, KeyPair, SizedBytes, X25519KeyPair},
     opaque::*,
     slow_hash::NoOpHash,
     tests::mock_rng::CycleRng,
@@ -220,7 +220,18 @@ fn stringify_test_vectors(p: &TestVectorParameters) -> String {
     s
 }
 
-fn generate_parameters<CS: CipherSuite>() -> TestVectorParameters {
+fn generate_parameters<CS: CipherSuite>() -> TestVectorParameters
+where
+    // Unsightly constraints due to the (required) use of the SizedBytes
+    // instance for KP in ServerRegistration::start. See also the impl
+    // Tryfrom<&[u8]> for ServerRegistration (those are the same constraints).
+    <<CS::KeyFormat as KeyPair>::Repr as SizedBytes>::Len:
+        std::ops::Add<<<CS::KeyFormat as KeyPair>::Repr as SizedBytes>::Len>,
+    generic_array::typenum::Sum<
+        <<CS::KeyFormat as KeyPair>::Repr as SizedBytes>::Len,
+        <<CS::KeyFormat as KeyPair>::Repr as SizedBytes>::Len,
+    >: generic_array::ArrayLength<u8>,
+{
     let mut rng = OsRng;
 
     // Inputs
@@ -260,7 +271,7 @@ fn generate_parameters<CS: CipherSuite>() -> TestVectorParameters {
     let server_registration_state = server_registration.to_bytes().to_vec();
 
     let mut client_s_sk_and_nonce: Vec<u8> = Vec::new();
-    client_s_sk_and_nonce.extend_from_slice(&client_s_kp.private());
+    client_s_sk_and_nonce.extend_from_slice(&client_s_kp.private().to_arr());
     client_s_sk_and_nonce.extend_from_slice(&envelope_nonce);
 
     let mut finish_registration_rng = CycleRng::new(client_s_sk_and_nonce);
@@ -274,7 +285,7 @@ fn generate_parameters<CS: CipherSuite>() -> TestVectorParameters {
 
     let mut client_login_start: Vec<u8> = Vec::new();
     client_login_start.extend_from_slice(&blinding_factor_raw);
-    client_login_start.extend_from_slice(&client_e_kp.private());
+    client_login_start.extend_from_slice(&client_e_kp.private().to_arr());
     client_login_start.extend_from_slice(&client_nonce);
 
     let mut client_login_start_rng = CycleRng::new(client_login_start);
@@ -283,7 +294,7 @@ fn generate_parameters<CS: CipherSuite>() -> TestVectorParameters {
     let l1_bytes = l1.to_bytes().to_vec();
     let client_login_state = client_login.to_bytes().to_vec();
 
-    let mut server_e_sk_rng = CycleRng::new(server_e_kp.private().to_vec());
+    let mut server_e_sk_rng = CycleRng::new(server_e_kp.private().to_arr().to_vec());
     let (l2, server_login) = ServerLogin::<CS>::start(
         password_file,
         server_s_kp.private(),
@@ -294,21 +305,21 @@ fn generate_parameters<CS: CipherSuite>() -> TestVectorParameters {
     let l2_bytes = l2.to_bytes().to_vec();
     let server_login_state = server_login.to_bytes().to_vec();
 
-    let mut client_e_sk_rng = CycleRng::new(client_e_kp.private().to_vec());
+    let mut client_e_sk_rng = CycleRng::new(client_e_kp.private().to_arr().to_vec());
     let (l3, client_shared_secret, _export_key_login) = client_login
         .finish(l2, server_s_kp.public(), &mut client_e_sk_rng)
         .unwrap();
     let l3_bytes = l3.to_bytes().to_vec();
 
     TestVectorParameters {
-        client_s_pk: client_s_kp.public().to_vec(),
-        client_s_sk: client_s_kp.private().to_vec(),
-        client_e_pk: client_e_kp.public().to_vec(),
-        client_e_sk: client_e_kp.private().to_vec(),
-        server_s_pk: server_s_kp.public().to_vec(),
-        server_s_sk: server_s_kp.private().to_vec(),
-        server_e_pk: server_e_kp.public().to_vec(),
-        server_e_sk: server_e_kp.private().to_vec(),
+        client_s_pk: client_s_kp.public().to_arr().to_vec(),
+        client_s_sk: client_s_kp.private().to_arr().to_vec(),
+        client_e_pk: client_e_kp.public().to_arr().to_vec(),
+        client_e_sk: client_e_kp.private().to_arr().to_vec(),
+        server_s_pk: server_s_kp.public().to_arr().to_vec(),
+        server_s_sk: server_s_kp.private().to_arr().to_vec(),
+        server_e_pk: server_e_kp.public().to_arr().to_vec(),
+        server_e_sk: server_e_kp.private().to_arr().to_vec(),
         password: password.to_vec(),
         blinding_factor_raw: blinding_factor_raw.to_vec(),
         blinding_factor: blinding_factor_bytes.to_vec(),

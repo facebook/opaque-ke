@@ -6,12 +6,8 @@
 //! Defines the CipherSuite trait to specify the underlying primitives for OPAQUE
 
 use crate::{
-    errors::InternalPakeError,
-    hash::Hash,
-    key_exchange::traits::KeyExchange,
-    keypair::{Key, KeyPair},
-    map_to_curve::GroupWithMapToCurve,
-    slow_hash::SlowHash,
+    errors::InternalPakeError, hash::Hash, key_exchange::traits::KeyExchange, keypair::KeyPair,
+    map_to_curve::GroupWithMapToCurve, slow_hash::SlowHash,
 };
 
 use rand_core::{CryptoRng, RngCore};
@@ -32,7 +28,7 @@ pub trait CipherSuite {
     /// `map_to_curve::GroupWithMapToCurve`.
     type Group: GroupWithMapToCurve;
     /// A keypair type composed of public and private components
-    type KeyFormat: KeyPair<Repr = Key> + PartialEq;
+    type KeyFormat: KeyPair + PartialEq;
     /// A key exchange protocol
     type KeyExchange: KeyExchange<Self::Hash, Self::KeyFormat>;
     /// The main hash function use (for HKDF computations and hashing transcripts)
