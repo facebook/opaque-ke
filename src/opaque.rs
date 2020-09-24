@@ -165,7 +165,7 @@ impl<CS: CipherSuite> TryFrom<&[u8]> for LoginFirstMessage<CS> {
 
         let ke1_message =
             <CS::KeyExchange as KeyExchange<CS::Hash, CS::KeyFormat>>::KE1Message::try_from(
-                checked_slice[elem_len..].to_vec(),
+                &checked_slice[elem_len..],
             )?;
         Ok(Self { alpha, ke1_message })
     }
@@ -224,7 +224,7 @@ impl<CS: CipherSuite> TryFrom<&[u8]> for LoginSecondMessage<CS> {
 
         let ke2_message =
             <CS::KeyExchange as KeyExchange<CS::Hash, CS::KeyFormat>>::KE2Message::try_from(
-                checked_slice[elem_len + envelope_size..].to_vec(),
+                &checked_slice[elem_len + envelope_size..],
             )?;
 
         Ok(Self {
@@ -246,9 +246,7 @@ impl<CS: CipherSuite> TryFrom<&[u8]> for LoginThirdMessage<CS> {
 
     fn try_from(bytes: &[u8]) -> Result<Self, Self::Error> {
         let ke3_message =
-            <CS::KeyExchange as KeyExchange<CS::Hash, CS::KeyFormat>>::KE3Message::try_from(
-                bytes.to_vec(),
-            )?;
+            <CS::KeyExchange as KeyExchange<CS::Hash, CS::KeyFormat>>::KE3Message::try_from(bytes)?;
         Ok(Self { ke3_message })
     }
 }
@@ -653,7 +651,7 @@ impl<CS: CipherSuite> TryFrom<&[u8]> for ClientLogin<CS> {
         let blinding_factor = CS::Group::from_scalar_slice(blinding_factor_bytes)?;
         let ke1_state =
             <CS::KeyExchange as KeyExchange<CS::Hash, CS::KeyFormat>>::KE1State::try_from(
-                checked_slice[scalar_len..scalar_len + ke1_state_size].to_vec(),
+                &checked_slice[scalar_len..scalar_len + ke1_state_size],
             )?;
         let password = bytes[scalar_len + ke1_state_size..].to_vec();
         Ok(Self {
@@ -818,7 +816,7 @@ impl<CS: CipherSuite> TryFrom<&[u8]> for ServerLogin<CS> {
             _cs: PhantomData,
             ke2_state:
                 <CS::KeyExchange as KeyExchange<CS::Hash, CS::KeyFormat>>::KE2State::try_from(
-                    bytes.to_vec(),
+                    bytes,
                 )?,
         })
     }

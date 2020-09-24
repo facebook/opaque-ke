@@ -168,7 +168,7 @@ fn login_first_message_roundtrip() {
 
     let ke1m: Vec<u8> = [&client_nonce[..], &client_e_kp.public()].concat();
     let reg = <TripleDH as KeyExchange<sha2::Sha256, crate::keypair::X25519KeyPair>>::KE1Message::try_from(
-        ke1m[..].to_vec(),
+        &ke1m[..],
     )
     .unwrap();
     let reg_bytes = reg.to_bytes();

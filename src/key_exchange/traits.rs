@@ -13,11 +13,11 @@ use rand_core::{CryptoRng, RngCore};
 use std::convert::TryFrom;
 
 pub trait KeyExchange<D: Hash, KeyFormat: KeyPair> {
-    type KE1State: TryFrom<Vec<u8>, Error = InternalPakeError> + ToBytes;
-    type KE2State: TryFrom<Vec<u8>, Error = ProtocolError> + ToBytes;
-    type KE1Message: TryFrom<Vec<u8>, Error = InternalPakeError> + ToBytes;
-    type KE2Message: TryFrom<Vec<u8>, Error = ProtocolError> + ToBytes;
-    type KE3Message: TryFrom<Vec<u8>, Error = ProtocolError> + ToBytes;
+    type KE1State: for<'r> TryFrom<&'r [u8], Error = InternalPakeError> + ToBytes;
+    type KE2State: for<'r> TryFrom<&'r [u8], Error = InternalPakeError> + ToBytes;
+    type KE1Message: for<'r> TryFrom<&'r [u8], Error = InternalPakeError> + ToBytes;
+    type KE2Message: for<'r> TryFrom<&'r [u8], Error = InternalPakeError> + ToBytes;
+    type KE3Message: for<'r> TryFrom<&'r [u8], Error = InternalPakeError> + ToBytes;
 
     fn generate_ke1<R: RngCore + CryptoRng>(
         l1_component: Vec<u8>,

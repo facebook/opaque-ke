@@ -229,14 +229,12 @@ pub struct KE1Message<KeyFormat: KeyPair> {
     pub(crate) client_e_pk: KeyFormat::Repr,
 }
 
-impl<HashLen: ArrayLength<u8>, KeyFormat: KeyPair> TryFrom<Vec<u8>>
-    for KE1State<HashLen, KeyFormat>
-{
+impl<HashLen: ArrayLength<u8>, KeyFormat: KeyPair> TryFrom<&[u8]> for KE1State<HashLen, KeyFormat> {
     type Error = InternalPakeError;
 
-    fn try_from(bytes: Vec<u8>) -> Result<Self, Self::Error> {
+    fn try_from(bytes: &[u8]) -> Result<Self, Self::Error> {
         let checked_bytes = check_slice_size(
-            &bytes,
+            bytes,
             KEY_LEN + NONCE_LEN + HashLen::to_usize(),
             "ke1_state",
         )?;
@@ -269,12 +267,12 @@ impl<KeyFormat: KeyPair> ToBytes for KE1Message<KeyFormat> {
     }
 }
 
-impl<KeyFormat: KeyPair> TryFrom<Vec<u8>> for KE1Message<KeyFormat> {
+impl<KeyFormat: KeyPair> TryFrom<&[u8]> for KE1Message<KeyFormat> {
     type Error = InternalPakeError;
 
-    fn try_from(ke1_message_bytes: Vec<u8>) -> Result<Self, Self::Error> {
+    fn try_from(ke1_message_bytes: &[u8]) -> Result<Self, Self::Error> {
         let checked_bytes =
-            check_slice_size(&ke1_message_bytes, NONCE_LEN + KEY_LEN, "ke1_message")?;
+            check_slice_size(ke1_message_bytes, NONCE_LEN + KEY_LEN, "ke1_message")?;
 
         Ok(Self {
             client_nonce: GenericArray::clone_from_slice(&checked_bytes[..NONCE_LEN]),
@@ -309,11 +307,11 @@ impl<HashLen: ArrayLength<u8>> ToBytes for KE2State<HashLen> {
     }
 }
 
-impl<HashLen: ArrayLength<u8>> TryFrom<Vec<u8>> for KE2State<HashLen> {
-    type Error = ProtocolError;
+impl<HashLen: ArrayLength<u8>> TryFrom<&[u8]> for KE2State<HashLen> {
+    type Error = InternalPakeError;
 
-    fn try_from(ke1_message_bytes: Vec<u8>) -> Result<Self, Self::Error> {
-        let checked_bytes = check_slice_size(&ke1_message_bytes, 3 * KEY_LEN, "ke2_state")?;
+    fn try_from(ke1_message_bytes: &[u8]) -> Result<Self, Self::Error> {
+        let checked_bytes = check_slice_size(ke1_message_bytes, 3 * KEY_LEN, "ke2_state")?;
 
         Ok(Self {
             km3: GenericArray::clone_from_slice(&checked_bytes[..KEY_LEN]),
@@ -335,14 +333,14 @@ impl<HashLen: ArrayLength<u8>, KeyFormat: KeyPair> ToBytes for KE2Message<HashLe
     }
 }
 
-impl<HashLen: ArrayLength<u8>, KeyFormat: KeyPair> TryFrom<Vec<u8>>
+impl<HashLen: ArrayLength<u8>, KeyFormat: KeyPair> TryFrom<&[u8]>
     for KE2Message<HashLen, KeyFormat>
 {
-    type Error = ProtocolError;
+    type Error = InternalPakeError;
 
-    fn try_from(ke2_message_bytes: Vec<u8>) -> Result<Self, Self::Error> {
+    fn try_from(ke2_message_bytes: &[u8]) -> Result<Self, Self::Error> {
         let ke2_message_len = NONCE_LEN + KEY_LEN + HashLen::to_usize();
-        let checked_bytes = check_slice_size(&ke2_message_bytes, ke2_message_len, "ke2_message")?;
+        let checked_bytes = check_slice_size(ke2_message_bytes, ke2_message_len, "ke2_message")?;
 
         Ok(Self {
             server_nonce: GenericArray::clone_from_slice(&checked_bytes[..NONCE_LEN]),
@@ -419,11 +417,11 @@ impl<HashLen: ArrayLength<u8>> ToBytes for KE3Message<HashLen> {
     }
 }
 
-impl<HashLen: ArrayLength<u8>> TryFrom<Vec<u8>> for KE3Message<HashLen> {
-    type Error = ProtocolError;
+impl<HashLen: ArrayLength<u8>> TryFrom<&[u8]> for KE3Message<HashLen> {
+    type Error = InternalPakeError;
 
-    fn try_from(bytes: Vec<u8>) -> Result<Self, Self::Error> {
-        let checked_bytes = check_slice_size(&bytes, KEY_LEN, "ke3_message")?;
+    fn try_from(bytes: &[u8]) -> Result<Self, Self::Error> {
+        let checked_bytes = check_slice_size(bytes, KEY_LEN, "ke3_message")?;
 
         Ok(Self {
             mac: GenericArray::clone_from_slice(&checked_bytes),
