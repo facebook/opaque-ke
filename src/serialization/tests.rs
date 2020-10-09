@@ -2,6 +2,7 @@
 //
 // This source code is licensed under the MIT license found in the
 // LICENSE file in the root directory of this source tree.
+
 use crate::{
     ciphersuite::CipherSuite,
     envelope::Envelope,
@@ -12,10 +13,10 @@ use crate::{
     },
     keypair::{KeyPair, SizedBytes, X25519KeyPair},
     opaque::*,
+    serialization::{serialize, ProtocolMessageType},
 };
 
 use curve25519_dalek::ristretto::RistrettoPoint;
-use generic_array::typenum::Unsigned;
 use proptest::{collection::vec, prelude::*};
 use rand_core::{OsRng, RngCore};
 
@@ -30,6 +31,8 @@ impl CipherSuite for Default {
     type Hash = sha2::Sha256;
     type SlowHash = crate::slow_hash::NoOpHash;
 }
+
+const MAX_ID_LENGTH: usize = 10;
 
 fn random_ristretto_point() -> RistrettoPoint {
     let mut rng = OsRng;
@@ -50,8 +53,21 @@ fn client_registration_roundtrip() {
     let pw = b"hunter2";
     let mut rng = OsRng;
     let sc = <RistrettoPoint as Group>::random_scalar(&mut rng);
-    // serialization order: scalar, password
-    let bytes: Vec<u8> = [&sc.as_bytes()[..], &pw[..]].concat();
+    let id_u_length: usize = rng.gen_range(0, MAX_ID_LENGTH);
+    let id_s_length: usize = rng.gen_range(0, MAX_ID_LENGTH);
+    let mut id_u = [0u8; MAX_ID_LENGTH];
+    rng.fill_bytes(&mut id_u);
+    let mut id_s = [0u8; MAX_ID_LENGTH];
+    rng.fill_bytes(&mut id_s);
+
+    // serialization order: id_u, id_s, scalar, password
+    let bytes: Vec<u8> = [
+        &serialize(&id_u[..id_u_length], 2)[..],
+        &serialize(&id_s[..id_s_length], 2)[..],
+        &sc.as_bytes()[..],
+        &pw[..],
+    ]
+    .concat();
     let reg = ClientRegistration::<Default>::try_from(&bytes[..]).unwrap();
     let reg_bytes = reg.to_bytes();
     assert_eq!(reg_bytes, bytes);
@@ -62,24 +78,28 @@ fn server_registration_roundtrip() {
     // If we don't have envelope and client_pk, the server registration just
     // contains the prf key
     let mut rng = OsRng;
-    let sc = <RistrettoPoint as Group>::random_scalar(&mut rng);
+    let oprf_key = <RistrettoPoint as Group>::random_scalar(&mut rng);
     let mut oprf_bytes: Vec<u8> = vec![];
-    oprf_bytes.extend_from_slice(sc.as_bytes());
+    oprf_bytes.extend_from_slice(oprf_key.as_bytes());
     let reg = ServerRegistration::<Default>::try_from(&oprf_bytes[..]).unwrap();
     let reg_bytes = reg.to_bytes();
     assert_eq!(reg_bytes, oprf_bytes);
     // If we do have envelope and client pk, the server registration contains
     // the whole kit
-    let key_len =
-        <<<Default as CipherSuite>::KeyFormat as KeyPair>::Repr as SizedBytes>::Len::to_usize();
-    let envelope_size = key_len + Envelope::<sha2::Sha256>::additional_size();
-    let mut mock_envelope_bytes = vec![0u8; envelope_size];
-    rng.fill_bytes(&mut mock_envelope_bytes);
-    println!("{}", mock_envelope_bytes.len());
+
+    // Construct a mock envelope
+    let mut mock_envelope_bytes = Vec::new();
+    mock_envelope_bytes.extend_from_slice(&[0; NONCE_LEN]); // empty nonce
+    mock_envelope_bytes.extend_from_slice(&[0, 0]); // empty ciphertext
+    mock_envelope_bytes.extend_from_slice(&[0, 0]); // empty auth_data
+                                                    // length-32 hmac
+    mock_envelope_bytes.extend_from_slice(&[0, 32]);
+    mock_envelope_bytes.extend_from_slice(&[0; 32]);
+
     let mock_client_kp = Default::generate_random_keypair(&mut rng).unwrap();
-    // serialization order: scalar, public key, envelope
+    // serialization order: oprf_key, public key, envelope
     let mut bytes = Vec::<u8>::new();
-    bytes.extend_from_slice(sc.as_bytes());
+    bytes.extend_from_slice(oprf_key.as_bytes());
     bytes.extend_from_slice(&mock_client_kp.public().to_arr());
     bytes.extend_from_slice(&mock_envelope_bytes);
     let reg = ServerRegistration::<Default>::try_from(&bytes[..]).unwrap();
@@ -91,10 +111,21 @@ fn server_registration_roundtrip() {
 fn register_first_message_roundtrip() {
     let pt = random_ristretto_point();
     let pt_bytes = pt.to_arr().to_vec();
-    let header = [1, 0, 0, 36, 0, 0, 0, 32];
+
+    let mut rng = OsRng;
+    let id_length: usize = rng.gen_range(0, MAX_ID_LENGTH);
+    let mut id = [0u8; MAX_ID_LENGTH];
+    rng.fill_bytes(&mut id);
+
+    let alpha_length: usize = 32;
+    let total_length: usize = alpha_length + id_length + 4;
 
     let mut input = Vec::new();
-    input.extend_from_slice(&header);
+    input.extend_from_slice(&[ProtocolMessageType::RegistrationRequest as u8 + 1]);
+    input.extend_from_slice(&total_length.to_be_bytes()[8 - 3..]);
+    input.extend_from_slice(&id_length.to_be_bytes()[8 - 2..]);
+    input.extend_from_slice(&id[..id_length]);
+    input.extend_from_slice(&alpha_length.to_be_bytes()[8 - 2..]);
     input.extend_from_slice(pt_bytes.as_slice());
 
     let r1 = RegisterFirstMessage::<RistrettoPoint>::deserialize(input.as_slice()).unwrap();
@@ -105,14 +136,24 @@ fn register_first_message_roundtrip() {
 #[test]
 fn register_second_message_roundtrip() {
     let pt = random_ristretto_point();
-    let pt_bytes = pt.to_arr();
-    let header = [2, 0, 0, 40, 0, 32];
-    let tail = [0, 0, 1, 1, 1, 3];
+    let beta_bytes = pt.to_arr();
+    let mut rng = OsRng;
+    let skp = Default::generate_random_keypair(&mut rng).unwrap();
+    let pubkey_bytes = skp.public().to_arr();
+    let credential_types = [1, 1, 1, 3];
+
+    let beta_length: usize = beta_bytes.len();
+    let pubkey_length: usize = pubkey_bytes.len();
+    let total_length: usize = beta_length + pubkey_length + credential_types.len() + 4;
 
     let mut input = Vec::new();
-    input.extend_from_slice(&header);
-    input.extend_from_slice(pt_bytes.as_slice());
-    input.extend_from_slice(&tail);
+    input.extend_from_slice(&[ProtocolMessageType::RegistrationResponse as u8 + 1]);
+    input.extend_from_slice(&total_length.to_be_bytes()[8 - 3..]);
+    input.extend_from_slice(&beta_length.to_be_bytes()[8 - 2..]);
+    input.extend_from_slice(beta_bytes.as_slice());
+    input.extend_from_slice(&pubkey_length.to_be_bytes()[8 - 2..]);
+    input.extend_from_slice(&pubkey_bytes.as_slice());
+    input.extend_from_slice(&credential_types);
 
     let r2 = RegisterSecondMessage::<RistrettoPoint>::deserialize(input.as_slice()).unwrap();
     let r2_bytes = r2.serialize();
@@ -125,9 +166,6 @@ fn register_third_message_roundtrip() {
     let skp = Default::generate_random_keypair(&mut rng).unwrap();
     let pubkey_bytes = skp.public().to_arr();
 
-    let header = [3, 0, 0, 136];
-    let intermediate = [0, 32];
-
     let mut key = [0u8; 32];
     rng.fill_bytes(&mut key);
 
@@ -135,12 +173,17 @@ fn register_third_message_roundtrip() {
     rng.fill_bytes(&mut msg);
 
     let (envelope, _) =
-        Envelope::<sha2::Sha256>::seal(&key, &msg, &pubkey_bytes, &mut rng).unwrap();
+        Envelope::<sha2::Sha256>::seal_raw(&key, &msg, &pubkey_bytes, &mut rng).unwrap();
+    let envelope_bytes = envelope.serialize();
+
+    let pubkey_length: usize = pubkey_bytes.len();
+    let total_length: usize = pubkey_length + envelope_bytes.len() + 2;
 
     let mut input = Vec::new();
-    input.extend_from_slice(&header);
-    input.extend_from_slice(&envelope.serialize());
-    input.extend_from_slice(&intermediate);
+    input.extend_from_slice(&[ProtocolMessageType::RegistrationUpload as u8 + 1]);
+    input.extend_from_slice(&total_length.to_be_bytes()[8 - 3..]);
+    input.extend_from_slice(&envelope_bytes);
+    input.extend_from_slice(&pubkey_length.to_be_bytes()[8 - 2..]);
     input.extend_from_slice(&pubkey_bytes[..]);
 
     let r3 = RegisterThirdMessage::<X25519KeyPair, sha2::Sha256>::deserialize(&input[..]).unwrap();
@@ -150,11 +193,12 @@ fn register_third_message_roundtrip() {
 
 #[test]
 fn login_first_message_roundtrip() {
-    let pt = random_ristretto_point();
-    let pt_bytes = pt.to_arr().to_vec();
-    let header = [4, 0, 0, 36, 0, 0, 0, 32];
-
     let mut rng = OsRng;
+    let alpha = random_ristretto_point();
+    let alpha_bytes = alpha.to_arr().to_vec();
+    let id_length: usize = rng.gen_range(0, MAX_ID_LENGTH);
+    let mut id = [0u8; MAX_ID_LENGTH];
+    rng.fill_bytes(&mut id);
 
     let client_e_kp = Default::generate_random_keypair(&mut rng).unwrap();
     let mut client_nonce = [0u8; NONCE_LEN];
@@ -162,9 +206,16 @@ fn login_first_message_roundtrip() {
 
     let ke1m: Vec<u8> = [&client_nonce[..], &client_e_kp.public()].concat();
 
+    let alpha_length = alpha_bytes.len();
+    let total_length_without_ke1m: usize = id_length + alpha_length + 4;
+
     let mut input = Vec::new();
-    input.extend_from_slice(&header);
-    input.extend_from_slice(pt_bytes.as_slice());
+    input.extend_from_slice(&[ProtocolMessageType::CredentialRequest as u8 + 1]);
+    input.extend_from_slice(&total_length_without_ke1m.to_be_bytes()[8 - 3..]);
+    input.extend_from_slice(&id_length.to_be_bytes()[8 - 2..]);
+    input.extend_from_slice(&id[..id_length]);
+    input.extend_from_slice(&alpha_length.to_be_bytes()[8 - 2..]);
+    input.extend_from_slice(&alpha_bytes);
     input.extend_from_slice(&ke1m[..]);
 
     let l1 = LoginFirstMessage::<Default>::deserialize(input.as_slice()).unwrap();
@@ -176,14 +227,10 @@ fn login_first_message_roundtrip() {
 fn login_second_message_roundtrip() {
     let pt = random_ristretto_point();
     let pt_bytes = pt.to_arr().to_vec();
-    let header = [5, 0, 0, 134, 0, 32];
 
     let mut rng = OsRng;
     let skp = Default::generate_random_keypair(&mut rng).unwrap();
     let pubkey_bytes = skp.public().to_arr();
-
-    let intermediate1 = [0, 96];
-    let intermediate2 = [0, 0];
 
     let mut key = [0u8; 32];
     rng.fill_bytes(&mut key);
@@ -192,7 +239,7 @@ fn login_second_message_roundtrip() {
     rng.fill_bytes(&mut msg);
 
     let (envelope, _) =
-        Envelope::<sha2::Sha256>::seal(&key, &msg, &pubkey_bytes, &mut rng).unwrap();
+        Envelope::<sha2::Sha256>::seal_raw(&key, &msg, &pubkey_bytes, &mut rng).unwrap();
 
     let server_e_kp = Default::generate_random_keypair(&mut rng).unwrap();
     let mut mac = [0u8; 32];
@@ -202,15 +249,18 @@ fn login_second_message_roundtrip() {
 
     let ke2m: Vec<u8> = [&server_nonce[..], &server_e_kp.public(), &mac[..]].concat();
 
+    let total_length_without_ke2m: usize = pt_bytes.len() + envelope.to_bytes().len() + 4;
+
     let mut input = Vec::new();
-    input.extend_from_slice(&header);
+    input.extend_from_slice(&[ProtocolMessageType::CredentialResponse as u8 + 1]);
+    input.extend_from_slice(&total_length_without_ke2m.to_be_bytes()[8 - 3..]);
+    input.extend_from_slice(&pt_bytes.len().to_be_bytes()[8 - 2..]);
     input.extend_from_slice(pt_bytes.as_slice());
-    input.extend_from_slice(&intermediate1[..]);
+    input.extend_from_slice(&envelope.to_bytes().len().to_be_bytes()[8 - 2..]);
     input.extend_from_slice(&envelope.to_bytes());
-    input.extend_from_slice(&intermediate2[..]);
     input.extend_from_slice(&ke2m[..]);
 
-    let l2 = LoginSecondMessage::<Default>::deserialize(input.as_slice()).unwrap();
+    let l2 = LoginSecondMessage::<Default>::deserialize(&input).unwrap();
     let l2_bytes = l2.serialize();
     assert_eq!(input, l2_bytes);
 }
@@ -219,6 +269,13 @@ fn login_second_message_roundtrip() {
 fn client_login_roundtrip() {
     let pw = b"hunter2";
     let mut rng = OsRng;
+    let id_u_length: usize = rng.gen_range(0, MAX_ID_LENGTH);
+    let id_s_length: usize = rng.gen_range(0, MAX_ID_LENGTH);
+    let mut id_u = [0u8; MAX_ID_LENGTH];
+    rng.fill_bytes(&mut id_u);
+    let mut id_s = [0u8; MAX_ID_LENGTH];
+    rng.fill_bytes(&mut id_s);
+
     let sc = <RistrettoPoint as Group>::random_scalar(&mut rng);
 
     let client_e_kp = Default::generate_random_keypair(&mut rng).unwrap();
@@ -230,8 +287,10 @@ fn client_login_roundtrip() {
     hasher.update(l1_data);
     let hashed_l1 = hasher.finalize();
 
-    // serialization order: scalar, password, ke1_state
+    // serialization order: id_u, id_s, scalar, password, ke1_state
     let bytes: Vec<u8> = [
+        &serialize(&id_u[..id_u_length], 2)[..],
+        &serialize(&id_s[..id_s_length], 2)[..],
         &sc.as_bytes()[..],
         &pw[..],
         client_e_kp.public(),

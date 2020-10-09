@@ -2,6 +2,7 @@
 //
 // This source code is licensed under the MIT license found in the
 // LICENSE file in the root directory of this source tree.
+
 use crate::errors::PakeError;
 
 use crate::{
@@ -9,8 +10,8 @@ use crate::{
     hash::Hash,
     keypair::KeyPair,
     opaque::{
-        LoginFirstMessage, LoginSecondMessage, RegisterFirstMessage, RegisterSecondMessage,
-        RegisterThirdMessage,
+        LoginFirstMessage, LoginSecondMessage, LoginThirdMessage, RegisterFirstMessage,
+        RegisterSecondMessage, RegisterThirdMessage,
     },
 };
 
@@ -20,15 +21,27 @@ pub enum ProtocolMessageType {
     RegistrationUpload,
     CredentialRequest,
     CredentialResponse,
+    KeyExchange,
 }
 
-#[allow(dead_code)]
+#[derive(Copy, Clone, Eq, Hash, PartialEq)]
 pub enum CredentialType {
     SkU,
     PkU,
     PkS,
     IdU,
     IdS,
+}
+
+pub(crate) fn u8_to_credential_type(x: u8) -> Option<CredentialType> {
+    match x {
+        1 => Some(CredentialType::SkU),
+        2 => Some(CredentialType::PkU),
+        3 => Some(CredentialType::PkS),
+        4 => Some(CredentialType::IdU),
+        5 => Some(CredentialType::IdS),
+        _ => None,
+    }
 }
 
 impl<T> From<&RegisterFirstMessage<T>> for ProtocolMessageType {
@@ -61,7 +74,13 @@ impl<T: CipherSuite> From<&LoginSecondMessage<T>> for ProtocolMessageType {
     }
 }
 
-pub(crate) fn serialize(input: Vec<u8>, max_bytes: usize) -> Vec<u8> {
+impl<T: CipherSuite> From<&LoginThirdMessage<T>> for ProtocolMessageType {
+    fn from(_mt: &LoginThirdMessage<T>) -> Self {
+        ProtocolMessageType::KeyExchange
+    }
+}
+
+pub(crate) fn serialize(input: &[u8], max_bytes: usize) -> Vec<u8> {
     let mut output: Vec<u8> = Vec::new();
     output.extend_from_slice(&input.len().to_be_bytes()[8 - max_bytes..]);
     output.extend_from_slice(&input[..]);
@@ -69,7 +88,7 @@ pub(crate) fn serialize(input: Vec<u8>, max_bytes: usize) -> Vec<u8> {
 }
 
 pub(crate) fn tokenize(input: Vec<u8>, size_bytes: usize) -> Result<(Vec<u8>, Vec<u8>), PakeError> {
-    if size_bytes > 8 {
+    if size_bytes > 8 || input.len() < size_bytes {
         return Err(PakeError::SerializationError);
     }
 

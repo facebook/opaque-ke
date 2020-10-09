@@ -40,6 +40,9 @@ pub enum InternalPakeError {
     /// This error occurs when the envelope seal open hmac check fails
     /// HMAC check in seal open failed.
     SealOpenHmacError,
+    /// This error occurs when the envelope cannot be constructed properly
+    /// based on the credentials that were specified to be required.
+    IncompatibleEnvelopeCredentialsError,
 }
 
 /// Represents an error in password checking
@@ -80,6 +83,9 @@ pub enum ProtocolError {
     /// This error occurs when the server answer cannot be handled
     /// Server response cannot be handled.
     ServerError,
+    /// This error occurs when the server specifies an envelope credentials
+    /// format that is invalid
+    ServerInvalidEnvelopeCredentialsFormatError,
     /// This error occurs when the client request cannot be handled
     /// Client request cannot be handled.
     ClientError,
@@ -119,6 +125,21 @@ pub(crate) mod utils {
         arg_name: &'static str,
     ) -> Result<&'a [u8], InternalPakeError> {
         if slice.len() != expected_len {
+            return Err(InternalPakeError::SizeError {
+                name: arg_name,
+                len: expected_len,
+                actual_len: slice.len(),
+            });
+        }
+        Ok(slice)
+    }
+
+    pub fn check_slice_size_atleast<'a>(
+        slice: &'a [u8],
+        expected_len: usize,
+        arg_name: &'static str,
+    ) -> Result<&'a [u8], InternalPakeError> {
+        if slice.len() < expected_len {
             return Err(InternalPakeError::SizeError {
                 name: arg_name,
                 len: expected_len,
