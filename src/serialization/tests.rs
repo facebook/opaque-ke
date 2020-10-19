@@ -249,14 +249,13 @@ fn login_second_message_roundtrip() {
 
     let ke2m: Vec<u8> = [&server_nonce[..], &server_e_kp.public(), &mac[..]].concat();
 
-    let total_length_without_ke2m: usize = pt_bytes.len() + envelope.to_bytes().len() + 4;
+    let total_length_without_ke2m: usize = pt_bytes.len() + envelope.to_bytes().len() + 2;
 
     let mut input = Vec::new();
     input.extend_from_slice(&[ProtocolMessageType::CredentialResponse as u8 + 1]);
     input.extend_from_slice(&total_length_without_ke2m.to_be_bytes()[8 - 3..]);
     input.extend_from_slice(&pt_bytes.len().to_be_bytes()[8 - 2..]);
     input.extend_from_slice(pt_bytes.as_slice());
-    input.extend_from_slice(&envelope.to_bytes().len().to_be_bytes()[8 - 2..]);
     input.extend_from_slice(&envelope.to_bytes());
     input.extend_from_slice(&ke2m[..]);
 

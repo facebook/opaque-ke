@@ -398,7 +398,7 @@ impl<CS: CipherSuite> LoginSecondMessage<CS> {
     pub fn serialize(&self) -> Vec<u8> {
         let mut credential_response: Vec<u8> = Vec::new();
         credential_response.extend_from_slice(&serialize(&self.beta.to_arr(), 2));
-        credential_response.extend_from_slice(&serialize(&self.envelope.to_bytes(), 2));
+        credential_response.extend_from_slice(&self.envelope.to_bytes());
 
         let mut output: Vec<u8> = Vec::new();
         output.push(ProtocolMessageType::from(self) as u8 + 1);
@@ -414,12 +414,7 @@ impl<CS: CipherSuite> LoginSecondMessage<CS> {
         }
 
         let (data, ke2m) = tokenize(input[1..].to_vec(), 3)?;
-        let (beta_bytes, remainder) = tokenize(data, 2)?;
-        let (envelope_bytes, remainder) = tokenize(remainder, 2)?;
-
-        if !remainder.is_empty() {
-            return Err(PakeError::SerializationError.into());
-        }
+        let (beta_bytes, envelope_bytes) = tokenize(data, 2)?;
 
         let concatenated = [&beta_bytes[..], &envelope_bytes[..], &ke2m[..]].concat();
         Self::try_from(&concatenated[..])
