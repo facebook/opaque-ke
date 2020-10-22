@@ -411,7 +411,7 @@ pub mod opaque;
 
 pub mod ciphersuite;
 mod envelope;
-mod hash;
+pub mod hash;
 
 mod elligator;
 pub mod group;

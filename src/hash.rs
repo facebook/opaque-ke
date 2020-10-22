@@ -3,6 +3,8 @@
 // This source code is licensed under the MIT license found in the
 // LICENSE file in the root directory of this source tree.
 
+//! A convenience trait for digest bounds used throughout the library
+
 use digest::{BlockInput, FixedOutput, Reset, Update};
 
 /// Trait inheriting the requirements from digest::Digest for compatibility with HKDF and HMAC
