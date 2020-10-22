@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.1 (October 22, 2020)
+
+* Changed visibility of hash module to be public
+
 ## 0.2.0 (September 3, 2020)
 
 * Added CipherSuite API for specifying underlying primitives
