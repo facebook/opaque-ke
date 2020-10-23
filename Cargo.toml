@@ -41,6 +41,7 @@ lazy_static = "1.4.0"
 serde_json = "1.0.57"
 proptest = "0.10.1"
 rand = "0.7"
+rustyline = "6.3.0"
 
 [[bench]]
 name = "oprf"

@@ -71,7 +71,7 @@
 //! ```
 //! # use opaque_ke::{
 //! #   errors::ProtocolError,
-//! #   opaque::{ClientRegistration, ServerRegistration},
+//! #   opaque::ServerRegistration,
 //! #   keypair::{KeyPair, X25519KeyPair, SizedBytes},
 //! #   slow_hash::NoOpHash,
 //! # };
@@ -84,6 +84,7 @@
 //! #     type Hash = sha2::Sha256;
 //! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
 //! # }
+//! use opaque_ke::opaque::ClientRegistration;
 //! use rand_core::{OsRng, RngCore};
 //! let mut client_rng = OsRng;
 //! let (r1, client_state) = ClientRegistration::<Default>::start(
@@ -101,7 +102,7 @@
 //! ```
 //! # use opaque_ke::{
 //! #   errors::ProtocolError,
-//! #   opaque::{ClientRegistration, ServerRegistration},
+//! #   opaque::ClientRegistration,
 //! #   keypair::{KeyPair, X25519KeyPair, SizedBytes},
 //! #   slow_hash::NoOpHash,
 //! # };
@@ -121,6 +122,7 @@
 //! #     Some(b"pepper"),
 //! #     &mut client_rng,
 //! # )?;
+//! use opaque_ke::opaque::ServerRegistration;
 //! let mut server_rng = OsRng;
 //! let (r2, server_state) = ServerRegistration::<Default>::start(r1, &mut server_rng)?;
 //! # Ok::<(), ProtocolError>(())
@@ -155,7 +157,7 @@
 //! #     &mut client_rng,
 //! # )?;
 //! # let mut server_rng = OsRng;
-//! let (r2, server_state) = ServerRegistration::<Default>::start(r1, &mut server_rng)?;
+//! # let (r2, server_state) = ServerRegistration::<Default>::start(r1, &mut server_rng)?;
 //! # let server_kp = Default::generate_random_keypair(&mut server_rng)?;
 //! let (r3, export_key_registration) =
 //!     client_state.finish(r2, server_kp.public(), &mut client_rng)?;
@@ -190,7 +192,7 @@
 //! #     &mut client_rng,
 //! # )?;
 //! # let mut server_rng = OsRng;
-//! let (r2, server_state) = ServerRegistration::<Default>::start(r1, &mut server_rng)?;
+//! # let (r2, server_state) = ServerRegistration::<Default>::start(r1, &mut server_rng)?;
 //! # let server_kp = Default::generate_random_keypair(&mut server_rng)?;
 //! # let (r3, export_key_registration) = client_state.finish(r2, server_kp.public(), &mut client_rng)?;
 //! let password_file = server_state.finish(r3)?;
@@ -212,7 +214,7 @@
 //! ```
 //! # use opaque_ke::{
 //! #   errors::ProtocolError,
-//! #   opaque::{ClientRegistration, ServerRegistration, ClientLogin, ServerLogin, LoginThirdMessage},
+//! #   opaque::{ClientRegistration, ServerRegistration, ServerLogin, LoginThirdMessage},
 //! #   keypair::{KeyPair, X25519KeyPair, SizedBytes},
 //! #   slow_hash::NoOpHash,
 //! # };
@@ -226,6 +228,7 @@
 //! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
 //! # }
 //! # use rand_core::{OsRng, RngCore};
+//! use opaque_ke::opaque::ClientLogin;
 //! let mut client_rng = OsRng;
 //! let (l1, client_state) = ClientLogin::<Default>::start(
 //!   b"password",
@@ -242,7 +245,7 @@
 //! ```
 //! # use opaque_ke::{
 //! #   errors::ProtocolError,
-//! #   opaque::{ClientRegistration, ServerRegistration, ClientLogin, ServerLogin, LoginThirdMessage},
+//! #   opaque::{ClientRegistration, ServerRegistration, ClientLogin, LoginThirdMessage},
 //! #   keypair::{KeyPair, X25519KeyPair, SizedBytes},
 //! #   slow_hash::NoOpHash,
 //! # };
@@ -263,7 +266,7 @@
 //! #     &mut client_rng,
 //! # )?;
 //! # let mut server_rng = OsRng;
-//! let (r2, server_state) = ServerRegistration::<Default>::start(r1, &mut server_rng)?;
+//! # let (r2, server_state) = ServerRegistration::<Default>::start(r1, &mut server_rng)?;
 //! # let server_kp = Default::generate_random_keypair(&mut server_rng)?;
 //! # let (r3, export_key_registration) = client_state.finish(r2, server_kp.public(), &mut client_rng)?;
 //! # let password_file_bytes = server_state.finish(r3)?.to_bytes();
@@ -272,6 +275,7 @@
 //! #   Some(b"pepper"),
 //! #   &mut client_rng,
 //! # )?;
+//! use opaque_ke::opaque::ServerLogin;
 //! use std::convert::TryFrom;
 //! let password_file = ServerRegistration::<Default>::try_from(&password_file_bytes[..])?;
 //! let mut server_rng = OsRng;
@@ -308,7 +312,7 @@
 //! #     &mut client_rng,
 //! # )?;
 //! # let mut server_rng = OsRng;
-//! let (r2, server_state) = ServerRegistration::<Default>::start(r1, &mut server_rng)?;
+//! # let (r2, server_state) = ServerRegistration::<Default>::start(r1, &mut server_rng)?;
 //! # let server_kp = Default::generate_random_keypair(&mut server_rng)?;
 //! # let (r3, export_key_registration) = client_state.finish(r2, server_kp.public(), &mut client_rng)?;
 //! # let password_file_bytes = server_state.finish(r3)?.to_bytes();
@@ -365,7 +369,7 @@
 //! #     &mut client_rng,
 //! # )?;
 //! # let mut server_rng = OsRng;
-//! let (r2, server_state) = ServerRegistration::<Default>::start(r1, &mut server_rng)?;
+//! # let (r2, server_state) = ServerRegistration::<Default>::start(r1, &mut server_rng)?;
 //! # let server_kp = Default::generate_random_keypair(&mut server_rng)?;
 //! # let (r3, export_key) = client_state.finish(r2, server_kp.public(), &mut client_rng)?;
 //! # let password_file_bytes = server_state.finish(r3)?.to_bytes();
