@@ -9,6 +9,7 @@ use crate::{
     hash::Hash,
     key_exchange::traits::{KeyExchange, ToBytes},
     keypair::{KeyPair, SizedBytes},
+    serialization::serialize,
 };
 use digest::{Digest, FixedOutput};
 use generic_array::{
@@ -27,6 +28,11 @@ pub(crate) type NonceLen = U32;
 const KE1_STATE_LEN: usize = KEY_LEN + KEY_LEN + NONCE_LEN;
 
 static STR_3DH: &[u8] = b"3DH keys";
+static STR_CLIENT_MAC: &[u8] = b"client mac";
+static STR_HANDSHAKE_SECRET: &[u8] = b"handshake secret";
+static STR_SERVER_MAC: &[u8] = b"server mac";
+static STR_SESSION_SECRET: &[u8] = b"session secret";
+static STR_OPAQUE: &[u8] = b"OPAQUE ";
 
 /// The Triple Diffie-Hellman key exchange implementation
 pub struct TripleDH;
@@ -84,7 +90,7 @@ impl<D: Hash, KeyFormat: KeyPair> KeyExchange<D, KeyFormat> for TripleDH {
             server_nonce_bytes.into()
         };
 
-        let (shared_secret, km2, km3) = derive_3dh_keys::<KeyFormat, D>(
+        let (session_secret, km2, km3) = derive_3dh_keys::<KeyFormat, D>(
             TripleDHComponents {
                 pk1: ke1_message.client_e_pk.clone(),
                 sk1: server_e_kp.private().clone(),
@@ -122,7 +128,7 @@ impl<D: Hash, KeyFormat: KeyPair> KeyExchange<D, KeyFormat> for TripleDH {
             KE2State {
                 km3,
                 hashed_transcript,
-                shared_secret,
+                session_secret,
             },
             KE2Message {
                 server_nonce,
@@ -139,7 +145,7 @@ impl<D: Hash, KeyFormat: KeyPair> KeyExchange<D, KeyFormat> for TripleDH {
         server_s_pk: KeyFormat::Repr,
         client_s_sk: KeyFormat::Repr,
     ) -> Result<(Vec<u8>, Self::KE3Message), ProtocolError> {
-        let (shared_secret, km2, km3) = derive_3dh_keys::<KeyFormat, D>(
+        let (session_secret, km2, km3) = derive_3dh_keys::<KeyFormat, D>(
             TripleDHComponents {
                 pk1: ke2_message.server_e_pk.clone(),
                 sk1: ke1_state.client_e_sk.clone(),
@@ -181,7 +187,7 @@ impl<D: Hash, KeyFormat: KeyPair> KeyExchange<D, KeyFormat> for TripleDH {
         client_mac.update(&hashed_transcript);
 
         Ok((
-            shared_secret.to_vec(),
+            session_secret.to_vec(),
             KE3Message {
                 mac: client_mac.finalize().into_bytes(),
             },
@@ -202,7 +208,7 @@ impl<D: Hash, KeyFormat: KeyPair> KeyExchange<D, KeyFormat> for TripleDH {
             ));
         }
 
-        Ok(ke2_state.shared_secret.to_vec())
+        Ok(ke2_state.session_secret.to_vec())
     }
 
     fn ke1_state_size() -> usize {
@@ -285,7 +291,7 @@ impl<KeyFormat: KeyPair> TryFrom<&[u8]> for KE1Message<KeyFormat> {
 pub struct KE2State<HashLen: ArrayLength<u8>> {
     km3: GenericArray<u8, HashLen>,
     hashed_transcript: GenericArray<u8, HashLen>,
-    shared_secret: GenericArray<u8, HashLen>,
+    session_secret: GenericArray<u8, HashLen>,
 }
 
 /// The second key exchange message
@@ -300,7 +306,7 @@ impl<HashLen: ArrayLength<u8>> ToBytes for KE2State<HashLen> {
         let output: Vec<u8> = [
             &self.km3[..],
             &self.hashed_transcript[..],
-            &self.shared_secret[..],
+            &self.session_secret[..],
         ]
         .concat();
         output
@@ -316,7 +322,7 @@ impl<HashLen: ArrayLength<u8>> TryFrom<&[u8]> for KE2State<HashLen> {
         Ok(Self {
             km3: GenericArray::clone_from_slice(&checked_bytes[..KEY_LEN]),
             hashed_transcript: GenericArray::clone_from_slice(&checked_bytes[KEY_LEN..2 * KEY_LEN]),
-            shared_secret: GenericArray::clone_from_slice(&checked_bytes[2 * KEY_LEN..]),
+            session_secret: GenericArray::clone_from_slice(&checked_bytes[2 * KEY_LEN..]),
         })
     }
 }
@@ -362,49 +368,12 @@ struct TripleDHComponents<KeyFormat: KeyPair> {
     sk3: KeyFormat::Repr,
 }
 
-// Consists of a shared secret, followed by two mac keys
+// Consists of a shared secret, followed by two mac keys: (session_secret, km2, km3)
 type TripleDHDerivationResult<D> = (
     GenericArray<u8, <D as FixedOutput>::OutputSize>,
     GenericArray<u8, <D as FixedOutput>::OutputSize>,
     GenericArray<u8, <D as FixedOutput>::OutputSize>,
 );
-
-// Internal function which takes the public and private components of the client and server keypairs, along
-// with some auxiliary metadata, to produce the shared secret and two MAC keys
-fn derive_3dh_keys<KeyFormat: KeyPair, D: Hash>(
-    dh: TripleDHComponents<KeyFormat>,
-    client_nonce: &GenericArray<u8, NonceLen>,
-    server_nonce: &GenericArray<u8, NonceLen>,
-    client_s_pk: KeyFormat::Repr,
-    server_s_pk: KeyFormat::Repr,
-) -> Result<TripleDHDerivationResult<D>, ProtocolError> {
-    let ikm: Vec<u8> = [
-        &KeyFormat::diffie_hellman(dh.pk1, dh.sk1)[..],
-        &KeyFormat::diffie_hellman(dh.pk2, dh.sk2)[..],
-        &KeyFormat::diffie_hellman(dh.pk3, dh.sk3)[..],
-    ]
-    .concat();
-
-    let info: Vec<u8> = [
-        STR_3DH,
-        &client_nonce,
-        &server_nonce,
-        &client_s_pk.to_arr(),
-        &server_s_pk.to_arr(),
-    ]
-    .concat();
-
-    const OUTPUT_SIZE: usize = 32;
-    let mut okm = [0u8; 3 * OUTPUT_SIZE];
-    let h = Hkdf::<D>::new(None, &ikm);
-    h.expand(&info, &mut okm)
-        .map_err(|_| InternalPakeError::HkdfError)?;
-    Ok((
-        GenericArray::clone_from_slice(&okm[..OUTPUT_SIZE]),
-        GenericArray::clone_from_slice(&okm[OUTPUT_SIZE..2 * OUTPUT_SIZE]),
-        GenericArray::clone_from_slice(&okm[2 * OUTPUT_SIZE..]),
-    ))
-}
 
 /// The third key exchange message
 pub struct KE3Message<HashLen: ArrayLength<u8>> {
@@ -427,4 +396,101 @@ impl<HashLen: ArrayLength<u8>> TryFrom<&[u8]> for KE3Message<HashLen> {
             mac: GenericArray::clone_from_slice(&checked_bytes),
         })
     }
+}
+
+// Helper functions
+
+// Internal function which takes the public and private components of the client and server keypairs, along
+// with some auxiliary metadata, to produce the shared secret and two MAC keys
+fn derive_3dh_keys<KeyFormat: KeyPair, D: Hash>(
+    dh: TripleDHComponents<KeyFormat>,
+    client_nonce: &GenericArray<u8, NonceLen>,
+    server_nonce: &GenericArray<u8, NonceLen>,
+    client_s_pk: KeyFormat::Repr,
+    server_s_pk: KeyFormat::Repr,
+) -> Result<TripleDHDerivationResult<D>, ProtocolError> {
+    let ikm: Vec<u8> = [
+        &KeyFormat::diffie_hellman(dh.pk1, dh.sk1)[..],
+        &KeyFormat::diffie_hellman(dh.pk2, dh.sk2)[..],
+        &KeyFormat::diffie_hellman(dh.pk3, dh.sk3)[..],
+    ]
+    .concat();
+
+    let info: Vec<u8> = [
+        STR_3DH,
+        &serialize(&client_nonce, 2),
+        &serialize(&server_nonce, 2),
+        &serialize(&client_s_pk.to_arr(), 2),
+        &serialize(&server_s_pk.to_arr(), 2),
+    ]
+    .concat();
+
+    let extracted_ikm = Hkdf::<D>::new(None, &ikm);
+    let handshake_secret = derive_secrets::<D>(&extracted_ikm, &STR_HANDSHAKE_SECRET, &info)?;
+    let session_secret = derive_secrets::<D>(&extracted_ikm, &STR_SESSION_SECRET, &info)?;
+    let km2 = hkdf_expand_label::<D>(
+        &handshake_secret,
+        &STR_SERVER_MAC,
+        b"",
+        <D as Digest>::OutputSize::to_usize(),
+    )?;
+    let km3 = hkdf_expand_label::<D>(
+        &handshake_secret,
+        &STR_CLIENT_MAC,
+        b"",
+        <D as Digest>::OutputSize::to_usize(),
+    )?;
+
+    Ok((
+        GenericArray::clone_from_slice(&session_secret),
+        GenericArray::clone_from_slice(&km2),
+        GenericArray::clone_from_slice(&km3),
+    ))
+}
+
+fn hkdf_expand_label<D: Hash>(
+    secret: &[u8],
+    label: &[u8],
+    context: &[u8],
+    length: usize,
+) -> Result<Vec<u8>, ProtocolError> {
+    let h = Hkdf::<D>::new(None, secret);
+    hkdf_expand_label_extracted(&h, label, context, length)
+}
+
+fn hkdf_expand_label_extracted<D: Hash>(
+    hkdf: &Hkdf<D>,
+    label: &[u8],
+    context: &[u8],
+    length: usize,
+) -> Result<Vec<u8>, ProtocolError> {
+    let mut okm = vec![0u8; length];
+
+    let mut hkdf_label: Vec<u8> = Vec::new();
+    hkdf_label.extend_from_slice(&length.to_be_bytes()[6..]);
+
+    let mut opaque_label: Vec<u8> = Vec::new();
+    opaque_label.extend_from_slice(&STR_OPAQUE);
+    opaque_label.extend_from_slice(&label);
+    hkdf_label.extend_from_slice(&serialize(&opaque_label, 1));
+
+    hkdf_label.extend_from_slice(&serialize(&context, 1));
+
+    hkdf.expand(&hkdf_label, &mut okm)
+        .map_err(|_| InternalPakeError::HkdfError)?;
+    Ok(okm)
+}
+
+fn derive_secrets<D: Hash>(
+    hkdf: &Hkdf<D>,
+    label: &[u8],
+    transcript: &[u8],
+) -> Result<Vec<u8>, ProtocolError> {
+    let hashed_transcript = D::digest(transcript);
+    hkdf_expand_label_extracted::<D>(
+        hkdf,
+        label,
+        &hashed_transcript,
+        <D as Digest>::OutputSize::to_usize(),
+    )
 }
