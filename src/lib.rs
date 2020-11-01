@@ -88,7 +88,6 @@
 //! let mut client_rng = OsRng;
 //! let (r1, client_state) = ClientRegistration::<Default>::start(
 //!     b"password",
-//!     Some(b"pepper"),
 //!     &mut client_rng,
 //! )?;
 //! # Ok::<(), ProtocolError>(())
@@ -118,7 +117,6 @@
 //! # let mut client_rng = OsRng;
 //! # let (r1, client_state) = ClientRegistration::<Default>::start(
 //! #     b"password",
-//! #     Some(b"pepper"),
 //! #     &mut client_rng,
 //! # )?;
 //! let mut server_rng = OsRng;
@@ -151,7 +149,6 @@
 //! # let mut client_rng = OsRng;
 //! # let (r1, client_state) = ClientRegistration::<Default>::start(
 //! #     b"password",
-//! #     Some(b"pepper"),
 //! #     &mut client_rng,
 //! # )?;
 //! # let mut server_rng = OsRng;
@@ -186,7 +183,6 @@
 //! # let mut client_rng = OsRng;
 //! # let (r1, client_state) = ClientRegistration::<Default>::start(
 //! #     b"password",
-//! #     Some(b"pepper"),
 //! #     &mut client_rng,
 //! # )?;
 //! # let mut server_rng = OsRng;
@@ -229,7 +225,6 @@
 //! let mut client_rng = OsRng;
 //! let (l1, client_state) = ClientLogin::<Default>::start(
 //!   b"password",
-//!   Some(b"pepper"),
 //!   &mut client_rng,
 //! )?;
 //! # Ok::<(), ProtocolError>(())
@@ -259,7 +254,6 @@
 //! # let mut client_rng = OsRng;
 //! # let (r1, client_state) = ClientRegistration::<Default>::start(
 //! #     b"password",
-//! #     Some(b"pepper"),
 //! #     &mut client_rng,
 //! # )?;
 //! # let mut server_rng = OsRng;
@@ -269,7 +263,6 @@
 //! # let password_file_bytes = server_state.finish(r3)?.to_bytes();
 //! # let (l1, client_state) = ClientLogin::<Default>::start(
 //! #   b"password",
-//! #   Some(b"pepper"),
 //! #   &mut client_rng,
 //! # )?;
 //! use std::convert::TryFrom;
@@ -304,7 +297,6 @@
 //! # let mut client_rng = OsRng;
 //! # let (r1, client_state) = ClientRegistration::<Default>::start(
 //! #     b"password",
-//! #     Some(b"pepper"),
 //! #     &mut client_rng,
 //! # )?;
 //! # let mut server_rng = OsRng;
@@ -314,7 +306,6 @@
 //! # let password_file_bytes = server_state.finish(r3)?.to_bytes();
 //! # let (l1, client_state) = ClientLogin::<Default>::start(
 //! #   b"password",
-//! #   Some(b"pepper"),
 //! #   &mut client_rng,
 //! # )?;
 //! # use std::convert::TryFrom;
@@ -361,7 +352,6 @@
 //! # let mut client_rng = OsRng;
 //! # let (r1, client_state) = ClientRegistration::<Default>::start(
 //! #     b"password",
-//! #     Some(b"pepper"),
 //! #     &mut client_rng,
 //! # )?;
 //! # let mut server_rng = OsRng;
@@ -371,7 +361,6 @@
 //! # let password_file_bytes = server_state.finish(r3)?.to_bytes();
 //! # let (l1, client_state) = ClientLogin::<Default>::start(
 //! #   b"password",
-//! #   Some(b"pepper"),
 //! #   &mut client_rng,
 //! # )?;
 //! # use std::convert::TryFrom;

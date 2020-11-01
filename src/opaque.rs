@@ -17,7 +17,6 @@ use crate::{
     key_exchange::traits::{KeyExchange, ToBytes},
     keypair::{KeyPair, SizedBytes},
     oprf,
-    oprf::OprfClientBytes,
     serialization::{
         serialize, tokenize, u8_to_credential_type, CredentialType, ProtocolMessageType,
     },
@@ -492,10 +491,8 @@ pub struct ClientRegistration<CS: CipherSuite> {
     id_u: Vec<u8>,
     /// Server identity
     id_s: Vec<u8>,
-    /// a blinding factor
-    pub(crate) blinding_factor: <CS::Group as Group>::Scalar,
-    /// the client's password
-    password: Vec<u8>,
+    /// token containing the client's password and the blinding factor
+    pub(crate) token: oprf::Token<CS::Group>,
 }
 
 impl<CS: CipherSuite> TryFrom<&[u8]> for ClientRegistration<CS> {
@@ -524,8 +521,10 @@ impl<CS: CipherSuite> TryFrom<&[u8]> for ClientRegistration<CS> {
         Ok(Self {
             id_u,
             id_s,
-            blinding_factor,
-            password,
+            token: oprf::Token {
+                data: password,
+                blind: blinding_factor,
+            },
         })
     }
 }
@@ -536,8 +535,8 @@ impl<CS: CipherSuite> ClientRegistration<CS> {
         let output: Vec<u8> = [
             &serialize(&self.id_u, 2),
             &serialize(&self.id_s, 2),
-            &CS::Group::scalar_as_bytes(&self.blinding_factor)[..],
-            &self.password,
+            &CS::Group::scalar_as_bytes(&self.token.blind)[..],
+            &self.token.data,
         ]
         .concat();
         output
@@ -566,19 +565,17 @@ impl<CS: CipherSuite> ClientRegistration<CS> {
     ///     type SlowHash = opaque_ke::slow_hash::NoOpHash;
     /// }
     /// let mut rng = OsRng;
-    /// let (register_m1, registration_state) = ClientRegistration::<Default>::start(b"hunter2", None, &mut rng)?;
+    /// let (register_m1, registration_state) = ClientRegistration::<Default>::start(b"hunter2", &mut rng)?;
     /// # Ok::<(), ProtocolError>(())
     /// ```
     pub fn start<R: RngCore + CryptoRng>(
         password: &[u8],
-        pepper: Option<&[u8]>,
         blinding_factor_rng: &mut R,
     ) -> Result<(RegisterFirstMessage<CS::Group>, Self), ProtocolError> {
         Self::start_with_user_and_server_name(
             &Vec::new(),
             &Vec::new(),
             password,
-            pepper,
             blinding_factor_rng,
         )
     }
@@ -588,13 +585,31 @@ impl<CS: CipherSuite> ClientRegistration<CS> {
         user_name: &[u8],
         server_name: &[u8],
         password: &[u8],
-        pepper: Option<&[u8]>,
         blinding_factor_rng: &mut R,
     ) -> Result<(RegisterFirstMessage<CS::Group>, Self), ProtocolError> {
-        let OprfClientBytes {
-            alpha,
-            blinding_factor,
-        } = oprf::generate_oprf1::<R, CS::Group>(&password, pepper, blinding_factor_rng)?;
+        Self::start_with_user_and_server_name_and_postprocessing(
+            user_name,
+            server_name,
+            password,
+            blinding_factor_rng,
+            std::convert::identity,
+        )
+    }
+
+    /// Same as ClientRegistration::start, but also accepts a username and server name as input as well as
+    /// an optional postprocessing function for the blinding factor
+    pub fn start_with_user_and_server_name_and_postprocessing<R: RngCore + CryptoRng>(
+        user_name: &[u8],
+        server_name: &[u8],
+        password: &[u8],
+        blinding_factor_rng: &mut R,
+        postprocess: fn(<CS::Group as Group>::Scalar) -> <CS::Group as Group>::Scalar,
+    ) -> Result<(RegisterFirstMessage<CS::Group>, Self), ProtocolError> {
+        let (token, alpha) = oprf::blind_with_postprocessing::<R, CS::Group>(
+            &password,
+            blinding_factor_rng,
+            postprocess,
+        )?;
 
         Ok((
             RegisterFirstMessage::<CS::Group> {
@@ -604,8 +619,7 @@ impl<CS: CipherSuite> ClientRegistration<CS> {
             Self {
                 id_u: user_name.to_vec(),
                 id_s: server_name.to_vec(),
-                blinding_factor,
-                password: password.to_vec(),
+                token,
             },
         ))
     }
@@ -642,7 +656,7 @@ impl<CS: CipherSuite> ClientRegistration<CS> {
     /// let mut client_rng = OsRng;
     /// let mut server_rng = OsRng;
     /// let server_kp = X25519KeyPair::generate_random(&mut server_rng)?;
-    /// let (register_m1, client_state) = ClientRegistration::<Default>::start(b"hunter2", None, &mut client_rng)?;
+    /// let (register_m1, client_state) = ClientRegistration::<Default>::start(b"hunter2", &mut client_rng)?;
     /// let (register_m2, server_state) =
     /// ServerRegistration::<Default>::start(register_m1, &mut server_rng)?;
     /// let mut client_rng = OsRng;
@@ -668,11 +682,8 @@ impl<CS: CipherSuite> ClientRegistration<CS> {
     ) -> Result<ClientRegistrationFinishResult<CS::KeyFormat, CS::Hash>, ProtocolError> {
         let client_static_keypair = CS::KeyFormat::generate_random(rng)?;
 
-        let password_derived_key = get_password_derived_key::<CS::Group, CS::SlowHash, CS::Hash>(
-            self.password.clone(),
-            r2.beta,
-            &self.blinding_factor,
-        )?;
+        let password_derived_key =
+            get_password_derived_key::<CS::Group, CS::SlowHash, CS::Hash>(&self.token, r2.beta)?;
 
         let mut credentials_map: HashMap<CredentialType, Vec<u8>> = HashMap::new();
         credentials_map.insert(
@@ -703,8 +714,8 @@ impl<CS: CipherSuite> ClientRegistration<CS> {
 // This can't be derived because of the use of a phantom parameter
 impl<CS: CipherSuite> Zeroize for ClientRegistration<CS> {
     fn zeroize(&mut self) {
-        self.password.zeroize();
-        self.blinding_factor.zeroize();
+        self.token.data.zeroize();
+        self.token.blind.zeroize();
     }
 }
 
@@ -717,8 +728,8 @@ impl<CS: CipherSuite> Drop for ClientRegistration<CS> {
 // This can't be derived because of the use of a phantom parameter
 impl<CS: CipherSuite> Zeroize for ClientLogin<CS> {
     fn zeroize(&mut self) {
-        self.password.zeroize();
-        self.blinding_factor.zeroize();
+        self.token.data.zeroize();
+        self.token.blind.zeroize();
     }
 }
 
@@ -825,7 +836,7 @@ where
     /// }
     /// let mut client_rng = OsRng;
     /// let mut server_rng = OsRng;
-    /// let (register_m1, client_state) = ClientRegistration::<Default>::start(b"hunter2", None, &mut client_rng)?;
+    /// let (register_m1, client_state) = ClientRegistration::<Default>::start(b"hunter2", &mut client_rng)?;
     /// let (register_m2, server_state) =
     /// ServerRegistration::<Default>::start(register_m1, &mut server_rng)?;
     /// # Ok::<(), ProtocolError>(())
@@ -862,7 +873,7 @@ where
         let oprf_key = CS::Group::random_scalar(rng);
 
         // Compute beta = alpha^oprf_key
-        let beta = oprf::generate_oprf2::<CS::Group>(message.alpha, &oprf_key)?;
+        let beta = oprf::evaluate::<CS::Group>(message.alpha, &oprf_key)?;
 
         Ok((
             RegisterSecondMessage {
@@ -902,7 +913,7 @@ where
     /// let mut client_rng = OsRng;
     /// let mut server_rng = OsRng;
     /// let server_kp = X25519KeyPair::generate_random(&mut server_rng)?;
-    /// let (register_m1, client_state) = ClientRegistration::<Default>::start(b"hunter2", None, &mut client_rng)?;
+    /// let (register_m1, client_state) = ClientRegistration::<Default>::start(b"hunter2", &mut client_rng)?;
     /// let (register_m2, server_state) =
     /// ServerRegistration::<Default>::start(register_m1, &mut server_rng)?;
     /// let mut client_rng = OsRng;
@@ -931,11 +942,8 @@ pub struct ClientLogin<CS: CipherSuite> {
     id_u: Vec<u8>,
     /// Server identity
     id_s: Vec<u8>,
-    /// A blinding factor, which is used to mask (and unmask) secret
-    /// information before transmission
-    blinding_factor: <CS::Group as Group>::Scalar,
-    /// The user's password
-    password: Vec<u8>,
+    /// token containing the client's password and the blinding factor
+    token: oprf::Token<CS::Group>,
     ke1_state: <CS::KeyExchange as KeyExchange<CS::Hash, CS::KeyFormat>>::KE1State,
 }
 
@@ -970,8 +978,10 @@ impl<CS: CipherSuite> TryFrom<&[u8]> for ClientLogin<CS> {
         Ok(Self {
             id_u,
             id_s,
-            blinding_factor,
-            password,
+            token: oprf::Token {
+                data: password,
+                blind: blinding_factor,
+            },
             ke1_state,
         })
     }
@@ -983,9 +993,9 @@ impl<CS: CipherSuite> ClientLogin<CS> {
         let output: Vec<u8> = [
             &serialize(&self.id_u, 2),
             &serialize(&self.id_s, 2),
-            &CS::Group::scalar_as_bytes(&self.blinding_factor)[..],
+            &CS::Group::scalar_as_bytes(&self.token.blind)[..],
             &self.ke1_state.to_bytes(),
-            &self.password,
+            &self.token.data,
         ]
         .concat();
         output
@@ -1020,15 +1030,14 @@ impl<CS: CipherSuite> ClientLogin<CS> {
     ///     type SlowHash = opaque_ke::slow_hash::NoOpHash;
     /// }
     /// let mut client_rng = OsRng;
-    /// let (login_m1, client_login_state) = ClientLogin::<Default>::start(b"hunter2", None, &mut client_rng)?;
+    /// let (login_m1, client_login_state) = ClientLogin::<Default>::start(b"hunter2", &mut client_rng)?;
     /// # Ok::<(), ProtocolError>(())
     /// ```
     pub fn start<R: RngCore + CryptoRng>(
         password: &[u8],
-        pepper: Option<&[u8]>,
         rng: &mut R,
     ) -> Result<(LoginFirstMessage<CS>, Self), ProtocolError> {
-        Self::start_with_user_and_server_name(&Vec::new(), &Vec::new(), password, pepper, rng)
+        Self::start_with_user_and_server_name(&Vec::new(), &Vec::new(), password, rng)
     }
 
     /// Same as start, but allows the user to supply a username and server name
@@ -1036,13 +1045,27 @@ impl<CS: CipherSuite> ClientLogin<CS> {
         user_name: &[u8],
         server_name: &[u8],
         password: &[u8],
-        pepper: Option<&[u8]>,
         rng: &mut R,
     ) -> Result<(LoginFirstMessage<CS>, Self), ProtocolError> {
-        let OprfClientBytes {
-            alpha,
-            blinding_factor,
-        } = oprf::generate_oprf1::<R, CS::Group>(&password, pepper, rng)?;
+        Self::start_with_user_and_server_name_and_postprocessing(
+            user_name,
+            server_name,
+            password,
+            rng,
+            std::convert::identity,
+        )
+    }
+
+    /// Same as start, but allows the user to supply a username and server name and postprocessing function
+    pub fn start_with_user_and_server_name_and_postprocessing<R: RngCore + CryptoRng>(
+        user_name: &[u8],
+        server_name: &[u8],
+        password: &[u8],
+        rng: &mut R,
+        postprocess: fn(<CS::Group as Group>::Scalar) -> <CS::Group as Group>::Scalar,
+    ) -> Result<(LoginFirstMessage<CS>, Self), ProtocolError> {
+        let (token, alpha) =
+            oprf::blind_with_postprocessing::<R, CS::Group>(&password, rng, postprocess)?;
 
         let (ke1_state, ke1_message) = CS::KeyExchange::generate_ke1(alpha.to_arr().to_vec(), rng)?;
 
@@ -1057,8 +1080,7 @@ impl<CS: CipherSuite> ClientLogin<CS> {
             Self {
                 id_u: user_name.to_vec(),
                 id_s: server_name.to_vec(),
-                blinding_factor,
-                password: password.to_vec(),
+                token,
                 ke1_state,
             },
         ))
@@ -1089,12 +1111,12 @@ impl<CS: CipherSuite> ClientLogin<CS> {
     /// }
     /// let mut client_rng = OsRng;
     /// # let mut server_rng = OsRng;
-    /// # let (register_m1, client_state) = ClientRegistration::<Default>::start(b"hunter2", None, &mut client_rng)?;
+    /// # let (register_m1, client_state) = ClientRegistration::<Default>::start(b"hunter2", &mut client_rng)?;
     /// # let server_kp = X25519KeyPair::generate_random(&mut server_rng)?;
     /// # let (register_m2, server_state) = ServerRegistration::<Default>::start(register_m1, &mut server_rng)?;
     /// # let (register_m3, _export_key) = client_state.finish(register_m2, server_kp.public(), &mut client_rng)?;
     /// # let p_file = server_state.finish(register_m3)?;
-    /// let (login_m1, client_login_state) = ClientLogin::<Default>::start(b"hunter2", None, &mut client_rng)?;
+    /// let (login_m1, client_login_state) = ClientLogin::<Default>::start(b"hunter2", &mut client_rng)?;
     /// let (login_m2, server_login_state) = ServerLogin::start(p_file, &server_kp.private(), login_m1, &mut server_rng)?;
     /// let (login_m3, client_transport, _export_key) = client_login_state.finish(login_m2, &server_kp.public(), &mut client_rng)?;
     /// # Ok::<(), ProtocolError>(())
@@ -1107,11 +1129,8 @@ impl<CS: CipherSuite> ClientLogin<CS> {
     ) -> Result<ClientLoginFinishResult<CS>, ProtocolError> {
         let l2_bytes: Vec<u8> = [&l2.beta.to_arr()[..], &l2.envelope.to_bytes()].concat();
 
-        let password_derived_key = get_password_derived_key::<CS::Group, CS::SlowHash, CS::Hash>(
-            self.password.clone(),
-            l2.beta,
-            &self.blinding_factor,
-        )?;
+        let password_derived_key =
+            get_password_derived_key::<CS::Group, CS::SlowHash, CS::Hash>(&self.token, l2.beta)?;
 
         let opened_envelope = &l2
             .envelope
@@ -1194,12 +1213,12 @@ impl<CS: CipherSuite> ServerLogin<CS> {
     /// let mut client_rng = OsRng;
     /// let mut server_rng = OsRng;
     /// let server_kp = X25519KeyPair::generate_random(&mut server_rng)?;
-    /// # let (register_m1, client_state) = ClientRegistration::<Default>::start(b"hunter2", None, &mut client_rng)?;
+    /// # let (register_m1, client_state) = ClientRegistration::<Default>::start(b"hunter2", &mut client_rng)?;
     /// # let (register_m2, server_state) =
     /// ServerRegistration::<Default>::start(register_m1, &mut server_rng)?;
     /// # let (register_m3, _export_key) = client_state.finish(register_m2, server_kp.public(), &mut client_rng)?;
     /// # let p_file = server_state.finish(register_m3)?;
-    /// let (login_m1, client_login_state) = ClientLogin::<Default>::start(b"hunter2", None, &mut client_rng)?;
+    /// let (login_m1, client_login_state) = ClientLogin::<Default>::start(b"hunter2", &mut client_rng)?;
     /// let (login_m2, server_login_state) = ServerLogin::start(p_file, &server_kp.private(), login_m1, &mut server_rng)?;
     /// # Ok::<(), ProtocolError>(())
     /// ```
@@ -1210,7 +1229,7 @@ impl<CS: CipherSuite> ServerLogin<CS> {
         rng: &mut R,
     ) -> Result<ServerLoginStartResult<CS>, ProtocolError> {
         let l1_bytes = &l1.to_bytes();
-        let beta = oprf::generate_oprf2(l1.alpha, &password_file.oprf_key)?;
+        let beta = oprf::evaluate(l1.alpha, &password_file.oprf_key)?;
 
         let client_s_pk = password_file
             .client_s_pk
@@ -1269,12 +1288,12 @@ impl<CS: CipherSuite> ServerLogin<CS> {
     /// let mut client_rng = OsRng;
     /// let mut server_rng = OsRng;
     /// let server_kp = X25519KeyPair::generate_random(&mut server_rng)?;
-    /// # let (register_m1, client_state) = ClientRegistration::<Default>::start(b"hunter2", None, &mut client_rng)?;
+    /// # let (register_m1, client_state) = ClientRegistration::<Default>::start(b"hunter2", &mut client_rng)?;
     /// # let (register_m2, server_state) =
     /// ServerRegistration::<Default>::start(register_m1, &mut server_rng)?;
     /// # let (register_m3, _export_key) = client_state.finish(register_m2, server_kp.public(), &mut client_rng)?;
     /// # let p_file = server_state.finish(register_m3)?;
-    /// let (login_m1, client_login_state) = ClientLogin::<Default>::start(b"hunter2", None, &mut client_rng)?;
+    /// let (login_m1, client_login_state) = ClientLogin::<Default>::start(b"hunter2", &mut client_rng)?;
     /// let (login_m2, server_login_state) = ServerLogin::start(p_file, &server_kp.private(), login_m1, &mut server_rng)?;
     /// let (login_m3, client_transport, _export_key) = client_login_state.finish(login_m2, &server_kp.public(), &mut client_rng)?;
     /// let mut server_transport = server_login_state.finish(login_m3)?;
@@ -1296,10 +1315,9 @@ impl<CS: CipherSuite> ServerLogin<CS> {
 
 // Helper functions
 fn get_password_derived_key<G: Group, SH: SlowHash<D>, D: Hash>(
-    password: Vec<u8>,
+    token: &oprf::Token<G>,
     beta: G,
-    blinding_factor: &G::Scalar,
 ) -> Result<Vec<u8>, InternalPakeError> {
-    let oprf_output = oprf::generate_oprf3::<G, D>(&password, beta, blinding_factor)?;
+    let oprf_output = oprf::unblind_and_finalize::<G, D>(token, beta)?;
     SH::hash(oprf_output)
 }
