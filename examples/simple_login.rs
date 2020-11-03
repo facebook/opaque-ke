@@ -56,9 +56,8 @@ fn account_registration(
 ) -> Vec<u8> {
     let mut client_rng = OsRng;
     let (r1, client_state) =
-        ClientRegistration::<Default>::start(password.as_bytes(), Some(b"pepper"), &mut client_rng)
-            .unwrap();
-    let r1_bytes = r1.to_bytes();
+        ClientRegistration::<Default>::start(password.as_bytes(), &mut client_rng).unwrap();
+    let r1_bytes = r1.serialize();
 
     // Client sends r1_bytes to server
 
@@ -68,7 +67,7 @@ fn account_registration(
         &mut server_rng,
     )
     .unwrap();
-    let r2_bytes = r2.to_bytes();
+    let r2_bytes = r2.serialize();
 
     // Server sends r2_bytes to client
 
@@ -79,7 +78,7 @@ fn account_registration(
             &mut client_rng,
         )
         .unwrap();
-    let r3_bytes = r3.to_bytes();
+    let r3_bytes = r3.serialize();
 
     // Client sends r3_bytes to server
 
@@ -97,9 +96,8 @@ fn account_login(
 ) -> bool {
     let mut client_rng = OsRng;
     let (l1, client_state) =
-        ClientLogin::<Default>::start(password.as_bytes(), Some(b"pepper"), &mut client_rng)
-            .unwrap();
-    let l1_bytes = l1.to_bytes();
+        ClientLogin::<Default>::start(password.as_bytes(), &mut client_rng).unwrap();
+    let l1_bytes = l1.serialize();
 
     // Client sends l1_bytes to server
 
@@ -112,7 +110,7 @@ fn account_login(
         &mut server_rng,
     )
     .unwrap();
-    let l2_bytes = l2.to_bytes();
+    let l2_bytes = l2.serialize();
 
     // Server sends l2_bytes to client
 
@@ -127,7 +125,7 @@ fn account_login(
         return false;
     }
     let (l3, client_shared_secret, _) = result.unwrap();
-    let l3_bytes = l3.to_bytes();
+    let l3_bytes = l3.serialize();
 
     // Client sends l3_bytes to server
 

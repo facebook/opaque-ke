@@ -6,8 +6,7 @@
 //! Defines the Group trait to specify the underlying prime order group used in
 //! OPAQUE's OPRF
 
-use crate::elligator;
-use crate::errors::InternalPakeError;
+use crate::{elligator, errors::InternalPakeError};
 
 use curve25519_dalek::{
     edwards::{CompressedEdwardsY, EdwardsPoint},
