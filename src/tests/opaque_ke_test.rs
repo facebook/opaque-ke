@@ -8,13 +8,14 @@ use crate::{
     errors::*,
     group::Group,
     key_exchange::tripledh::{TripleDH, NONCE_LEN},
-    keypair::{Key, KeyPair, SizedBytes, X25519KeyPair},
+    keypair::{Key, KeyPair, X25519KeyPair},
     opaque::*,
     slow_hash::NoOpHash,
     tests::mock_rng::CycleRng,
 };
 use curve25519_dalek::edwards::EdwardsPoint;
 use generic_array::GenericArray;
+use generic_bytes::SizedBytes;
 use rand_core::{OsRng, RngCore};
 use serde_json::Value;
 use std::convert::TryFrom;

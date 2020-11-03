@@ -336,6 +336,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "generic-bytes"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d6638d839bbd1cea640d8c5348dd82e0d545dbd364f3c2a251646eaf2ef0773b"
+dependencies = [
+ "generic-array",
+]
+
+[[package]]
+name = "generic-bytes-derive"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f4257fe99e64e321c197164da8ae22f7a3c074a5b2519072866e2d38bc1ca59e"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
 name = "getrandom"
 version = "0.1.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -518,6 +538,8 @@ dependencies = [
  "displaydoc",
  "fiat-crypto",
  "generic-array",
+ "generic-bytes",
+ "generic-bytes-derive",
  "hex",
  "hkdf",
  "hmac 0.9.0",

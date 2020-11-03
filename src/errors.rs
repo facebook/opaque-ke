@@ -10,6 +10,8 @@ use thiserror::Error;
 /// Represents an error in the manipulation of internal cryptographic data
 #[derive(Debug, Display, Error)]
 pub enum InternalPakeError {
+    /// Deserializing from a byte sequence failed
+    InvalidByteSequence,
     /// Invalid length for {name}: expected {len}, but is actually {actual_len}.
     SizeError {
         /// name
@@ -113,6 +115,24 @@ impl From<InternalPakeError> for ProtocolError {
 impl From<::std::convert::Infallible> for ProtocolError {
     fn from(_: ::std::convert::Infallible) -> Self {
         unreachable!()
+    }
+}
+
+impl From<generic_bytes::TryFromSizedBytesError> for InternalPakeError {
+    fn from(_: generic_bytes::TryFromSizedBytesError) -> Self {
+        InternalPakeError::InvalidByteSequence
+    }
+}
+
+impl From<generic_bytes::TryFromSizedBytesError> for PakeError {
+    fn from(e: generic_bytes::TryFromSizedBytesError) -> Self {
+        PakeError::CryptoError(e.into())
+    }
+}
+
+impl From<generic_bytes::TryFromSizedBytesError> for ProtocolError {
+    fn from(e: generic_bytes::TryFromSizedBytesError) -> Self {
+        PakeError::CryptoError(e.into()).into()
     }
 }
 
