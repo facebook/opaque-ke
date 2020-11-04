@@ -34,8 +34,6 @@ use zeroize::Zeroize;
 
 /// The message sent by the client to the server, to initiate registration
 pub struct RegisterFirstMessage<Grp> {
-    /// User identity
-    id_u: Vec<u8>,
     /// blinded password information
     alpha: Grp,
 }
@@ -44,29 +42,25 @@ impl<Grp: Group> TryFrom<&[u8]> for RegisterFirstMessage<Grp> {
     type Error = ProtocolError;
     fn try_from(first_message_bytes: &[u8]) -> Result<Self, Self::Error> {
         let elem_len = Grp::ElemLen::to_usize();
-        let checked_slice =
-            check_slice_size_atleast(first_message_bytes, elem_len, "first_message_bytes")?;
-
-        let id_u = checked_slice[..checked_slice.len() - elem_len].to_vec();
+        let checked_slice = check_slice_size(first_message_bytes, elem_len, "first_message_bytes")?;
 
         // Check that the message is actually containing an element of the
         // correct subgroup
         let arr = GenericArray::from_slice(&checked_slice[checked_slice.len() - elem_len..]);
         let alpha = Grp::from_element_slice(arr)?;
-        Ok(Self { id_u, alpha })
+        Ok(Self { alpha })
     }
 }
 
 impl<Grp: Group> RegisterFirstMessage<Grp> {
     /// Byte representation for the registration request
     pub fn to_bytes(&self) -> Vec<u8> {
-        [&self.id_u[..], &self.alpha.to_arr().to_vec()[..]].concat()
+        self.alpha.to_arr().to_vec()
     }
 
     /// Serialization into bytes
     pub fn serialize(&self) -> Vec<u8> {
         let mut registration_request: Vec<u8> = Vec::new();
-        registration_request.extend_from_slice(&serialize(&self.id_u, 2));
         registration_request.extend_from_slice(&serialize(&self.alpha.to_arr(), 2));
 
         let mut output: Vec<u8> = Vec::new();
@@ -88,9 +82,7 @@ impl<Grp: Group> RegisterFirstMessage<Grp> {
         if !remainder.is_empty() {
             return Err(PakeError::SerializationError.into());
         }
-
-        let (id_u, remainder) = tokenize(data, 2)?;
-        let (alpha_bytes, remainder) = tokenize(remainder, 2)?;
+        let (alpha_bytes, remainder) = tokenize(data, 2)?;
 
         if !remainder.is_empty() {
             return Err(PakeError::SerializationError.into());
@@ -105,7 +97,7 @@ impl<Grp: Group> RegisterFirstMessage<Grp> {
         // correct subgroup
         let arr = GenericArray::from_slice(checked_slice);
         let alpha = Grp::from_element_slice(arr)?;
-        Ok(Self { id_u, alpha })
+        Ok(Self { alpha })
     }
 }
 
@@ -317,8 +309,6 @@ where
 
 /// The message sent by the user to the server, to initiate registration
 pub struct LoginFirstMessage<CS: CipherSuite> {
-    /// User identity
-    id_u: Vec<u8>,
     /// blinded password information
     alpha: CS::Group,
     ke1_message: <CS::KeyExchange as KeyExchange<CS::Hash, CS::KeyFormat>>::KE1Message,
@@ -340,7 +330,6 @@ impl<CS: CipherSuite> LoginFirstMessage<CS> {
     /// Serialization into bytes
     pub fn serialize(&self) -> Vec<u8> {
         let mut credential_request: Vec<u8> = Vec::new();
-        credential_request.extend_from_slice(&serialize(&self.id_u, 2));
         credential_request.extend_from_slice(&serialize(&self.alpha.to_arr(), 2));
 
         let mut output: Vec<u8> = Vec::new();
@@ -357,9 +346,7 @@ impl<CS: CipherSuite> LoginFirstMessage<CS> {
         }
 
         let (data, ke1m) = tokenize(input[1..].to_vec(), 3)?;
-
-        let (id_u, remainder) = tokenize(data, 2)?;
-        let (alpha_bytes, remainder) = tokenize(remainder, 2)?;
+        let (alpha_bytes, remainder) = tokenize(data, 2)?;
 
         if !remainder.is_empty() {
             return Err(PakeError::SerializationError.into());
@@ -375,11 +362,7 @@ impl<CS: CipherSuite> LoginFirstMessage<CS> {
                 &ke1m[..],
             )?;
 
-        Ok(Self {
-            id_u,
-            alpha,
-            ke1_message,
-        })
+        Ok(Self { alpha, ke1_message })
     }
 }
 
@@ -601,10 +584,7 @@ impl<CS: CipherSuite> ClientRegistration<CS> {
         )?;
 
         Ok((
-            RegisterFirstMessage::<CS::Group> {
-                id_u: user_name.to_vec(),
-                alpha,
-            },
+            RegisterFirstMessage::<CS::Group> { alpha },
             Self {
                 id_u: user_name.to_vec(),
                 id_s: server_name.to_vec(),
@@ -1054,11 +1034,7 @@ impl<CS: CipherSuite> ClientLogin<CS> {
 
         let (ke1_state, ke1_message) = CS::KeyExchange::generate_ke1(alpha.to_arr().to_vec(), rng)?;
 
-        let l1 = LoginFirstMessage {
-            id_u: user_name.to_vec(),
-            alpha,
-            ke1_message,
-        };
+        let l1 = LoginFirstMessage { alpha, ke1_message };
 
         Ok((
             l1,

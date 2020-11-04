@@ -113,19 +113,12 @@ fn register_first_message_roundtrip() {
     let pt = random_ristretto_point();
     let pt_bytes = pt.to_arr().to_vec();
 
-    let mut rng = OsRng;
-    let id_length: usize = rng.gen_range(0, MAX_ID_LENGTH);
-    let mut id = [0u8; MAX_ID_LENGTH];
-    rng.fill_bytes(&mut id);
-
     let alpha_length: usize = 32;
-    let total_length: usize = alpha_length + id_length + 4;
+    let total_length: usize = alpha_length + 2;
 
     let mut input = Vec::new();
     input.extend_from_slice(&[ProtocolMessageType::RegistrationRequest as u8 + 1]);
     input.extend_from_slice(&total_length.to_be_bytes()[8 - 3..]);
-    input.extend_from_slice(&id_length.to_be_bytes()[8 - 2..]);
-    input.extend_from_slice(&id[..id_length]);
     input.extend_from_slice(&alpha_length.to_be_bytes()[8 - 2..]);
     input.extend_from_slice(pt_bytes.as_slice());
 
@@ -197,9 +190,6 @@ fn login_first_message_roundtrip() {
     let mut rng = OsRng;
     let alpha = random_ristretto_point();
     let alpha_bytes = alpha.to_arr().to_vec();
-    let id_length: usize = rng.gen_range(0, MAX_ID_LENGTH);
-    let mut id = [0u8; MAX_ID_LENGTH];
-    rng.fill_bytes(&mut id);
 
     let client_e_kp = Default::generate_random_keypair(&mut rng).unwrap();
     let mut client_nonce = [0u8; NONCE_LEN];
@@ -208,13 +198,11 @@ fn login_first_message_roundtrip() {
     let ke1m: Vec<u8> = [&client_nonce[..], &client_e_kp.public()].concat();
 
     let alpha_length = alpha_bytes.len();
-    let total_length_without_ke1m: usize = id_length + alpha_length + 4;
+    let total_length_without_ke1m: usize = alpha_length + 2;
 
     let mut input = Vec::new();
     input.extend_from_slice(&[ProtocolMessageType::CredentialRequest as u8 + 1]);
     input.extend_from_slice(&total_length_without_ke1m.to_be_bytes()[8 - 3..]);
-    input.extend_from_slice(&id_length.to_be_bytes()[8 - 2..]);
-    input.extend_from_slice(&id[..id_length]);
     input.extend_from_slice(&alpha_length.to_be_bytes()[8 - 2..]);
     input.extend_from_slice(&alpha_bytes);
     input.extend_from_slice(&ke1m[..]);
