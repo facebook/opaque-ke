@@ -254,6 +254,7 @@ where
         id_s,
         password,
         &mut blinding_factor_registration_rng,
+        std::convert::identity,
     )
     .unwrap();
     let r1_bytes = r1.serialize().to_vec();
@@ -291,6 +292,7 @@ where
         id_s,
         password,
         &mut client_login_start_rng,
+        std::convert::identity,
     )
     .unwrap();
     let l1_bytes = l1.serialize().to_vec();
@@ -362,14 +364,15 @@ fn postprocess_blinding_factor<G: Group>(_: G::Scalar) -> G::Scalar {
 fn test_r1() -> Result<(), PakeError> {
     let parameters = populate_test_vectors(&serde_json::from_str(TEST_VECTOR).unwrap());
     let mut rng = OsRng;
-    let (r1, client_registration) = ClientRegistration::<X255193dhNoSlowHash>::start_with_user_and_server_name_and_postprocessing(
-        &parameters.id_u,
-        &parameters.id_s,
-        &parameters.password,
-        &mut rng,
-        postprocess_blinding_factor::<<X255193dhNoSlowHash as CipherSuite>::Group>,
-    )
-    .unwrap();
+    let (r1, client_registration) =
+        ClientRegistration::<X255193dhNoSlowHash>::start_with_user_and_server_name(
+            &parameters.id_u,
+            &parameters.id_s,
+            &parameters.password,
+            &mut rng,
+            postprocess_blinding_factor::<<X255193dhNoSlowHash as CipherSuite>::Group>,
+        )
+        .unwrap();
     assert_eq!(hex::encode(&parameters.r1), hex::encode(r1.serialize()));
     assert_eq!(
         hex::encode(&parameters.client_registration_state),
@@ -452,15 +455,14 @@ fn test_l1() -> Result<(), PakeError> {
     ]
     .concat();
     let mut client_login_start_rng = CycleRng::new(client_login_start);
-    let (l1, client_login) =
-        ClientLogin::<X255193dhNoSlowHash>::start_with_user_and_server_name_and_postprocessing(
-            &parameters.id_u,
-            &parameters.id_s,
-            &parameters.password,
-            &mut client_login_start_rng,
-            postprocess_blinding_factor::<<X255193dhNoSlowHash as CipherSuite>::Group>,
-        )
-        .unwrap();
+    let (l1, client_login) = ClientLogin::<X255193dhNoSlowHash>::start_with_user_and_server_name(
+        &parameters.id_u,
+        &parameters.id_s,
+        &parameters.password,
+        &mut client_login_start_rng,
+        postprocess_blinding_factor::<<X255193dhNoSlowHash as CipherSuite>::Group>,
+    )
+    .unwrap();
     assert_eq!(hex::encode(&parameters.l1), hex::encode(l1.serialize()));
     assert_eq!(
         hex::encode(&parameters.client_login_state),

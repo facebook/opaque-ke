@@ -23,14 +23,18 @@ static STR_VOPRF: &[u8] = b"VOPRF05";
 /// message is sent from the client (who holds the input) to the server (who holds the OPRF key).
 /// The client can also pass in an optional "pepper" string to be mixed in with the input through
 /// an HKDF computation.
-pub(crate) fn blind_with_postprocessing<R: RngCore + CryptoRng, G: GroupWithMapToCurve>(
+pub(crate) fn blind<R: RngCore + CryptoRng, G: GroupWithMapToCurve>(
     input: &[u8],
     blinding_factor_rng: &mut R,
-    postprocess: fn(G::Scalar) -> G::Scalar,
+    #[cfg(test)] postprocess: fn(G::Scalar) -> G::Scalar,
 ) -> Result<(Token<G>, G), InternalPakeError> {
     let mapped_point = G::map_to_curve(input, Some(STR_VOPRF)); // TODO: add contextString from RFC
     let blinding_factor = G::random_scalar(blinding_factor_rng);
+    #[cfg(test)]
     let blind = postprocess(blinding_factor);
+    #[cfg(not(test))]
+    let blind = blinding_factor;
+
     let blind_token = mapped_point * &blind;
     Ok((
         Token {
@@ -60,23 +64,34 @@ pub(crate) fn unblind_and_finalize<G: Group, H: Hash>(
     Ok(prk)
 }
 
-// Benchmarking shims
+////////////////////////
+// Benchmarking shims //
+////////////////////////
+
 #[cfg(feature = "bench")]
+#[doc(hidden)]
 #[inline]
 pub fn blind_shim<R: RngCore + CryptoRng, G: GroupWithMapToCurve>(
     input: &[u8],
     blinding_factor_rng: &mut R,
 ) -> Result<(Token<G>, G), InternalPakeError> {
-    blind_with_postprocessing(input, blinding_factor_rng, std::convert::identity)
+    blind(
+        input,
+        blinding_factor_rng,
+        #[cfg(test)]
+        std::convert::identity,
+    )
 }
 
 #[cfg(feature = "bench")]
+#[doc(hidden)]
 #[inline]
 pub fn evaluate_shim<G: Group>(point: G, oprf_key: &G::Scalar) -> Result<G, InternalPakeError> {
     evaluate(point, oprf_key)
 }
 
 #[cfg(feature = "bench")]
+#[doc(hidden)]
 #[inline]
 pub fn unblind_and_finalize_shim<G: Group, H: Hash>(
     token: &Token<G>,
@@ -85,8 +100,10 @@ pub fn unblind_and_finalize_shim<G: Group, H: Hash>(
     unblind_and_finalize::<G, H>(token, point)
 }
 
-// Tests
-// =====
+///////////
+// Tests //
+// ===== //
+///////////
 
 #[cfg(test)]
 mod tests {
@@ -117,11 +134,8 @@ mod tests {
     fn oprf_retrieval() -> Result<(), InternalPakeError> {
         let input = b"hunter2";
         let mut rng = OsRng;
-        let (token, alpha) = blind_with_postprocessing::<_, RistrettoPoint>(
-            &input[..],
-            &mut rng,
-            std::convert::identity,
-        )?;
+        let (token, alpha) =
+            blind::<_, RistrettoPoint>(&input[..], &mut rng, std::convert::identity)?;
         let oprf_key_bytes = arr![
             u8; 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23,
             24, 25, 26, 27, 28, 29, 30, 31, 32,
@@ -139,12 +153,8 @@ mod tests {
         let mut rng = OsRng;
         let mut input = vec![0u8; 64];
         rng.fill_bytes(&mut input);
-        let (token, alpha) = blind_with_postprocessing::<_, RistrettoPoint>(
-            &input,
-            &mut rng,
-            std::convert::identity,
-        )
-        .unwrap();
+        let (token, alpha) =
+            blind::<_, RistrettoPoint>(&input, &mut rng, std::convert::identity).unwrap();
         let res = unblind_and_finalize::<RistrettoPoint, sha2::Sha256>(&token, alpha).unwrap();
 
         let (hashed_input, _) = Hkdf::<Sha512>::extract(Some(STR_VOPRF), &input);
