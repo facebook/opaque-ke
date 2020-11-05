@@ -577,37 +577,25 @@ impl<CS: CipherSuite> ClientRegistration<CS> {
             &Vec::new(),
             password,
             blinding_factor_rng,
+            #[cfg(test)]
+            std::convert::identity,
         )
     }
 
-    /// Same as ClientRegistration::start, but also accepts a username and server name as input
+    /// Same as ClientRegistration::start, but also accepts a username and
+    /// server name as input
+    /// as well as an optional postprocessing function for the blinding factor(used in tests)
     pub fn start_with_user_and_server_name<R: RngCore + CryptoRng>(
         user_name: &[u8],
         server_name: &[u8],
         password: &[u8],
         blinding_factor_rng: &mut R,
+        #[cfg(test)] postprocess: fn(<CS::Group as Group>::Scalar) -> <CS::Group as Group>::Scalar,
     ) -> Result<(RegisterFirstMessage<CS::Group>, Self), ProtocolError> {
-        Self::start_with_user_and_server_name_and_postprocessing(
-            user_name,
-            server_name,
-            password,
-            blinding_factor_rng,
-            std::convert::identity,
-        )
-    }
-
-    /// Same as ClientRegistration::start, but also accepts a username and server name as input as well as
-    /// an optional postprocessing function for the blinding factor
-    pub fn start_with_user_and_server_name_and_postprocessing<R: RngCore + CryptoRng>(
-        user_name: &[u8],
-        server_name: &[u8],
-        password: &[u8],
-        blinding_factor_rng: &mut R,
-        postprocess: fn(<CS::Group as Group>::Scalar) -> <CS::Group as Group>::Scalar,
-    ) -> Result<(RegisterFirstMessage<CS::Group>, Self), ProtocolError> {
-        let (token, alpha) = oprf::blind_with_postprocessing::<R, CS::Group>(
+        let (token, alpha) = oprf::blind::<R, CS::Group>(
             &password,
             blinding_factor_rng,
+            #[cfg(test)]
             postprocess,
         )?;
 
@@ -1037,35 +1025,31 @@ impl<CS: CipherSuite> ClientLogin<CS> {
         password: &[u8],
         rng: &mut R,
     ) -> Result<(LoginFirstMessage<CS>, Self), ProtocolError> {
-        Self::start_with_user_and_server_name(&Vec::new(), &Vec::new(), password, rng)
+        Self::start_with_user_and_server_name(
+            &Vec::new(),
+            &Vec::new(),
+            password,
+            rng,
+            #[cfg(test)]
+            std::convert::identity,
+        )
     }
 
     /// Same as start, but allows the user to supply a username and server name
+    /// and, in tests, a postprocessing function
     pub fn start_with_user_and_server_name<R: RngCore + CryptoRng>(
         user_name: &[u8],
         server_name: &[u8],
         password: &[u8],
         rng: &mut R,
+        #[cfg(test)] postprocess: fn(<CS::Group as Group>::Scalar) -> <CS::Group as Group>::Scalar,
     ) -> Result<(LoginFirstMessage<CS>, Self), ProtocolError> {
-        Self::start_with_user_and_server_name_and_postprocessing(
-            user_name,
-            server_name,
-            password,
+        let (token, alpha) = oprf::blind::<R, CS::Group>(
+            &password,
             rng,
-            std::convert::identity,
-        )
-    }
-
-    /// Same as start, but allows the user to supply a username and server name and postprocessing function
-    pub fn start_with_user_and_server_name_and_postprocessing<R: RngCore + CryptoRng>(
-        user_name: &[u8],
-        server_name: &[u8],
-        password: &[u8],
-        rng: &mut R,
-        postprocess: fn(<CS::Group as Group>::Scalar) -> <CS::Group as Group>::Scalar,
-    ) -> Result<(LoginFirstMessage<CS>, Self), ProtocolError> {
-        let (token, alpha) =
-            oprf::blind_with_postprocessing::<R, CS::Group>(&password, rng, postprocess)?;
+            #[cfg(test)]
+            postprocess,
+        )?;
 
         let (ke1_state, ke1_message) = CS::KeyExchange::generate_ke1(alpha.to_arr().to_vec(), rng)?;
 
