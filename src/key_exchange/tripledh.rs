@@ -8,7 +8,7 @@ use crate::{
     errors::{utils::check_slice_size, InternalPakeError, PakeError, ProtocolError},
     hash::Hash,
     key_exchange::traits::{KeyExchange, ToBytes},
-    keypair::{KeyPair, SizedBytes},
+    keypair::{KeyPair, SizedBytesExt},
     serialization::serialize,
 };
 use digest::{Digest, FixedOutput};
@@ -16,6 +16,7 @@ use generic_array::{
     typenum::{Unsigned, U32},
     ArrayLength, GenericArray,
 };
+use generic_bytes::SizedBytes;
 use hkdf::Hkdf;
 use hmac::{Hmac, Mac, NewMac};
 use rand_core::{CryptoRng, RngCore};

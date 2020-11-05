@@ -15,7 +15,7 @@ use crate::{
     group::Group,
     hash::Hash,
     key_exchange::traits::{KeyExchange, ToBytes},
-    keypair::{KeyPair, SizedBytes},
+    keypair::{KeyPair, SizedBytesExt},
     oprf,
     serialization::{
         serialize, tokenize, u8_to_credential_type, CredentialType, ProtocolMessageType,
@@ -23,6 +23,7 @@ use crate::{
     slow_hash::SlowHash,
 };
 use generic_array::{typenum::Unsigned, GenericArray};
+use generic_bytes::SizedBytes;
 use rand_core::{CryptoRng, RngCore};
 use std::collections::HashMap;
 use std::{convert::TryFrom, marker::PhantomData};
@@ -628,7 +629,7 @@ impl<CS: CipherSuite> ClientRegistration<CS> {
     /// # Example
     ///
     /// ```
-    /// use opaque_ke::{opaque::{ClientRegistration, ServerRegistration}, keypair::{X25519KeyPair, SizedBytes}};
+    /// use opaque_ke::{opaque::{ClientRegistration, ServerRegistration}, keypair::X25519KeyPair};
     /// # use opaque_ke::errors::ProtocolError;
     /// # use opaque_ke::keypair::KeyPair;
     /// use rand_core::{OsRng, RngCore};
@@ -810,7 +811,7 @@ where
     /// # Example
     ///
     /// ```
-    /// use opaque_ke::{opaque::*, keypair::{X25519KeyPair, SizedBytes}};
+    /// use opaque_ke::{opaque::*, keypair::X25519KeyPair};
     /// # use opaque_ke::errors::ProtocolError;
     /// use rand_core::{OsRng, RngCore};
     /// use opaque_ke::ciphersuite::CipherSuite;
@@ -886,7 +887,7 @@ where
     /// # Example
     ///
     /// ```
-    /// use opaque_ke::{opaque::*, keypair::{KeyPair, X25519KeyPair, SizedBytes}};
+    /// use opaque_ke::{opaque::*, keypair::{KeyPair, X25519KeyPair}};
     /// # use opaque_ke::errors::ProtocolError;
     /// use rand_core::{OsRng, RngCore};
     /// use opaque_ke::ciphersuite::CipherSuite;

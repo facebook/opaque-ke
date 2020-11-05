@@ -17,6 +17,7 @@ use generic_array::{
     typenum::{U32, U64},
     ArrayLength, GenericArray,
 };
+
 use rand_core::{CryptoRng, RngCore};
 use std::ops::Mul;
 use zeroize::Zeroize;

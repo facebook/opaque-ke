@@ -40,7 +40,7 @@
 //! ## Setup
 //! To setup the protocol, the server begins by generating a static keypair:
 //! ```
-//! # use opaque_ke::keypair::{KeyPair, X25519KeyPair, SizedBytes};
+//! # use opaque_ke::keypair::{KeyPair, X25519KeyPair};
 //! # use opaque_ke::errors::ProtocolError;
 //! # use opaque_ke::ciphersuite::CipherSuite;
 //! # struct Default;
@@ -72,7 +72,7 @@
 //! # use opaque_ke::{
 //! #   errors::ProtocolError,
 //! #   opaque::ServerRegistration,
-//! #   keypair::{KeyPair, X25519KeyPair, SizedBytes},
+//! #   keypair::{KeyPair, X25519KeyPair},
 //! #   slow_hash::NoOpHash,
 //! # };
 //! # use opaque_ke::ciphersuite::CipherSuite;
@@ -102,7 +102,7 @@
 //! # use opaque_ke::{
 //! #   errors::ProtocolError,
 //! #   opaque::ClientRegistration,
-//! #   keypair::{KeyPair, X25519KeyPair, SizedBytes},
+//! #   keypair::{KeyPair, X25519KeyPair},
 //! #   slow_hash::NoOpHash,
 //! # };
 //! # use opaque_ke::ciphersuite::CipherSuite;
@@ -135,7 +135,7 @@
 //! # use opaque_ke::{
 //! #   errors::ProtocolError,
 //! #   opaque::{ClientRegistration, ServerRegistration},
-//! #   keypair::{KeyPair, X25519KeyPair, SizedBytes},
+//! #   keypair::{KeyPair, X25519KeyPair},
 //! #   slow_hash::NoOpHash,
 //! # };
 //! # use opaque_ke::ciphersuite::CipherSuite;
@@ -169,7 +169,7 @@
 //! # use opaque_ke::{
 //! #   errors::ProtocolError,
 //! #   opaque::{ClientRegistration, ServerRegistration},
-//! #   keypair::{KeyPair, X25519KeyPair, SizedBytes},
+//! #   keypair::{KeyPair, X25519KeyPair},
 //! #   slow_hash::NoOpHash,
 //! # };
 //! # use opaque_ke::ciphersuite::CipherSuite;
@@ -211,7 +211,7 @@
 //! # use opaque_ke::{
 //! #   errors::ProtocolError,
 //! #   opaque::{ClientRegistration, ServerRegistration, ServerLogin, LoginThirdMessage},
-//! #   keypair::{KeyPair, X25519KeyPair, SizedBytes},
+//! #   keypair::{KeyPair, X25519KeyPair},
 //! #   slow_hash::NoOpHash,
 //! # };
 //! # use opaque_ke::ciphersuite::CipherSuite;
@@ -241,7 +241,7 @@
 //! # use opaque_ke::{
 //! #   errors::ProtocolError,
 //! #   opaque::{ClientRegistration, ServerRegistration, ClientLogin, LoginThirdMessage},
-//! #   keypair::{KeyPair, X25519KeyPair, SizedBytes},
+//! #   keypair::{KeyPair, X25519KeyPair},
 //! #   slow_hash::NoOpHash,
 //! # };
 //! # use opaque_ke::ciphersuite::CipherSuite;
@@ -285,7 +285,7 @@
 //! # use opaque_ke::{
 //! #   errors::ProtocolError,
 //! #   opaque::{ClientRegistration, ServerRegistration, ClientLogin, ServerLogin, LoginThirdMessage},
-//! #   keypair::{KeyPair, X25519KeyPair, SizedBytes},
+//! #   keypair::{KeyPair, X25519KeyPair},
 //! #   slow_hash::NoOpHash,
 //! # };
 //! # use opaque_ke::ciphersuite::CipherSuite;
@@ -340,7 +340,7 @@
 //! # use opaque_ke::{
 //! #   errors::ProtocolError,
 //! #   opaque::{ClientRegistration, ServerRegistration, ClientLogin, ServerLogin, LoginThirdMessage},
-//! #   keypair::{KeyPair, X25519KeyPair, SizedBytes},
+//! #   keypair::{KeyPair, X25519KeyPair},
 //! #   slow_hash::NoOpHash,
 //! # };
 //! # use opaque_ke::ciphersuite::CipherSuite;

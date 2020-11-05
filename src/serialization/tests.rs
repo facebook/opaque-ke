@@ -11,12 +11,13 @@ use crate::{
         traits::{KeyExchange, ToBytes},
         tripledh::{TripleDH, NONCE_LEN},
     },
-    keypair::{KeyPair, SizedBytes, X25519KeyPair},
+    keypair::{KeyPair, X25519KeyPair},
     opaque::*,
     serialization::{serialize, ProtocolMessageType},
 };
 
 use curve25519_dalek::ristretto::RistrettoPoint;
+use generic_bytes::SizedBytes;
 use proptest::{collection::vec, prelude::*};
 use rand_core::{OsRng, RngCore};
 
