@@ -27,6 +27,8 @@ pub enum InternalPakeError {
     SubGroupError,
     /// hashing to a key failed
     HashingFailure,
+    /// Computing the hash-to-curve function failed
+    HashToCurveError,
     /// Computing HKDF failed while deriving subkeys
     HkdfError,
     /// Computing HMAC failed while supplying a secret key

@@ -16,6 +16,7 @@ use crate::{
     hash::Hash,
     key_exchange::traits::{KeyExchange, ToBytes},
     keypair::{KeyPair, SizedBytesExt},
+    map_to_curve::GroupWithMapToCurve,
     oprf,
     serialization::{
         serialize, tokenize, u8_to_credential_type, CredentialType, ProtocolMessageType,
@@ -28,6 +29,8 @@ use rand_core::{CryptoRng, RngCore};
 use std::collections::HashMap;
 use std::{convert::TryFrom, marker::PhantomData};
 use zeroize::Zeroize;
+
+static STR_OPAQUE_VERSION: &[u8] = b"OPAQUE00";
 
 // Messages
 // =========
@@ -1275,10 +1278,14 @@ impl<CS: CipherSuite> ServerLogin<CS> {
 }
 
 // Helper functions
-fn get_password_derived_key<G: Group, SH: SlowHash<D>, D: Hash>(
+fn get_password_derived_key<G: GroupWithMapToCurve, SH: SlowHash<D>, D: Hash>(
     token: &oprf::Token<G>,
     beta: G,
 ) -> Result<Vec<u8>, InternalPakeError> {
-    let oprf_output = oprf::unblind_and_finalize::<G, D>(token, beta)?;
+    let oprf_output = oprf::finalize::<G, D>(
+        &token.data,
+        &oprf::unblind::<G>(token, beta),
+        STR_OPAQUE_VERSION,
+    );
     SH::hash(oprf_output)
 }

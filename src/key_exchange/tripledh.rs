@@ -287,7 +287,6 @@ impl<KeyFormat: KeyPair> TryFrom<&[u8]> for KE1Message<KeyFormat> {
         })
     }
 }
-
 /// The server state produced after the second key exchange message
 pub struct KE2State<HashLen: ArrayLength<u8>> {
     km3: GenericArray<u8, HashLen>,

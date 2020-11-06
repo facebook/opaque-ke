@@ -5,10 +5,10 @@
 
 use crate::{
     errors::InternalPakeError, group::Group, hash::Hash, map_to_curve::GroupWithMapToCurve,
+    serialization::serialize,
 };
 use digest::Digest;
 use generic_array::GenericArray;
-use hkdf::Hkdf;
 use rand_core::{CryptoRng, RngCore};
 
 /// Used to store the OPRF input and blinding factor
@@ -18,6 +18,8 @@ pub struct Token<Grp: Group> {
 }
 
 static STR_VOPRF: &[u8] = b"VOPRF05";
+static STR_VOPRF_FINALIZE: &[u8] = b"VOPRF05-Finalize-";
+static MODE_BASE: u8 = 0x01;
 
 /// Computes the first step for the multiplicative blinding version of DH-OPRF. This
 /// message is sent from the client (who holds the input) to the server (who holds the OPRF key).
@@ -28,7 +30,8 @@ pub(crate) fn blind<R: RngCore + CryptoRng, G: GroupWithMapToCurve>(
     blinding_factor_rng: &mut R,
     #[cfg(test)] postprocess: fn(G::Scalar) -> G::Scalar,
 ) -> Result<(Token<G>, G), InternalPakeError> {
-    let mapped_point = G::map_to_curve(input, Some(STR_VOPRF)); // TODO: add contextString from RFC
+    let dst = [STR_VOPRF, &G::get_context_string(MODE_BASE)].concat();
+    let mapped_point = G::map_to_curve(input, &dst)?;
     let blinding_factor = G::random_scalar(blinding_factor_rng);
     #[cfg(test)]
     let blind = postprocess(blinding_factor);
@@ -53,15 +56,25 @@ pub(crate) fn evaluate<G: Group>(point: G, oprf_key: &G::Scalar) -> Result<G, In
 
 /// Computes the third step for the multiplicative blinding version of DH-OPRF, in which
 /// the client unblinds the server's message.
-pub(crate) fn unblind_and_finalize<G: Group, H: Hash>(
-    token: &Token<G>,
-    point: G,
-) -> Result<GenericArray<u8, <H as Digest>::OutputSize>, InternalPakeError> {
+pub(crate) fn unblind<G: Group>(token: &Token<G>, point: G) -> Vec<u8> {
     let unblinded = point * &G::scalar_invert(&token.blind);
-    let ikm: Vec<u8> = [&unblinded.to_arr()[..], &token.data].concat();
-    // TODO: implement proper finalizing code here
-    let (prk, _) = Hkdf::<H>::extract(None, &ikm);
-    Ok(prk)
+    unblinded.to_arr().to_vec()
+}
+
+pub(crate) fn finalize<G: GroupWithMapToCurve, H: Hash>(
+    token_data: &[u8],
+    issued_token: &[u8],
+    info: &[u8],
+) -> GenericArray<u8, <H as Digest>::OutputSize> {
+    let finalize_dst = [STR_VOPRF_FINALIZE, &G::get_context_string(MODE_BASE)].concat();
+    let hash_input = [
+        serialize(token_data, 2),
+        serialize(issued_token, 2),
+        serialize(info, 2),
+        serialize(&finalize_dst, 2),
+    ]
+    .concat();
+    <H as Digest>::digest(&hash_input)
 }
 
 ////////////////////////
@@ -93,11 +106,15 @@ pub fn evaluate_shim<G: Group>(point: G, oprf_key: &G::Scalar) -> Result<G, Inte
 #[cfg(feature = "bench")]
 #[doc(hidden)]
 #[inline]
-pub fn unblind_and_finalize_shim<G: Group, H: Hash>(
+pub fn unblind_and_finalize_shim<G: GroupWithMapToCurve, H: Hash>(
     token: &Token<G>,
     point: G,
 ) -> Result<GenericArray<u8, <H as Digest>::OutputSize>, InternalPakeError> {
-    unblind_and_finalize::<G, H>(token, point)
+    Ok(finalize::<G, H>(
+        &token.data,
+        &unblind::<G>(token, point),
+        b"",
+    ))
 }
 
 ///////////
@@ -111,23 +128,19 @@ mod tests {
     use crate::group::Group;
     use curve25519_dalek::ristretto::RistrettoPoint;
     use generic_array::{arr, GenericArray};
-    use hkdf::Hkdf;
     use rand_core::OsRng;
-    use sha2::{Sha256, Sha512};
 
     fn prf(
         input: &[u8],
         oprf_key: &[u8; 32],
     ) -> GenericArray<u8, <RistrettoPoint as Group>::ElemLen> {
-        let (hashed_input, _) = Hkdf::<Sha512>::extract(Some(STR_VOPRF), &input);
-        let point = RistrettoPoint::hash_to_curve(GenericArray::from_slice(&hashed_input));
+        let dst = [STR_VOPRF, &RistrettoPoint::get_context_string(MODE_BASE)].concat();
+        let point = RistrettoPoint::map_to_curve(input, &dst).unwrap();
         let scalar =
             RistrettoPoint::from_scalar_slice(GenericArray::from_slice(&oprf_key[..])).unwrap();
         let res = point * scalar;
-        let ikm: Vec<u8> = [&res.to_arr()[..], &input].concat();
 
-        let (prk, _) = Hkdf::<Sha256>::extract(None, &ikm);
-        prk
+        finalize::<RistrettoPoint, sha2::Sha256>(&input, &res.to_arr().to_vec(), b"")
     }
 
     #[test]
@@ -142,7 +155,8 @@ mod tests {
         ];
         let oprf_key = RistrettoPoint::from_scalar_slice(&oprf_key_bytes)?;
         let beta = evaluate::<RistrettoPoint>(alpha, &oprf_key)?;
-        let res = unblind_and_finalize::<RistrettoPoint, sha2::Sha256>(&token, beta)?;
+        let res =
+            finalize::<RistrettoPoint, sha2::Sha256>(&token.data, &unblind(&token, beta), b"");
         let res2 = prf(&input[..], &oprf_key.as_bytes());
         assert_eq!(res, res2);
         Ok(())
@@ -155,18 +169,13 @@ mod tests {
         rng.fill_bytes(&mut input);
         let (token, alpha) =
             blind::<_, RistrettoPoint>(&input, &mut rng, std::convert::identity).unwrap();
-        let res = unblind_and_finalize::<RistrettoPoint, sha2::Sha256>(&token, alpha).unwrap();
+        let res =
+            finalize::<RistrettoPoint, sha2::Sha256>(&token.data, &unblind(&token, alpha), b"");
 
-        let (hashed_input, _) = Hkdf::<Sha512>::extract(Some(STR_VOPRF), &input);
-        let mut bits = [0u8; 64];
-        bits.copy_from_slice(&hashed_input);
+        let dst = [STR_VOPRF, &RistrettoPoint::get_context_string(MODE_BASE)].concat();
+        let point = RistrettoPoint::map_to_curve(&input, &dst).unwrap();
+        let res2 = finalize::<RistrettoPoint, sha2::Sha256>(&input, &point.to_arr().to_vec(), b"");
 
-        let point = RistrettoPoint::from_uniform_bytes(&bits);
-        let mut ikm: Vec<u8> = Vec::new();
-        ikm.extend_from_slice(&point.to_arr());
-        ikm.extend_from_slice(&input);
-        let (prk, _) = Hkdf::<Sha256>::extract(None, &ikm);
-
-        assert_eq!(res, prk);
+        assert_eq!(res, res2);
     }
 }

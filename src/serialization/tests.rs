@@ -13,7 +13,7 @@ use crate::{
     },
     keypair::{KeyPair, X25519KeyPair},
     opaque::*,
-    serialization::{serialize, ProtocolMessageType},
+    serialization::{i2osp, os2ip, serialize, ProtocolMessageType},
 };
 
 use curve25519_dalek::ristretto::RistrettoPoint;
@@ -118,8 +118,8 @@ fn register_first_message_roundtrip() {
 
     let mut input = Vec::new();
     input.extend_from_slice(&[ProtocolMessageType::RegistrationRequest as u8 + 1]);
-    input.extend_from_slice(&total_length.to_be_bytes()[8 - 3..]);
-    input.extend_from_slice(&alpha_length.to_be_bytes()[8 - 2..]);
+    input.extend_from_slice(&total_length.to_be_bytes()[std::mem::size_of::<usize>() - 3..]);
+    input.extend_from_slice(&alpha_length.to_be_bytes()[std::mem::size_of::<usize>() - 2..]);
     input.extend_from_slice(pt_bytes.as_slice());
 
     let r1 = RegisterFirstMessage::<RistrettoPoint>::deserialize(input.as_slice()).unwrap();
@@ -142,10 +142,10 @@ fn register_second_message_roundtrip() {
 
     let mut input = Vec::new();
     input.extend_from_slice(&[ProtocolMessageType::RegistrationResponse as u8 + 1]);
-    input.extend_from_slice(&total_length.to_be_bytes()[8 - 3..]);
-    input.extend_from_slice(&beta_length.to_be_bytes()[8 - 2..]);
+    input.extend_from_slice(&total_length.to_be_bytes()[std::mem::size_of::<usize>() - 3..]);
+    input.extend_from_slice(&beta_length.to_be_bytes()[std::mem::size_of::<usize>() - 2..]);
     input.extend_from_slice(beta_bytes.as_slice());
-    input.extend_from_slice(&pubkey_length.to_be_bytes()[8 - 2..]);
+    input.extend_from_slice(&pubkey_length.to_be_bytes()[std::mem::size_of::<usize>() - 2..]);
     input.extend_from_slice(&pubkey_bytes.as_slice());
     input.extend_from_slice(&credential_types);
 
@@ -175,9 +175,9 @@ fn register_third_message_roundtrip() {
 
     let mut input = Vec::new();
     input.extend_from_slice(&[ProtocolMessageType::RegistrationUpload as u8 + 1]);
-    input.extend_from_slice(&total_length.to_be_bytes()[8 - 3..]);
+    input.extend_from_slice(&total_length.to_be_bytes()[std::mem::size_of::<usize>() - 3..]);
     input.extend_from_slice(&envelope_bytes);
-    input.extend_from_slice(&pubkey_length.to_be_bytes()[8 - 2..]);
+    input.extend_from_slice(&pubkey_length.to_be_bytes()[std::mem::size_of::<usize>() - 2..]);
     input.extend_from_slice(&pubkey_bytes[..]);
 
     let r3 = RegisterThirdMessage::<X25519KeyPair, sha2::Sha256>::deserialize(&input[..]).unwrap();
@@ -202,8 +202,10 @@ fn login_first_message_roundtrip() {
 
     let mut input = Vec::new();
     input.extend_from_slice(&[ProtocolMessageType::CredentialRequest as u8 + 1]);
-    input.extend_from_slice(&total_length_without_ke1m.to_be_bytes()[8 - 3..]);
-    input.extend_from_slice(&alpha_length.to_be_bytes()[8 - 2..]);
+    input.extend_from_slice(
+        &total_length_without_ke1m.to_be_bytes()[std::mem::size_of::<usize>() - 3..],
+    );
+    input.extend_from_slice(&alpha_length.to_be_bytes()[std::mem::size_of::<usize>() - 2..]);
     input.extend_from_slice(&alpha_bytes);
     input.extend_from_slice(&ke1m[..]);
 
@@ -238,12 +240,14 @@ fn login_second_message_roundtrip() {
 
     let ke2m: Vec<u8> = [&server_nonce[..], &server_e_kp.public(), &mac[..]].concat();
 
-    let total_length_without_ke2m: usize = pt_bytes.len() + envelope.to_bytes().len() + 2;
+    let total_length_without_ke2m = pt_bytes.len() + envelope.to_bytes().len() + 2;
 
     let mut input = Vec::new();
     input.extend_from_slice(&[ProtocolMessageType::CredentialResponse as u8 + 1]);
-    input.extend_from_slice(&total_length_without_ke2m.to_be_bytes()[8 - 3..]);
-    input.extend_from_slice(&pt_bytes.len().to_be_bytes()[8 - 2..]);
+    input.extend_from_slice(
+        &total_length_without_ke2m.to_be_bytes()[std::mem::size_of::<usize>() - 3..],
+    );
+    input.extend_from_slice(&pt_bytes.len().to_be_bytes()[std::mem::size_of::<usize>() - 2..]);
     input.extend_from_slice(pt_bytes.as_slice());
     input.extend_from_slice(&envelope.to_bytes());
     input.extend_from_slice(&ke2m[..]);
@@ -307,6 +311,11 @@ fn ke1_message_roundtrip() {
 }
 
 proptest! {
+
+#[test]
+fn test_i2osp_os2ip(bytes in vec(any::<u8>(), 0..std::mem::size_of::<usize>())) {
+    assert_eq!(i2osp(os2ip(&bytes)?, bytes.len()), bytes);
+}
 
 #[test]
 fn test_nocrash_register_first_message(bytes in vec(any::<u8>(), 0..200)) {
