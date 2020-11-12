@@ -35,6 +35,26 @@ jobs:
           command: test
           args: --no-default-features --features ${{ matrix.backend_feature }}
 
+  cross-test:
+    name: Test on ${{ matrix.target }} (using cross)
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          # 32-bit x86
+          - i686-unknown-linux-gnu
+        backend_feature:
+          - u64_backend
+          - u32_backend
+    steps:
+      - uses: actions/checkout@v2
+      - uses: hecrj/setup-rust-action@v1
+      - run: cargo install cross
+      # Note: just use `cross` as you would `cargo`, but always
+      # pass the `--target=${{ matrix.target }}` arg. (Yes, really).
+      - run: cross test --verbose --target=${{ matrix.target }} --no-default-features --features ${{ matrix.backend_feature }}
+
   benches:
     name: cargo bench compilation
     runs-on: ubuntu-latest
