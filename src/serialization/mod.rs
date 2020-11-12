@@ -80,33 +80,45 @@ impl<T: CipherSuite> From<&LoginThirdMessage<T>> for ProtocolMessageType {
     }
 }
 
-pub(crate) fn serialize(input: &[u8], max_bytes: usize) -> Vec<u8> {
-    let mut output: Vec<u8> = Vec::new();
-    output
-        .extend_from_slice(&input.len().to_be_bytes()[std::mem::size_of::<usize>() - max_bytes..]);
-    output.extend_from_slice(&input[..]);
+// Corresponds to the I2OSP() function from RFC8017
+pub(crate) fn i2osp(input: usize, length: usize) -> Vec<u8> {
+    if length <= std::mem::size_of::<usize>() {
+        return (&input.to_be_bytes()[std::mem::size_of::<usize>() - length..]).to_vec();
+    }
+
+    let mut output = vec![0u8; length];
+    output.splice(
+        length - std::mem::size_of::<usize>()..length,
+        input.to_be_bytes().iter().cloned(),
+    );
     output
 }
 
+// Corresponds to the OS2IP() function from RFC8017
+pub(crate) fn os2ip(input: &[u8]) -> Result<usize, PakeError> {
+    if input.len() > std::mem::size_of::<usize>() {
+        // TODO:: check RFC compliance in refusing this
+        return Err(PakeError::SerializationError);
+    }
+
+    let mut output_array = [0u8; std::mem::size_of::<usize>()];
+    output_array[std::mem::size_of::<usize>() - input.len()..].copy_from_slice(input);
+    Ok(usize::from_be_bytes(output_array))
+}
+
+// Computes I2OSP(len(input), max_bytes) || input
+pub(crate) fn serialize(input: &[u8], max_bytes: usize) -> Vec<u8> {
+    [&i2osp(input.len(), max_bytes), &input[..]].concat()
+}
+
+// Tokenizes an input of the format I2OSP(len(input), max_bytes) || input, outputting
+// (input, remainder)
 pub(crate) fn tokenize(input: Vec<u8>, size_bytes: usize) -> Result<(Vec<u8>, Vec<u8>), PakeError> {
-    if size_bytes > 8 || input.len() < size_bytes {
+    if size_bytes > std::mem::size_of::<usize>() || input.len() < size_bytes {
         return Err(PakeError::SerializationError);
     }
 
-    let mut size_array = [0u8; 8];
-    for i in 0..size_bytes {
-        size_array[8 - size_bytes + i] = input[i];
-    }
-
-    let big_size = u64::from_be_bytes(size_array);
-
-    // TODO:: check RFC compliance in refusing this
-    if big_size >= u32::MAX as u64 {
-        return Err(PakeError::SerializationError);
-    }
-
-    let size = big_size as usize;
-
+    let size = os2ip(&input[..size_bytes])?;
     if size_bytes + size > input.len() {
         return Err(PakeError::SerializationError);
     }
