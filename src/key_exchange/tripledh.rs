@@ -468,7 +468,7 @@ fn hkdf_expand_label_extracted<D: Hash>(
     let mut okm = vec![0u8; length];
 
     let mut hkdf_label: Vec<u8> = Vec::new();
-    hkdf_label.extend_from_slice(&length.to_be_bytes()[6..]);
+    hkdf_label.extend_from_slice(&length.to_be_bytes()[std::mem::size_of::<usize>() - 2..]);
 
     let mut opaque_label: Vec<u8> = Vec::new();
     opaque_label.extend_from_slice(&STR_OPAQUE);

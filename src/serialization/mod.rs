@@ -82,7 +82,8 @@ impl<T: CipherSuite> From<&LoginThirdMessage<T>> for ProtocolMessageType {
 
 pub(crate) fn serialize(input: &[u8], max_bytes: usize) -> Vec<u8> {
     let mut output: Vec<u8> = Vec::new();
-    output.extend_from_slice(&input.len().to_be_bytes()[8 - max_bytes..]);
+    output
+        .extend_from_slice(&input.len().to_be_bytes()[std::mem::size_of::<usize>() - max_bytes..]);
     output.extend_from_slice(&input[..]);
     output
 }
@@ -96,7 +97,15 @@ pub(crate) fn tokenize(input: Vec<u8>, size_bytes: usize) -> Result<(Vec<u8>, Ve
     for i in 0..size_bytes {
         size_array[8 - size_bytes + i] = input[i];
     }
-    let size = usize::from_be_bytes(size_array);
+
+    let big_size = u64::from_be_bytes(size_array);
+
+    // TODO:: check RFC compliance in refusing this
+    if big_size >= u32::MAX as u64 {
+        return Err(PakeError::SerializationError);
+    }
+
+    let size = big_size as usize;
 
     if size_bytes + size > input.len() {
         return Err(PakeError::SerializationError);
