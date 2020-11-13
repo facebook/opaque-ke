@@ -113,7 +113,7 @@ pub(crate) fn serialize(input: &[u8], max_bytes: usize) -> Vec<u8> {
 
 // Tokenizes an input of the format I2OSP(len(input), max_bytes) || input, outputting
 // (input, remainder)
-pub(crate) fn tokenize(input: Vec<u8>, size_bytes: usize) -> Result<(Vec<u8>, Vec<u8>), PakeError> {
+pub(crate) fn tokenize(input: &[u8], size_bytes: usize) -> Result<(Vec<u8>, Vec<u8>), PakeError> {
     if size_bytes > std::mem::size_of::<usize>() || input.len() < size_bytes {
         return Err(PakeError::SerializationError);
     }

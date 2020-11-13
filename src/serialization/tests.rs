@@ -34,6 +34,7 @@ impl CipherSuite for Default {
 }
 
 const MAX_ID_LENGTH: usize = 10;
+const MAX_INFO_LENGTH: usize = 10;
 
 fn random_ristretto_point() -> RistrettoPoint {
     let mut rng = OsRng;
@@ -195,7 +196,15 @@ fn login_first_message_roundtrip() {
     let mut client_nonce = [0u8; NONCE_LEN];
     rng.fill_bytes(&mut client_nonce);
 
-    let ke1m: Vec<u8> = [&client_nonce[..], &client_e_kp.public()].concat();
+    let mut info = [0u8; MAX_INFO_LENGTH];
+    rng.fill_bytes(&mut info);
+
+    let ke1m: Vec<u8> = [
+        &client_nonce[..],
+        &serialize(&info.to_vec(), 2),
+        &client_e_kp.public(),
+    ]
+    .concat();
 
     let alpha_length = alpha_bytes.len();
     let total_length_without_ke1m: usize = alpha_length + 2;
@@ -238,7 +247,19 @@ fn login_second_message_roundtrip() {
     let mut server_nonce = [0u8; NONCE_LEN];
     rng.fill_bytes(&mut server_nonce);
 
-    let ke2m: Vec<u8> = [&server_nonce[..], &server_e_kp.public(), &mac[..]].concat();
+    let mut info = [0u8; MAX_INFO_LENGTH];
+    rng.fill_bytes(&mut info);
+    let mut e_info = [0u8; MAX_INFO_LENGTH];
+    rng.fill_bytes(&mut e_info);
+
+    let ke2m: Vec<u8> = [
+        &server_nonce[..],
+        &serialize(&info.to_vec(), 2),
+        &server_e_kp.public(),
+        &serialize(&e_info.to_vec(), 2),
+        &mac[..],
+    ]
+    .concat();
 
     let total_length_without_ke2m = pt_bytes.len() + envelope.to_bytes().len() + 2;
 
@@ -255,6 +276,32 @@ fn login_second_message_roundtrip() {
     let l2 = LoginSecondMessage::<Default>::deserialize(&input).unwrap();
     let l2_bytes = l2.serialize();
     assert_eq!(input, l2_bytes);
+}
+
+#[test]
+fn login_third_message_roundtrip() {
+    let mut rng = OsRng;
+    let mut info = [0u8; MAX_INFO_LENGTH];
+    rng.fill_bytes(&mut info);
+    let mut e_info = [0u8; MAX_INFO_LENGTH];
+    rng.fill_bytes(&mut e_info);
+    let mut mac = [0u8; 32];
+    rng.fill_bytes(&mut mac);
+
+    let ke3m: Vec<u8> = [
+        &serialize(&info.to_vec(), 2),
+        &serialize(&e_info.to_vec(), 2),
+        &mac[..],
+    ]
+    .concat();
+
+    let mut input = Vec::new();
+    input.extend_from_slice(&[ProtocolMessageType::KeyExchange as u8 + 1]);
+    input.extend_from_slice(&ke3m[..]);
+
+    let l3 = LoginThirdMessage::<Default>::deserialize(&input).unwrap();
+    let l3_bytes = l3.serialize();
+    assert_eq!(input, l3_bytes);
 }
 
 #[test]
@@ -303,11 +350,71 @@ fn ke1_message_roundtrip() {
     let mut client_nonce = [0u8; NONCE_LEN];
     rng.fill_bytes(&mut client_nonce);
 
-    let ke1m: Vec<u8> = [&client_nonce[..], &client_e_kp.public()].concat();
+    let mut info = [0u8; MAX_INFO_LENGTH];
+    rng.fill_bytes(&mut info);
+
+    let ke1m: Vec<u8> = [
+        &client_nonce[..],
+        &serialize(&info.to_vec(), 2),
+        &client_e_kp.public(),
+    ]
+    .concat();
     let reg =
         <TripleDH as KeyExchange<sha2::Sha256, crate::keypair::X25519KeyPair>>::KE1Message::try_from(&ke1m[..]).unwrap();
     let reg_bytes = reg.to_bytes();
     assert_eq!(reg_bytes, ke1m);
+}
+
+#[test]
+fn ke2_message_roundtrip() {
+    let mut rng = OsRng;
+
+    let server_e_kp = Default::generate_random_keypair(&mut rng).unwrap();
+    let mut mac = [0u8; 32];
+    rng.fill_bytes(&mut mac);
+    let mut server_nonce = [0u8; NONCE_LEN];
+    rng.fill_bytes(&mut server_nonce);
+    let mut info = [0u8; MAX_INFO_LENGTH];
+    rng.fill_bytes(&mut info);
+    let mut e_info = [0u8; MAX_INFO_LENGTH];
+    rng.fill_bytes(&mut e_info);
+
+    let ke2m: Vec<u8> = [
+        &server_nonce[..],
+        &serialize(&info.to_vec(), 2),
+        &server_e_kp.public(),
+        &serialize(&e_info.to_vec(), 2),
+        &mac[..],
+    ]
+    .concat();
+
+    let reg =
+        <TripleDH as KeyExchange<sha2::Sha256, crate::keypair::X25519KeyPair>>::KE2Message::try_from(&ke2m[..]).unwrap();
+    let reg_bytes = reg.to_bytes();
+    assert_eq!(reg_bytes, ke2m);
+}
+
+#[test]
+fn ke3_message_roundtrip() {
+    let mut rng = OsRng;
+    let mut info = [0u8; MAX_INFO_LENGTH];
+    rng.fill_bytes(&mut info);
+    let mut e_info = [0u8; MAX_INFO_LENGTH];
+    rng.fill_bytes(&mut e_info);
+    let mut mac = [0u8; 32];
+    rng.fill_bytes(&mut mac);
+
+    let ke3m: Vec<u8> = [
+        &serialize(&info.to_vec(), 2),
+        &serialize(&e_info.to_vec(), 2),
+        &mac[..],
+    ]
+    .concat();
+
+    let reg =
+        <TripleDH as KeyExchange<sha2::Sha256, crate::keypair::X25519KeyPair>>::KE3Message::try_from(&ke3m[..]).unwrap();
+    let reg_bytes = reg.to_bytes();
+    assert_eq!(reg_bytes, ke3m);
 }
 
 proptest! {

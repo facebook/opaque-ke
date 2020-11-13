@@ -81,11 +81,11 @@ impl<Grp: Group> RegisterFirstMessage<Grp> {
             return Err(PakeError::SerializationError.into());
         }
 
-        let (data, remainder) = tokenize(input[1..].to_vec(), 3)?;
+        let (data, remainder) = tokenize(&input[1..], 3)?;
         if !remainder.is_empty() {
             return Err(PakeError::SerializationError.into());
         }
-        let (alpha_bytes, remainder) = tokenize(data, 2)?;
+        let (alpha_bytes, remainder) = tokenize(&data, 2)?;
 
         if !remainder.is_empty() {
             return Err(PakeError::SerializationError.into());
@@ -191,17 +191,17 @@ where
             return Err(PakeError::SerializationError.into());
         }
 
-        let (data, remainder) = tokenize(input[1..].to_vec(), 3)?;
+        let (data, remainder) = tokenize(&input[1..], 3)?;
         if !remainder.is_empty() {
             return Err(PakeError::SerializationError.into());
         }
 
-        let (beta_bytes, remainder) = tokenize(data, 2)?;
-        let (server_s_pk, remainder) = tokenize(remainder, 2)?;
+        let (beta_bytes, remainder) = tokenize(&data, 2)?;
+        let (server_s_pk, remainder) = tokenize(&remainder, 2)?;
 
         // Handle ecf deserialization
-        let (secret_credentials, remainder) = tokenize(remainder, 1)?;
-        let (cleartext_credentials, remainder) = tokenize(remainder, 1)?;
+        let (secret_credentials, remainder) = tokenize(&remainder, 1)?;
+        let (cleartext_credentials, remainder) = tokenize(&remainder, 1)?;
         let sc = secret_credentials
             .iter()
             .map(|x| u8_to_credential_type(*x).ok_or(PakeError::SerializationError))
@@ -291,13 +291,13 @@ where
             return Err(PakeError::SerializationError.into());
         }
 
-        let (data, remainder) = tokenize(input[1..].to_vec(), 3)?;
+        let (data, remainder) = tokenize(&input[1..], 3)?;
         if !remainder.is_empty() {
             return Err(PakeError::SerializationError.into());
         }
 
         let (envelope, remainder) = Envelope::<D>::deserialize(&data)?;
-        let (client_s_pk, remainder) = tokenize(remainder, 2)?;
+        let (client_s_pk, remainder) = tokenize(&remainder, 2)?;
 
         if !remainder.is_empty() {
             return Err(PakeError::SerializationError.into());
@@ -348,8 +348,8 @@ impl<CS: CipherSuite> LoginFirstMessage<CS> {
             return Err(PakeError::SerializationError.into());
         }
 
-        let (data, ke1m) = tokenize(input[1..].to_vec(), 3)?;
-        let (alpha_bytes, remainder) = tokenize(data, 2)?;
+        let (data, ke1m) = tokenize(&input[1..], 3)?;
+        let (alpha_bytes, remainder) = tokenize(&data, 2)?;
 
         if !remainder.is_empty() {
             return Err(PakeError::SerializationError.into());
@@ -399,8 +399,8 @@ impl<CS: CipherSuite> LoginSecondMessage<CS> {
             return Err(PakeError::SerializationError.into());
         }
 
-        let (data, ke2m) = tokenize(input[1..].to_vec(), 3)?;
-        let (beta_bytes, envelope_bytes) = tokenize(data, 2)?;
+        let (data, ke2m) = tokenize(&input[1..], 3)?;
+        let (beta_bytes, envelope_bytes) = tokenize(&data, 2)?;
 
         let concatenated = [&beta_bytes[..], &envelope_bytes[..], &ke2m[..]].concat();
         Self::try_from(&concatenated[..])
@@ -463,6 +463,15 @@ impl<CS: CipherSuite> LoginThirdMessage<CS> {
         output
     }
 
+    /// Deserialization from bytes
+    pub fn deserialize(input: &[u8]) -> Result<Self, ProtocolError> {
+        if input.is_empty() || input[0] != ProtocolMessageType::KeyExchange as u8 + 1 {
+            return Err(PakeError::SerializationError.into());
+        }
+
+        Self::try_from(&input[1..])
+    }
+
     /// byte representation for the login finalization
     pub fn to_bytes(&self) -> Vec<u8> {
         self.ke3_message.to_bytes()
@@ -485,8 +494,8 @@ pub struct ClientRegistration<CS: CipherSuite> {
 impl<CS: CipherSuite> TryFrom<&[u8]> for ClientRegistration<CS> {
     type Error = ProtocolError;
     fn try_from(input: &[u8]) -> Result<Self, Self::Error> {
-        let (id_u, bytes) = tokenize(input.to_vec(), 2)?;
-        let (id_s, bytes) = tokenize(bytes.to_vec(), 2)?;
+        let (id_u, bytes) = tokenize(&input, 2)?;
+        let (id_s, bytes) = tokenize(&bytes, 2)?;
 
         let min_expected_len = <CS::Group as Group>::ScalarLen::to_usize();
         let checked_slice = (if bytes.len() <= min_expected_len {
@@ -922,8 +931,8 @@ pub struct ClientLogin<CS: CipherSuite> {
 impl<CS: CipherSuite> TryFrom<&[u8]> for ClientLogin<CS> {
     type Error = ProtocolError;
     fn try_from(input: &[u8]) -> Result<Self, Self::Error> {
-        let (id_u, bytes) = tokenize(input.to_vec(), 2)?;
-        let (id_s, bytes) = tokenize(bytes.to_vec(), 2)?;
+        let (id_u, bytes) = tokenize(&input, 2)?;
+        let (id_s, bytes) = tokenize(&bytes, 2)?;
 
         let scalar_len = <CS::Group as Group>::ScalarLen::to_usize();
         let ke1_state_size =
@@ -1035,7 +1044,11 @@ impl<CS: CipherSuite> ClientLogin<CS> {
             postprocess,
         )?;
 
-        let (ke1_state, ke1_message) = CS::KeyExchange::generate_ke1(alpha.to_arr().to_vec(), rng)?;
+        let (ke1_state, ke1_message) = CS::KeyExchange::generate_ke1(
+            alpha.to_arr().to_vec(),
+            Vec::new(), /* TODO set this */
+            rng,
+        )?;
 
         let l1 = LoginFirstMessage { alpha, ke1_message };
 
@@ -1114,6 +1127,8 @@ impl<CS: CipherSuite> ClientLogin<CS> {
             <CS::KeyFormat as KeyPair>::Repr::from_bytes(
                 &opened_envelope.credentials_map[&CredentialType::SkU],
             )?,
+            Vec::new(), // TODO: fill in
+            Vec::new(), // TODO: fill in
         )?;
 
         Ok((
@@ -1209,6 +1224,8 @@ impl<CS: CipherSuite> ServerLogin<CS> {
             l1.ke1_message,
             client_s_pk,
             server_s_sk.clone(),
+            Vec::new(), // TODO populate this
+            Vec::new(), // TODO populate this
         )?;
 
         let l2 = LoginSecondMessage {
