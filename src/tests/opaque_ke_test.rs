@@ -12,6 +12,7 @@ use crate::{
     opaque::*,
     slow_hash::NoOpHash,
     tests::mock_rng::CycleRng,
+    *,
 };
 use curve25519_dalek::edwards::EdwardsPoint;
 use generic_array::GenericArray;
@@ -83,7 +84,7 @@ static TEST_VECTOR: &str = r#"
     "client_nonce": "8bdd8689f4ea9486aaa3bac182d31f31e3c62d76b3869ae1dd05d5c708b13e86",
     "server_nonce": "d529ed9480524236ed6f6cafd92ebab3c6091afde54f47f9079575c090cad7d6",
     "r1": "010000220020ada5910d73be53a8a6c50d32e9efcc0eb3e871103c05fb993fcb8312aff7fc79",
-    "r2": "02000028002035104271fe25c0074ea715af805c019772a97b6e975376f411e1c37831a56fa7000001010103",
+    "r2": "02000048002035104271fe25c0074ea715af805c019772a97b6e975376f411e1c37831a56fa700209ef0646ad66cf13ce4052294c7325e044853f0c1fd03e91288f8339d812d4a5701010103",
     "r3": "030000aeb326061dfc120f5b261b28bbae4262c26ad343a640b5fb4b90ba3f16600e1c89002375ba1dad2970f60479c4ce0fe1e62271f2c5561757557c88941d9278ededbc981de07c00230300209ef0646ad66cf13ce4052294c7325e044853f0c1fd03e91288f8339d812d4a570020c575cad080bafce229c0de9700269d48d8102d3f0f70497a770d9c0bcb5d181e0020aee30cf198cc78b5b1a5ed5a4bda21bceb5e4732fffbddf867e32ee814d67317",
     "l1": "040000220020ada5910d73be53a8a6c50d32e9efcc0eb3e871103c05fb993fcb8312aff7fc798bdd8689f4ea9486aaa3bac182d31f31e3c62d76b3869ae1dd05d5c708b13e8600001fb90ca40034a0ee0d9d087a2c12743329d792b21e4c4424e561a665a1031b00",
     "l2": "050000ae002035104271fe25c0074ea715af805c019772a97b6e975376f411e1c37831a56fa7b326061dfc120f5b261b28bbae4262c26ad343a640b5fb4b90ba3f16600e1c89002375ba1dad2970f60479c4ce0fe1e62271f2c5561757557c88941d9278ededbc981de07c00230300209ef0646ad66cf13ce4052294c7325e044853f0c1fd03e91288f8339d812d4a570020c575cad080bafce229c0de9700269d48d8102d3f0f70497a770d9c0bcb5d181ef021332310d7f6a1c8272d11610e0244cf462efe1a7d9e6657cf12f74d30f2720000b2df778b631c83d1fdd76feb9978d156ad0c1d18fedbe2b15a309f673e3d846400003bc4221316aaad7b6110910bae5a3bc0e498738634916021546f6fce652adc78",
@@ -250,10 +251,9 @@ where
     rng.fill_bytes(&mut server_nonce);
 
     let mut blinding_factor_registration_rng = CycleRng::new(blinding_factor_raw.to_vec());
-    let (r1, client_registration) = ClientRegistration::<CS>::start_with_user_and_server_name(
-        id_u,
-        id_s,
+    let (r1, client_registration) = ClientRegistration::<CS>::start(
         password,
+        ClientRegistrationStartParameters::WithIdentifiers(id_u.to_vec(), id_s.to_vec()),
         &mut blinding_factor_registration_rng,
         std::convert::identity,
     )
@@ -264,7 +264,8 @@ where
     let client_registration_state = client_registration.to_bytes().to_vec();
 
     let mut oprf_key_rng = CycleRng::new(oprf_key_raw.to_vec());
-    let (r2, server_registration) = ServerRegistration::<CS>::start(r1, &mut oprf_key_rng).unwrap();
+    let (r2, server_registration) =
+        ServerRegistration::<CS>::start(r1, server_s_kp.public(), &mut oprf_key_rng).unwrap();
     let r2_bytes = r2.serialize().to_vec();
     let oprf_key_bytes = CS::Group::scalar_as_bytes(&server_registration.oprf_key).clone();
     let server_registration_state = server_registration.to_bytes().to_vec();
@@ -275,7 +276,7 @@ where
 
     let mut finish_registration_rng = CycleRng::new(client_s_sk_and_nonce);
     let (r3, export_key_registration) = client_registration
-        .finish(r2, server_s_kp.public(), &mut finish_registration_rng)
+        .finish(r2, &mut finish_registration_rng)
         .unwrap();
     let r3_bytes = r3.serialize().to_vec();
 
@@ -288,33 +289,52 @@ where
     client_login_start.extend_from_slice(&client_nonce);
 
     let mut client_login_start_rng = CycleRng::new(client_login_start);
-    let (l1, client_login) = ClientLogin::<CS>::start_with_user_and_server_name(
-        id_u,
-        id_s,
+    let client_login_start_result = ClientLogin::<CS>::start(
         password,
         &mut client_login_start_rng,
+        ClientLoginStartParameters::WithIdentifiersAndInfo(
+            Vec::new(),
+            id_u.to_vec(),
+            id_s.to_vec(),
+        ),
         std::convert::identity,
     )
     .unwrap();
-    let l1_bytes = l1.serialize().to_vec();
-    let client_login_state = client_login.to_bytes().to_vec();
+    let l1_bytes = client_login_start_result
+        .credential_request
+        .serialize()
+        .to_vec();
+    let client_login_state = client_login_start_result
+        .client_login_state
+        .to_bytes()
+        .to_vec();
 
     let mut server_e_sk_rng = CycleRng::new(server_e_kp.private().to_arr().to_vec());
-    let (l2, server_login) = ServerLogin::<CS>::start(
+    let server_login_start_result = ServerLogin::<CS>::start(
         password_file,
         server_s_kp.private(),
-        l1,
+        client_login_start_result.credential_request,
         &mut server_e_sk_rng,
+        ServerLoginStartParameters::default(),
     )
     .unwrap();
-    let l2_bytes = l2.serialize().to_vec();
-    let server_login_state = server_login.to_bytes().to_vec();
+    let l2_bytes = server_login_start_result
+        .credential_response
+        .serialize()
+        .to_vec();
+    let server_login_state = server_login_start_result
+        .server_login_state
+        .to_bytes()
+        .to_vec();
 
-    let mut client_e_sk_rng = CycleRng::new(client_e_kp.private().to_arr().to_vec());
-    let (l3, client_shared_secret, _export_key_login) = client_login
-        .finish(l2, server_s_kp.public(), &mut client_e_sk_rng)
+    let client_login_finish_result = client_login_start_result
+        .client_login_state
+        .finish(
+            server_login_start_result.credential_response,
+            ClientLoginFinishParameters::default(),
+        )
         .unwrap();
-    let l3_bytes = l3.to_bytes().to_vec();
+    let l3_bytes = client_login_finish_result.key_exchange.to_bytes().to_vec();
 
     TestVectorParameters {
         client_s_pk: client_s_kp.public().to_arr().to_vec(),
@@ -344,7 +364,7 @@ where
         server_registration_state,
         client_login_state,
         server_login_state,
-        shared_secret: client_shared_secret,
+        shared_secret: client_login_finish_result.session_secret,
         export_key: export_key_registration.to_vec(),
     }
 }
@@ -365,15 +385,13 @@ fn postprocess_blinding_factor<G: Group>(_: G::Scalar) -> G::Scalar {
 fn test_r1() -> Result<(), PakeError> {
     let parameters = populate_test_vectors(&serde_json::from_str(TEST_VECTOR).unwrap());
     let mut rng = OsRng;
-    let (r1, client_registration) =
-        ClientRegistration::<X255193dhNoSlowHash>::start_with_user_and_server_name(
-            &parameters.id_u,
-            &parameters.id_s,
-            &parameters.password,
-            &mut rng,
-            postprocess_blinding_factor::<<X255193dhNoSlowHash as CipherSuite>::Group>,
-        )
-        .unwrap();
+    let (r1, client_registration) = ClientRegistration::<X255193dhNoSlowHash>::start(
+        &parameters.password,
+        ClientRegistrationStartParameters::WithIdentifiers(parameters.id_u, parameters.id_s),
+        &mut rng,
+        postprocess_blinding_factor::<<X255193dhNoSlowHash as CipherSuite>::Group>,
+    )
+    .unwrap();
     assert_eq!(hex::encode(&parameters.r1), hex::encode(r1.serialize()));
     assert_eq!(
         hex::encode(&parameters.client_registration_state),
@@ -388,6 +406,7 @@ fn test_r2() -> Result<(), PakeError> {
     let mut oprf_key_rng = CycleRng::new(parameters.oprf_key);
     let (r2, server_registration) = ServerRegistration::<X255193dhNoSlowHash>::start(
         RegisterFirstMessage::deserialize(&parameters.r1[..]).unwrap(),
+        &Key::try_from(&parameters.server_s_pk[..]).unwrap(),
         &mut oprf_key_rng,
     )
     .unwrap();
@@ -412,7 +431,6 @@ fn test_r3() -> Result<(), PakeError> {
     .unwrap()
     .finish(
         RegisterSecondMessage::deserialize(&parameters.r2[..]).unwrap(),
-        &Key::try_from(&parameters.server_s_pk[..]).unwrap(),
         &mut finish_registration_rng,
     )
     .unwrap();
@@ -456,18 +474,24 @@ fn test_l1() -> Result<(), PakeError> {
     ]
     .concat();
     let mut client_login_start_rng = CycleRng::new(client_login_start);
-    let (l1, client_login) = ClientLogin::<X255193dhNoSlowHash>::start_with_user_and_server_name(
-        &parameters.id_u,
-        &parameters.id_s,
+    let client_login_start_result = ClientLogin::<X255193dhNoSlowHash>::start(
         &parameters.password,
         &mut client_login_start_rng,
+        ClientLoginStartParameters::WithIdentifiersAndInfo(
+            Vec::new(),
+            parameters.id_u,
+            parameters.id_s,
+        ),
         postprocess_blinding_factor::<<X255193dhNoSlowHash as CipherSuite>::Group>,
     )
     .unwrap();
-    assert_eq!(hex::encode(&parameters.l1), hex::encode(l1.serialize()));
+    assert_eq!(
+        hex::encode(&parameters.l1),
+        hex::encode(client_login_start_result.credential_request.serialize())
+    );
     assert_eq!(
         hex::encode(&parameters.client_login_state),
-        hex::encode(client_login.to_bytes())
+        hex::encode(client_login_start_result.client_login_state.to_bytes())
     );
     Ok(())
 }
@@ -477,18 +501,22 @@ fn test_l2() -> Result<(), PakeError> {
     let parameters = populate_test_vectors(&serde_json::from_str(TEST_VECTOR).unwrap());
 
     let mut server_e_sk_rng = CycleRng::new(parameters.server_e_sk);
-    let (l2, server_login) = ServerLogin::<X255193dhNoSlowHash>::start(
+    let server_login_start_result = ServerLogin::<X255193dhNoSlowHash>::start(
         ServerRegistration::try_from(&parameters.password_file[..]).unwrap(),
         &Key::try_from(&parameters.server_s_sk[..]).unwrap(),
         LoginFirstMessage::<X255193dhNoSlowHash>::deserialize(&parameters.l1[..]).unwrap(),
         &mut server_e_sk_rng,
+        ServerLoginStartParameters::default(),
     )
     .unwrap();
 
-    assert_eq!(hex::encode(&parameters.l2), hex::encode(l2.serialize()));
+    assert_eq!(
+        hex::encode(&parameters.l2),
+        hex::encode(server_login_start_result.credential_response.serialize())
+    );
     assert_eq!(
         hex::encode(&parameters.server_login_state),
-        hex::encode(server_login.to_bytes())
+        hex::encode(server_login_start_result.server_login_state.to_bytes())
     );
     Ok(())
 }
@@ -497,25 +525,26 @@ fn test_l2() -> Result<(), PakeError> {
 fn test_l3() -> Result<(), PakeError> {
     let parameters = populate_test_vectors(&serde_json::from_str(TEST_VECTOR).unwrap());
 
-    let mut client_e_sk_rng = CycleRng::new(parameters.client_e_sk.to_vec());
-    let (l3, shared_secret, export_key_login) =
+    let client_login_finish_result =
         ClientLogin::<X255193dhNoSlowHash>::try_from(&parameters.client_login_state[..])
             .unwrap()
             .finish(
                 LoginSecondMessage::<X255193dhNoSlowHash>::deserialize(&parameters.l2[..]).unwrap(),
-                &Key::try_from(&parameters.server_s_pk[..])?,
-                &mut client_e_sk_rng,
+                ClientLoginFinishParameters::default(),
             )
             .unwrap();
 
     assert_eq!(
         hex::encode(&parameters.shared_secret),
-        hex::encode(&shared_secret)
+        hex::encode(&client_login_finish_result.session_secret)
     );
-    assert_eq!(hex::encode(&parameters.l3), hex::encode(l3.to_bytes()));
+    assert_eq!(
+        hex::encode(&parameters.l3),
+        hex::encode(client_login_finish_result.key_exchange.to_bytes())
+    );
     assert_eq!(
         hex::encode(&parameters.export_key),
-        hex::encode(export_key_login)
+        hex::encode(client_login_finish_result.export_key)
     );
 
     Ok(())
@@ -525,7 +554,7 @@ fn test_l3() -> Result<(), PakeError> {
 fn test_server_login_finish() -> Result<(), ProtocolError> {
     let parameters = populate_test_vectors(&serde_json::from_str(TEST_VECTOR).unwrap());
 
-    let shared_secret =
+    let server_login_result =
         ServerLogin::<X255193dhNoSlowHash>::try_from(&parameters.server_login_state[..])
             .unwrap()
             .finish(LoginThirdMessage::try_from(&parameters.l3[..])?)
@@ -533,7 +562,7 @@ fn test_server_login_finish() -> Result<(), ProtocolError> {
 
     assert_eq!(
         hex::encode(parameters.shared_secret),
-        hex::encode(shared_secret)
+        hex::encode(server_login_result.session_secret)
     );
 
     Ok(())
@@ -546,36 +575,52 @@ fn test_complete_flow(
     let mut client_rng = OsRng;
     let mut server_rng = OsRng;
     let server_kp = X255193dhNoSlowHash::generate_random_keypair(&mut server_rng)?;
-    let (register_m1, client_state) =
-        ClientRegistration::<X255193dhNoSlowHash>::start(registration_password, &mut client_rng)?;
-    let (register_m2, server_state) =
-        ServerRegistration::<X255193dhNoSlowHash>::start(register_m1, &mut server_rng)?;
-    let (register_m3, registration_export_key) =
-        client_state.finish(register_m2, server_kp.public(), &mut client_rng)?;
-    let p_file = server_state.finish(register_m3)?;
-    let (login_m1, client_login_state) =
-        ClientLogin::<X255193dhNoSlowHash>::start(login_password, &mut client_rng)?;
-    let (login_m2, server_login_state) = ServerLogin::<X255193dhNoSlowHash>::start(
-        p_file,
-        &server_kp.private(),
-        login_m1,
+    let (register_m1, client_state) = ClientRegistration::<X255193dhNoSlowHash>::start(
+        registration_password,
+        ClientRegistrationStartParameters::default(),
+        &mut client_rng,
+        std::convert::identity,
+    )?;
+    let (register_m2, server_state) = ServerRegistration::<X255193dhNoSlowHash>::start(
+        register_m1,
+        server_kp.public(),
         &mut server_rng,
     )?;
+    let (register_m3, registration_export_key) =
+        client_state.finish(register_m2, &mut client_rng)?;
+    let p_file = server_state.finish(register_m3)?;
+    let client_login_start_result = ClientLogin::<X255193dhNoSlowHash>::start(
+        login_password,
+        &mut client_rng,
+        ClientLoginStartParameters::default(),
+        std::convert::identity,
+    )?;
+    let server_login_start_result = ServerLogin::<X255193dhNoSlowHash>::start(
+        p_file,
+        &server_kp.private(),
+        client_login_start_result.credential_request,
+        &mut server_rng,
+        ServerLoginStartParameters::default(),
+    )?;
 
-    let client_login_result =
-        client_login_state.finish(login_m2, &server_kp.public(), &mut client_rng);
+    let client_login_result = client_login_start_result.client_login_state.finish(
+        server_login_start_result.credential_response,
+        ClientLoginFinishParameters::default(),
+    );
 
     if hex::encode(registration_password) == hex::encode(login_password) {
-        let (login_m3, client_shared_secret, login_export_key) = client_login_result?;
-        let server_shared_secret = server_login_state.finish(login_m3)?;
+        let client_login_finish_result = client_login_result?;
+        let server_login_finish_result = server_login_start_result
+            .server_login_state
+            .finish(client_login_finish_result.key_exchange)?;
 
         assert_eq!(
-            hex::encode(server_shared_secret),
-            hex::encode(client_shared_secret)
+            hex::encode(server_login_finish_result.session_secret),
+            hex::encode(client_login_finish_result.session_secret)
         );
         assert_eq!(
             hex::encode(registration_export_key),
-            hex::encode(login_export_key)
+            hex::encode(client_login_finish_result.export_key)
         );
     } else {
         let res = matches!(

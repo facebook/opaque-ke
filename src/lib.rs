@@ -71,7 +71,7 @@
 //! ```
 //! # use opaque_ke::{
 //! #   errors::ProtocolError,
-//! #   opaque::ServerRegistration,
+//! #   ServerRegistration,
 //! #   keypair::{KeyPair, X25519KeyPair},
 //! #   slow_hash::NoOpHash,
 //! # };
@@ -84,11 +84,12 @@
 //! #     type Hash = sha2::Sha256;
 //! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
 //! # }
-//! use opaque_ke::opaque::ClientRegistration;
+//! use opaque_ke::{ClientRegistration, ClientRegistrationStartParameters};
 //! use rand_core::{OsRng, RngCore};
 //! let mut client_rng = OsRng;
 //! let (r1, client_state) = ClientRegistration::<Default>::start(
 //!     b"password",
+//!     ClientRegistrationStartParameters::default(),
 //!     &mut client_rng,
 //! )?;
 //! # Ok::<(), ProtocolError>(())
@@ -101,7 +102,7 @@
 //! ```
 //! # use opaque_ke::{
 //! #   errors::ProtocolError,
-//! #   opaque::ClientRegistration,
+//! #   ClientRegistration, ClientRegistrationStartParameters,
 //! #   keypair::{KeyPair, X25519KeyPair},
 //! #   slow_hash::NoOpHash,
 //! # };
@@ -118,11 +119,13 @@
 //! # let mut client_rng = OsRng;
 //! # let (r1, client_state) = ClientRegistration::<Default>::start(
 //! #     b"password",
+//! #     ClientRegistrationStartParameters::default(),
 //! #     &mut client_rng,
 //! # )?;
-//! use opaque_ke::opaque::ServerRegistration;
+//! use opaque_ke::ServerRegistration;
 //! let mut server_rng = OsRng;
-//! let (r2, server_state) = ServerRegistration::<Default>::start(r1, &mut server_rng)?;
+//! let server_kp = Default::generate_random_keypair(&mut server_rng)?;
+//! let (r2, server_state) = ServerRegistration::<Default>::start(r1, server_kp.public(), &mut server_rng)?;
 //! # Ok::<(), ProtocolError>(())
 //! ```
 //! `r2` is returned to the client, and `server_state` must be persisted on the server for the final step of server
@@ -134,7 +137,7 @@
 //! ```
 //! # use opaque_ke::{
 //! #   errors::ProtocolError,
-//! #   opaque::{ClientRegistration, ServerRegistration},
+//! #   ClientRegistration, ClientRegistrationStartParameters, ServerRegistration,
 //! #   keypair::{KeyPair, X25519KeyPair},
 //! #   slow_hash::NoOpHash,
 //! # };
@@ -151,13 +154,14 @@
 //! # let mut client_rng = OsRng;
 //! # let (r1, client_state) = ClientRegistration::<Default>::start(
 //! #     b"password",
+//! #     ClientRegistrationStartParameters::default(),
 //! #     &mut client_rng,
 //! # )?;
 //! # let mut server_rng = OsRng;
-//! # let (r2, server_state) = ServerRegistration::<Default>::start(r1, &mut server_rng)?;
 //! # let server_kp = Default::generate_random_keypair(&mut server_rng)?;
+//! # let (r2, server_state) = ServerRegistration::<Default>::start(r1, server_kp.public(), &mut server_rng)?;
 //! let (r3, export_key_registration) =
-//!     client_state.finish(r2, server_kp.public(), &mut client_rng)?;
+//!     client_state.finish(r2, &mut client_rng)?;
 //! # Ok::<(), ProtocolError>(())
 //! ```
 //! `r3` is sent to the server, and the client can optionally use `export_key_registration` for applications that choose to
@@ -168,7 +172,7 @@
 //! ```
 //! # use opaque_ke::{
 //! #   errors::ProtocolError,
-//! #   opaque::{ClientRegistration, ServerRegistration},
+//! #   ClientRegistration, ClientRegistrationStartParameters, ServerRegistration,
 //! #   keypair::{KeyPair, X25519KeyPair},
 //! #   slow_hash::NoOpHash,
 //! # };
@@ -185,12 +189,13 @@
 //! # let mut client_rng = OsRng;
 //! # let (r1, client_state) = ClientRegistration::<Default>::start(
 //! #     b"password",
+//! #     ClientRegistrationStartParameters::default(),
 //! #     &mut client_rng,
 //! # )?;
 //! # let mut server_rng = OsRng;
-//! # let (r2, server_state) = ServerRegistration::<Default>::start(r1, &mut server_rng)?;
 //! # let server_kp = Default::generate_random_keypair(&mut server_rng)?;
-//! # let (r3, export_key_registration) = client_state.finish(r2, server_kp.public(), &mut client_rng)?;
+//! # let (r2, server_state) = ServerRegistration::<Default>::start(r1, server_kp.public(), &mut server_rng)?;
+//! # let (r3, export_key_registration) = client_state.finish(r2, &mut client_rng)?;
 //! let password_file = server_state.finish(r3)?;
 //! # Ok::<(), ProtocolError>(())
 //! ```
@@ -210,7 +215,7 @@
 //! ```
 //! # use opaque_ke::{
 //! #   errors::ProtocolError,
-//! #   opaque::{ClientRegistration, ServerRegistration, ServerLogin, LoginThirdMessage},
+//! #   ClientRegistration, ServerRegistration, ServerLogin, LoginThirdMessage,
 //! #   keypair::{KeyPair, X25519KeyPair},
 //! #   slow_hash::NoOpHash,
 //! # };
@@ -224,23 +229,25 @@
 //! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
 //! # }
 //! # use rand_core::{OsRng, RngCore};
-//! use opaque_ke::opaque::ClientLogin;
+//! use opaque_ke::{ClientLogin, ClientLoginStartParameters};
 //! let mut client_rng = OsRng;
-//! let (l1, client_state) = ClientLogin::<Default>::start(
+//! let client_login_start_result = ClientLogin::<Default>::start(
 //!   b"password",
 //!   &mut client_rng,
+//!   ClientLoginStartParameters::default(),
 //! )?;
 //! # Ok::<(), ProtocolError>(())
 //! ```
-//! `l1` is sent to the server, and `client_state` must be persisted on the client for the final step of client login.
+//! `client_login_start_result.credential_request` is sent to the server, and `client_login_start_result.client_login_state`
+//! must be persisted on the client for the final step of client login.
 //!
 //! In the second step (server login start), the server takes as input the `l1` message from the client, the server's
 //! private key `server_kp.private()`, along with a serialized version of the password file, `password_file_bytes`, and
-//! runs `ServerLogin::start` to produce `l2`:
+//! runs `ServerLogin::start` to produce `server_login_start_result`:
 //! ```
 //! # use opaque_ke::{
 //! #   errors::ProtocolError,
-//! #   opaque::{ClientRegistration, ServerRegistration, ClientLogin, LoginThirdMessage},
+//! #   ClientRegistration, ClientRegistrationStartParameters, ServerRegistration, ClientLogin, ClientLoginStartParameters, LoginThirdMessage,
 //! #   keypair::{KeyPair, X25519KeyPair},
 //! #   slow_hash::NoOpHash,
 //! # };
@@ -257,26 +264,29 @@
 //! # let mut client_rng = OsRng;
 //! # let (r1, client_state) = ClientRegistration::<Default>::start(
 //! #     b"password",
+//! #     ClientRegistrationStartParameters::default(),
 //! #     &mut client_rng,
 //! # )?;
 //! # let mut server_rng = OsRng;
-//! # let (r2, server_state) = ServerRegistration::<Default>::start(r1, &mut server_rng)?;
 //! # let server_kp = Default::generate_random_keypair(&mut server_rng)?;
-//! # let (r3, export_key_registration) = client_state.finish(r2, server_kp.public(), &mut client_rng)?;
+//! # let (r2, server_state) = ServerRegistration::<Default>::start(r1, server_kp.public(), &mut server_rng)?;
+//! # let (r3, export_key_registration) = client_state.finish(r2, &mut client_rng)?;
 //! # let password_file_bytes = server_state.finish(r3)?.to_bytes();
-//! # let (l1, client_state) = ClientLogin::<Default>::start(
+//! # let client_login_start_result = ClientLogin::<Default>::start(
 //! #   b"password",
 //! #   &mut client_rng,
+//! #   ClientLoginStartParameters::default(),
 //! # )?;
-//! use opaque_ke::opaque::ServerLogin;
+//! use opaque_ke::{ServerLogin, ServerLoginStartParameters};
 //! use std::convert::TryFrom;
 //! let password_file = ServerRegistration::<Default>::try_from(&password_file_bytes[..])?;
 //! let mut server_rng = OsRng;
-//! let (l2, server_state) =
-//!     ServerLogin::start(password_file, &server_kp.private(), l1, &mut server_rng)?;
+//! let server_login_start_result =
+//!     ServerLogin::start(password_file, &server_kp.private(), client_login_start_result.credential_request, &mut server_rng, ServerLoginStartParameters::default())?;
 //! # Ok::<(), ProtocolError>(())
 //! ```
-//! `l2` is returned to the client, and `server_state` must be persisted on the server for the final step of server login.
+//! `server_login_start_result.credential_response` is returned to the client, and `server_login_start_result.server_login_state`
+//! must be persisted on the server for the final step of server login.
 //!
 //! In the third step (client login finish), the client takes as input the `l2` message from the server, along with the
 //! server's static public key `server_kp.public()`, and uses `client_state` from the first step to run `finish` and produce
@@ -284,7 +294,7 @@
 //! ```
 //! # use opaque_ke::{
 //! #   errors::ProtocolError,
-//! #   opaque::{ClientRegistration, ServerRegistration, ClientLogin, ServerLogin, LoginThirdMessage},
+//! #   ClientRegistration, ClientRegistrationStartParameters, ServerRegistration, ClientLogin, ClientLoginStartParameters, ClientLoginFinishParameters, ServerLogin, ServerLoginStartParameters, LoginThirdMessage,
 //! #   keypair::{KeyPair, X25519KeyPair},
 //! #   slow_hash::NoOpHash,
 //! # };
@@ -301,30 +311,31 @@
 //! # let mut client_rng = OsRng;
 //! # let (r1, client_state) = ClientRegistration::<Default>::start(
 //! #     b"password",
+//! #     ClientRegistrationStartParameters::default(),
 //! #     &mut client_rng,
 //! # )?;
 //! # let mut server_rng = OsRng;
-//! # let (r2, server_state) = ServerRegistration::<Default>::start(r1, &mut server_rng)?;
 //! # let server_kp = Default::generate_random_keypair(&mut server_rng)?;
-//! # let (r3, export_key_registration) = client_state.finish(r2, server_kp.public(), &mut client_rng)?;
+//! # let (r2, server_state) = ServerRegistration::<Default>::start(r1, server_kp.public(), &mut server_rng)?;
+//! # let (r3, export_key_registration) = client_state.finish(r2, &mut client_rng)?;
 //! # let password_file_bytes = server_state.finish(r3)?.to_bytes();
-//! # let (l1, client_state) = ClientLogin::<Default>::start(
+//! # let client_login_start_result = ClientLogin::<Default>::start(
 //! #   b"password",
 //! #   &mut client_rng,
+//! #   ClientLoginStartParameters::default(),
 //! # )?;
 //! # use std::convert::TryFrom;
 //! # let password_file =
 //! #   ServerRegistration::<Default>::try_from(
 //! #     &password_file_bytes[..],
 //! #   )?;
-//! # let (l2, server_state) =
-//! #     ServerLogin::start(password_file, &server_kp.private(), l1, &mut server_rng)?;
-//! let (l3, client_shared_secret, export_key_login) = client_state.finish(
-//!   l2,
-//!   &server_kp.public(),
-//!   &mut client_rng,
+//! # let server_login_start_result =
+//! #     ServerLogin::start(password_file, &server_kp.private(), client_login_start_result.credential_request, &mut server_rng, ServerLoginStartParameters::default())?;
+//! let client_login_finish_result = client_login_start_result.client_login_state.finish(
+//!   server_login_start_result.credential_response,
+//!   ClientLoginFinishParameters::default(),
 //! )?;
-//! assert_eq!(export_key_registration, export_key_login);
+//! assert_eq!(export_key_registration, client_login_finish_result.export_key);
 //! # Ok::<(), ProtocolError>(())
 //! ```
 //! Note that if the client supplies a tuple (password, pepper, server public key) that does not match the tuple
@@ -339,7 +350,7 @@
 //! ```
 //! # use opaque_ke::{
 //! #   errors::ProtocolError,
-//! #   opaque::{ClientRegistration, ServerRegistration, ClientLogin, ServerLogin, LoginThirdMessage},
+//! #   ClientRegistration, ClientRegistrationStartParameters, ServerRegistration, ClientLogin, ClientLoginStartParameters, ClientLoginFinishParameters, ServerLogin, ServerLoginStartParameters, LoginThirdMessage,
 //! #   keypair::{KeyPair, X25519KeyPair},
 //! #   slow_hash::NoOpHash,
 //! # };
@@ -356,31 +367,32 @@
 //! # let mut client_rng = OsRng;
 //! # let (r1, client_state) = ClientRegistration::<Default>::start(
 //! #     b"password",
+//! #     ClientRegistrationStartParameters::default(),
 //! #     &mut client_rng,
 //! # )?;
 //! # let mut server_rng = OsRng;
-//! # let (r2, server_state) = ServerRegistration::<Default>::start(r1, &mut server_rng)?;
 //! # let server_kp = Default::generate_random_keypair(&mut server_rng)?;
-//! # let (r3, export_key) = client_state.finish(r2, server_kp.public(), &mut client_rng)?;
+//! # let (r2, server_state) = ServerRegistration::<Default>::start(r1, server_kp.public(), &mut server_rng)?;
+//! # let (r3, export_key) = client_state.finish(r2, &mut client_rng)?;
 //! # let password_file_bytes = server_state.finish(r3)?.to_bytes();
-//! # let (l1, client_state) = ClientLogin::<Default>::start(
+//! # let client_login_start_result = ClientLogin::<Default>::start(
 //! #   b"password",
 //! #   &mut client_rng,
+//! #   ClientLoginStartParameters::default(),
 //! # )?;
 //! # use std::convert::TryFrom;
 //! # let password_file =
 //! #   ServerRegistration::<Default>::try_from(
 //! #     &password_file_bytes[..],
 //! #   )?;
-//! # let (l2, server_state) =
-//! #     ServerLogin::start(password_file, &server_kp.private(), l1, &mut server_rng)?;
-//! # let (l3, client_shared_secret, export_key) = client_state.finish(
-//! #   l2,
-//! #   &server_kp.public(),
-//! #   &mut client_rng,
+//! # let server_login_start_result =
+//! #     ServerLogin::start(password_file, &server_kp.private(), client_login_start_result.credential_request, &mut server_rng, ServerLoginStartParameters::default())?;
+//! # let client_login_finish_result = client_login_start_result.client_login_state.finish(
+//! #   server_login_start_result.credential_response,
+//! #   ClientLoginFinishParameters::default(),
 //! # )?;
-//! let server_shared_secret = server_state.finish(l3)?;
-//! assert_eq!(client_shared_secret, server_shared_secret);
+//! let server_login_finish_result = server_login_start_result.server_login_state.finish(client_login_finish_result.key_exchange)?;
+//! assert_eq!(client_login_finish_result.session_secret, server_login_finish_result.session_secret);
 //! # Ok::<(), ProtocolError>(())
 //! ```
 //! If the protocol completes successfully, then the server obtains a `server_shared_secret` which is guaranteed to
@@ -400,7 +412,9 @@ compile_error!(
 pub mod errors;
 
 // High-level API
-pub mod opaque;
+mod opaque;
+
+mod messages;
 
 pub mod ciphersuite;
 mod envelope;
@@ -425,3 +439,15 @@ mod serialization;
 
 #[cfg(test)]
 mod tests;
+
+// Exports
+
+pub use crate::messages::{
+    LoginFirstMessage, LoginSecondMessage, LoginThirdMessage, RegisterFirstMessage,
+    RegisterSecondMessage, RegisterThirdMessage,
+};
+pub use crate::opaque::{ClientLogin, ClientRegistration, ServerLogin, ServerRegistration};
+pub use crate::opaque::{
+    ClientLoginFinishParameters, ClientLoginStartParameters, ClientRegistrationStartParameters,
+    ServerLoginStartParameters,
+};

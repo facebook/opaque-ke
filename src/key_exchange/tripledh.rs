@@ -81,6 +81,7 @@ impl<D: Hash, KeyFormat: KeyPair> KeyExchange<D, KeyFormat> for TripleDH {
         ))
     }
 
+    #[allow(clippy::type_complexity)]
     fn generate_ke2<R: RngCore + CryptoRng>(
         rng: &mut R,
         l1_bytes: Vec<u8>,
@@ -88,9 +89,11 @@ impl<D: Hash, KeyFormat: KeyPair> KeyExchange<D, KeyFormat> for TripleDH {
         ke1_message: Self::KE1Message,
         client_s_pk: KeyFormat::Repr,
         server_s_sk: KeyFormat::Repr,
+        id_u: Vec<u8>,
+        id_s: Vec<u8>,
         info: Vec<u8>,
         e_info: Vec<u8>,
-    ) -> Result<(Self::KE2State, Self::KE2Message), ProtocolError> {
+    ) -> Result<(Vec<u8>, Self::KE2State, Self::KE2Message), ProtocolError> {
         let server_e_kp = KeyFormat::generate_random(rng)?;
         let server_nonce: GenericArray<u8, NonceLen> = {
             let mut server_nonce_bytes = [0u8; NONCE_LEN];
@@ -103,14 +106,14 @@ impl<D: Hash, KeyFormat: KeyPair> KeyExchange<D, KeyFormat> for TripleDH {
                 pk1: ke1_message.client_e_pk.clone(),
                 sk1: server_e_kp.private().clone(),
                 pk2: ke1_message.client_e_pk,
-                sk2: server_s_sk.clone(),
-                pk3: client_s_pk.clone(),
+                sk2: server_s_sk,
+                pk3: client_s_pk,
                 sk3: server_e_kp.private().clone(),
             },
             &ke1_message.client_nonce,
             &server_nonce,
-            &client_s_pk.to_arr(),
-            &KeyFormat::public_from_private(&server_s_sk).to_arr(),
+            &id_u,
+            &id_s,
         )?;
 
         let mut hasher = D::new();
@@ -142,6 +145,7 @@ impl<D: Hash, KeyFormat: KeyPair> KeyExchange<D, KeyFormat> for TripleDH {
         let hashed_transcript = hasher3.finalize();
 
         Ok((
+            ke1_message.info,
             KE2State {
                 km3,
                 hashed_transcript,
@@ -157,28 +161,31 @@ impl<D: Hash, KeyFormat: KeyPair> KeyExchange<D, KeyFormat> for TripleDH {
         ))
     }
 
+    #[allow(clippy::type_complexity)]
     fn generate_ke3(
         l2_component: Vec<u8>,
         ke2_message: Self::KE2Message,
         ke1_state: &Self::KE1State,
         server_s_pk: KeyFormat::Repr,
         client_s_sk: KeyFormat::Repr,
+        id_u: Vec<u8>,
+        id_s: Vec<u8>,
         info: Vec<u8>,
         e_info: Vec<u8>,
-    ) -> Result<(Vec<u8>, Self::KE3Message), ProtocolError> {
+    ) -> Result<(Vec<u8>, Vec<u8>, Vec<u8>, Self::KE3Message), ProtocolError> {
         let (session_secret, km2, km3) = derive_3dh_keys::<KeyFormat, D>(
             TripleDHComponents {
                 pk1: ke2_message.server_e_pk.clone(),
                 sk1: ke1_state.client_e_sk.clone(),
-                pk2: server_s_pk.clone(),
+                pk2: server_s_pk,
                 sk2: ke1_state.client_e_sk.clone(),
                 pk3: ke2_message.server_e_pk.clone(),
-                sk3: client_s_sk.clone(),
+                sk3: client_s_sk,
             },
             &ke1_state.client_nonce,
             &ke2_message.server_nonce,
-            &KeyFormat::public_from_private(&client_s_sk).to_arr(),
-            &server_s_pk.to_arr(),
+            &id_u,
+            &id_s,
         )?;
 
         let transcript: Vec<u8> = [
@@ -219,6 +226,8 @@ impl<D: Hash, KeyFormat: KeyPair> KeyExchange<D, KeyFormat> for TripleDH {
         client_mac.update(&transcript_with_ke3);
 
         Ok((
+            ke2_message.info,
+            ke2_message.e_info, // TODO: need to decrypt
             session_secret.to_vec(),
             KE3Message {
                 info,
@@ -228,10 +237,11 @@ impl<D: Hash, KeyFormat: KeyPair> KeyExchange<D, KeyFormat> for TripleDH {
         ))
     }
 
+    #[allow(clippy::type_complexity)]
     fn finish_ke(
         ke3_message: Self::KE3Message,
         ke2_state: &Self::KE2State,
-    ) -> Result<Vec<u8>, ProtocolError> {
+    ) -> Result<(Vec<u8>, Vec<u8>, Vec<u8>), ProtocolError> {
         let transcript_with_ke3 = [
             ke2_state.hashed_transcript.to_vec(),
             ke3_message.to_bytes_without_mac(),
@@ -247,7 +257,11 @@ impl<D: Hash, KeyFormat: KeyPair> KeyExchange<D, KeyFormat> for TripleDH {
             ));
         }
 
-        Ok(ke2_state.session_secret.to_vec())
+        Ok((
+            ke3_message.info,
+            ke3_message.e_info, // TODO: need to decrypt
+            ke2_state.session_secret.to_vec(),
+        ))
     }
 
     fn ke1_state_size() -> usize {

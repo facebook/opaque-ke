@@ -14,6 +14,7 @@ use crate::{
     keypair::{KeyPair, X25519KeyPair},
     opaque::*,
     serialization::{i2osp, os2ip, serialize, ProtocolMessageType},
+    *,
 };
 
 use curve25519_dalek::ristretto::RistrettoPoint;

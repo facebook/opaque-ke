@@ -6,13 +6,8 @@
 use crate::errors::PakeError;
 
 use crate::{
-    ciphersuite::CipherSuite,
-    hash::Hash,
-    keypair::KeyPair,
-    opaque::{
-        LoginFirstMessage, LoginSecondMessage, LoginThirdMessage, RegisterFirstMessage,
-        RegisterSecondMessage, RegisterThirdMessage,
-    },
+    ciphersuite::CipherSuite, hash::Hash, keypair::KeyPair, LoginFirstMessage, LoginSecondMessage,
+    LoginThirdMessage, RegisterFirstMessage, RegisterSecondMessage, RegisterThirdMessage,
 };
 
 pub enum ProtocolMessageType {
