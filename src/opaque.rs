@@ -463,6 +463,15 @@ impl<CS: CipherSuite> LoginThirdMessage<CS> {
         output
     }
 
+    /// Deserialization from bytes
+    pub fn deserialize(input: &[u8]) -> Result<Self, ProtocolError> {
+        if input.is_empty() || input[0] != ProtocolMessageType::KeyExchange as u8 + 1 {
+            return Err(PakeError::SerializationError.into());
+        }
+
+        Self::try_from(&input[1..])
+    }
+
     /// byte representation for the login finalization
     pub fn to_bytes(&self) -> Vec<u8> {
         self.ke3_message.to_bytes()

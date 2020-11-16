@@ -63,7 +63,7 @@ fn account_registration(
 
     let mut server_rng = OsRng;
     let (r2, server_state) = ServerRegistration::<Default>::start(
-        RegisterFirstMessage::try_from(&r1_bytes[..]).unwrap(),
+        RegisterFirstMessage::deserialize(&r1_bytes[..]).unwrap(),
         &mut server_rng,
     )
     .unwrap();
@@ -73,7 +73,7 @@ fn account_registration(
 
     let (r3, _) = client_state
         .finish(
-            RegisterSecondMessage::try_from(&r2_bytes[..]).unwrap(),
+            RegisterSecondMessage::deserialize(&r2_bytes[..]).unwrap(),
             server_kp.public(),
             &mut client_rng,
         )
@@ -83,7 +83,7 @@ fn account_registration(
     // Client sends r3_bytes to server
 
     let password_file = server_state
-        .finish(RegisterThirdMessage::try_from(&r3_bytes[..]).unwrap())
+        .finish(RegisterThirdMessage::deserialize(&r3_bytes[..]).unwrap())
         .unwrap();
     password_file.to_bytes()
 }
@@ -106,7 +106,7 @@ fn account_login(
     let (l2, server_state) = ServerLogin::start(
         password_file,
         &server_kp.private(),
-        LoginFirstMessage::try_from(&l1_bytes[..]).unwrap(),
+        LoginFirstMessage::deserialize(&l1_bytes[..]).unwrap(),
         &mut server_rng,
     )
     .unwrap();
@@ -115,7 +115,7 @@ fn account_login(
     // Server sends l2_bytes to client
 
     let result = client_state.finish(
-        LoginSecondMessage::try_from(&l2_bytes[..]).unwrap(),
+        LoginSecondMessage::deserialize(&l2_bytes[..]).unwrap(),
         &server_kp.public(),
         &mut client_rng,
     );
@@ -130,7 +130,7 @@ fn account_login(
     // Client sends l3_bytes to server
 
     let server_shared_secret = server_state
-        .finish(LoginThirdMessage::try_from(&l3_bytes[..]).unwrap())
+        .finish(LoginThirdMessage::deserialize(&l3_bytes[..]).unwrap())
         .unwrap();
 
     client_shared_secret == server_shared_secret
