@@ -25,7 +25,7 @@ pub trait KeyExchange<D: Hash, KeyFormat: KeyPair> {
         rng: &mut R,
     ) -> Result<(Self::KE1State, Self::KE1Message), ProtocolError>;
 
-    #[allow(clippy::too_many_arguments)]
+    #[allow(clippy::too_many_arguments, clippy::type_complexity)]
     fn generate_ke2<R: RngCore + CryptoRng>(
         rng: &mut R,
         l1_bytes: Vec<u8>,
@@ -33,24 +33,30 @@ pub trait KeyExchange<D: Hash, KeyFormat: KeyPair> {
         ke1_message: Self::KE1Message,
         client_s_pk: KeyFormat::Repr,
         server_s_sk: KeyFormat::Repr,
+        id_u: Vec<u8>,
+        id_s: Vec<u8>,
         info: Vec<u8>,
         e_info: Vec<u8>,
-    ) -> Result<(Self::KE2State, Self::KE2Message), ProtocolError>;
+    ) -> Result<(Vec<u8>, Self::KE2State, Self::KE2Message), ProtocolError>;
 
+    #[allow(clippy::too_many_arguments, clippy::type_complexity)]
     fn generate_ke3(
         l2_component: Vec<u8>,
         ke2_message: Self::KE2Message,
         ke1_state: &Self::KE1State,
         server_s_pk: KeyFormat::Repr,
         client_s_sk: KeyFormat::Repr,
+        id_u: Vec<u8>,
+        id_s: Vec<u8>,
         info: Vec<u8>,
         e_info: Vec<u8>,
-    ) -> Result<(Vec<u8>, Self::KE3Message), ProtocolError>;
+    ) -> Result<(Vec<u8>, Vec<u8>, Vec<u8>, Self::KE3Message), ProtocolError>;
 
+    #[allow(clippy::type_complexity)]
     fn finish_ke(
         ke3_message: Self::KE3Message,
         ke2_state: &Self::KE2State,
-    ) -> Result<Vec<u8>, ProtocolError>;
+    ) -> Result<(Vec<u8>, Vec<u8>, Vec<u8>), ProtocolError>;
 
     fn ke1_state_size() -> usize;
 

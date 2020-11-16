@@ -28,13 +28,11 @@ use std::convert::TryFrom;
 use std::process::exit;
 
 use opaque_ke::{
-    ciphersuite::CipherSuite,
-    keypair::KeyPair,
-    opaque::{
-        ClientLogin, ClientRegistration, LoginFirstMessage, LoginSecondMessage, LoginThirdMessage,
-        RegisterFirstMessage, RegisterSecondMessage, RegisterThirdMessage, ServerLogin,
-        ServerRegistration,
-    },
+    ciphersuite::CipherSuite, keypair::KeyPair, ClientLogin, ClientLoginFinishParameters,
+    ClientLoginStartParameters, ClientRegistration, ClientRegistrationStartParameters,
+    LoginFirstMessage, LoginSecondMessage, LoginThirdMessage, RegisterFirstMessage,
+    RegisterSecondMessage, RegisterThirdMessage, ServerLogin, ServerLoginStartParameters,
+    ServerRegistration,
 };
 
 // The ciphersuite trait allows to specify the underlying primitives
@@ -55,8 +53,12 @@ fn account_registration(
     password: String,
 ) -> Vec<u8> {
     let mut client_rng = OsRng;
-    let (r1, client_state) =
-        ClientRegistration::<Default>::start(password.as_bytes(), &mut client_rng).unwrap();
+    let (r1, client_state) = ClientRegistration::<Default>::start(
+        password.as_bytes(),
+        ClientRegistrationStartParameters::default(),
+        &mut client_rng,
+    )
+    .unwrap();
     let r1_bytes = r1.serialize();
 
     // Client sends r1_bytes to server
@@ -64,6 +66,7 @@ fn account_registration(
     let mut server_rng = OsRng;
     let (r2, server_state) = ServerRegistration::<Default>::start(
         RegisterFirstMessage::deserialize(&r1_bytes[..]).unwrap(),
+        server_kp.public(),
         &mut server_rng,
     )
     .unwrap();
@@ -74,7 +77,6 @@ fn account_registration(
     let (r3, _) = client_state
         .finish(
             RegisterSecondMessage::deserialize(&r2_bytes[..]).unwrap(),
-            server_kp.public(),
             &mut client_rng,
         )
         .unwrap();
@@ -95,45 +97,50 @@ fn account_login(
     password_file_bytes: &[u8],
 ) -> bool {
     let mut client_rng = OsRng;
-    let (l1, client_state) =
-        ClientLogin::<Default>::start(password.as_bytes(), &mut client_rng).unwrap();
-    let l1_bytes = l1.serialize();
+    let client_login_start_result = ClientLogin::<Default>::start(
+        password.as_bytes(),
+        &mut client_rng,
+        ClientLoginStartParameters::default(),
+    )
+    .unwrap();
+    let l1_bytes = client_login_start_result.credential_request.serialize();
 
     // Client sends l1_bytes to server
 
     let password_file = ServerRegistration::<Default>::try_from(password_file_bytes).unwrap();
     let mut server_rng = OsRng;
-    let (l2, server_state) = ServerLogin::start(
+    let server_login_start_result = ServerLogin::start(
         password_file,
         &server_kp.private(),
         LoginFirstMessage::deserialize(&l1_bytes[..]).unwrap(),
         &mut server_rng,
+        ServerLoginStartParameters::default(),
     )
     .unwrap();
-    let l2_bytes = l2.serialize();
+    let l2_bytes = server_login_start_result.credential_response.serialize();
 
     // Server sends l2_bytes to client
 
-    let result = client_state.finish(
+    let result = client_login_start_result.client_login_state.finish(
         LoginSecondMessage::deserialize(&l2_bytes[..]).unwrap(),
-        &server_kp.public(),
-        &mut client_rng,
+        ClientLoginFinishParameters::default(),
     );
 
     if result.is_err() {
         // Client-detected login failure
         return false;
     }
-    let (l3, client_shared_secret, _) = result.unwrap();
-    let l3_bytes = l3.serialize();
+    let client_login_finish_result = result.unwrap();
+    let l3_bytes = client_login_finish_result.key_exchange.serialize();
 
     // Client sends l3_bytes to server
 
-    let server_shared_secret = server_state
+    let server_login_finish_result = server_login_start_result
+        .server_login_state
         .finish(LoginThirdMessage::deserialize(&l3_bytes[..]).unwrap())
         .unwrap();
 
-    client_shared_secret == server_shared_secret
+    client_login_finish_result.session_secret == server_login_finish_result.session_secret
 }
 
 // A function run on the client which extracts a username and password from the CLI
