@@ -155,9 +155,9 @@ impl<D: Hash> Envelope<D> {
         }
 
         let nonce = &input[..NONCE_LEN];
-        let (ciphertext, remainder) = tokenize(input[NONCE_LEN..].to_vec(), 2)?;
-        let (auth_data, remainder) = tokenize(remainder, 2)?;
-        let (hmac, remainder) = tokenize(remainder, 2)?;
+        let (ciphertext, remainder) = tokenize(&input[NONCE_LEN..], 2)?;
+        let (auth_data, remainder) = tokenize(&remainder, 2)?;
+        let (hmac, remainder) = tokenize(&remainder, 2)?;
         Ok((
             Self::new(
                 nonce.to_vec(),
@@ -195,7 +195,7 @@ impl<D: Hash> Envelope<D> {
         while !bytes_copy.is_empty() {
             let t = u8_to_credential_type(bytes_copy[0])
                 .ok_or(InternalPakeError::IncompatibleEnvelopeCredentialsError)?;
-            let (cred, remainder) = tokenize(bytes_copy[1..].to_vec(), 2)
+            let (cred, remainder) = tokenize(&bytes_copy[1..], 2)
                 .map_err(|_| InternalPakeError::IncompatibleEnvelopeCredentialsError)?;
             bytes_copy = remainder;
             credentials.insert(t, cred);
