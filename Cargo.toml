@@ -13,6 +13,7 @@ readme = "README.md"
 default = ["u64_backend"]
 slow-hash = ["scrypt"]
 bench = []
+test-vector = []
 u64_backend = ["curve25519-dalek/u64_backend", "x25519-dalek/u64_backend"]
 u32_backend = ["curve25519-dalek/u32_backend", "x25519-dalek/u32_backend"]
 
@@ -49,3 +50,7 @@ rustyline = "6.3.0"
 name = "oprf"
 harness = false
 required-features = ["bench"]
+
+[[example]]
+name = "test_vector_generation"
+required-features = ["test-vector"]

@@ -103,6 +103,12 @@ impl Default for ClientRegistrationStartParameters {
 }
 
 impl<CS: CipherSuite> ClientRegistration<CS> {
+    #[cfg(feature = "test-vector")]
+    #[doc(hidden)]
+    pub fn get_blind(&self) -> &<CS::Group as Group>::Scalar {
+        &self.token.blind
+    }
+
     /// Returns an initial "blinded" request to send to the server, as well as a ClientRegistration
     ///
     /// # Arguments
@@ -325,6 +331,12 @@ where
             .iter()
             .for_each(|v| output.extend_from_slice(&v.to_bytes()));
         output
+    }
+
+    #[cfg(feature = "test-vector")]
+    #[doc(hidden)]
+    pub fn get_oprf_key(&self) -> &<CS::Group as Group>::Scalar {
+        &self.oprf_key
     }
 
     /// From the client's "blinded" password, returns a response to be

@@ -11,7 +11,7 @@ use crate::{
     keypair::{Key, KeyPair, X25519KeyPair},
     opaque::*,
     slow_hash::NoOpHash,
-    tests::mock_rng::CycleRng,
+    test_vectors::{CycleRng, TestVectorParameters},
     *,
 };
 use curve25519_dalek::edwards::EdwardsPoint;
@@ -31,38 +31,6 @@ impl CipherSuite for X255193dhNoSlowHash {
     type KeyExchange = TripleDH;
     type Hash = sha2::Sha256;
     type SlowHash = NoOpHash;
-}
-
-pub struct TestVectorParameters {
-    pub client_s_pk: Vec<u8>,
-    pub client_s_sk: Vec<u8>,
-    pub client_e_pk: Vec<u8>,
-    pub client_e_sk: Vec<u8>,
-    pub server_s_pk: Vec<u8>,
-    pub server_s_sk: Vec<u8>,
-    pub server_e_pk: Vec<u8>,
-    pub server_e_sk: Vec<u8>,
-    pub id_u: Vec<u8>,
-    pub id_s: Vec<u8>,
-    pub password: Vec<u8>,
-    pub blinding_factor: Vec<u8>,
-    pub oprf_key: Vec<u8>,
-    pub envelope_nonce: Vec<u8>,
-    pub client_nonce: Vec<u8>,
-    pub server_nonce: Vec<u8>,
-    pub r1: Vec<u8>,
-    pub r2: Vec<u8>,
-    pub r3: Vec<u8>,
-    pub l1: Vec<u8>,
-    pub l2: Vec<u8>,
-    pub l3: Vec<u8>,
-    client_registration_state: Vec<u8>,
-    server_registration_state: Vec<u8>,
-    client_login_state: Vec<u8>,
-    server_login_state: Vec<u8>,
-    pub password_file: Vec<u8>,
-    pub export_key: Vec<u8>,
-    pub shared_secret: Vec<u8>,
 }
 
 static TEST_VECTOR: &str = r#"

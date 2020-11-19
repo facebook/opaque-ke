@@ -26,9 +26,11 @@ use rand_core::{CryptoRng, RngCore};
 
 use std::convert::TryFrom;
 
-const KEY_LEN: usize = 32;
-pub(crate) const NONCE_LEN: usize = 32;
+/// The length of the client and server nonces used in the AKE
+pub const NONCE_LEN: usize = 32;
 pub(crate) type NonceLen = U32;
+
+const KEY_LEN: usize = 32;
 const KE1_STATE_LEN: usize = KEY_LEN + KEY_LEN + NONCE_LEN;
 
 static STR_3DH: &[u8] = b"3DH keys";

@@ -428,6 +428,8 @@ pub mod map_to_curve;
 pub mod key_exchange;
 pub mod keypair;
 
+pub mod test_vectors;
+
 #[cfg(feature = "bench")]
 pub mod oprf;
 #[cfg(not(feature = "bench"))]
