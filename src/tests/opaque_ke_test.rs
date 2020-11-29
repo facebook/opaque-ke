@@ -50,6 +50,11 @@ pub struct TestVectorParameters {
     pub envelope_nonce: Vec<u8>,
     pub client_nonce: Vec<u8>,
     pub server_nonce: Vec<u8>,
+    pub info1: Vec<u8>,
+    pub info2: Vec<u8>,
+    pub einfo2: Vec<u8>,
+    pub info3: Vec<u8>,
+    pub einfo3: Vec<u8>,
     pub r1: Vec<u8>,
     pub r2: Vec<u8>,
     pub r3: Vec<u8>,
@@ -67,35 +72,40 @@ pub struct TestVectorParameters {
 
 static TEST_VECTOR: &str = r#"
 {
-    "client_s_pk": "aee30cf198cc78b5b1a5ed5a4bda21bceb5e4732fffbddf867e32ee814d67317",
-    "client_s_sk": "1811b9d5fc4ea11b32405510632c643a2f760659c73298fe12a458ef39258b48",
-    "client_e_pk": "1fb90ca40034a0ee0d9d087a2c12743329d792b21e4c4424e561a665a1031b00",
-    "client_e_sk": "a86125633d89a6799a09456e45b5968e3958641c084e0e85185392ef67e59d40",
-    "server_s_pk": "9ef0646ad66cf13ce4052294c7325e044853f0c1fd03e91288f8339d812d4a57",
-    "server_s_sk": "807548d5912d55092f88c5ba1ca2588a795b43adcdc877497d8a983a3c3ed146",
-    "server_e_pk": "b2df778b631c83d1fdd76feb9978d156ad0c1d18fedbe2b15a309f673e3d8464",
-    "server_e_sk": "f021332310d7f6a1c8272d11610e0244cf462efe1a7d9e6657cf12f74d30f272",
+    "client_s_pk": "9e1a7d68007f9db6f2cc515c9e42ce52eee78a6e4d6bca5a16d49bbfa4cd462e",
+    "client_s_sk": "101719337a212b3e55872a0c25874f420bb4510e445c527159ec3e23afe13c7c",
+    "client_e_pk": "5abe58c49c4fe4b3c82f6313857969cc9a2bc913865026ff39b0235636434844",
+    "client_e_sk": "78a41d08c2cb8e1dd3818a494136f5ee321ea2478ba161f0bcbc282c68467a5a",
+    "server_s_pk": "96118ab2892cb29ab29af9e8f0cf7d4d336e757e4f56bbe6afde887714118e12",
+    "server_s_sk": "70240d3fb3f49a289488f0b89b5f956276766efd5c1254317e72c4cb4d452840",
+    "server_e_pk": "9fe1377a64db22c3ae9ebe7d6016b5cbb8060448d8b5582548566f41202f7f33",
+    "server_e_sk": "2021fce09d946296e0a0671555d7552c7f1f69ed9d116cc3b6605449abcf6951",
     "id_u": "696455",
     "id_s": "696453",
     "password": "70617373776f7264",
-    "blinding_factor": "f614e957f0441399ede44bed38487eee12f154e5ac14adedb1402bdea174670b",
-    "oprf_key": "9c13cf985a00394cb6acdebf846eafaa60d0ff81cd4d52655d6db3eee123760e",
-    "envelope_nonce": "b326061dfc120f5b261b28bbae4262c26ad343a640b5fb4b90ba3f16600e1c89",
-    "client_nonce": "8bdd8689f4ea9486aaa3bac182d31f31e3c62d76b3869ae1dd05d5c708b13e86",
-    "server_nonce": "d529ed9480524236ed6f6cafd92ebab3c6091afde54f47f9079575c090cad7d6",
-    "r1": "010000220020ada5910d73be53a8a6c50d32e9efcc0eb3e871103c05fb993fcb8312aff7fc79",
-    "r2": "02000048002035104271fe25c0074ea715af805c019772a97b6e975376f411e1c37831a56fa700209ef0646ad66cf13ce4052294c7325e044853f0c1fd03e91288f8339d812d4a5701010103",
-    "r3": "030000aeb326061dfc120f5b261b28bbae4262c26ad343a640b5fb4b90ba3f16600e1c89002375ba1dad2970f60479c4ce0fe1e62271f2c5561757557c88941d9278ededbc981de07c00230300209ef0646ad66cf13ce4052294c7325e044853f0c1fd03e91288f8339d812d4a570020c575cad080bafce229c0de9700269d48d8102d3f0f70497a770d9c0bcb5d181e0020aee30cf198cc78b5b1a5ed5a4bda21bceb5e4732fffbddf867e32ee814d67317",
-    "l1": "040000220020ada5910d73be53a8a6c50d32e9efcc0eb3e871103c05fb993fcb8312aff7fc798bdd8689f4ea9486aaa3bac182d31f31e3c62d76b3869ae1dd05d5c708b13e8600001fb90ca40034a0ee0d9d087a2c12743329d792b21e4c4424e561a665a1031b00",
-    "l2": "050000ae002035104271fe25c0074ea715af805c019772a97b6e975376f411e1c37831a56fa7b326061dfc120f5b261b28bbae4262c26ad343a640b5fb4b90ba3f16600e1c89002375ba1dad2970f60479c4ce0fe1e62271f2c5561757557c88941d9278ededbc981de07c00230300209ef0646ad66cf13ce4052294c7325e044853f0c1fd03e91288f8339d812d4a570020c575cad080bafce229c0de9700269d48d8102d3f0f70497a770d9c0bcb5d181ef021332310d7f6a1c8272d11610e0244cf462efe1a7d9e6657cf12f74d30f2720000b2df778b631c83d1fdd76feb9978d156ad0c1d18fedbe2b15a309f673e3d846400003bc4221316aaad7b6110910bae5a3bc0e498738634916021546f6fce652adc78",
-    "l3": "00000000a06be277ca4254db95ab90deeb5111effd46a9e619d26098806e34b8315f6c78",
-    "client_registration_state": "00036964550003696453f614e957f0441399ede44bed38487eee12f154e5ac14adedb1402bdea174670b70617373776f7264",
-    "client_login_state": "00036964550003696453f614e957f0441399ede44bed38487eee12f154e5ac14adedb1402bdea174670ba86125633d89a6799a09456e45b5968e3958641c084e0e85185392ef67e59d408bdd8689f4ea9486aaa3bac182d31f31e3c62d76b3869ae1dd05d5c708b13e86b8990f815be25d3ab39421afac70cd6427ff73d364ed52d76320775e1320f7c570617373776f7264",
-    "server_registration_state": "9c13cf985a00394cb6acdebf846eafaa60d0ff81cd4d52655d6db3eee123760e",
-    "server_login_state": "d71ab2471d28aec63b7c5227048a10e68e292b5acc75e12035816f3f1857740dcceb58e1095db8918dd41ad1aea631468dd161e165b5222d162f223dea33c53b50fc81d1199cf256ad4839860c168a5a42e785e4f375775ffd8f9f96c16d12ec",
-    "password_file": "9c13cf985a00394cb6acdebf846eafaa60d0ff81cd4d52655d6db3eee123760eaee30cf198cc78b5b1a5ed5a4bda21bceb5e4732fffbddf867e32ee814d67317b326061dfc120f5b261b28bbae4262c26ad343a640b5fb4b90ba3f16600e1c89002375ba1dad2970f60479c4ce0fe1e62271f2c5561757557c88941d9278ededbc981de07c00230300209ef0646ad66cf13ce4052294c7325e044853f0c1fd03e91288f8339d812d4a570020c575cad080bafce229c0de9700269d48d8102d3f0f70497a770d9c0bcb5d181e",
-    "export_key": "405705c182c2afd6cc474cbd8827f4d046d74ec46b841727ae208333191be764",
-    "shared_secret": "50fc81d1199cf256ad4839860c168a5a42e785e4f375775ffd8f9f96c16d12ec"
+    "blinding_factor": "2d33e5917ed8ed3b4318dc15d6844fa7fae0b84210ac588350fccf2aa7e26b03",
+    "oprf_key": "90f32248c84a99c303dd97f5a6b80106a7324dd27cf1a9bdec725ce5be11f205",
+    "envelope_nonce": "491dc86966491b649bab099c1dd3a7927ea0ecb74b88d5d08c7267f151e9bf67",
+    "client_nonce": "741fbafaf51abbeab80434c1d1afccc81059b356b84ab704447d9632d5696d91",
+    "server_nonce": "745d196eac5679020332a2c237e63f56310741dbceb714cad4ea28680e5e52c9",
+    "info1": "696e666f31",
+    "info2": "696e666f32",
+    "einfo2": "65696e666f32",
+    "info3": "696e666f33",
+    "einfo3": "65696e666f33",
+    "r1": "0100002200204e61b9b1f2efbc4da7f114b9b8585ece25b3faec9c45e49ff60f310f61586417",
+    "r2": "020000480020fe43bff51e3868ecc913c97774e070e68acf5532f1862da20e554450f43856a2002096118ab2892cb29ab29af9e8f0cf7d4d336e757e4f56bbe6afde887714118e1201010103",
+    "r3": "030000ae491dc86966491b649bab099c1dd3a7927ea0ecb74b88d5d08c7267f151e9bf67002351e93c57b3c307d92ae0d38cbc9c66636511a3fa97bb34947e85c79dbafd670a22152a002303002096118ab2892cb29ab29af9e8f0cf7d4d336e757e4f56bbe6afde887714118e120020626884cb268cfbb7af1edd23ebe12c0cc995a95dffcf225ad9db330185846e9400209e1a7d68007f9db6f2cc515c9e42ce52eee78a6e4d6bca5a16d49bbfa4cd462e",
+    "l1": "0400002200204e61b9b1f2efbc4da7f114b9b8585ece25b3faec9c45e49ff60f310f61586417741fbafaf51abbeab80434c1d1afccc81059b356b84ab704447d9632d5696d910005696e666f315abe58c49c4fe4b3c82f6313857969cc9a2bc913865026ff39b0235636434844",
+    "l2": "050000ae0020fe43bff51e3868ecc913c97774e070e68acf5532f1862da20e554450f43856a2491dc86966491b649bab099c1dd3a7927ea0ecb74b88d5d08c7267f151e9bf67002351e93c57b3c307d92ae0d38cbc9c66636511a3fa97bb34947e85c79dbafd670a22152a002303002096118ab2892cb29ab29af9e8f0cf7d4d336e757e4f56bbe6afde887714118e120020626884cb268cfbb7af1edd23ebe12c0cc995a95dffcf225ad9db330185846e942021fce09d946296e0a0671555d7552c7f1f69ed9d116cc3b6605449abcf69510005696e666f329fe1377a64db22c3ae9ebe7d6016b5cbb8060448d8b5582548566f41202f7f33000665696e666f32317af5691eb732163f54e2e497b5a883598baafce9a3a87a710f374b611aa3d5",
+    "l3": "0005696e666f33000665696e666f339ca8f1957db30ea986d9d29d9efc458476959dde2efeb4308bcde0e807152987",
+    "client_registration_state": "000369645500036964532d33e5917ed8ed3b4318dc15d6844fa7fae0b84210ac588350fccf2aa7e26b0370617373776f7264",
+    "client_login_state": "000369645500036964532d33e5917ed8ed3b4318dc15d6844fa7fae0b84210ac588350fccf2aa7e26b0378a41d08c2cb8e1dd3818a494136f5ee321ea2478ba161f0bcbc282c68467a5a741fbafaf51abbeab80434c1d1afccc81059b356b84ab704447d9632d5696d91c346939f310305b1a7e4a3d0958c3c8ecb62ba654f99a3f291aa17f665db721070617373776f7264",
+    "server_registration_state": "90f32248c84a99c303dd97f5a6b80106a7324dd27cf1a9bdec725ce5be11f205",
+    "server_login_state": "6b4d09544d05b91e31dca9fc27da533acd02bd7aafd10a715b479c7de2aedcdc5bf8effba8cc499e32894279cd7b70774a264c7813ad97e0360697b0a81ce1adcfa865f87aa285b8938e46b53f497852f2d88cf4c9302bd27debb02f582fb392",
+    "password_file": "90f32248c84a99c303dd97f5a6b80106a7324dd27cf1a9bdec725ce5be11f2059e1a7d68007f9db6f2cc515c9e42ce52eee78a6e4d6bca5a16d49bbfa4cd462e491dc86966491b649bab099c1dd3a7927ea0ecb74b88d5d08c7267f151e9bf67002351e93c57b3c307d92ae0d38cbc9c66636511a3fa97bb34947e85c79dbafd670a22152a002303002096118ab2892cb29ab29af9e8f0cf7d4d336e757e4f56bbe6afde887714118e120020626884cb268cfbb7af1edd23ebe12c0cc995a95dffcf225ad9db330185846e94",
+    "export_key": "a8a7ecd9f8e4fe53fd883655fb7eb1b52df11b5956b066dca30af60288520611",
+    "shared_secret": "cfa865f87aa285b8938e46b53f497852f2d88cf4c9302bd27debb02f582fb392"
 }
 "#;
 
@@ -123,6 +133,11 @@ fn populate_test_vectors(values: &Value) -> TestVectorParameters {
         envelope_nonce: decode(&values, "envelope_nonce").unwrap(),
         client_nonce: decode(&values, "client_nonce").unwrap(),
         server_nonce: decode(&values, "server_nonce").unwrap(),
+        info1: decode(&values, "info1").unwrap(),
+        info2: decode(&values, "info2").unwrap(),
+        einfo2: decode(&values, "einfo2").unwrap(),
+        info3: decode(&values, "info3").unwrap(),
+        einfo3: decode(&values, "einfo3").unwrap(),
         r1: decode(&values, "r1").unwrap(),
         r2: decode(&values, "r2").unwrap(),
         r3: decode(&values, "r3").unwrap(),
@@ -170,6 +185,11 @@ fn stringify_test_vectors(p: &TestVectorParameters) -> String {
     );
     s.push_str(format!("\"client_nonce\": \"{}\",\n", hex::encode(&p.client_nonce)).as_str());
     s.push_str(format!("\"server_nonce\": \"{}\",\n", hex::encode(&p.server_nonce)).as_str());
+    s.push_str(format!("\"info1\": \"{}\",\n", hex::encode(&p.info1)).as_str());
+    s.push_str(format!("\"info2\": \"{}\",\n", hex::encode(&p.info2)).as_str());
+    s.push_str(format!("\"einfo2\": \"{}\",\n", hex::encode(&p.einfo2)).as_str());
+    s.push_str(format!("\"info3\": \"{}\",\n", hex::encode(&p.info3)).as_str());
+    s.push_str(format!("\"einfo3\": \"{}\",\n", hex::encode(&p.einfo3)).as_str());
     s.push_str(format!("\"r1\": \"{}\",\n", hex::encode(&p.r1)).as_str());
     s.push_str(format!("\"r2\": \"{}\",\n", hex::encode(&p.r2)).as_str());
     s.push_str(format!("\"r3\": \"{}\",\n", hex::encode(&p.r3)).as_str());
@@ -250,6 +270,12 @@ where
     let mut server_nonce = [0u8; NONCE_LEN];
     rng.fill_bytes(&mut server_nonce);
 
+    let info1 = b"info1";
+    let info2 = b"info2";
+    let einfo2 = b"einfo2";
+    let info3 = b"info3";
+    let einfo3 = b"einfo3";
+
     let mut blinding_factor_registration_rng = CycleRng::new(blinding_factor_raw.to_vec());
     let (r1, client_registration) = ClientRegistration::<CS>::start(
         password,
@@ -292,8 +318,8 @@ where
     let client_login_start_result = ClientLogin::<CS>::start(
         password,
         &mut client_login_start_rng,
-        ClientLoginStartParameters::WithIdentifiersAndInfo(
-            Vec::new(),
+        ClientLoginStartParameters::WithInfoAndIdentifiers(
+            info1.to_vec(),
             id_u.to_vec(),
             id_s.to_vec(),
         ),
@@ -315,7 +341,7 @@ where
         server_s_kp.private(),
         client_login_start_result.credential_request,
         &mut server_e_sk_rng,
-        ServerLoginStartParameters::default(),
+        ServerLoginStartParameters::WithInfo(info2.to_vec(), einfo2.to_vec()),
     )
     .unwrap();
     let l2_bytes = server_login_start_result
@@ -331,7 +357,7 @@ where
         .client_login_state
         .finish(
             server_login_start_result.credential_response,
-            ClientLoginFinishParameters::default(),
+            ClientLoginFinishParameters::WithInfo(info3.to_vec(), einfo3.to_vec()),
         )
         .unwrap();
     let l3_bytes = client_login_finish_result.key_exchange.to_bytes().to_vec();
@@ -353,6 +379,11 @@ where
         envelope_nonce: envelope_nonce.to_vec(),
         client_nonce: client_nonce.to_vec(),
         server_nonce: server_nonce.to_vec(),
+        info1: info1.to_vec(),
+        info2: info2.to_vec(),
+        einfo2: einfo2.to_vec(),
+        info3: info3.to_vec(),
+        einfo3: einfo3.to_vec(),
         r1: r1_bytes,
         r2: r2_bytes,
         r3: r3_bytes,
@@ -477,8 +508,8 @@ fn test_l1() -> Result<(), PakeError> {
     let client_login_start_result = ClientLogin::<X255193dhNoSlowHash>::start(
         &parameters.password,
         &mut client_login_start_rng,
-        ClientLoginStartParameters::WithIdentifiersAndInfo(
-            Vec::new(),
+        ClientLoginStartParameters::WithInfoAndIdentifiers(
+            parameters.info1,
             parameters.id_u,
             parameters.id_s,
         ),
@@ -506,10 +537,18 @@ fn test_l2() -> Result<(), PakeError> {
         &Key::try_from(&parameters.server_s_sk[..]).unwrap(),
         LoginFirstMessage::<X255193dhNoSlowHash>::deserialize(&parameters.l1[..]).unwrap(),
         &mut server_e_sk_rng,
-        ServerLoginStartParameters::default(),
+        ServerLoginStartParameters::WithInfo(parameters.info2.to_vec(), parameters.einfo2.to_vec()),
     )
     .unwrap();
 
+    assert_eq!(
+        hex::encode(&parameters.info1),
+        hex::encode(server_login_start_result.plain_info),
+    );
+    assert_eq!(
+        hex::encode(&parameters.client_s_pk),
+        hex::encode(server_login_start_result.client_s_pk),
+    );
     assert_eq!(
         hex::encode(&parameters.l2),
         hex::encode(server_login_start_result.credential_response.serialize())
@@ -530,10 +569,26 @@ fn test_l3() -> Result<(), PakeError> {
             .unwrap()
             .finish(
                 LoginSecondMessage::<X255193dhNoSlowHash>::deserialize(&parameters.l2[..]).unwrap(),
-                ClientLoginFinishParameters::default(),
+                ClientLoginFinishParameters::WithInfo(
+                    parameters.info3.to_vec(),
+                    parameters.einfo3.to_vec(),
+                ),
             )
             .unwrap();
 
+    assert_eq!(
+        hex::encode(&parameters.info2),
+        hex::encode(&client_login_finish_result.plain_info)
+    );
+    assert_eq!(
+        hex::encode(&parameters.einfo2),
+        hex::encode(&client_login_finish_result.confidential_info)
+    );
+    assert_eq!(
+        hex::encode(&parameters.server_s_pk),
+        hex::encode(&client_login_finish_result.server_s_pk)
+    );
+    assert_eq!(None, client_login_finish_result.id_s);
     assert_eq!(
         hex::encode(&parameters.shared_secret),
         hex::encode(&client_login_finish_result.session_secret)
@@ -560,6 +615,14 @@ fn test_server_login_finish() -> Result<(), ProtocolError> {
             .finish(LoginThirdMessage::try_from(&parameters.l3[..])?)
             .unwrap();
 
+    assert_eq!(
+        hex::encode(parameters.info3),
+        hex::encode(server_login_result.plain_info)
+    );
+    assert_eq!(
+        hex::encode(parameters.einfo3),
+        hex::encode(server_login_result.confidential_info)
+    );
     assert_eq!(
         hex::encode(parameters.shared_secret),
         hex::encode(server_login_result.session_secret)

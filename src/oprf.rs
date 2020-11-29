@@ -50,8 +50,8 @@ pub(crate) fn blind<R: RngCore + CryptoRng, G: GroupWithMapToCurve>(
 
 /// Computes the second step for the multiplicative blinding version of DH-OPRF. This
 /// message is sent from the server (who holds the OPRF key) to the client.
-pub(crate) fn evaluate<G: Group>(point: G, oprf_key: &G::Scalar) -> Result<G, InternalPakeError> {
-    Ok(point * oprf_key)
+pub(crate) fn evaluate<G: Group>(point: G, oprf_key: &G::Scalar) -> G {
+    point * oprf_key
 }
 
 /// Computes the third step for the multiplicative blinding version of DH-OPRF, in which
@@ -99,7 +99,7 @@ pub fn blind_shim<R: RngCore + CryptoRng, G: GroupWithMapToCurve>(
 #[cfg(feature = "bench")]
 #[doc(hidden)]
 #[inline]
-pub fn evaluate_shim<G: Group>(point: G, oprf_key: &G::Scalar) -> Result<G, InternalPakeError> {
+pub fn evaluate_shim<G: Group>(point: G, oprf_key: &G::Scalar) -> G {
     evaluate(point, oprf_key)
 }
 
@@ -154,7 +154,7 @@ mod tests {
             24, 25, 26, 27, 28, 29, 30, 31, 32,
         ];
         let oprf_key = RistrettoPoint::from_scalar_slice(&oprf_key_bytes)?;
-        let beta = evaluate::<RistrettoPoint>(alpha, &oprf_key)?;
+        let beta = evaluate::<RistrettoPoint>(alpha, &oprf_key);
         let res =
             finalize::<RistrettoPoint, sha2::Sha256>(&token.data, &unblind(&token, beta), b"");
         let res2 = prf(&input[..], &oprf_key.as_bytes());

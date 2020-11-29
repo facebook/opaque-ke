@@ -365,7 +365,7 @@ where
         let oprf_key = CS::Group::random_scalar(rng);
 
         // Compute beta = alpha^oprf_key
-        let beta = oprf::evaluate::<CS::Group>(message.alpha, &oprf_key)?;
+        let beta = oprf::evaluate::<CS::Group>(message.alpha, &oprf_key);
 
         Ok((
             RegisterSecondMessage {
@@ -499,12 +499,12 @@ pub enum ClientLoginStartParameters {
     /// Specifying an info field that will be sent to the server
     WithInfo(Vec<u8>),
     /// Specifying the info field along with idU and idS
-    WithIdentifiersAndInfo(Vec<u8>, Vec<u8>, Vec<u8>),
+    WithInfoAndIdentifiers(Vec<u8>, Vec<u8>, Vec<u8>),
 }
 
 impl Default for ClientLoginStartParameters {
     fn default() -> Self {
-        Self::WithIdentifiersAndInfo(Vec::new(), Vec::new(), Vec::new())
+        Self::WithInfoAndIdentifiers(Vec::new(), Vec::new(), Vec::new())
     }
 }
 
@@ -540,6 +540,10 @@ pub struct ClientLoginFinishResult<CS: CipherSuite> {
     pub session_secret: Vec<u8>,
     /// The client-side export key
     pub export_key: GenericArray<u8, ExportKeySize>,
+    /// The server's static public key
+    pub server_s_pk: Vec<u8>,
+    /// An optional id_s if suppleid by the server
+    pub id_s: Option<Vec<u8>>,
 }
 
 impl<CS: CipherSuite> ClientLogin<CS> {
@@ -575,7 +579,7 @@ impl<CS: CipherSuite> ClientLogin<CS> {
     ) -> Result<ClientLoginStartResult<CS>, ProtocolError> {
         let (info, id_u, id_s) = match params {
             ClientLoginStartParameters::WithInfo(info) => (info, Vec::new(), Vec::new()),
-            ClientLoginStartParameters::WithIdentifiersAndInfo(info, id_u, id_s) => {
+            ClientLoginStartParameters::WithInfoAndIdentifiers(info, id_u, id_s) => {
                 (info, id_u, id_s)
             }
         };
@@ -674,9 +678,9 @@ impl<CS: CipherSuite> ClientLogin<CS> {
                 .to_vec(),
         };
 
-        let id_s = match opened_envelope.credentials_map.get(&CredentialType::IdS) {
-            Some(id_s) => id_s.clone(),
-            None => server_s_pk.to_arr().to_vec(),
+        let (id_s, ret_id_s) = match opened_envelope.credentials_map.get(&CredentialType::IdS) {
+            Some(id_s) => (id_s.clone(), Some(id_s.clone())),
+            None => (server_s_pk.to_arr().to_vec(), None),
         };
 
         let (plain_info, confidential_info, session_secret, ke3_message) =
@@ -684,7 +688,7 @@ impl<CS: CipherSuite> ClientLogin<CS> {
                 l2_bytes,
                 l2.ke2_message,
                 &self.ke1_state,
-                server_s_pk,
+                server_s_pk.clone(),
                 client_s_sk,
                 id_u,
                 id_s,
@@ -698,6 +702,8 @@ impl<CS: CipherSuite> ClientLogin<CS> {
             key_exchange: LoginThirdMessage { ke3_message },
             session_secret,
             export_key: opened_envelope.export_key,
+            server_s_pk: server_s_pk.to_arr().to_vec(),
+            id_s: ret_id_s,
         })
     }
 }
@@ -744,6 +750,8 @@ pub struct ServerLoginStartResult<CS: CipherSuite> {
     pub credential_response: LoginSecondMessage<CS>,
     /// The state that the server must keep in order to finish the protocl
     pub server_login_state: ServerLogin<CS>,
+    /// The client's static public key
+    pub client_s_pk: Vec<u8>,
 }
 
 /// Contains the fields that are returned by a server login finish
@@ -828,7 +836,7 @@ impl<CS: CipherSuite> ServerLogin<CS> {
         };
 
         let l1_bytes = &l1.to_bytes();
-        let beta = oprf::evaluate(l1.alpha, &password_file.oprf_key)?;
+        let beta = oprf::evaluate(l1.alpha, &password_file.oprf_key);
         let envelope = password_file.envelope.ok_or(InternalPakeError::SealError)?;
         let l2_component: Vec<u8> = [&beta.to_arr()[..], &envelope.to_bytes()].concat();
 
@@ -837,7 +845,7 @@ impl<CS: CipherSuite> ServerLogin<CS> {
             l1_bytes.to_vec(),
             l2_component,
             l1.ke1_message,
-            client_s_pk,
+            client_s_pk.clone(),
             server_s_sk.clone(),
             id_u,
             id_s,
@@ -858,6 +866,7 @@ impl<CS: CipherSuite> ServerLogin<CS> {
                 _cs: PhantomData,
                 ke2_state,
             },
+            client_s_pk: client_s_pk.to_arr().to_vec(),
         })
     }
 
