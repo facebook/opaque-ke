@@ -13,7 +13,7 @@ use crate::{
     },
     keypair::{KeyPair, X25519KeyPair},
     opaque::*,
-    serialization::{i2osp, os2ip, serialize, ProtocolMessageType},
+    serialization::{i2osp, os2ip, serialize},
     *,
 };
 
@@ -116,11 +116,8 @@ fn register_first_message_roundtrip() {
     let pt_bytes = pt.to_arr().to_vec();
 
     let alpha_length: usize = 32;
-    let total_length: usize = alpha_length + 2;
 
     let mut input = Vec::new();
-    input.extend_from_slice(&[ProtocolMessageType::RegistrationRequest as u8 + 1]);
-    input.extend_from_slice(&total_length.to_be_bytes()[std::mem::size_of::<usize>() - 3..]);
     input.extend_from_slice(&alpha_length.to_be_bytes()[std::mem::size_of::<usize>() - 2..]);
     input.extend_from_slice(pt_bytes.as_slice());
 
@@ -140,11 +137,8 @@ fn register_second_message_roundtrip() {
 
     let beta_length: usize = beta_bytes.len();
     let pubkey_length: usize = pubkey_bytes.len();
-    let total_length: usize = beta_length + pubkey_length + credential_types.len() + 4;
 
     let mut input = Vec::new();
-    input.extend_from_slice(&[ProtocolMessageType::RegistrationResponse as u8 + 1]);
-    input.extend_from_slice(&total_length.to_be_bytes()[std::mem::size_of::<usize>() - 3..]);
     input.extend_from_slice(&beta_length.to_be_bytes()[std::mem::size_of::<usize>() - 2..]);
     input.extend_from_slice(beta_bytes.as_slice());
     input.extend_from_slice(&pubkey_length.to_be_bytes()[std::mem::size_of::<usize>() - 2..]);
@@ -173,11 +167,8 @@ fn register_third_message_roundtrip() {
     let envelope_bytes = envelope.serialize();
 
     let pubkey_length: usize = pubkey_bytes.len();
-    let total_length: usize = pubkey_length + envelope_bytes.len() + 2;
 
     let mut input = Vec::new();
-    input.extend_from_slice(&[ProtocolMessageType::RegistrationUpload as u8 + 1]);
-    input.extend_from_slice(&total_length.to_be_bytes()[std::mem::size_of::<usize>() - 3..]);
     input.extend_from_slice(&envelope_bytes);
     input.extend_from_slice(&pubkey_length.to_be_bytes()[std::mem::size_of::<usize>() - 2..]);
     input.extend_from_slice(&pubkey_bytes[..]);
@@ -208,13 +199,8 @@ fn login_first_message_roundtrip() {
     .concat();
 
     let alpha_length = alpha_bytes.len();
-    let total_length_without_ke1m: usize = alpha_length + 2;
 
     let mut input = Vec::new();
-    input.extend_from_slice(&[ProtocolMessageType::CredentialRequest as u8 + 1]);
-    input.extend_from_slice(
-        &total_length_without_ke1m.to_be_bytes()[std::mem::size_of::<usize>() - 3..],
-    );
     input.extend_from_slice(&alpha_length.to_be_bytes()[std::mem::size_of::<usize>() - 2..]);
     input.extend_from_slice(&alpha_bytes);
     input.extend_from_slice(&ke1m[..]);
@@ -262,16 +248,10 @@ fn login_second_message_roundtrip() {
     ]
     .concat();
 
-    let total_length_without_ke2m = pt_bytes.len() + envelope.to_bytes().len() + 2;
-
     let mut input = Vec::new();
-    input.extend_from_slice(&[ProtocolMessageType::CredentialResponse as u8 + 1]);
-    input.extend_from_slice(
-        &total_length_without_ke2m.to_be_bytes()[std::mem::size_of::<usize>() - 3..],
-    );
     input.extend_from_slice(&pt_bytes.len().to_be_bytes()[std::mem::size_of::<usize>() - 2..]);
     input.extend_from_slice(pt_bytes.as_slice());
-    input.extend_from_slice(&envelope.to_bytes());
+    input.extend_from_slice(&envelope.serialize());
     input.extend_from_slice(&ke2m[..]);
 
     let l2 = LoginSecondMessage::<Default>::deserialize(&input).unwrap();
@@ -289,16 +269,12 @@ fn login_third_message_roundtrip() {
     let mut mac = [0u8; 32];
     rng.fill_bytes(&mut mac);
 
-    let ke3m: Vec<u8> = [
+    let input: Vec<u8> = [
         &serialize(&info.to_vec(), 2),
         &serialize(&e_info.to_vec(), 2),
         &mac[..],
     ]
     .concat();
-
-    let mut input = Vec::new();
-    input.extend_from_slice(&[ProtocolMessageType::KeyExchange as u8 + 1]);
-    input.extend_from_slice(&ke3m[..]);
 
     let l3 = LoginThirdMessage::<Default>::deserialize(&input).unwrap();
     let l3_bytes = l3.serialize();

@@ -5,20 +5,6 @@
 
 use crate::errors::PakeError;
 
-use crate::{
-    ciphersuite::CipherSuite, hash::Hash, keypair::KeyPair, LoginFirstMessage, LoginSecondMessage,
-    LoginThirdMessage, RegisterFirstMessage, RegisterSecondMessage, RegisterThirdMessage,
-};
-
-pub enum ProtocolMessageType {
-    RegistrationRequest,
-    RegistrationResponse,
-    RegistrationUpload,
-    CredentialRequest,
-    CredentialResponse,
-    KeyExchange,
-}
-
 #[derive(Copy, Clone, Eq, Hash, PartialEq)]
 pub enum CredentialType {
     SkU,
@@ -36,42 +22,6 @@ pub(crate) fn u8_to_credential_type(x: u8) -> Option<CredentialType> {
         4 => Some(CredentialType::IdU),
         5 => Some(CredentialType::IdS),
         _ => None,
-    }
-}
-
-impl<T> From<&RegisterFirstMessage<T>> for ProtocolMessageType {
-    fn from(_mt: &RegisterFirstMessage<T>) -> Self {
-        ProtocolMessageType::RegistrationRequest
-    }
-}
-
-impl<T> From<&RegisterSecondMessage<T>> for ProtocolMessageType {
-    fn from(_mt: &RegisterSecondMessage<T>) -> Self {
-        ProtocolMessageType::RegistrationResponse
-    }
-}
-
-impl<T: KeyPair, U: Hash> From<&RegisterThirdMessage<T, U>> for ProtocolMessageType {
-    fn from(_mt: &RegisterThirdMessage<T, U>) -> Self {
-        ProtocolMessageType::RegistrationUpload
-    }
-}
-
-impl<T: CipherSuite> From<&LoginFirstMessage<T>> for ProtocolMessageType {
-    fn from(_mt: &LoginFirstMessage<T>) -> Self {
-        ProtocolMessageType::CredentialRequest
-    }
-}
-
-impl<T: CipherSuite> From<&LoginSecondMessage<T>> for ProtocolMessageType {
-    fn from(_mt: &LoginSecondMessage<T>) -> Self {
-        ProtocolMessageType::CredentialResponse
-    }
-}
-
-impl<T: CipherSuite> From<&LoginThirdMessage<T>> for ProtocolMessageType {
-    fn from(_mt: &LoginThirdMessage<T>) -> Self {
-        ProtocolMessageType::KeyExchange
     }
 }
 
