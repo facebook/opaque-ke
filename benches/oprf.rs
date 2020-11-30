@@ -51,7 +51,7 @@ fn oprf2(c: &mut Criterion) {
 
     c.bench_function("evaluate with Ristretto", move |b| {
         b.iter(|| {
-            let _beta = evaluate_shim::<RistrettoPoint>(alpha, &salt).unwrap();
+            let _beta = evaluate_shim::<RistrettoPoint>(alpha, &salt);
         })
     });
 }
@@ -69,7 +69,7 @@ fn oprf2_edwards(c: &mut Criterion) {
 
     c.bench_function("evaluate with Edwards", move |b| {
         b.iter(|| {
-            let _beta = evaluate_shim::<EdwardsPoint>(alpha, &salt).unwrap();
+            let _beta = evaluate_shim::<EdwardsPoint>(alpha, &salt);
         })
     });
 }
@@ -84,7 +84,7 @@ fn oprf3(c: &mut Criterion) {
         24, 25, 26, 27, 28, 29, 30, 31, 32,
     ];
     let salt = RistrettoPoint::from_scalar_slice(&salt_bytes).unwrap();
-    let beta = evaluate_shim::<RistrettoPoint>(alpha, &salt).unwrap();
+    let beta = evaluate_shim::<RistrettoPoint>(alpha, &salt);
 
     c.bench_function("unblind_and_finalize with Ristretto", move |b| {
         b.iter(|| {
@@ -103,7 +103,7 @@ fn oprf3_edwards(c: &mut Criterion) {
         24, 25, 26, 27, 28, 29, 30, 31, 32,
     ];
     let salt = RistrettoPoint::from_scalar_slice(&salt_bytes).unwrap();
-    let beta = evaluate_shim::<EdwardsPoint>(alpha, &salt).unwrap();
+    let beta = evaluate_shim::<EdwardsPoint>(alpha, &salt);
 
     c.bench_function("unblind_and_finalize with Edwards", move |b| {
         b.iter(|| {
