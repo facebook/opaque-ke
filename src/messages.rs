@@ -16,9 +16,7 @@ use crate::{
     hash::Hash,
     key_exchange::traits::{KeyExchange, ToBytes},
     keypair::{KeyPair, SizedBytesExt},
-    serialization::{
-        serialize, tokenize, u8_to_credential_type, CredentialType, ProtocolMessageType,
-    },
+    serialization::{serialize, tokenize, u8_to_credential_type, CredentialType},
 };
 use generic_array::{typenum::Unsigned, GenericArray};
 use generic_bytes::SizedBytes;
@@ -55,29 +53,12 @@ impl<Grp: Group> RegisterFirstMessage<Grp> {
 
     /// Serialization into bytes
     pub fn serialize(&self) -> Vec<u8> {
-        let mut registration_request: Vec<u8> = Vec::new();
-        registration_request.extend_from_slice(&serialize(&self.alpha.to_arr(), 2));
-
-        let mut output: Vec<u8> = Vec::new();
-        output.push(ProtocolMessageType::from(self) as u8 + 1);
-        output.extend_from_slice(&serialize(&registration_request, 3));
-        output
+        serialize(&self.alpha.to_arr(), 2)
     }
 
     /// Deserialization from bytes
     pub fn deserialize(input: &[u8]) -> Result<Self, ProtocolError> {
-        if input.is_empty()
-            || input.is_empty()
-            || input[0] != ProtocolMessageType::RegistrationRequest as u8 + 1
-        {
-            return Err(PakeError::SerializationError.into());
-        }
-
-        let (data, remainder) = tokenize(&input[1..], 3)?;
-        if !remainder.is_empty() {
-            return Err(PakeError::SerializationError.into());
-        }
-        let (alpha_bytes, remainder) = tokenize(&data, 2)?;
+        let (alpha_bytes, remainder) = tokenize(&input, 2)?;
 
         if !remainder.is_empty() {
             return Err(PakeError::SerializationError.into());
@@ -171,24 +152,12 @@ where
         .concat();
         registration_response.extend_from_slice(&ecf_serialized);
 
-        let mut output: Vec<u8> = Vec::new();
-        output.push(ProtocolMessageType::from(self) as u8 + 1);
-        output.extend_from_slice(&serialize(&registration_response, 3));
-        output
+        registration_response
     }
 
     /// Deserialization from bytes
     pub fn deserialize(input: &[u8]) -> Result<Self, ProtocolError> {
-        if input.is_empty() || input[0] != ProtocolMessageType::RegistrationResponse as u8 + 1 {
-            return Err(PakeError::SerializationError.into());
-        }
-
-        let (data, remainder) = tokenize(&input[1..], 3)?;
-        if !remainder.is_empty() {
-            return Err(PakeError::SerializationError.into());
-        }
-
-        let (beta_bytes, remainder) = tokenize(&data, 2)?;
+        let (beta_bytes, remainder) = tokenize(&input, 2)?;
         let (server_s_pk, remainder) = tokenize(&remainder, 2)?;
 
         // Handle ecf deserialization
@@ -270,25 +239,12 @@ where
         let mut registration_upload: Vec<u8> = Vec::new();
         registration_upload.extend_from_slice(&self.envelope.serialize());
         registration_upload.extend_from_slice(&serialize(&self.client_s_pk.to_arr(), 2));
-
-        let mut output: Vec<u8> = Vec::new();
-        output.push(ProtocolMessageType::from(self) as u8 + 1);
-        output.extend_from_slice(&serialize(&registration_upload, 3));
-        output
+        registration_upload
     }
 
     /// Deserialization from bytes
     pub fn deserialize(input: &[u8]) -> Result<Self, ProtocolError> {
-        if input.is_empty() || input[0] != ProtocolMessageType::RegistrationUpload as u8 + 1 {
-            return Err(PakeError::SerializationError.into());
-        }
-
-        let (data, remainder) = tokenize(&input[1..], 3)?;
-        if !remainder.is_empty() {
-            return Err(PakeError::SerializationError.into());
-        }
-
-        let (envelope, remainder) = Envelope::<D>::deserialize(&data)?;
+        let (envelope, remainder) = Envelope::<D>::deserialize(&input)?;
         let (client_s_pk, remainder) = tokenize(&remainder, 2)?;
 
         if !remainder.is_empty() {
@@ -326,26 +282,13 @@ impl<CS: CipherSuite> LoginFirstMessage<CS> {
     pub fn serialize(&self) -> Vec<u8> {
         let mut credential_request: Vec<u8> = Vec::new();
         credential_request.extend_from_slice(&serialize(&self.alpha.to_arr(), 2));
-
-        let mut output: Vec<u8> = Vec::new();
-        output.push(ProtocolMessageType::from(self) as u8 + 1);
-        output.extend_from_slice(&serialize(&credential_request, 3));
-        output.extend_from_slice(&self.ke1_message.to_bytes());
-        output
+        credential_request.extend_from_slice(&self.ke1_message.to_bytes());
+        credential_request
     }
 
     /// Deserialization from bytes
     pub fn deserialize(input: &[u8]) -> Result<Self, ProtocolError> {
-        if input.is_empty() || input[0] != ProtocolMessageType::CredentialRequest as u8 + 1 {
-            return Err(PakeError::SerializationError.into());
-        }
-
-        let (data, ke1m) = tokenize(&input[1..], 3)?;
-        let (alpha_bytes, remainder) = tokenize(&data, 2)?;
-
-        if !remainder.is_empty() {
-            return Err(PakeError::SerializationError.into());
-        }
+        let (alpha_bytes, ke1m) = tokenize(&input, 2)?;
 
         let elem_len = <CS::Group as Group>::ElemLen::to_usize();
         let checked_slice = check_slice_size(&alpha_bytes, elem_len, "login_first_message_bytes")?;
@@ -377,24 +320,14 @@ impl<CS: CipherSuite> LoginSecondMessage<CS> {
         let mut credential_response: Vec<u8> = Vec::new();
         credential_response.extend_from_slice(&serialize(&self.beta.to_arr(), 2));
         credential_response.extend_from_slice(&self.envelope.to_bytes());
-
-        let mut output: Vec<u8> = Vec::new();
-        output.push(ProtocolMessageType::from(self) as u8 + 1);
-        output.extend_from_slice(&serialize(&credential_response, 3));
-        output.extend_from_slice(&self.ke2_message.to_bytes());
-        output
+        credential_response.extend_from_slice(&self.ke2_message.to_bytes());
+        credential_response
     }
 
     /// Deserialization from bytes
     pub fn deserialize(input: &[u8]) -> Result<Self, ProtocolError> {
-        if input.is_empty() || input[0] != ProtocolMessageType::CredentialResponse as u8 + 1 {
-            return Err(PakeError::SerializationError.into());
-        }
-
-        let (data, ke2m) = tokenize(&input[1..], 3)?;
-        let (beta_bytes, envelope_bytes) = tokenize(&data, 2)?;
-
-        let concatenated = [&beta_bytes[..], &envelope_bytes[..], &ke2m[..]].concat();
+        let (beta_bytes, envelope_and_ke2m_bytes) = tokenize(&input, 2)?;
+        let concatenated = [&beta_bytes[..], &envelope_and_ke2m_bytes[..]].concat();
         Self::try_from(&concatenated[..])
     }
 }
@@ -449,19 +382,12 @@ impl<CS: CipherSuite> TryFrom<&[u8]> for LoginThirdMessage<CS> {
 impl<CS: CipherSuite> LoginThirdMessage<CS> {
     /// Serialization into bytes
     pub fn serialize(&self) -> Vec<u8> {
-        let mut output: Vec<u8> = Vec::new();
-        output.push(ProtocolMessageType::from(self) as u8 + 1);
-        output.extend_from_slice(&self.ke3_message.to_bytes());
-        output
+        self.ke3_message.to_bytes()
     }
 
     /// Deserialization from bytes
     pub fn deserialize(input: &[u8]) -> Result<Self, ProtocolError> {
-        if input.is_empty() || input[0] != ProtocolMessageType::KeyExchange as u8 + 1 {
-            return Err(PakeError::SerializationError.into());
-        }
-
-        Self::try_from(&input[1..])
+        Self::try_from(&input[..])
     }
 
     /// byte representation for the login finalization
