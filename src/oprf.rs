@@ -17,21 +17,21 @@ pub struct Token<Grp: Group> {
     pub(crate) blind: Grp::Scalar,
 }
 
-static STR_VOPRF: &[u8] = b"VOPRF05";
-static STR_VOPRF_FINALIZE: &[u8] = b"VOPRF05-Finalize-";
-static MODE_BASE: u8 = 0x01;
+static STR_VOPRF: &[u8] = b"VOPRF06-HashToGroup-";
+static STR_VOPRF_FINALIZE: &[u8] = b"VOPRF06-Finalize-";
+static MODE_BASE: u8 = 0x00;
 
 /// Computes the first step for the multiplicative blinding version of DH-OPRF. This
 /// message is sent from the client (who holds the input) to the server (who holds the OPRF key).
 /// The client can also pass in an optional "pepper" string to be mixed in with the input through
 /// an HKDF computation.
-pub(crate) fn blind<R: RngCore + CryptoRng, G: GroupWithMapToCurve>(
+pub(crate) fn blind<R: RngCore + CryptoRng, G: GroupWithMapToCurve, H: Hash>(
     input: &[u8],
     blinding_factor_rng: &mut R,
     #[cfg(test)] postprocess: fn(G::Scalar) -> G::Scalar,
 ) -> Result<(Token<G>, G), InternalPakeError> {
     let dst = [STR_VOPRF, &G::get_context_string(MODE_BASE)].concat();
-    let mapped_point = G::map_to_curve(input, &dst)?;
+    let mapped_point = G::map_to_curve::<H>(input, &dst)?;
     let blinding_factor = G::random_scalar(blinding_factor_rng);
     #[cfg(test)]
     let blind = postprocess(blinding_factor);
@@ -84,11 +84,11 @@ pub(crate) fn finalize<G: GroupWithMapToCurve, H: Hash>(
 #[cfg(feature = "bench")]
 #[doc(hidden)]
 #[inline]
-pub fn blind_shim<R: RngCore + CryptoRng, G: GroupWithMapToCurve>(
+pub fn blind_shim<R: RngCore + CryptoRng, G: GroupWithMapToCurve, H: Hash>(
     input: &[u8],
     blinding_factor_rng: &mut R,
 ) -> Result<(Token<G>, G), InternalPakeError> {
-    blind(
+    blind::<R, G, H>(
         input,
         blinding_factor_rng,
         #[cfg(test)]
@@ -129,13 +129,14 @@ mod tests {
     use curve25519_dalek::ristretto::RistrettoPoint;
     use generic_array::{arr, GenericArray};
     use rand_core::OsRng;
+    use sha2::Sha256;
 
     fn prf(
         input: &[u8],
         oprf_key: &[u8; 32],
     ) -> GenericArray<u8, <RistrettoPoint as Group>::ElemLen> {
         let dst = [STR_VOPRF, &RistrettoPoint::get_context_string(MODE_BASE)].concat();
-        let point = RistrettoPoint::map_to_curve(input, &dst).unwrap();
+        let point = RistrettoPoint::map_to_curve::<Sha256>(input, &dst).unwrap();
         let scalar =
             RistrettoPoint::from_scalar_slice(GenericArray::from_slice(&oprf_key[..])).unwrap();
         let res = point * scalar;
@@ -148,7 +149,7 @@ mod tests {
         let input = b"hunter2";
         let mut rng = OsRng;
         let (token, alpha) =
-            blind::<_, RistrettoPoint>(&input[..], &mut rng, std::convert::identity)?;
+            blind::<_, RistrettoPoint, Sha256>(&input[..], &mut rng, std::convert::identity)?;
         let oprf_key_bytes = arr![
             u8; 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23,
             24, 25, 26, 27, 28, 29, 30, 31, 32,
@@ -168,12 +169,12 @@ mod tests {
         let mut input = vec![0u8; 64];
         rng.fill_bytes(&mut input);
         let (token, alpha) =
-            blind::<_, RistrettoPoint>(&input, &mut rng, std::convert::identity).unwrap();
+            blind::<_, RistrettoPoint, Sha256>(&input, &mut rng, std::convert::identity).unwrap();
         let res =
             finalize::<RistrettoPoint, sha2::Sha256>(&token.data, &unblind(&token, alpha), b"");
 
         let dst = [STR_VOPRF, &RistrettoPoint::get_context_string(MODE_BASE)].concat();
-        let point = RistrettoPoint::map_to_curve(&input, &dst).unwrap();
+        let point = RistrettoPoint::map_to_curve::<Sha256>(&input, &dst).unwrap();
         let res2 = finalize::<RistrettoPoint, sha2::Sha256>(&input, &point.to_arr().to_vec(), b"");
 
         assert_eq!(res, res2);

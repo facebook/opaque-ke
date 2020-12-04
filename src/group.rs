@@ -29,7 +29,7 @@ pub trait Group: Sized + for<'a> Mul<&'a <Self as Group>::Scalar, Output = Self>
     type Scalar: Zeroize;
     /// The byte length necessary to represent scalars
     type ScalarLen: ArrayLength<u8>;
-    /// Return a scalat from its fixed-length bytes representation
+    /// Return a scalar from its fixed-length bytes representation
     fn from_scalar_slice(
         scalar_bits: &GenericArray<u8, Self::ScalarLen>,
     ) -> Result<Self::Scalar, InternalPakeError>;

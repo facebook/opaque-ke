@@ -5,3 +5,4 @@
 
 pub mod mock_rng;
 mod opaque_ke_test;
+mod voprf_test_vectors;

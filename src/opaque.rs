@@ -137,7 +137,7 @@ impl<CS: CipherSuite> ClientRegistration<CS> {
             ClientRegistrationStartParameters::WithIdentifiers(id_u, id_s) => (id_u, id_s),
         };
 
-        let (token, alpha) = oprf::blind::<R, CS::Group>(
+        let (token, alpha) = oprf::blind::<R, CS::Group, CS::Hash>(
             &password,
             blinding_factor_rng,
             #[cfg(test)]
@@ -584,7 +584,7 @@ impl<CS: CipherSuite> ClientLogin<CS> {
             }
         };
 
-        let (token, alpha) = oprf::blind::<R, CS::Group>(
+        let (token, alpha) = oprf::blind::<R, CS::Group, CS::Hash>(
             &password,
             rng,
             #[cfg(test)]
