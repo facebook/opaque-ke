@@ -15,7 +15,6 @@ use digest::{BlockInput, Digest};
 use generic_array::typenum::Unsigned;
 use generic_array::GenericArray;
 use hkdf::Hkdf;
-use sha2::Sha256;
 
 /// A subtrait of Group specifying how to hash a password into a point
 pub trait GroupWithMapToCurve: Group {
@@ -24,7 +23,7 @@ pub trait GroupWithMapToCurve: Group {
     const SUITE_ID: usize;
 
     /// transforms a password and domain separation tag (DST) into a curve point
-    fn map_to_curve(msg: &[u8], dst: &[u8]) -> Result<Self, InternalPakeError>;
+    fn map_to_curve<H: Hash>(msg: &[u8], dst: &[u8]) -> Result<Self, InternalPakeError>;
 
     /// Generates the contextString parameter as defined in
     /// https://www.ietf.org/archive/id/draft-irtf-cfrg-voprf-05.txt
@@ -34,12 +33,12 @@ pub trait GroupWithMapToCurve: Group {
 }
 
 impl GroupWithMapToCurve for RistrettoPoint {
-    const SUITE_ID: usize = 0x01;
+    const SUITE_ID: usize = 0x0001;
 
     // Implements the hash_to_ristretto255() function from
     // https://www.ietf.org/archive/id/draft-irtf-cfrg-hash-to-curve-10.txt
-    fn map_to_curve(msg: &[u8], dst: &[u8]) -> Result<Self, InternalPakeError> {
-        let uniform_bytes = expand_message_xmd::<Sha256>(msg, dst, 64)?;
+    fn map_to_curve<H: Hash>(msg: &[u8], dst: &[u8]) -> Result<Self, InternalPakeError> {
+        let uniform_bytes = expand_message_xmd::<H>(msg, dst, 64)?;
         Ok(<Self as Group>::hash_to_curve(
             &GenericArray::clone_from_slice(&uniform_bytes[..]),
         ))
@@ -47,10 +46,12 @@ impl GroupWithMapToCurve for RistrettoPoint {
 }
 
 impl GroupWithMapToCurve for EdwardsPoint {
-    const SUITE_ID: usize = 0x09; // FIXME, seemingly unsupported by VOPRF RFC?
-    fn map_to_curve(msg: &[u8], dst: &[u8]) -> Result<Self, InternalPakeError> {
-        let (hashed_input, _) = Hkdf::<Sha256>::extract(Some(dst), msg);
-        Ok(<Self as Group>::hash_to_curve(&hashed_input))
+    const SUITE_ID: usize = 0x0009; // FIXME, seemingly unsupported by VOPRF RFC?
+    fn map_to_curve<H: Hash>(msg: &[u8], dst: &[u8]) -> Result<Self, InternalPakeError> {
+        let (hashed_input, _) = Hkdf::<H>::extract(Some(dst), msg);
+        Ok(<Self as Group>::hash_to_curve(
+            &GenericArray::clone_from_slice(&hashed_input[..]),
+        ))
     }
 }
 

@@ -14,7 +14,7 @@ use opaque_ke::{
     oprf::{blind_shim, evaluate_shim, unblind_and_finalize_shim},
 };
 use rand::{prelude::ThreadRng, thread_rng};
-use sha2::Sha256;
+use sha2::{Sha256, Sha512};
 
 fn oprf1(c: &mut Criterion) {
     let mut csprng: ThreadRng = thread_rng();
@@ -22,7 +22,7 @@ fn oprf1(c: &mut Criterion) {
 
     c.bench_function("blind with Ristretto", move |b| {
         b.iter(|| {
-            blind_shim::<_, RistrettoPoint>(&input[..], &mut csprng).unwrap();
+            blind_shim::<_, RistrettoPoint, Sha512>(&input[..], &mut csprng).unwrap();
         })
     });
 }
@@ -33,7 +33,7 @@ fn oprf1_edwards(c: &mut Criterion) {
 
     c.bench_function("blind with Edwards", move |b| {
         b.iter(|| {
-            blind_shim::<_, EdwardsPoint>(&input[..], &mut csprng).unwrap();
+            blind_shim::<_, EdwardsPoint, Sha256>(&input[..], &mut csprng).unwrap();
         })
     });
 }
@@ -42,7 +42,7 @@ fn oprf2(c: &mut Criterion) {
     let mut csprng: ThreadRng = thread_rng();
     let input = b"hunter2";
 
-    let (_, alpha) = blind_shim::<_, RistrettoPoint>(&input[..], &mut csprng).unwrap();
+    let (_, alpha) = blind_shim::<_, RistrettoPoint, Sha512>(&input[..], &mut csprng).unwrap();
     let salt_bytes = arr![
         u8; 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23,
         24, 25, 26, 27, 28, 29, 30, 31, 32,
@@ -60,7 +60,7 @@ fn oprf2_edwards(c: &mut Criterion) {
     let mut csprng: ThreadRng = thread_rng();
     let input = b"hunter2";
 
-    let (_, alpha) = blind_shim::<_, EdwardsPoint>(&input[..], &mut csprng).unwrap();
+    let (_, alpha) = blind_shim::<_, EdwardsPoint, Sha256>(&input[..], &mut csprng).unwrap();
     let salt_bytes = arr![
         u8; 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23,
         24, 25, 26, 27, 28, 29, 30, 31, 32,
@@ -78,7 +78,7 @@ fn oprf3(c: &mut Criterion) {
     let mut csprng: ThreadRng = thread_rng();
     let input = b"hunter2";
 
-    let (token, alpha) = blind_shim::<_, RistrettoPoint>(&input[..], &mut csprng).unwrap();
+    let (token, alpha) = blind_shim::<_, RistrettoPoint, Sha512>(&input[..], &mut csprng).unwrap();
     let salt_bytes = arr![
         u8; 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23,
         24, 25, 26, 27, 28, 29, 30, 31, 32,
@@ -88,7 +88,7 @@ fn oprf3(c: &mut Criterion) {
 
     c.bench_function("unblind_and_finalize with Ristretto", move |b| {
         b.iter(|| {
-            let _res = unblind_and_finalize_shim::<RistrettoPoint, Sha256>(&token, beta).unwrap();
+            let _res = unblind_and_finalize_shim::<RistrettoPoint, Sha512>(&token, beta).unwrap();
         })
     });
 }
@@ -97,7 +97,7 @@ fn oprf3_edwards(c: &mut Criterion) {
     let mut csprng: ThreadRng = thread_rng();
     let input = b"hunter2";
 
-    let (token, alpha) = blind_shim::<_, EdwardsPoint>(&input[..], &mut csprng).unwrap();
+    let (token, alpha) = blind_shim::<_, EdwardsPoint, Sha256>(&input[..], &mut csprng).unwrap();
     let salt_bytes = arr![
         u8; 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23,
         24, 25, 26, 27, 28, 29, 30, 31, 32,
