@@ -7,6 +7,8 @@
 
 use crate::{errors::InternalPakeError, hash::Hash};
 use digest::Digest;
+#[cfg(feature = "slow-hash")]
+use generic_array::typenum::Unsigned;
 use generic_array::GenericArray;
 
 /// Used for the slow hashing function in OPAQUE
@@ -34,9 +36,9 @@ impl<D: Hash> SlowHash<D> for scrypt::ScryptParams {
         input: GenericArray<u8, <D as Digest>::OutputSize>,
     ) -> Result<Vec<u8>, InternalPakeError> {
         let params = scrypt::ScryptParams::new(15, 8, 1).unwrap();
-        let mut output = [0u8; <D as Digest>::OutputSize::to_usize()];
+        let mut output = vec![0u8; <D as Digest>::OutputSize::to_usize()];
         scrypt::scrypt(&input, &[], &params, &mut output)
             .map_err(|_| InternalPakeError::SlowHashError)?;
-        Ok(output.to_vec())
+        Ok(output)
     }
 }

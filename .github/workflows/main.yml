@@ -35,26 +35,6 @@ jobs:
           command: test
           args: --no-default-features --features ${{ matrix.backend_feature }}
 
-  simple-login-test:
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-    name: test simple_login command-line example
-    steps:
-      - name: install expect
-        run: sudo apt-get install expect
-      - name: Checkout sources
-        uses: actions/checkout@v2
-      - name: install rust
-        uses: actions-rs/toolchain@v1
-        with:
-          profile: minimal
-          toolchain: nightly
-          override: true
-          components: rustfmt, clippy
-      - name: Run expect (which then runs cargo run)
-        run: expect -f scripts/simple_login.exp
-
   cross-test:
     name: Test on ${{ matrix.target }} (using cross)
     runs-on: ubuntu-latest
@@ -74,6 +54,42 @@ jobs:
       # Note: just use `cross` as you would `cargo`, but always
       # pass the `--target=${{ matrix.target }}` arg. (Yes, really).
       - run: cross test --verbose --target=${{ matrix.target }} --no-default-features --features ${{ matrix.backend_feature }}
+
+
+  slow-hash-test:
+    name: Test on ${{ matrix.target }} with slow hash
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        backend_feature:
+          - u64_backend
+          - u32_backend
+    steps:
+      - uses: actions/checkout@v2
+      - uses: hecrj/setup-rust-action@v1
+      - run: cargo test --verbose --features slow-hash --no-default-features --features ${{ matrix.backend_feature }}
+
+
+  simple-login-test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+    name: test simple_login command-line example
+    steps:
+      - name: install expect
+        run: sudo apt-get install expect
+      - name: Checkout sources
+        uses: actions/checkout@v2
+      - name: install rust
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: nightly
+          override: true
+          components: rustfmt, clippy
+      - name: Run expect (which then runs cargo run)
+        run: expect -f scripts/simple_login.exp
 
   benches:
     name: cargo bench compilation
