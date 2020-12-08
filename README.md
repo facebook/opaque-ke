@@ -29,7 +29,8 @@ Resources
 ---------
 
 - [OPAQUE academic publication](https://eprint.iacr.org/2018/163.pdf), including formal definitions and a proof of security
-- [draft-krawczyk-cfrg-opaque-05](https://tools.ietf.org/html/draft-krawczyk-cfrg-opaque-06), containing a specification for the OPAQUE protocol
+- [draft-irtf-cfrg-opaque-01](https://www.ietf.org/archive/id/draft-irtf-cfrg-opaque-01.html), containing a detailed (byte-level) specification for OPAQUE
+- [draft-krawczyk-cfrg-opaque-06](https://tools.ietf.org/html/draft-krawczyk-cfrg-opaque-06), containing a high-level specification for OPAQUE
 - ["Let's talk about PAKE"](https://blog.cryptographyengineering.com/2018/10/19/lets-talk-about-pake/), an introductory blog post written by Matthew Green that covers OPAQUE
 
 Contributors
@@ -41,7 +42,7 @@ To learn more about contributing to this project, [see this document](./CONTRIBU
 
 #### Acknowledgments
 
-Special thanks go to Hugo Krawczyk for helping to clarify discrepancies and making suggestions for improving
+Special thanks go to Hugo Krawczyk and Chris Wood for helping to clarify discrepancies and making suggestions for improving
 this implementation.
 
 

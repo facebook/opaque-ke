@@ -17,8 +17,8 @@ use crate::{
     oprf,
     serialization::{serialize, tokenize, CredentialType},
     slow_hash::SlowHash,
-    LoginFirstMessage, LoginSecondMessage, LoginThirdMessage, RegisterFirstMessage,
-    RegisterSecondMessage, RegisterThirdMessage,
+    CredentialFinalization, CredentialRequest, CredentialResponse, RegistrationRequest,
+    RegistrationResponse, RegistrationUpload,
 };
 use generic_array::{typenum::Unsigned, GenericArray};
 use generic_bytes::SizedBytes;
@@ -102,6 +102,14 @@ impl Default for ClientRegistrationStartParameters {
     }
 }
 
+/// Contains the fields that are returned by a client registration start
+pub struct ClientRegistrationStartResult<CS: CipherSuite> {
+    /// The registration request message to be sent to the server
+    pub message: RegistrationRequest<CS::Group>,
+    /// The client state that must be persisted in order to complete registration
+    pub state: ClientRegistration<CS>,
+}
+
 impl<CS: CipherSuite> ClientRegistration<CS> {
     /// Returns an initial "blinded" request to send to the server, as well as a ClientRegistration
     ///
@@ -124,15 +132,15 @@ impl<CS: CipherSuite> ClientRegistration<CS> {
     ///     type SlowHash = opaque_ke::slow_hash::NoOpHash;
     /// }
     /// let mut client_rng = OsRng;
-    /// let (register_m1, registration_state) = ClientRegistration::<Default>::start(b"hunter2", ClientRegistrationStartParameters::default(), &mut client_rng)?;
+    /// let client_registration_start_result = ClientRegistration::<Default>::start(&mut client_rng, b"hunter2", ClientRegistrationStartParameters::default())?;
     /// # Ok::<(), ProtocolError>(())
     /// ```
     pub fn start<R: RngCore + CryptoRng>(
+        blinding_factor_rng: &mut R,
         password: &[u8],
         params: ClientRegistrationStartParameters,
-        blinding_factor_rng: &mut R,
         #[cfg(test)] postprocess: fn(<CS::Group as Group>::Scalar) -> <CS::Group as Group>::Scalar,
-    ) -> Result<(RegisterFirstMessage<CS::Group>, Self), ProtocolError> {
+    ) -> Result<ClientRegistrationStartResult<CS>, ProtocolError> {
         let (id_u, id_s) = match params {
             ClientRegistrationStartParameters::WithIdentifiers(id_u, id_s) => (id_u, id_s),
         };
@@ -144,17 +152,20 @@ impl<CS: CipherSuite> ClientRegistration<CS> {
             postprocess,
         )?;
 
-        Ok((
-            RegisterFirstMessage::<CS::Group> { alpha },
-            Self { id_u, id_s, token },
-        ))
+        Ok(ClientRegistrationStartResult {
+            message: RegistrationRequest::<CS::Group> { alpha },
+            state: Self { id_u, id_s, token },
+        })
     }
 }
 
-type ClientRegistrationFinishResult<KeyFormat, D> = (
-    RegisterThirdMessage<KeyFormat, D>,
-    GenericArray<u8, ExportKeySize>,
-);
+/// Contains the fields that are returned by a client registration finish
+pub struct ClientRegistrationFinishResult<KeyFormat: KeyPair, D: Hash> {
+    /// The registration upload message to be sent to the server
+    pub message: RegistrationUpload<KeyFormat, D>,
+    /// The export key output by client registration
+    pub export_key: GenericArray<u8, ExportKeySize>,
+}
 
 impl<CS: CipherSuite> ClientRegistration<CS> {
     /// "Unblinds" the server's answer and returns a final message containing
@@ -182,17 +193,17 @@ impl<CS: CipherSuite> ClientRegistration<CS> {
     /// let mut client_rng = OsRng;
     /// let mut server_rng = OsRng;
     /// let server_kp = X25519KeyPair::generate_random(&mut server_rng)?;
-    /// let (register_m1, client_state) = ClientRegistration::<Default>::start(b"hunter2", ClientRegistrationStartParameters::default(), &mut client_rng)?;
-    /// let (register_m2, server_state) =
-    /// ServerRegistration::<Default>::start(register_m1, server_kp.public(), &mut server_rng)?;
+    /// let client_registration_start_result = ClientRegistration::<Default>::start(&mut client_rng, b"hunter2", ClientRegistrationStartParameters::default())?;
+    /// let server_registration_start_result =
+    /// ServerRegistration::<Default>::start(&mut server_rng, client_registration_start_result.message, server_kp.public())?;
     /// let mut client_rng = OsRng;
-    /// let register_m3 = client_state.finish(register_m2, &mut client_rng)?;
+    /// let client_registration_finish_result = client_registration_start_result.state.finish(&mut client_rng, server_registration_start_result.message)?;
     /// # Ok::<(), ProtocolError>(())
     /// ```
     pub fn finish<R: CryptoRng + RngCore>(
         self,
-        r2: RegisterSecondMessage<CS::Group>,
         rng: &mut R,
+        r2: RegistrationResponse<CS::Group>,
     ) -> Result<ClientRegistrationFinishResult<CS::KeyFormat, CS::Hash>, ProtocolError> {
         let client_static_keypair = CS::KeyFormat::generate_random(rng)?;
 
@@ -215,13 +226,13 @@ impl<CS: CipherSuite> ClientRegistration<CS> {
         let (envelope, export_key) =
             Envelope::<CS::Hash>::seal(&password_derived_key, r2.ecf, credentials_map, rng)?;
 
-        Ok((
-            RegisterThirdMessage {
+        Ok(ClientRegistrationFinishResult {
+            message: RegistrationUpload {
                 envelope,
                 client_s_pk: client_static_keypair.public().clone(),
             },
             export_key,
-        ))
+        })
     }
 }
 
@@ -251,6 +262,14 @@ impl<CS: CipherSuite> Drop for ClientLogin<CS> {
     fn drop(&mut self) {
         self.zeroize();
     }
+}
+
+/// Contains the fields that are returned by a server registration start
+pub struct ServerRegistrationStartResult<CS: CipherSuite> {
+    /// The registration resposne message to send to the client
+    pub message: RegistrationResponse<CS::Group>,
+    /// The state that the server must keep in order to complete registration
+    pub state: ServerRegistration<CS>,
 }
 
 /// The state elements the server holds to record a registration
@@ -351,34 +370,34 @@ where
     /// let mut client_rng = OsRng;
     /// let mut server_rng = OsRng;
     /// let server_kp = X25519KeyPair::generate_random(&mut server_rng)?;
-    /// let (register_m1, client_state) = ClientRegistration::<Default>::start(b"hunter2", ClientRegistrationStartParameters::default(), &mut client_rng)?;
-    /// let (register_m2, server_state) =
-    /// ServerRegistration::<Default>::start(register_m1, server_kp.public(), &mut server_rng)?;
+    /// let client_registration_start_result = ClientRegistration::<Default>::start(&mut client_rng, b"hunter2", ClientRegistrationStartParameters::default())?;
+    /// let server_registration_start_result =
+    /// ServerRegistration::<Default>::start(&mut server_rng, client_registration_start_result.message, server_kp.public())?;
     /// # Ok::<(), ProtocolError>(())
     /// ```
     pub fn start<R: RngCore + CryptoRng>(
-        message: RegisterFirstMessage<CS::Group>,
-        server_s_pk: &<CS::KeyFormat as KeyPair>::Repr,
         rng: &mut R,
-    ) -> Result<(RegisterSecondMessage<CS::Group>, Self), ProtocolError> {
+        message: RegistrationRequest<CS::Group>,
+        server_s_pk: &<CS::KeyFormat as KeyPair>::Repr,
+    ) -> Result<ServerRegistrationStartResult<CS>, ProtocolError> {
         // RFC: generate oprf_key (salt) and v_u = g^oprf_key
         let oprf_key = CS::Group::random_scalar(rng);
 
         // Compute beta = alpha^oprf_key
         let beta = oprf::evaluate::<CS::Group>(message.alpha, &oprf_key);
 
-        Ok((
-            RegisterSecondMessage {
+        Ok(ServerRegistrationStartResult {
+            message: RegistrationResponse {
                 beta,
                 server_s_pk: server_s_pk.to_arr().to_vec(),
                 ecf: EnvelopeCredentialsFormat::default()?,
             },
-            Self {
+            state: Self {
                 envelope: None,
                 client_s_pk: None,
                 oprf_key,
             },
-        ))
+        })
     }
 
     /// From the client's cryptographic identifiers, fully populates and
@@ -405,17 +424,17 @@ where
     /// let mut client_rng = OsRng;
     /// let mut server_rng = OsRng;
     /// let server_kp = X25519KeyPair::generate_random(&mut server_rng)?;
-    /// let (register_m1, client_state) = ClientRegistration::<Default>::start(b"hunter2", ClientRegistrationStartParameters::default(), &mut client_rng)?;
-    /// let (register_m2, server_state) =
-    /// ServerRegistration::<Default>::start(register_m1, server_kp.public(), &mut server_rng)?;
+    /// let client_registration_start_result = ClientRegistration::<Default>::start(&mut client_rng, b"hunter2", ClientRegistrationStartParameters::default())?;
+    /// let server_registration_start_result =
+    /// ServerRegistration::<Default>::start(&mut server_rng, client_registration_start_result.message, server_kp.public())?;
     /// let mut client_rng = OsRng;
-    /// let (register_m3, _export_key) = client_state.finish(register_m2, &mut client_rng)?;
-    /// let client_record = server_state.finish(register_m3)?;
+    /// let client_registration_finish_result = client_registration_start_result.state.finish(&mut client_rng, server_registration_start_result.message)?;
+    /// let client_record = server_registration_start_result.state.finish(client_registration_finish_result.message)?;
     /// # Ok::<(), ProtocolError>(())
     /// ```
     pub fn finish(
         self,
-        message: RegisterThirdMessage<CS::KeyFormat, CS::Hash>,
+        message: RegistrationUpload<CS::KeyFormat, CS::Hash>,
     ) -> Result<Self, ProtocolError> {
         Ok(Self {
             envelope: Some(message.envelope),
@@ -511,9 +530,9 @@ impl Default for ClientLoginStartParameters {
 /// Contains the fields that are returned by a client login start
 pub struct ClientLoginStartResult<CS: CipherSuite> {
     /// The message to send to the server to begin the login protocol
-    pub credential_request: LoginFirstMessage<CS>,
+    pub message: CredentialRequest<CS>,
     /// The state that the client must keep in order to complete the protocol
-    pub client_login_state: ClientLogin<CS>,
+    pub state: ClientLogin<CS>,
 }
 
 /// Optional parameters for client login finish
@@ -530,20 +549,20 @@ impl Default for ClientLoginFinishParameters {
 
 /// Contains the fields that are returned by a client login finish
 pub struct ClientLoginFinishResult<CS: CipherSuite> {
-    /// The plaintext info sent by the client
-    pub plain_info: Vec<u8>,
-    /// The message to send back to the client
-    pub confidential_info: Vec<u8>,
     /// The message to send to the server to complete the protocol
-    pub key_exchange: LoginThirdMessage<CS>,
+    pub message: CredentialFinalization<CS>,
     /// The shared session secret
-    pub session_secret: Vec<u8>,
+    pub shared_secret: Vec<u8>,
     /// The client-side export key
     pub export_key: GenericArray<u8, ExportKeySize>,
     /// The server's static public key
     pub server_s_pk: Vec<u8>,
-    /// An optional id_s if suppleid by the server
+    /// An optional id_s if supplied by the server
     pub id_s: Option<Vec<u8>>,
+    /// The plaintext info sent by the client
+    pub plain_info: Vec<u8>,
+    /// The confidential info sent by the client
+    pub confidential_info: Vec<u8>,
 }
 
 impl<CS: CipherSuite> ClientLogin<CS> {
@@ -568,12 +587,12 @@ impl<CS: CipherSuite> ClientLogin<CS> {
     ///     type SlowHash = opaque_ke::slow_hash::NoOpHash;
     /// }
     /// let mut client_rng = OsRng;
-    /// let client_login_start_result = ClientLogin::<Default>::start(b"hunter2", &mut client_rng, ClientLoginStartParameters::default())?;
+    /// let client_login_start_result = ClientLogin::<Default>::start(&mut client_rng, b"hunter2", ClientLoginStartParameters::default())?;
     /// # Ok::<(), ProtocolError>(())
     /// ```
     pub fn start<R: RngCore + CryptoRng>(
-        password: &[u8],
         rng: &mut R,
+        password: &[u8],
         params: ClientLoginStartParameters,
         #[cfg(test)] postprocess: fn(<CS::Group as Group>::Scalar) -> <CS::Group as Group>::Scalar,
     ) -> Result<ClientLoginStartResult<CS>, ProtocolError> {
@@ -594,11 +613,11 @@ impl<CS: CipherSuite> ClientLogin<CS> {
         let (ke1_state, ke1_message) =
             CS::KeyExchange::generate_ke1(alpha.to_arr().to_vec(), info, rng)?;
 
-        let l1 = LoginFirstMessage { alpha, ke1_message };
+        let l1 = CredentialRequest { alpha, ke1_message };
 
         Ok(ClientLoginStartResult {
-            credential_request: l1,
-            client_login_state: Self {
+            message: l1,
+            state: Self {
                 id_u,
                 id_s,
                 token,
@@ -632,19 +651,19 @@ impl<CS: CipherSuite> ClientLogin<CS> {
     /// }
     /// let mut client_rng = OsRng;
     /// # let mut server_rng = OsRng;
-    /// # let (register_m1, client_state) = ClientRegistration::<Default>::start(b"hunter2", ClientRegistrationStartParameters::default(), &mut client_rng)?;
+    /// # let client_registration_start_result = ClientRegistration::<Default>::start(&mut client_rng, b"hunter2", ClientRegistrationStartParameters::default())?;
     /// # let server_kp = X25519KeyPair::generate_random(&mut server_rng)?;
-    /// # let (register_m2, server_state) = ServerRegistration::<Default>::start(register_m1, server_kp.public(), &mut server_rng)?;
-    /// # let (register_m3, _export_key) = client_state.finish(register_m2, &mut client_rng)?;
-    /// # let p_file = server_state.finish(register_m3)?;
-    /// let client_login_start_result = ClientLogin::<Default>::start(b"hunter2", &mut client_rng, ClientLoginStartParameters::default())?;
-    /// let server_login_start_result = ServerLogin::start(p_file, &server_kp.private(), client_login_start_result.credential_request, &mut server_rng, ServerLoginStartParameters::default())?;
-    /// let client_login_finish_result = client_login_start_result.client_login_state.finish(server_login_start_result.credential_response, ClientLoginFinishParameters::default())?;
+    /// # let server_registration_start_result = ServerRegistration::<Default>::start(&mut server_rng, client_registration_start_result.message, server_kp.public())?;
+    /// # let client_registration_finish_result = client_registration_start_result.state.finish(&mut client_rng, server_registration_start_result.message)?;
+    /// # let p_file = server_registration_start_result.state.finish(client_registration_finish_result.message)?;
+    /// let client_login_start_result = ClientLogin::<Default>::start(&mut client_rng, b"hunter2", ClientLoginStartParameters::default())?;
+    /// let server_login_start_result = ServerLogin::start(&mut server_rng, p_file, &server_kp.private(), client_login_start_result.message, ServerLoginStartParameters::default())?;
+    /// let client_login_finish_result = client_login_start_result.state.finish(server_login_start_result.message, ClientLoginFinishParameters::default())?;
     /// # Ok::<(), ProtocolError>(())
     /// ```
     pub fn finish(
         self,
-        l2: LoginSecondMessage<CS>,
+        l2: CredentialResponse<CS>,
         params: ClientLoginFinishParameters,
     ) -> Result<ClientLoginFinishResult<CS>, ProtocolError> {
         let (info, e_info) = match params {
@@ -683,7 +702,7 @@ impl<CS: CipherSuite> ClientLogin<CS> {
             None => (server_s_pk.to_arr().to_vec(), None),
         };
 
-        let (plain_info, confidential_info, session_secret, ke3_message) =
+        let (plain_info, confidential_info, shared_secret, ke3_message) =
             CS::KeyExchange::generate_ke3(
                 l2_bytes,
                 l2.ke2_message,
@@ -699,8 +718,8 @@ impl<CS: CipherSuite> ClientLogin<CS> {
         Ok(ClientLoginFinishResult {
             plain_info,
             confidential_info,
-            key_exchange: LoginThirdMessage { ke3_message },
-            session_secret,
+            message: CredentialFinalization { ke3_message },
+            shared_secret,
             export_key: opened_envelope.export_key,
             server_s_pk: server_s_pk.to_arr().to_vec(),
             id_s: ret_id_s,
@@ -744,25 +763,27 @@ impl Default for ServerLoginStartParameters {
 
 /// Contains the fields that are returned by a server login start
 pub struct ServerLoginStartResult<CS: CipherSuite> {
-    /// The plaintext info sent by the client
-    pub plain_info: Vec<u8>,
     /// The message to send back to the client
-    pub credential_response: LoginSecondMessage<CS>,
+    pub message: CredentialResponse<CS>,
     /// The state that the server must keep in order to finish the protocl
-    pub server_login_state: ServerLogin<CS>,
+    pub state: ServerLogin<CS>,
     /// The client's static public key
     pub client_s_pk: Vec<u8>,
+    /// The plaintext info sent by the client
+    pub plain_info: Vec<u8>,
 }
 
 /// Contains the fields that are returned by a server login finish
 pub struct ServerLoginFinishResult {
+    /// The shared session secret between client and server
+    pub shared_secret: Vec<u8>,
     /// The plaintext info sent by the client
     pub plain_info: Vec<u8>,
     /// The confidential info sent by the client
     pub confidential_info: Vec<u8>,
-    /// The shared session secret between client and server
-    pub session_secret: Vec<u8>,
 }
+
+impl ServerLoginFinishResult {}
 
 impl<CS: CipherSuite> ServerLogin<CS> {
     /// byte representation for the server's login state
@@ -796,20 +817,20 @@ impl<CS: CipherSuite> ServerLogin<CS> {
     /// let mut client_rng = OsRng;
     /// let mut server_rng = OsRng;
     /// let server_kp = X25519KeyPair::generate_random(&mut server_rng)?;
-    /// # let (register_m1, client_state) = ClientRegistration::<Default>::start(b"hunter2", ClientRegistrationStartParameters::default(), &mut client_rng)?;
-    /// # let (register_m2, server_state) =
-    /// ServerRegistration::<Default>::start(register_m1, server_kp.public(), &mut server_rng)?;
-    /// # let (register_m3, _export_key) = client_state.finish(register_m2, &mut client_rng)?;
-    /// # let p_file = server_state.finish(register_m3)?;
-    /// let client_login_start_result = ClientLogin::<Default>::start(b"hunter2", &mut client_rng, ClientLoginStartParameters::default())?;
-    /// let server_login_start_result = ServerLogin::start(p_file, &server_kp.private(), client_login_start_result.credential_request, &mut server_rng, ServerLoginStartParameters::default())?;
+    /// # let client_registration_start_result = ClientRegistration::<Default>::start(&mut client_rng, b"hunter2", ClientRegistrationStartParameters::default())?;
+    /// # let server_registration_start_result =
+    /// ServerRegistration::<Default>::start(&mut server_rng, client_registration_start_result.message, server_kp.public())?;
+    /// # let client_registration_finish_result = client_registration_start_result.state.finish(&mut client_rng, server_registration_start_result.message)?;
+    /// # let p_file = server_registration_start_result.state.finish(client_registration_finish_result.message)?;
+    /// let client_login_start_result = ClientLogin::<Default>::start(&mut client_rng, b"hunter2", ClientLoginStartParameters::default())?;
+    /// let server_login_start_result = ServerLogin::start(&mut server_rng, p_file, &server_kp.private(), client_login_start_result.message, ServerLoginStartParameters::default())?;
     /// # Ok::<(), ProtocolError>(())
     /// ```
     pub fn start<R: RngCore + CryptoRng>(
+        rng: &mut R,
         password_file: ServerRegistration<CS>,
         server_s_sk: &<CS::KeyFormat as KeyPair>::Repr,
-        l1: LoginFirstMessage<CS>,
-        rng: &mut R,
+        l1: CredentialRequest<CS>,
         params: ServerLoginStartParameters,
     ) -> Result<ServerLoginStartResult<CS>, ProtocolError> {
         let client_s_pk = password_file
@@ -853,7 +874,7 @@ impl<CS: CipherSuite> ServerLogin<CS> {
             e_info,
         )?;
 
-        let l2 = LoginSecondMessage {
+        let l2 = CredentialResponse {
             beta,
             envelope,
             ke2_message,
@@ -861,8 +882,8 @@ impl<CS: CipherSuite> ServerLogin<CS> {
 
         Ok(ServerLoginStartResult {
             plain_info,
-            credential_response: l2,
-            server_login_state: Self {
+            message: l2,
+            state: Self {
                 _cs: PhantomData,
                 ke2_state,
             },
@@ -896,22 +917,22 @@ impl<CS: CipherSuite> ServerLogin<CS> {
     /// let mut client_rng = OsRng;
     /// let mut server_rng = OsRng;
     /// let server_kp = X25519KeyPair::generate_random(&mut server_rng)?;
-    /// # let (register_m1, client_state) = ClientRegistration::<Default>::start(b"hunter2", ClientRegistrationStartParameters::default(), &mut client_rng)?;
-    /// # let (register_m2, server_state) =
-    /// ServerRegistration::<Default>::start(register_m1, server_kp.public(), &mut server_rng)?;
-    /// # let (register_m3, _export_key) = client_state.finish(register_m2, &mut client_rng)?;
-    /// # let p_file = server_state.finish(register_m3)?;
-    /// let client_login_start_result = ClientLogin::<Default>::start(b"hunter2", &mut client_rng, ClientLoginStartParameters::default())?;
-    /// let server_login_start_result = ServerLogin::start(p_file, &server_kp.private(), client_login_start_result.credential_request, &mut server_rng, ServerLoginStartParameters::default())?;
-    /// let client_login_finish_result = client_login_start_result.client_login_state.finish(server_login_start_result.credential_response, ClientLoginFinishParameters::default())?;
-    /// let mut server_transport = server_login_start_result.server_login_state.finish(client_login_finish_result.key_exchange)?;
+    /// # let client_registration_start_result = ClientRegistration::<Default>::start(&mut client_rng, b"hunter2", ClientRegistrationStartParameters::default())?;
+    /// # let server_registration_start_result =
+    /// ServerRegistration::<Default>::start(&mut server_rng, client_registration_start_result.message, server_kp.public())?;
+    /// # let client_registration_finish_result = client_registration_start_result.state.finish(&mut client_rng, server_registration_start_result.message)?;
+    /// # let p_file = server_registration_start_result.state.finish(client_registration_finish_result.message)?;
+    /// let client_login_start_result = ClientLogin::<Default>::start(&mut client_rng, b"hunter2", ClientLoginStartParameters::default())?;
+    /// let server_login_start_result = ServerLogin::start(&mut server_rng, p_file, &server_kp.private(), client_login_start_result.message, ServerLoginStartParameters::default())?;
+    /// let client_login_finish_result = client_login_start_result.state.finish(server_login_start_result.message, ClientLoginFinishParameters::default())?;
+    /// let mut server_transport = server_login_start_result.state.finish(client_login_finish_result.message)?;
     /// # Ok::<(), ProtocolError>(())
     /// ```
     pub fn finish(
         &self,
-        message: LoginThirdMessage<CS>,
+        message: CredentialFinalization<CS>,
     ) -> Result<ServerLoginFinishResult, ProtocolError> {
-        let (plain_info, confidential_info, session_secret) =
+        let (plain_info, confidential_info, shared_secret) =
             <CS::KeyExchange as KeyExchange<CS::Hash, CS::KeyFormat>>::finish_ke(
                 message.ke3_message,
                 &self.ke2_state,
@@ -926,7 +947,7 @@ impl<CS: CipherSuite> ServerLogin<CS> {
         Ok(ServerLoginFinishResult {
             plain_info,
             confidential_info,
-            session_secret,
+            shared_secret,
         })
     }
 }

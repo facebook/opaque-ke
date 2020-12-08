@@ -30,8 +30,8 @@ use std::process::exit;
 use opaque_ke::{
     ciphersuite::CipherSuite, keypair::KeyPair, ClientLogin, ClientLoginFinishParameters,
     ClientLoginStartParameters, ClientRegistration, ClientRegistrationStartParameters,
-    LoginFirstMessage, LoginSecondMessage, LoginThirdMessage, RegisterFirstMessage,
-    RegisterSecondMessage, RegisterThirdMessage, ServerLogin, ServerLoginStartParameters,
+    CredentialFinalization, CredentialRequest, CredentialResponse, RegistrationRequest,
+    RegistrationResponse, RegistrationUpload, ServerLogin, ServerLoginStartParameters,
     ServerRegistration,
 };
 
@@ -53,39 +53,41 @@ fn account_registration(
     password: String,
 ) -> Vec<u8> {
     let mut client_rng = OsRng;
-    let (r1, client_state) = ClientRegistration::<Default>::start(
+    let client_registration_start_result = ClientRegistration::<Default>::start(
+        &mut client_rng,
         password.as_bytes(),
         ClientRegistrationStartParameters::default(),
-        &mut client_rng,
     )
     .unwrap();
-    let r1_bytes = r1.serialize();
+    let registration_request_bytes = client_registration_start_result.message.serialize();
 
-    // Client sends r1_bytes to server
+    // Client sends registration_request_bytes to server
 
     let mut server_rng = OsRng;
-    let (r2, server_state) = ServerRegistration::<Default>::start(
-        RegisterFirstMessage::deserialize(&r1_bytes[..]).unwrap(),
-        server_kp.public(),
+    let server_registration_start_result = ServerRegistration::<Default>::start(
         &mut server_rng,
+        RegistrationRequest::deserialize(&registration_request_bytes[..]).unwrap(),
+        server_kp.public(),
     )
     .unwrap();
-    let r2_bytes = r2.serialize();
+    let registration_response_bytes = server_registration_start_result.message.serialize();
 
-    // Server sends r2_bytes to client
+    // Server sends registration_response_bytes to client
 
-    let (r3, _) = client_state
+    let client_finish_registration_result = client_registration_start_result
+        .state
         .finish(
-            RegisterSecondMessage::deserialize(&r2_bytes[..]).unwrap(),
             &mut client_rng,
+            RegistrationResponse::deserialize(&registration_response_bytes[..]).unwrap(),
         )
         .unwrap();
-    let r3_bytes = r3.serialize();
+    let message_bytes = client_finish_registration_result.message.serialize();
 
-    // Client sends r3_bytes to server
+    // Client sends message_bytes to server
 
-    let password_file = server_state
-        .finish(RegisterThirdMessage::deserialize(&r3_bytes[..]).unwrap())
+    let password_file = server_registration_start_result
+        .state
+        .finish(RegistrationUpload::deserialize(&message_bytes[..]).unwrap())
         .unwrap();
     password_file.to_bytes()
 }
@@ -98,31 +100,31 @@ fn account_login(
 ) -> bool {
     let mut client_rng = OsRng;
     let client_login_start_result = ClientLogin::<Default>::start(
-        password.as_bytes(),
         &mut client_rng,
+        password.as_bytes(),
         ClientLoginStartParameters::default(),
     )
     .unwrap();
-    let l1_bytes = client_login_start_result.credential_request.serialize();
+    let credential_request_bytes = client_login_start_result.message.serialize();
 
-    // Client sends l1_bytes to server
+    // Client sends credential_request_bytes to server
 
     let password_file = ServerRegistration::<Default>::try_from(password_file_bytes).unwrap();
     let mut server_rng = OsRng;
     let server_login_start_result = ServerLogin::start(
+        &mut server_rng,
         password_file,
         &server_kp.private(),
-        LoginFirstMessage::deserialize(&l1_bytes[..]).unwrap(),
-        &mut server_rng,
+        CredentialRequest::deserialize(&credential_request_bytes[..]).unwrap(),
         ServerLoginStartParameters::default(),
     )
     .unwrap();
-    let l2_bytes = server_login_start_result.credential_response.serialize();
+    let credential_response_bytes = server_login_start_result.message.serialize();
 
-    // Server sends l2_bytes to client
+    // Server sends credential_response_bytes to client
 
-    let result = client_login_start_result.client_login_state.finish(
-        LoginSecondMessage::deserialize(&l2_bytes[..]).unwrap(),
+    let result = client_login_start_result.state.finish(
+        CredentialResponse::deserialize(&credential_response_bytes[..]).unwrap(),
         ClientLoginFinishParameters::default(),
     );
 
@@ -131,16 +133,16 @@ fn account_login(
         return false;
     }
     let client_login_finish_result = result.unwrap();
-    let l3_bytes = client_login_finish_result.key_exchange.serialize();
+    let credential_finalization_bytes = client_login_finish_result.message.serialize();
 
-    // Client sends l3_bytes to server
+    // Client sends credential_finalization_bytes to server
 
     let server_login_finish_result = server_login_start_result
-        .server_login_state
-        .finish(LoginThirdMessage::deserialize(&l3_bytes[..]).unwrap())
+        .state
+        .finish(CredentialFinalization::deserialize(&credential_finalization_bytes[..]).unwrap())
         .unwrap();
 
-    client_login_finish_result.session_secret == server_login_finish_result.session_secret
+    client_login_finish_result.shared_secret == server_login_finish_result.shared_secret
 }
 
 // A function run on the client which extracts a username and password from the CLI

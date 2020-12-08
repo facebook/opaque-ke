@@ -121,7 +121,7 @@ fn register_first_message_roundtrip() {
     input.extend_from_slice(&alpha_length.to_be_bytes()[std::mem::size_of::<usize>() - 2..]);
     input.extend_from_slice(pt_bytes.as_slice());
 
-    let r1 = RegisterFirstMessage::<RistrettoPoint>::deserialize(input.as_slice()).unwrap();
+    let r1 = RegistrationRequest::<RistrettoPoint>::deserialize(input.as_slice()).unwrap();
     let r1_bytes = r1.serialize();
     assert_eq!(input, r1_bytes);
 }
@@ -145,7 +145,7 @@ fn register_second_message_roundtrip() {
     input.extend_from_slice(&pubkey_bytes.as_slice());
     input.extend_from_slice(&credential_types);
 
-    let r2 = RegisterSecondMessage::<RistrettoPoint>::deserialize(input.as_slice()).unwrap();
+    let r2 = RegistrationResponse::<RistrettoPoint>::deserialize(input.as_slice()).unwrap();
     let r2_bytes = r2.serialize();
     assert_eq!(input, r2_bytes);
 }
@@ -173,7 +173,7 @@ fn register_third_message_roundtrip() {
     input.extend_from_slice(&pubkey_length.to_be_bytes()[std::mem::size_of::<usize>() - 2..]);
     input.extend_from_slice(&pubkey_bytes[..]);
 
-    let r3 = RegisterThirdMessage::<X25519KeyPair, sha2::Sha256>::deserialize(&input[..]).unwrap();
+    let r3 = RegistrationUpload::<X25519KeyPair, sha2::Sha256>::deserialize(&input[..]).unwrap();
     let r3_bytes = r3.serialize();
     assert_eq!(input, r3_bytes);
 }
@@ -205,7 +205,7 @@ fn login_first_message_roundtrip() {
     input.extend_from_slice(&alpha_bytes);
     input.extend_from_slice(&ke1m[..]);
 
-    let l1 = LoginFirstMessage::<Default>::deserialize(input.as_slice()).unwrap();
+    let l1 = CredentialRequest::<Default>::deserialize(input.as_slice()).unwrap();
     let l1_bytes = l1.serialize();
     assert_eq!(input, l1_bytes);
 }
@@ -254,7 +254,7 @@ fn login_second_message_roundtrip() {
     input.extend_from_slice(&envelope.serialize());
     input.extend_from_slice(&ke2m[..]);
 
-    let l2 = LoginSecondMessage::<Default>::deserialize(&input).unwrap();
+    let l2 = CredentialResponse::<Default>::deserialize(&input).unwrap();
     let l2_bytes = l2.serialize();
     assert_eq!(input, l2_bytes);
 }
@@ -276,7 +276,7 @@ fn login_third_message_roundtrip() {
     ]
     .concat();
 
-    let l3 = LoginThirdMessage::<Default>::deserialize(&input).unwrap();
+    let l3 = CredentialFinalization::<Default>::deserialize(&input).unwrap();
     let l3_bytes = l3.serialize();
     assert_eq!(input, l3_bytes);
 }
@@ -403,32 +403,32 @@ fn test_i2osp_os2ip(bytes in vec(any::<u8>(), 0..std::mem::size_of::<usize>())) 
 
 #[test]
 fn test_nocrash_register_first_message(bytes in vec(any::<u8>(), 0..200)) {
-    RegisterFirstMessage::<RistrettoPoint>::try_from(&bytes[..]).map_or(true, |_| true);
+    RegistrationRequest::<RistrettoPoint>::try_from(&bytes[..]).map_or(true, |_| true);
 }
 
 #[test]
 fn test_nocrash_register_second_message(bytes in vec(any::<u8>(), 0..200)) {
-    RegisterSecondMessage::<RistrettoPoint>::try_from(&bytes[..]).map_or(true, |_| true);
+    RegistrationResponse::<RistrettoPoint>::try_from(&bytes[..]).map_or(true, |_| true);
 }
 
 #[test]
 fn test_nocrash_register_third_message(bytes in vec(any::<u8>(), 0..200)) {
-    RegisterThirdMessage::<crate::keypair::X25519KeyPair, sha2::Sha512>::try_from(&bytes[..]).map_or(true, |_| true);
+    RegistrationUpload::<crate::keypair::X25519KeyPair, sha2::Sha512>::try_from(&bytes[..]).map_or(true, |_| true);
 }
 
 #[test]
 fn test_nocrash_login_first_message(bytes in vec(any::<u8>(), 0..500)) {
-    LoginFirstMessage::<Default>::try_from(&bytes[..]).map_or(true, |_| true);
+    CredentialRequest::<Default>::try_from(&bytes[..]).map_or(true, |_| true);
 }
 
 #[test]
 fn test_nocrash_login_second_message(bytes in vec(any::<u8>(), 0..500)) {
-    LoginSecondMessage::<Default>::try_from(&bytes[..]).map_or(true, |_| true);
+    CredentialResponse::<Default>::try_from(&bytes[..]).map_or(true, |_| true);
 }
 
 #[test]
 fn test_nocrash_login_third_message(bytes in vec(any::<u8>(), 0..500)) {
-    LoginThirdMessage::<Default>::try_from(&bytes[..]).map_or(true, |_| true);
+    CredentialFinalization::<Default>::try_from(&bytes[..]).map_or(true, |_| true);
 }
 
 #[test]
