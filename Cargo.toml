@@ -24,26 +24,26 @@ fiat-crypto = { version = "0.1.5"}
 generic-array = "0.14.4"
 generic-bytes = { version = "0.1.0" }
 generic-bytes-derive = { version = "0.1.0" }
-hkdf = "0.9.0"
-hmac = "0.9.0"
+hkdf = "0.10.0"
+hmac = "0.10.1"
 rand_core = "0.5.1"
-scrypt = { version = "0.4.1", optional = true }
-sha2 = "0.9.1"
-subtle = { version = "^2.2.1", default-features = false }
-thiserror = "1.0.20"
-x25519-dalek = { version = "1.0.1", default-features = false, features = ["std"] }
-zeroize = "1.1"
+scrypt = { version = "0.5.0", optional = true }
+sha2 = "0.9.2"
+subtle = { version = "2.3.0", default-features = false }
+thiserror = "1.0.22"
+x25519-dalek = { version = "1.1.0", default-features = false, features = ["std"] }
+zeroize = "1.1.1"
 
 [dev-dependencies]
-anyhow = "1.0.32"
-base64 = "0.12.3"
+anyhow = "1.0.35"
+base64 = "0.13.0"
 criterion = "0.3.3"
 hex = "0.4.2"
 lazy_static = "1.4.0"
-serde_json = "1.0.57"
+serde_json = "1.0.60"
 proptest = "0.10.1"
 rand = "0.7"
-rustyline = "6.3.0"
+rustyline = "7.0.0"
 
 [[bench]]
 name = "oprf"
