@@ -413,7 +413,7 @@ fn postprocess_blinding_factor<G: Group>(_: G::Scalar) -> G::Scalar {
 }
 
 #[test]
-fn test_r1() -> Result<(), PakeError> {
+fn test_r1() -> Result<(), ProtocolError> {
     let parameters = populate_test_vectors(&serde_json::from_str(TEST_VECTOR).unwrap());
     let mut rng = OsRng;
     let (r1, client_registration) = ClientRegistration::<X255193dhNoSlowHash>::start(
@@ -421,8 +421,7 @@ fn test_r1() -> Result<(), PakeError> {
         ClientRegistrationStartParameters::WithIdentifiers(parameters.id_u, parameters.id_s),
         &mut rng,
         postprocess_blinding_factor::<<X255193dhNoSlowHash as CipherSuite>::Group>,
-    )
-    .unwrap();
+    )?;
     assert_eq!(hex::encode(&parameters.r1), hex::encode(r1.serialize()));
     assert_eq!(
         hex::encode(&parameters.client_registration_state),
@@ -432,15 +431,14 @@ fn test_r1() -> Result<(), PakeError> {
 }
 
 #[test]
-fn test_r2() -> Result<(), PakeError> {
+fn test_r2() -> Result<(), ProtocolError> {
     let parameters = populate_test_vectors(&serde_json::from_str(TEST_VECTOR).unwrap());
     let mut oprf_key_rng = CycleRng::new(parameters.oprf_key);
     let (r2, server_registration) = ServerRegistration::<X255193dhNoSlowHash>::start(
         RegisterFirstMessage::deserialize(&parameters.r1[..]).unwrap(),
         &Key::try_from(&parameters.server_s_pk[..]).unwrap(),
         &mut oprf_key_rng,
-    )
-    .unwrap();
+    )?;
     assert_eq!(hex::encode(parameters.r2), hex::encode(r2.serialize()));
     assert_eq!(
         hex::encode(&parameters.server_registration_state),
@@ -450,7 +448,7 @@ fn test_r2() -> Result<(), PakeError> {
 }
 
 #[test]
-fn test_r3() -> Result<(), PakeError> {
+fn test_r3() -> Result<(), ProtocolError> {
     let parameters = populate_test_vectors(&serde_json::from_str(TEST_VECTOR).unwrap());
 
     let client_s_sk_and_nonce: Vec<u8> =
@@ -458,14 +456,11 @@ fn test_r3() -> Result<(), PakeError> {
     let mut finish_registration_rng = CycleRng::new(client_s_sk_and_nonce);
     let (r3, export_key_registration) = ClientRegistration::<X255193dhNoSlowHash>::try_from(
         &parameters.client_registration_state[..],
-    )
-    .unwrap()
+    )?
     .finish(
         RegisterSecondMessage::deserialize(&parameters.r2[..]).unwrap(),
         &mut finish_registration_rng,
-    )
-    .unwrap();
-
+    )?;
     assert_eq!(hex::encode(parameters.r3), hex::encode(r3.serialize()));
     assert_eq!(
         hex::encode(parameters.export_key),
@@ -476,17 +471,14 @@ fn test_r3() -> Result<(), PakeError> {
 }
 
 #[test]
-fn test_password_file() -> Result<(), PakeError> {
+fn test_password_file() -> Result<(), ProtocolError> {
     let parameters = populate_test_vectors(&serde_json::from_str(TEST_VECTOR).unwrap());
 
     let server_registration = ServerRegistration::<X255193dhNoSlowHash>::try_from(
         &parameters.server_registration_state[..],
-    )
-    .unwrap();
+    )?;
     let password_file = server_registration
-        .finish(RegisterThirdMessage::deserialize(&parameters.r3[..]).unwrap())
-        .unwrap();
-
+        .finish(RegisterThirdMessage::deserialize(&parameters.r3[..]).unwrap())?;
     assert_eq!(
         hex::encode(parameters.password_file),
         hex::encode(password_file.to_bytes())
@@ -495,7 +487,7 @@ fn test_password_file() -> Result<(), PakeError> {
 }
 
 #[test]
-fn test_l1() -> Result<(), PakeError> {
+fn test_l1() -> Result<(), ProtocolError> {
     let parameters = populate_test_vectors(&serde_json::from_str(TEST_VECTOR).unwrap());
 
     let client_login_start = [
@@ -514,8 +506,7 @@ fn test_l1() -> Result<(), PakeError> {
             parameters.id_s,
         ),
         postprocess_blinding_factor::<<X255193dhNoSlowHash as CipherSuite>::Group>,
-    )
-    .unwrap();
+    )?;
     assert_eq!(
         hex::encode(&parameters.l1),
         hex::encode(client_login_start_result.credential_request.serialize())
@@ -528,7 +519,7 @@ fn test_l1() -> Result<(), PakeError> {
 }
 
 #[test]
-fn test_l2() -> Result<(), PakeError> {
+fn test_l2() -> Result<(), ProtocolError> {
     let parameters = populate_test_vectors(&serde_json::from_str(TEST_VECTOR).unwrap());
 
     let mut server_e_sk_rng = CycleRng::new(parameters.server_e_sk);
@@ -538,9 +529,7 @@ fn test_l2() -> Result<(), PakeError> {
         LoginFirstMessage::<X255193dhNoSlowHash>::deserialize(&parameters.l1[..]).unwrap(),
         &mut server_e_sk_rng,
         ServerLoginStartParameters::WithInfo(parameters.info2.to_vec(), parameters.einfo2.to_vec()),
-    )
-    .unwrap();
-
+    )?;
     assert_eq!(
         hex::encode(&parameters.info1),
         hex::encode(server_login_start_result.plain_info),
@@ -561,21 +550,17 @@ fn test_l2() -> Result<(), PakeError> {
 }
 
 #[test]
-fn test_l3() -> Result<(), PakeError> {
+fn test_l3() -> Result<(), ProtocolError> {
     let parameters = populate_test_vectors(&serde_json::from_str(TEST_VECTOR).unwrap());
 
     let client_login_finish_result =
-        ClientLogin::<X255193dhNoSlowHash>::try_from(&parameters.client_login_state[..])
-            .unwrap()
-            .finish(
-                LoginSecondMessage::<X255193dhNoSlowHash>::deserialize(&parameters.l2[..]).unwrap(),
-                ClientLoginFinishParameters::WithInfo(
-                    parameters.info3.to_vec(),
-                    parameters.einfo3.to_vec(),
-                ),
-            )
-            .unwrap();
-
+        ClientLogin::<X255193dhNoSlowHash>::try_from(&parameters.client_login_state[..])?.finish(
+            LoginSecondMessage::<X255193dhNoSlowHash>::deserialize(&parameters.l2[..]).unwrap(),
+            ClientLoginFinishParameters::WithInfo(
+                parameters.info3.to_vec(),
+                parameters.einfo3.to_vec(),
+            ),
+        )?;
     assert_eq!(
         hex::encode(&parameters.info2),
         hex::encode(&client_login_finish_result.plain_info)
@@ -610,11 +595,8 @@ fn test_server_login_finish() -> Result<(), ProtocolError> {
     let parameters = populate_test_vectors(&serde_json::from_str(TEST_VECTOR).unwrap());
 
     let server_login_result =
-        ServerLogin::<X255193dhNoSlowHash>::try_from(&parameters.server_login_state[..])
-            .unwrap()
-            .finish(LoginThirdMessage::try_from(&parameters.l3[..])?)
-            .unwrap();
-
+        ServerLogin::<X255193dhNoSlowHash>::try_from(&parameters.server_login_state[..])?
+            .finish(LoginThirdMessage::try_from(&parameters.l3[..])?)?;
     assert_eq!(
         hex::encode(parameters.info3),
         hex::encode(server_login_result.plain_info)
