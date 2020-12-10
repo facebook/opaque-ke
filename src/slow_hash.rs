@@ -35,7 +35,8 @@ impl<D: Hash> SlowHash<D> for scrypt::ScryptParams {
     fn hash(
         input: GenericArray<u8, <D as Digest>::OutputSize>,
     ) -> Result<Vec<u8>, InternalPakeError> {
-        let params = scrypt::ScryptParams::new(15, 8, 1).unwrap();
+        let params =
+            scrypt::ScryptParams::new(15, 8, 1).map_err(|_| InternalPakeError::SlowHashError)?;
         let mut output = vec![0u8; <D as Digest>::OutputSize::to_usize()];
         scrypt::scrypt(&input, &[], &params, &mut output)
             .map_err(|_| InternalPakeError::SlowHashError)?;

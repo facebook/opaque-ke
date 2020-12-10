@@ -196,10 +196,7 @@ mod tests {
     ];
 
     fn deserialize_point(pt: &[u8]) -> Result<EdwardsPoint> {
-        let bytes: [u8; 32] = (&pt[..32])
-            .try_into()
-            .expect("Slice pattern invariant broken");
-
+        let bytes: [u8; 32] = (&pt[..32]).try_into()?;
         curve25519_dalek::edwards::CompressedEdwardsY(bytes)
             .decompress()
             .ok_or_else(|| anyhow!("Point decompression failed!"))

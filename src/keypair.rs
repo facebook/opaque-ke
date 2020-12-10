@@ -160,7 +160,14 @@ impl KeyPair for X25519KeyPair {
     }
 
     fn check_public_key(key: Self::Repr) -> Result<Self::Repr, InternalPakeError> {
-        let key_bytes: [u8; 32] = (&key[..]).try_into().expect("Key invariant broken");
+        let key_bytes: [u8; 32] =
+            (&key[..])
+                .try_into()
+                .map_err(|_| InternalPakeError::SizeError {
+                    name: "key",
+                    len: 32,
+                    actual_len: key.len(),
+                })?;
         let point = ::curve25519_dalek::montgomery::MontgomeryPoint(key_bytes)
             .to_edwards(1)
             .ok_or(InternalPakeError::PointError)?;
