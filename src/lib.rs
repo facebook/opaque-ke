@@ -5,7 +5,7 @@
 
 //! An implementation of the OPAQUE asymmetric password authentication key exchange protocol
 //!
-//! Note: This implementation is in sync with [draft-krawczyk-cfrg-opaque-06](https://tools.ietf.org/html/draft-krawczyk-cfrg-opaque-06),
+//! Note: This implementation is in sync with [draft-irtf-cfrg-opaque-01](https://www.ietf.org/archive/id/draft-irtf-cfrg-opaque-01.html),
 //! but this specification is subject to change, until the final version published by the IETF.
 //!
 //! # Overview
@@ -32,13 +32,11 @@
 //! ```
 //!
 //! Note that our choice of slow hashing function in this example, `NoOpHash`, is selected only to ensure
-//! that the tests execute quickly. A real application should use an actual slow hashing function, such as `Scrypt`.
-//!
-//! We have included a concrete instantiation of the authenticated key exchange protocol using 3DH. In the future, we plan to
-//! add support for other KE protocols as well.
+//! that the tests execute quickly. A real application should use an actual slow hashing function, such as `scrypt`,
+//! which can be enabled through the `slow-hash` feature.
 //!
 //! ## Setup
-//! To setup the protocol, the server begins by generating a static keypair:
+//! To set up the protocol, the server begins by generating a static keypair:
 //! ```
 //! # use opaque_ke::keypair::{KeyPair, X25519KeyPair};
 //! # use opaque_ke::errors::ProtocolError;
@@ -60,14 +58,15 @@
 //! used by the client during both registration and login, and the private component will be used by the server during login.
 //!
 //! ## Registration
-//! The registration protocol between the client and server consists of four steps along with three messages, denoted
-//! as `r1`, `r2`, and `r3`. Before registration begins, it is expected that the server's static public key, `server_kp.public()`,
-//! has been transmitted to the client in an offline step. A successful execution of the registration protocol results in the
-//! server producing a password file corresponding to the tuple combination of (password, pepper, server public key) provided by
+//! The registration protocol between the client and server consists of four steps along with three messages:
+//! [RegistrationRequest], [RegistrationResponse], and [RegistrationUpload]. A successful execution of the registration protocol results in the
+//! server producing a password file corresponding to the password provided by
 //! the client. This password file is typically stored server-side, and retrieved upon future login attempts made by the client.
 //!
-//! In the first step (client registration start), the client chooses a registration password and an optional "pepper", and
-//! runs `ClientRegistration::start` to produce a message `r1`:
+//! ### Client Registration Start
+//! In the first step of registration, the client chooses as input a registration password. The client runs [ClientRegistration::start]
+//! to produce an output consisting of a [RegistrationRequest] to be sent to the server, and
+//! a [ClientRegistration] which must be persisted on the client for the final step of client registration.
 //! ```
 //! # use opaque_ke::{
 //! #   errors::ProtocolError,
@@ -87,18 +86,20 @@
 //! use opaque_ke::{ClientRegistration, ClientRegistrationStartParameters};
 //! use rand_core::{OsRng, RngCore};
 //! let mut client_rng = OsRng;
-//! let (r1, client_state) = ClientRegistration::<Default>::start(
+//! let client_registration_start_result = ClientRegistration::<Default>::start(
+//!     &mut client_rng,
 //!     b"password",
 //!     ClientRegistrationStartParameters::default(),
-//!     &mut client_rng,
 //! )?;
 //! # Ok::<(), ProtocolError>(())
 //! ```
-//! `r1` is sent to the server, and `client_state` must be persisted on the client for the final step of client
-//! registration.
 //!
-//! In the second step (server registration start), the server takes as input the `r1` message from the client and runs
-//! `ServerRegistration::start` to produce `r2`:
+//! ### Server Registration Start
+//! In the second step of registration, the server takes as input the instance of [RegistrationRequest] from the client, and
+//! the server's public key `server_kp.public()`.
+//! The server runs [ServerRegistration::start] to produce an output consisting of
+//! a [RegistrationResponse] to be returned to the client, and
+//! a [ServerRegistration] which must be persisted on the server for the final step of server registration.
 //! ```
 //! # use opaque_ke::{
 //! #   errors::ProtocolError,
@@ -117,23 +118,28 @@
 //! # }
 //! # use rand_core::{OsRng, RngCore};
 //! # let mut client_rng = OsRng;
-//! # let (r1, client_state) = ClientRegistration::<Default>::start(
+//! # let client_registration_start_result = ClientRegistration::<Default>::start(
+//! #     &mut client_rng,
 //! #     b"password",
 //! #     ClientRegistrationStartParameters::default(),
-//! #     &mut client_rng,
 //! # )?;
 //! use opaque_ke::ServerRegistration;
 //! let mut server_rng = OsRng;
 //! let server_kp = Default::generate_random_keypair(&mut server_rng)?;
-//! let (r2, server_state) = ServerRegistration::<Default>::start(r1, server_kp.public(), &mut server_rng)?;
+//! let server_registration_start_result = ServerRegistration::<Default>::start(
+//!     &mut server_rng,
+//!     client_registration_start_result.message,
+//!     server_kp.public(),
+//! )?;
 //! # Ok::<(), ProtocolError>(())
 //! ```
-//! `r2` is returned to the client, and `server_state` must be persisted on the server for the final step of server
-//! registration.
 //!
-//! In the third step (client registration finish), the client takes as input the `r2` message from the server, along
-//! with the server's static public key `server_kp.public()`, and uses `client_state` from the first step to run
-//! `finish` and produce a message `r3` along with the export key `export_key_registration`:
+//! ### Client Registration Finish
+//! In the third step of registration, the client takes as input
+//! a [RegistrationResponse] from the server, and
+//! a [ClientRegistration] from the first step of registration.
+//! The client runs [ClientRegistration::finish] to produce an output consisting of a [RegistrationUpload]
+//! to be sent to the server.
 //! ```
 //! # use opaque_ke::{
 //! #   errors::ProtocolError,
@@ -152,23 +158,28 @@
 //! # }
 //! # use rand_core::{OsRng, RngCore};
 //! # let mut client_rng = OsRng;
-//! # let (r1, client_state) = ClientRegistration::<Default>::start(
+//! # let client_registration_start_result = ClientRegistration::<Default>::start(
+//! #     &mut client_rng,
 //! #     b"password",
 //! #     ClientRegistrationStartParameters::default(),
-//! #     &mut client_rng,
 //! # )?;
 //! # let mut server_rng = OsRng;
 //! # let server_kp = Default::generate_random_keypair(&mut server_rng)?;
-//! # let (r2, server_state) = ServerRegistration::<Default>::start(r1, server_kp.public(), &mut server_rng)?;
-//! let (r3, export_key_registration) =
-//!     client_state.finish(r2, &mut client_rng)?;
+//! # let server_registration_start_result = ServerRegistration::<Default>::start(&mut server_rng, client_registration_start_result.message, server_kp.public())?;
+//! let client_registration_finish_result = client_registration_start_result.state.finish(
+//!     &mut client_rng,
+//!     server_registration_start_result.message,
+//! )?;
 //! # Ok::<(), ProtocolError>(())
 //! ```
-//! `r3` is sent to the server, and the client can optionally use `export_key_registration` for applications that choose to
-//! process user information beyond the OPAQUE functionality (e.g., additional secrets or credentials).
 //!
-//! In the fourth step of registration, the server takes as input the `r3` message from the client and uses
-//! `server_state` from the second step to run `finish` and produce `password_file`:
+//! ### Server Registration Finish
+//! In the fourth step of registration, the server takes as input
+//! a [RegistrationUpload] from the client, and
+//! a [ServerRegistration] from the second step.
+//! The server runs [ServerRegistration::finish] to produce a finalized [ServerRegistration].
+//! At this point, the client can be considered as successfully registered, and the server can invoke
+//! [ServerRegistration::to_bytes] to store the password file for use during the login protocol.
 //! ```
 //! # use opaque_ke::{
 //! #   errors::ProtocolError,
@@ -187,35 +198,36 @@
 //! # }
 //! # use rand_core::{OsRng, RngCore};
 //! # let mut client_rng = OsRng;
-//! # let (r1, client_state) = ClientRegistration::<Default>::start(
+//! # let client_registration_start_result = ClientRegistration::<Default>::start(
+//! #     &mut client_rng,
 //! #     b"password",
 //! #     ClientRegistrationStartParameters::default(),
-//! #     &mut client_rng,
 //! # )?;
 //! # let mut server_rng = OsRng;
 //! # let server_kp = Default::generate_random_keypair(&mut server_rng)?;
-//! # let (r2, server_state) = ServerRegistration::<Default>::start(r1, server_kp.public(), &mut server_rng)?;
-//! # let (r3, export_key_registration) = client_state.finish(r2, &mut client_rng)?;
-//! let password_file = server_state.finish(r3)?;
+//! # let server_registration_start_result = ServerRegistration::<Default>::start(&mut server_rng, client_registration_start_result.message, server_kp.public())?;
+//! # let client_registration_finish_result = client_registration_start_result.state.finish(&mut client_rng, server_registration_start_result.message)?;
+//! let password_file = server_registration_start_result.state.finish(
+//!     client_registration_finish_result.message,
+//! )?;
 //! # Ok::<(), ProtocolError>(())
 //! ```
-//! At this point, the client can be considered as successfully registered, and the server can store
-//! `password_file.to_bytes()` for use during the login protocol.
-//!
 //!
 //! ## Login
-//! The login protocol between a client and server also consists of four steps along with three messages, denoted as
-//! `l1`, `l2`, and `l3`. The server is expected to have access to the a password file corresponding to an output
-//! of the registration phase. The login protocol will execute successfully only if the same tuple combination of
-//! (password, pepper, server public key) is presented as was used in the registration phase that produced the
-//! password file that the server is testing against.
+//! The login protocol between a client and server also consists of four steps along with three messages:
+//! [CredentialRequest], [CredentialResponse], [CredentialFinalization]. The server is expected to have access to the password file
+//! corresponding to an output of the registration phase. The login protocol will execute successfully only if the same password
+//! was used in the registration phase that produced the password file that the server is testing against.
 //!
-//! In the first step (client login start), the client chooses a registration password and an optional "pepper", and runs
-//! `ClientLogin::start` to produce a message `l1`:
+//! ### Client Login Start
+//! In the first step of login, the client chooses as input a login password.
+//! The client runs [ClientLogin::start] to produce an output consisting of
+//! a [CredentialRequest] to be sent to the server, and
+//! a [ClientLogin] which must be persisted on the client for the final step of client login.
 //! ```
 //! # use opaque_ke::{
 //! #   errors::ProtocolError,
-//! #   ClientRegistration, ServerRegistration, ServerLogin, LoginThirdMessage,
+//! #   ClientRegistration, ServerRegistration, ServerLogin, CredentialFinalization,
 //! #   keypair::{KeyPair, X25519KeyPair},
 //! #   slow_hash::NoOpHash,
 //! # };
@@ -232,22 +244,25 @@
 //! use opaque_ke::{ClientLogin, ClientLoginStartParameters};
 //! let mut client_rng = OsRng;
 //! let client_login_start_result = ClientLogin::<Default>::start(
-//!   b"password",
 //!   &mut client_rng,
+//!   b"password",
 //!   ClientLoginStartParameters::default(),
 //! )?;
 //! # Ok::<(), ProtocolError>(())
 //! ```
-//! `client_login_start_result.credential_request` is sent to the server, and `client_login_start_result.client_login_state`
-//! must be persisted on the client for the final step of client login.
 //!
-//! In the second step (server login start), the server takes as input the `l1` message from the client, the server's
-//! private key `server_kp.private()`, along with a serialized version of the password file, `password_file_bytes`, and
-//! runs `ServerLogin::start` to produce `server_login_start_result`:
+//! ### Server Login Start
+//! In the second step of login, the server takes as input
+//! a [CredentialRequest] from the client,
+//! the server's private key `server_kp.private()`, and
+//! the password file output from registration.
+//! The server runs [ServerLogin::start] to produce an output consisting of
+//! a [CredentialResponse] which is returned to the client, and
+//! a [ServerLogin] which must be persisted on the server for the final step of login.
 //! ```
 //! # use opaque_ke::{
 //! #   errors::ProtocolError,
-//! #   ClientRegistration, ClientRegistrationStartParameters, ServerRegistration, ClientLogin, ClientLoginStartParameters, LoginThirdMessage,
+//! #   ClientRegistration, ClientRegistrationStartParameters, ServerRegistration, ClientLogin, ClientLoginStartParameters, CredentialFinalization,
 //! #   keypair::{KeyPair, X25519KeyPair},
 //! #   slow_hash::NoOpHash,
 //! # };
@@ -262,39 +277,44 @@
 //! # }
 //! # use rand_core::{OsRng, RngCore};
 //! # let mut client_rng = OsRng;
-//! # let (r1, client_state) = ClientRegistration::<Default>::start(
+//! # let client_registration_start_result = ClientRegistration::<Default>::start(
+//! #     &mut client_rng,
 //! #     b"password",
 //! #     ClientRegistrationStartParameters::default(),
-//! #     &mut client_rng,
 //! # )?;
 //! # let mut server_rng = OsRng;
 //! # let server_kp = Default::generate_random_keypair(&mut server_rng)?;
-//! # let (r2, server_state) = ServerRegistration::<Default>::start(r1, server_kp.public(), &mut server_rng)?;
-//! # let (r3, export_key_registration) = client_state.finish(r2, &mut client_rng)?;
-//! # let password_file_bytes = server_state.finish(r3)?.to_bytes();
+//! # let server_registration_start_result = ServerRegistration::<Default>::start(&mut server_rng, client_registration_start_result.message, server_kp.public())?;
+//! # let client_registration_finish_result = client_registration_start_result.state.finish(&mut client_rng, server_registration_start_result.message)?;
+//! # let password_file_bytes = server_registration_start_result.state.finish(client_registration_finish_result.message)?.to_bytes();
 //! # let client_login_start_result = ClientLogin::<Default>::start(
-//! #   b"password",
 //! #   &mut client_rng,
+//! #   b"password",
 //! #   ClientLoginStartParameters::default(),
 //! # )?;
 //! use opaque_ke::{ServerLogin, ServerLoginStartParameters};
 //! use std::convert::TryFrom;
 //! let password_file = ServerRegistration::<Default>::try_from(&password_file_bytes[..])?;
 //! let mut server_rng = OsRng;
-//! let server_login_start_result =
-//!     ServerLogin::start(password_file, &server_kp.private(), client_login_start_result.credential_request, &mut server_rng, ServerLoginStartParameters::default())?;
+//! let server_login_start_result = ServerLogin::start(
+//!     &mut server_rng,
+//!     password_file,
+//!     &server_kp.private(),
+//!     client_login_start_result.message,
+//!     ServerLoginStartParameters::default(),
+//! )?;
 //! # Ok::<(), ProtocolError>(())
 //! ```
-//! `server_login_start_result.credential_response` is returned to the client, and `server_login_start_result.server_login_state`
-//! must be persisted on the server for the final step of server login.
 //!
-//! In the third step (client login finish), the client takes as input the `l2` message from the server, along with the
-//! server's static public key `server_kp.public()`, and uses `client_state` from the first step to run `finish` and produce
-//! a message `l3`, the shared secret `client_shared_secret`, and the export key `export_key_login`:
+//! ### Client Login Finish
+//! In the third step of login, the client takes as input a [CredentialResponse] from the server.
+//! The client runs [ClientLogin::finish] and produces an output consisting of
+//! a [CredentialFinalization] to be sent to the server to complete the protocol,
+//! the `shared_secret` sequence of bytes which will match the server's shared secret upon a successful login.
 //! ```
 //! # use opaque_ke::{
 //! #   errors::ProtocolError,
-//! #   ClientRegistration, ClientRegistrationStartParameters, ServerRegistration, ClientLogin, ClientLoginStartParameters, ClientLoginFinishParameters, ServerLogin, ServerLoginStartParameters, LoginThirdMessage,
+//! #   ClientRegistration, ClientRegistrationStartParameters, ServerRegistration, ClientLogin, ClientLoginStartParameters, ClientLoginFinishParameters, ServerLogin, ServerLoginStartParameters, CredentialFinalization,
 //! #   keypair::{KeyPair, X25519KeyPair},
 //! #   slow_hash::NoOpHash,
 //! # };
@@ -309,20 +329,20 @@
 //! # }
 //! # use rand_core::{OsRng, RngCore};
 //! # let mut client_rng = OsRng;
-//! # let (r1, client_state) = ClientRegistration::<Default>::start(
+//! # let client_registration_start_result = ClientRegistration::<Default>::start(
+//! #     &mut client_rng,
 //! #     b"password",
 //! #     ClientRegistrationStartParameters::default(),
-//! #     &mut client_rng,
 //! # )?;
 //! # let mut server_rng = OsRng;
 //! # let server_kp = Default::generate_random_keypair(&mut server_rng)?;
-//! # let (r2, server_state) = ServerRegistration::<Default>::start(r1, server_kp.public(), &mut server_rng)?;
-//! # let (r3, export_key_registration) = client_state.finish(r2, &mut client_rng)?;
-//! # let password_file_bytes = server_state.finish(r3)?.to_bytes();
+//! # let server_registration_start_result = ServerRegistration::<Default>::start(&mut server_rng, client_registration_start_result.message, server_kp.public())?;
+//! # let client_registration_finish_result = client_registration_start_result.state.finish(&mut client_rng, server_registration_start_result.message)?;
+//! # let password_file_bytes = server_registration_start_result.state.finish(client_registration_finish_result.message)?.to_bytes();
 //! # let client_login_start_result = ClientLogin::<Default>::start(
-//! #   b"password",
-//! #   &mut client_rng,
-//! #   ClientLoginStartParameters::default(),
+//! #     &mut client_rng,
+//! #     b"password",
+//! #     ClientLoginStartParameters::default(),
 //! # )?;
 //! # use std::convert::TryFrom;
 //! # let password_file =
@@ -330,27 +350,25 @@
 //! #     &password_file_bytes[..],
 //! #   )?;
 //! # let server_login_start_result =
-//! #     ServerLogin::start(password_file, &server_kp.private(), client_login_start_result.credential_request, &mut server_rng, ServerLoginStartParameters::default())?;
-//! let client_login_finish_result = client_login_start_result.client_login_state.finish(
-//!   server_login_start_result.credential_response,
+//! #     ServerLogin::start(&mut server_rng, password_file, &server_kp.private(), client_login_start_result.message, ServerLoginStartParameters::default())?;
+//! let client_login_finish_result = client_login_start_result.state.finish(
+//!   server_login_start_result.message,
 //!   ClientLoginFinishParameters::default(),
 //! )?;
-//! assert_eq!(export_key_registration, client_login_finish_result.export_key);
+//! assert_eq!(
+//!     client_registration_finish_result.export_key,
+//!     client_login_finish_result.export_key,
+//! );
 //! # Ok::<(), ProtocolError>(())
 //! ```
-//! Note that if the client supplies a tuple (password, pepper, server public key) that does not match the tuple
-//! used to create the password file, then at this point the `finish` algorithm outputs the error `InvalidLoginError`.
 //!
-//! If `finish` completes successfully, then `l3` is sent to the server, and (similarly to registration) the client
-//! can use `export_key_login` for applications that can take advantage of the fact that this key is identical to
-//! `export_key_registration`.
-//!
-//! In the fourth step of login, the server takes as input the `l3` message from the client and uses `server_state` from
-//! the second step to run `finish`:
+//! ### Server Login Finish
+//! In the fourth step of login, the server takes as input a [CredentialFinalization] from the client and runs [ServerLogin::finish] to
+//! produce an output consisting of the `shared_secret` sequence of bytes which will match the client's shared secret upon a successful login.
 //! ```
 //! # use opaque_ke::{
 //! #   errors::ProtocolError,
-//! #   ClientRegistration, ClientRegistrationStartParameters, ServerRegistration, ClientLogin, ClientLoginStartParameters, ClientLoginFinishParameters, ServerLogin, ServerLoginStartParameters, LoginThirdMessage,
+//! #   ClientRegistration, ClientRegistrationStartParameters, ServerRegistration, ClientLogin, ClientLoginStartParameters, ClientLoginFinishParameters, ServerLogin, ServerLoginStartParameters, CredentialFinalization,
 //! #   keypair::{KeyPair, X25519KeyPair},
 //! #   slow_hash::NoOpHash,
 //! # };
@@ -365,19 +383,19 @@
 //! # }
 //! # use rand_core::{OsRng, RngCore};
 //! # let mut client_rng = OsRng;
-//! # let (r1, client_state) = ClientRegistration::<Default>::start(
+//! # let client_registration_start_result = ClientRegistration::<Default>::start(
+//! #     &mut client_rng,
 //! #     b"password",
 //! #     ClientRegistrationStartParameters::default(),
-//! #     &mut client_rng,
 //! # )?;
 //! # let mut server_rng = OsRng;
 //! # let server_kp = Default::generate_random_keypair(&mut server_rng)?;
-//! # let (r2, server_state) = ServerRegistration::<Default>::start(r1, server_kp.public(), &mut server_rng)?;
-//! # let (r3, export_key) = client_state.finish(r2, &mut client_rng)?;
-//! # let password_file_bytes = server_state.finish(r3)?.to_bytes();
+//! # let server_registration_start_result = ServerRegistration::<Default>::start(&mut server_rng, client_registration_start_result.message, server_kp.public())?;
+//! # let client_registration_finish_result = client_registration_start_result.state.finish(&mut client_rng, server_registration_start_result.message)?;
+//! # let password_file_bytes = server_registration_start_result.state.finish(client_registration_finish_result.message)?.to_bytes();
 //! # let client_login_start_result = ClientLogin::<Default>::start(
-//! #   b"password",
 //! #   &mut client_rng,
+//! #   b"password",
 //! #   ClientLoginStartParameters::default(),
 //! # )?;
 //! # use std::convert::TryFrom;
@@ -386,17 +404,22 @@
 //! #     &password_file_bytes[..],
 //! #   )?;
 //! # let server_login_start_result =
-//! #     ServerLogin::start(password_file, &server_kp.private(), client_login_start_result.credential_request, &mut server_rng, ServerLoginStartParameters::default())?;
-//! # let client_login_finish_result = client_login_start_result.client_login_state.finish(
-//! #   server_login_start_result.credential_response,
+//! #     ServerLogin::start(&mut server_rng, password_file, &server_kp.private(), client_login_start_result.message, ServerLoginStartParameters::default())?;
+//! # let client_login_finish_result = client_login_start_result.state.finish(
+//! #   server_login_start_result.message,
 //! #   ClientLoginFinishParameters::default(),
 //! # )?;
-//! let server_login_finish_result = server_login_start_result.server_login_state.finish(client_login_finish_result.key_exchange)?;
-//! assert_eq!(client_login_finish_result.session_secret, server_login_finish_result.session_secret);
+//! let server_login_finish_result = server_login_start_result.state.finish(
+//!    client_login_finish_result.message,
+//! )?;
+//! assert_eq!(
+//!    client_login_finish_result.shared_secret,
+//!    server_login_finish_result.shared_secret,
+//! );
 //! # Ok::<(), ProtocolError>(())
 //! ```
-//! If the protocol completes successfully, then the server obtains a `server_shared_secret` which is guaranteed to
-//! match `client_shared_secret`. Otherwise, on failure, the `finish` algorithm outputs the error `InvalidLoginError`.
+//! If the protocol completes successfully, then the server obtains a `server_login_finish_result.shared_secret` which is guaranteed to
+//! match `client_login_finish_result.shared_secret`. Otherwise, on failure, the [ServerLogin::finish] algorithm outputs the error [InvalidLoginError](errors::PakeError::InvalidLoginError).
 //!
 
 #![cfg_attr(not(feature = "bench"), deny(missing_docs))]
@@ -443,8 +466,8 @@ mod tests;
 // Exports
 
 pub use crate::messages::{
-    LoginFirstMessage, LoginSecondMessage, LoginThirdMessage, RegisterFirstMessage,
-    RegisterSecondMessage, RegisterThirdMessage,
+    CredentialFinalization, CredentialRequest, CredentialResponse, RegistrationRequest,
+    RegistrationResponse, RegistrationUpload,
 };
 pub use crate::opaque::{ClientLogin, ClientRegistration, ServerLogin, ServerRegistration};
 pub use crate::opaque::{
