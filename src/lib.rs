@@ -83,13 +83,12 @@
 //! #     type Hash = sha2::Sha256;
 //! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
 //! # }
-//! use opaque_ke::{ClientRegistration, ClientRegistrationStartParameters};
+//! use opaque_ke::ClientRegistration;
 //! use rand_core::{OsRng, RngCore};
 //! let mut client_rng = OsRng;
 //! let client_registration_start_result = ClientRegistration::<Default>::start(
 //!     &mut client_rng,
 //!     b"password",
-//!     ClientRegistrationStartParameters::default(),
 //! )?;
 //! # Ok::<(), ProtocolError>(())
 //! ```
@@ -103,7 +102,7 @@
 //! ```
 //! # use opaque_ke::{
 //! #   errors::ProtocolError,
-//! #   ClientRegistration, ClientRegistrationStartParameters,
+//! #   ClientRegistration,
 //! #   keypair::{KeyPair, X25519KeyPair},
 //! #   slow_hash::NoOpHash,
 //! # };
@@ -121,7 +120,6 @@
 //! # let client_registration_start_result = ClientRegistration::<Default>::start(
 //! #     &mut client_rng,
 //! #     b"password",
-//! #     ClientRegistrationStartParameters::default(),
 //! # )?;
 //! use opaque_ke::ServerRegistration;
 //! let mut server_rng = OsRng;
@@ -143,7 +141,7 @@
 //! ```
 //! # use opaque_ke::{
 //! #   errors::ProtocolError,
-//! #   ClientRegistration, ClientRegistrationStartParameters, ServerRegistration,
+//! #   ClientRegistration, ClientRegistrationFinishParameters, ServerRegistration,
 //! #   keypair::{KeyPair, X25519KeyPair},
 //! #   slow_hash::NoOpHash,
 //! # };
@@ -161,7 +159,6 @@
 //! # let client_registration_start_result = ClientRegistration::<Default>::start(
 //! #     &mut client_rng,
 //! #     b"password",
-//! #     ClientRegistrationStartParameters::default(),
 //! # )?;
 //! # let mut server_rng = OsRng;
 //! # let server_kp = Default::generate_random_keypair(&mut server_rng)?;
@@ -169,6 +166,7 @@
 //! let client_registration_finish_result = client_registration_start_result.state.finish(
 //!     &mut client_rng,
 //!     server_registration_start_result.message,
+//!     ClientRegistrationFinishParameters::default(),
 //! )?;
 //! # Ok::<(), ProtocolError>(())
 //! ```
@@ -183,7 +181,7 @@
 //! ```
 //! # use opaque_ke::{
 //! #   errors::ProtocolError,
-//! #   ClientRegistration, ClientRegistrationStartParameters, ServerRegistration,
+//! #   ClientRegistration, ClientRegistrationFinishParameters, ServerRegistration,
 //! #   keypair::{KeyPair, X25519KeyPair},
 //! #   slow_hash::NoOpHash,
 //! # };
@@ -201,12 +199,11 @@
 //! # let client_registration_start_result = ClientRegistration::<Default>::start(
 //! #     &mut client_rng,
 //! #     b"password",
-//! #     ClientRegistrationStartParameters::default(),
 //! # )?;
 //! # let mut server_rng = OsRng;
 //! # let server_kp = Default::generate_random_keypair(&mut server_rng)?;
 //! # let server_registration_start_result = ServerRegistration::<Default>::start(&mut server_rng, client_registration_start_result.message, server_kp.public())?;
-//! # let client_registration_finish_result = client_registration_start_result.state.finish(&mut client_rng, server_registration_start_result.message)?;
+//! # let client_registration_finish_result = client_registration_start_result.state.finish(&mut client_rng, server_registration_start_result.message, ClientRegistrationFinishParameters::default())?;
 //! let password_file = server_registration_start_result.state.finish(
 //!     client_registration_finish_result.message,
 //! )?;
@@ -262,7 +259,7 @@
 //! ```
 //! # use opaque_ke::{
 //! #   errors::ProtocolError,
-//! #   ClientRegistration, ClientRegistrationStartParameters, ServerRegistration, ClientLogin, ClientLoginStartParameters, CredentialFinalization,
+//! #   ClientRegistration, ClientRegistrationFinishParameters, ServerRegistration, ClientLogin, ClientLoginStartParameters, CredentialFinalization,
 //! #   keypair::{KeyPair, X25519KeyPair},
 //! #   slow_hash::NoOpHash,
 //! # };
@@ -280,12 +277,11 @@
 //! # let client_registration_start_result = ClientRegistration::<Default>::start(
 //! #     &mut client_rng,
 //! #     b"password",
-//! #     ClientRegistrationStartParameters::default(),
 //! # )?;
 //! # let mut server_rng = OsRng;
 //! # let server_kp = Default::generate_random_keypair(&mut server_rng)?;
 //! # let server_registration_start_result = ServerRegistration::<Default>::start(&mut server_rng, client_registration_start_result.message, server_kp.public())?;
-//! # let client_registration_finish_result = client_registration_start_result.state.finish(&mut client_rng, server_registration_start_result.message)?;
+//! # let client_registration_finish_result = client_registration_start_result.state.finish(&mut client_rng, server_registration_start_result.message, ClientRegistrationFinishParameters::default())?;
 //! # let password_file_bytes = server_registration_start_result.state.finish(client_registration_finish_result.message)?.to_bytes();
 //! # let client_login_start_result = ClientLogin::<Default>::start(
 //! #   &mut client_rng,
@@ -314,7 +310,7 @@
 //! ```
 //! # use opaque_ke::{
 //! #   errors::ProtocolError,
-//! #   ClientRegistration, ClientRegistrationStartParameters, ServerRegistration, ClientLogin, ClientLoginStartParameters, ClientLoginFinishParameters, ServerLogin, ServerLoginStartParameters, CredentialFinalization,
+//! #   ClientRegistration, ClientRegistrationFinishParameters, ServerRegistration, ClientLogin, ClientLoginStartParameters, ClientLoginFinishParameters, ServerLogin, ServerLoginStartParameters, CredentialFinalization,
 //! #   keypair::{KeyPair, X25519KeyPair},
 //! #   slow_hash::NoOpHash,
 //! # };
@@ -332,12 +328,11 @@
 //! # let client_registration_start_result = ClientRegistration::<Default>::start(
 //! #     &mut client_rng,
 //! #     b"password",
-//! #     ClientRegistrationStartParameters::default(),
 //! # )?;
 //! # let mut server_rng = OsRng;
 //! # let server_kp = Default::generate_random_keypair(&mut server_rng)?;
 //! # let server_registration_start_result = ServerRegistration::<Default>::start(&mut server_rng, client_registration_start_result.message, server_kp.public())?;
-//! # let client_registration_finish_result = client_registration_start_result.state.finish(&mut client_rng, server_registration_start_result.message)?;
+//! # let client_registration_finish_result = client_registration_start_result.state.finish(&mut client_rng, server_registration_start_result.message, ClientRegistrationFinishParameters::default())?;
 //! # let password_file_bytes = server_registration_start_result.state.finish(client_registration_finish_result.message)?.to_bytes();
 //! # let client_login_start_result = ClientLogin::<Default>::start(
 //! #     &mut client_rng,
@@ -368,7 +363,7 @@
 //! ```
 //! # use opaque_ke::{
 //! #   errors::ProtocolError,
-//! #   ClientRegistration, ClientRegistrationStartParameters, ServerRegistration, ClientLogin, ClientLoginStartParameters, ClientLoginFinishParameters, ServerLogin, ServerLoginStartParameters, CredentialFinalization,
+//! #   ClientRegistration, ClientRegistrationFinishParameters, ServerRegistration, ClientLogin, ClientLoginStartParameters, ClientLoginFinishParameters, ServerLogin, ServerLoginStartParameters, CredentialFinalization,
 //! #   keypair::{KeyPair, X25519KeyPair},
 //! #   slow_hash::NoOpHash,
 //! # };
@@ -386,12 +381,11 @@
 //! # let client_registration_start_result = ClientRegistration::<Default>::start(
 //! #     &mut client_rng,
 //! #     b"password",
-//! #     ClientRegistrationStartParameters::default(),
 //! # )?;
 //! # let mut server_rng = OsRng;
 //! # let server_kp = Default::generate_random_keypair(&mut server_rng)?;
 //! # let server_registration_start_result = ServerRegistration::<Default>::start(&mut server_rng, client_registration_start_result.message, server_kp.public())?;
-//! # let client_registration_finish_result = client_registration_start_result.state.finish(&mut client_rng, server_registration_start_result.message)?;
+//! # let client_registration_finish_result = client_registration_start_result.state.finish(&mut client_rng, server_registration_start_result.message, ClientRegistrationFinishParameters::default())?;
 //! # let password_file_bytes = server_registration_start_result.state.finish(client_registration_finish_result.message)?.to_bytes();
 //! # let client_login_start_result = ClientLogin::<Default>::start(
 //! #   &mut client_rng,
@@ -471,6 +465,6 @@ pub use crate::messages::{
 };
 pub use crate::opaque::{ClientLogin, ClientRegistration, ServerLogin, ServerRegistration};
 pub use crate::opaque::{
-    ClientLoginFinishParameters, ClientLoginStartParameters, ClientRegistrationStartParameters,
+    ClientLoginFinishParameters, ClientLoginStartParameters, ClientRegistrationFinishParameters,
     ServerLoginStartParameters,
 };

@@ -34,10 +34,6 @@ static STR_OPAQUE_VERSION: &[u8] = b"OPAQUE00";
 
 /// The state elements the client holds to register itself
 pub struct ClientRegistration<CS: CipherSuite> {
-    /// User identity
-    id_u: Vec<u8>,
-    /// Server identity
-    id_s: Vec<u8>,
     /// token containing the client's password and the blinding factor
     pub(crate) token: oprf::Token<CS::Group>,
 }
@@ -45,18 +41,15 @@ pub struct ClientRegistration<CS: CipherSuite> {
 impl<CS: CipherSuite> TryFrom<&[u8]> for ClientRegistration<CS> {
     type Error = ProtocolError;
     fn try_from(input: &[u8]) -> Result<Self, Self::Error> {
-        let (id_u, bytes) = tokenize(&input, 2)?;
-        let (id_s, bytes) = tokenize(&bytes, 2)?;
-
         let min_expected_len = <CS::Group as Group>::ScalarLen::to_usize();
-        let checked_slice = (if bytes.len() <= min_expected_len {
+        let checked_slice = (if input.len() <= min_expected_len {
             Err(InternalPakeError::SizeError {
                 name: "client_registration_bytes",
                 len: min_expected_len,
-                actual_len: bytes.len(),
+                actual_len: input.len(),
             })
         } else {
-            Ok(bytes)
+            Ok(input)
         })?;
 
         // Check that the message is actually containing an element of the
@@ -66,8 +59,6 @@ impl<CS: CipherSuite> TryFrom<&[u8]> for ClientRegistration<CS> {
         let blinding_factor = CS::Group::from_scalar_slice(blinding_factor_bytes)?;
         let password = checked_slice[scalar_len..].to_vec();
         Ok(Self {
-            id_u,
-            id_s,
             token: oprf::Token {
                 data: password,
                 blind: blinding_factor,
@@ -80,8 +71,6 @@ impl<CS: CipherSuite> ClientRegistration<CS> {
     /// byte representation for the client's registration state
     pub fn to_bytes(&self) -> Vec<u8> {
         let output: Vec<u8> = [
-            &serialize(&self.id_u, 2),
-            &serialize(&self.id_s, 2),
             &CS::Group::scalar_as_bytes(&self.token.blind)[..],
             &self.token.data,
         ]
@@ -90,13 +79,13 @@ impl<CS: CipherSuite> ClientRegistration<CS> {
     }
 }
 
-/// Optional parameters for client registration start
-pub enum ClientRegistrationStartParameters {
+/// Optional parameters for client registration finish
+pub enum ClientRegistrationFinishParameters {
     /// Specifying the identifiers idU and idS
     WithIdentifiers(Vec<u8>, Vec<u8>),
 }
 
-impl Default for ClientRegistrationStartParameters {
+impl Default for ClientRegistrationFinishParameters {
     fn default() -> Self {
         Self::WithIdentifiers(Vec::new(), Vec::new())
     }
@@ -119,7 +108,7 @@ impl<CS: CipherSuite> ClientRegistration<CS> {
     /// # Example
     ///
     /// ```
-    /// use opaque_ke::{ClientRegistration, ClientRegistrationStartParameters};
+    /// use opaque_ke::ClientRegistration;
     /// # use opaque_ke::errors::ProtocolError;
     /// use rand_core::{OsRng, RngCore};
     /// use opaque_ke::ciphersuite::CipherSuite;
@@ -132,19 +121,14 @@ impl<CS: CipherSuite> ClientRegistration<CS> {
     ///     type SlowHash = opaque_ke::slow_hash::NoOpHash;
     /// }
     /// let mut client_rng = OsRng;
-    /// let client_registration_start_result = ClientRegistration::<Default>::start(&mut client_rng, b"hunter2", ClientRegistrationStartParameters::default())?;
+    /// let client_registration_start_result = ClientRegistration::<Default>::start(&mut client_rng, b"hunter2")?;
     /// # Ok::<(), ProtocolError>(())
     /// ```
     pub fn start<R: RngCore + CryptoRng>(
         blinding_factor_rng: &mut R,
         password: &[u8],
-        params: ClientRegistrationStartParameters,
         #[cfg(test)] postprocess: fn(<CS::Group as Group>::Scalar) -> <CS::Group as Group>::Scalar,
     ) -> Result<ClientRegistrationStartResult<CS>, ProtocolError> {
-        let (id_u, id_s) = match params {
-            ClientRegistrationStartParameters::WithIdentifiers(id_u, id_s) => (id_u, id_s),
-        };
-
         let (token, alpha) = oprf::blind::<R, CS::Group, CS::Hash>(
             &password,
             blinding_factor_rng,
@@ -154,7 +138,7 @@ impl<CS: CipherSuite> ClientRegistration<CS> {
 
         Ok(ClientRegistrationStartResult {
             message: RegistrationRequest::<CS::Group> { alpha },
-            state: Self { id_u, id_s, token },
+            state: Self { token },
         })
     }
 }
@@ -177,7 +161,7 @@ impl<CS: CipherSuite> ClientRegistration<CS> {
     /// # Example
     ///
     /// ```
-    /// use opaque_ke::{ClientRegistration, ClientRegistrationStartParameters, ServerRegistration, keypair::X25519KeyPair};
+    /// use opaque_ke::{ClientRegistration, ClientRegistrationFinishParameters, ServerRegistration, keypair::X25519KeyPair};
     /// # use opaque_ke::errors::ProtocolError;
     /// # use opaque_ke::keypair::KeyPair;
     /// use rand_core::{OsRng, RngCore};
@@ -193,18 +177,22 @@ impl<CS: CipherSuite> ClientRegistration<CS> {
     /// let mut client_rng = OsRng;
     /// let mut server_rng = OsRng;
     /// let server_kp = X25519KeyPair::generate_random(&mut server_rng)?;
-    /// let client_registration_start_result = ClientRegistration::<Default>::start(&mut client_rng, b"hunter2", ClientRegistrationStartParameters::default())?;
+    /// let client_registration_start_result = ClientRegistration::<Default>::start(&mut client_rng, b"hunter2")?;
     /// let server_registration_start_result =
     /// ServerRegistration::<Default>::start(&mut server_rng, client_registration_start_result.message, server_kp.public())?;
     /// let mut client_rng = OsRng;
-    /// let client_registration_finish_result = client_registration_start_result.state.finish(&mut client_rng, server_registration_start_result.message)?;
+    /// let client_registration_finish_result = client_registration_start_result.state.finish(&mut client_rng, server_registration_start_result.message, ClientRegistrationFinishParameters::default())?;
     /// # Ok::<(), ProtocolError>(())
     /// ```
     pub fn finish<R: CryptoRng + RngCore>(
         self,
         rng: &mut R,
         r2: RegistrationResponse<CS::Group>,
+        params: ClientRegistrationFinishParameters,
     ) -> Result<ClientRegistrationFinishResult<CS::KeyFormat, CS::Hash>, ProtocolError> {
+        let (id_u, id_s) = match params {
+            ClientRegistrationFinishParameters::WithIdentifiers(id_u, id_s) => (id_u, id_s),
+        };
         let client_static_keypair = CS::KeyFormat::generate_random(rng)?;
 
         let password_derived_key =
@@ -220,8 +208,8 @@ impl<CS: CipherSuite> ClientRegistration<CS> {
             client_static_keypair.public().to_arr().to_vec(),
         );
         credentials_map.insert(CredentialType::PkS, r2.server_s_pk);
-        credentials_map.insert(CredentialType::IdU, self.id_u.clone());
-        credentials_map.insert(CredentialType::IdS, self.id_s.clone());
+        credentials_map.insert(CredentialType::IdU, id_u);
+        credentials_map.insert(CredentialType::IdS, id_s);
 
         let (envelope, export_key) =
             Envelope::<CS::Hash>::seal(&password_derived_key, r2.ecf, credentials_map, rng)?;
@@ -370,9 +358,8 @@ where
     /// let mut client_rng = OsRng;
     /// let mut server_rng = OsRng;
     /// let server_kp = X25519KeyPair::generate_random(&mut server_rng)?;
-    /// let client_registration_start_result = ClientRegistration::<Default>::start(&mut client_rng, b"hunter2", ClientRegistrationStartParameters::default())?;
-    /// let server_registration_start_result =
-    /// ServerRegistration::<Default>::start(&mut server_rng, client_registration_start_result.message, server_kp.public())?;
+    /// let client_registration_start_result = ClientRegistration::<Default>::start(&mut client_rng, b"hunter2")?;
+    /// let server_registration_start_result = ServerRegistration::<Default>::start(&mut server_rng, client_registration_start_result.message, server_kp.public())?;
     /// # Ok::<(), ProtocolError>(())
     /// ```
     pub fn start<R: RngCore + CryptoRng>(
@@ -424,11 +411,10 @@ where
     /// let mut client_rng = OsRng;
     /// let mut server_rng = OsRng;
     /// let server_kp = X25519KeyPair::generate_random(&mut server_rng)?;
-    /// let client_registration_start_result = ClientRegistration::<Default>::start(&mut client_rng, b"hunter2", ClientRegistrationStartParameters::default())?;
-    /// let server_registration_start_result =
-    /// ServerRegistration::<Default>::start(&mut server_rng, client_registration_start_result.message, server_kp.public())?;
+    /// let client_registration_start_result = ClientRegistration::<Default>::start(&mut client_rng, b"hunter2")?;
+    /// let server_registration_start_result = ServerRegistration::<Default>::start(&mut server_rng, client_registration_start_result.message, server_kp.public())?;
     /// let mut client_rng = OsRng;
-    /// let client_registration_finish_result = client_registration_start_result.state.finish(&mut client_rng, server_registration_start_result.message)?;
+    /// let client_registration_finish_result = client_registration_start_result.state.finish(&mut client_rng, server_registration_start_result.message, ClientRegistrationFinishParameters::default())?;
     /// let client_record = server_registration_start_result.state.finish(client_registration_finish_result.message)?;
     /// # Ok::<(), ProtocolError>(())
     /// ```
@@ -636,7 +622,7 @@ impl<CS: CipherSuite> ClientLogin<CS> {
     ///
     /// ```
     /// use opaque_ke::{ClientLogin, ClientLoginStartParameters, ClientLoginFinishParameters, ServerLogin, ServerLoginStartParameters};
-    /// # use opaque_ke::{ClientRegistration, ClientRegistrationStartParameters, ServerRegistration};
+    /// # use opaque_ke::{ClientRegistration, ClientRegistrationFinishParameters, ServerRegistration};
     /// # use opaque_ke::errors::ProtocolError;
     /// # use opaque_ke::keypair::{X25519KeyPair, KeyPair};
     /// use rand_core::{OsRng, RngCore};
@@ -651,10 +637,10 @@ impl<CS: CipherSuite> ClientLogin<CS> {
     /// }
     /// let mut client_rng = OsRng;
     /// # let mut server_rng = OsRng;
-    /// # let client_registration_start_result = ClientRegistration::<Default>::start(&mut client_rng, b"hunter2", ClientRegistrationStartParameters::default())?;
+    /// # let client_registration_start_result = ClientRegistration::<Default>::start(&mut client_rng, b"hunter2")?;
     /// # let server_kp = X25519KeyPair::generate_random(&mut server_rng)?;
     /// # let server_registration_start_result = ServerRegistration::<Default>::start(&mut server_rng, client_registration_start_result.message, server_kp.public())?;
-    /// # let client_registration_finish_result = client_registration_start_result.state.finish(&mut client_rng, server_registration_start_result.message)?;
+    /// # let client_registration_finish_result = client_registration_start_result.state.finish(&mut client_rng, server_registration_start_result.message, ClientRegistrationFinishParameters::default())?;
     /// # let p_file = server_registration_start_result.state.finish(client_registration_finish_result.message)?;
     /// let client_login_start_result = ClientLogin::<Default>::start(&mut client_rng, b"hunter2", ClientLoginStartParameters::default())?;
     /// let server_login_start_result = ServerLogin::start(&mut server_rng, p_file, &server_kp.private(), client_login_start_result.message, ServerLoginStartParameters::default())?;
@@ -801,7 +787,7 @@ impl<CS: CipherSuite> ServerLogin<CS> {
     ///
     /// ```
     /// use opaque_ke::{ClientLogin, ClientLoginStartParameters, ServerLogin, ServerLoginStartParameters};
-    /// # use opaque_ke::{ClientRegistration, ClientRegistrationStartParameters, ServerRegistration};
+    /// # use opaque_ke::{ClientRegistration, ClientRegistrationFinishParameters, ServerRegistration};
     /// # use opaque_ke::errors::ProtocolError;
     /// # use opaque_ke::keypair::{KeyPair, X25519KeyPair};
     /// use rand_core::{OsRng, RngCore};
@@ -817,10 +803,9 @@ impl<CS: CipherSuite> ServerLogin<CS> {
     /// let mut client_rng = OsRng;
     /// let mut server_rng = OsRng;
     /// let server_kp = X25519KeyPair::generate_random(&mut server_rng)?;
-    /// # let client_registration_start_result = ClientRegistration::<Default>::start(&mut client_rng, b"hunter2", ClientRegistrationStartParameters::default())?;
-    /// # let server_registration_start_result =
-    /// ServerRegistration::<Default>::start(&mut server_rng, client_registration_start_result.message, server_kp.public())?;
-    /// # let client_registration_finish_result = client_registration_start_result.state.finish(&mut client_rng, server_registration_start_result.message)?;
+    /// # let client_registration_start_result = ClientRegistration::<Default>::start(&mut client_rng, b"hunter2")?;
+    /// # let server_registration_start_result = ServerRegistration::<Default>::start(&mut server_rng, client_registration_start_result.message, server_kp.public())?;
+    /// # let client_registration_finish_result = client_registration_start_result.state.finish(&mut client_rng, server_registration_start_result.message, ClientRegistrationFinishParameters::default())?;
     /// # let p_file = server_registration_start_result.state.finish(client_registration_finish_result.message)?;
     /// let client_login_start_result = ClientLogin::<Default>::start(&mut client_rng, b"hunter2", ClientLoginStartParameters::default())?;
     /// let server_login_start_result = ServerLogin::start(&mut server_rng, p_file, &server_kp.private(), client_login_start_result.message, ServerLoginStartParameters::default())?;
@@ -901,7 +886,7 @@ impl<CS: CipherSuite> ServerLogin<CS> {
     ///
     /// ```
     /// use opaque_ke::{ClientLogin, ClientLoginFinishParameters, ClientLoginStartParameters, ServerLogin, ServerLoginStartParameters};
-    /// # use opaque_ke::{ClientRegistration, ClientRegistrationStartParameters, ServerRegistration};
+    /// # use opaque_ke::{ClientRegistration, ClientRegistrationFinishParameters, ServerRegistration};
     /// # use opaque_ke::errors::ProtocolError;
     /// # use opaque_ke::keypair::{KeyPair, X25519KeyPair};
     /// use rand_core::{OsRng, RngCore};
@@ -917,10 +902,9 @@ impl<CS: CipherSuite> ServerLogin<CS> {
     /// let mut client_rng = OsRng;
     /// let mut server_rng = OsRng;
     /// let server_kp = X25519KeyPair::generate_random(&mut server_rng)?;
-    /// # let client_registration_start_result = ClientRegistration::<Default>::start(&mut client_rng, b"hunter2", ClientRegistrationStartParameters::default())?;
-    /// # let server_registration_start_result =
-    /// ServerRegistration::<Default>::start(&mut server_rng, client_registration_start_result.message, server_kp.public())?;
-    /// # let client_registration_finish_result = client_registration_start_result.state.finish(&mut client_rng, server_registration_start_result.message)?;
+    /// # let client_registration_start_result = ClientRegistration::<Default>::start(&mut client_rng, b"hunter2")?;
+    /// # let server_registration_start_result = ServerRegistration::<Default>::start(&mut server_rng, client_registration_start_result.message, server_kp.public())?;
+    /// # let client_registration_finish_result = client_registration_start_result.state.finish(&mut client_rng, server_registration_start_result.message, ClientRegistrationFinishParameters::default())?;
     /// # let p_file = server_registration_start_result.state.finish(client_registration_finish_result.message)?;
     /// let client_login_start_result = ClientLogin::<Default>::start(&mut client_rng, b"hunter2", ClientLoginStartParameters::default())?;
     /// let server_login_start_result = ServerLogin::start(&mut server_rng, p_file, &server_kp.private(), client_login_start_result.message, ServerLoginStartParameters::default())?;
