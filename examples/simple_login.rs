@@ -29,7 +29,7 @@ use std::process::exit;
 
 use opaque_ke::{
     ciphersuite::CipherSuite, keypair::KeyPair, ClientLogin, ClientLoginFinishParameters,
-    ClientLoginStartParameters, ClientRegistration, ClientRegistrationStartParameters,
+    ClientLoginStartParameters, ClientRegistration, ClientRegistrationFinishParameters,
     CredentialFinalization, CredentialRequest, CredentialResponse, RegistrationRequest,
     RegistrationResponse, RegistrationUpload, ServerLogin, ServerLoginStartParameters,
     ServerRegistration,
@@ -53,12 +53,8 @@ fn account_registration(
     password: String,
 ) -> Vec<u8> {
     let mut client_rng = OsRng;
-    let client_registration_start_result = ClientRegistration::<Default>::start(
-        &mut client_rng,
-        password.as_bytes(),
-        ClientRegistrationStartParameters::default(),
-    )
-    .unwrap();
+    let client_registration_start_result =
+        ClientRegistration::<Default>::start(&mut client_rng, password.as_bytes()).unwrap();
     let registration_request_bytes = client_registration_start_result.message.serialize();
 
     // Client sends registration_request_bytes to server
@@ -79,6 +75,7 @@ fn account_registration(
         .finish(
             &mut client_rng,
             RegistrationResponse::deserialize(&registration_response_bytes[..]).unwrap(),
+            ClientRegistrationFinishParameters::default(),
         )
         .unwrap();
     let message_bytes = client_finish_registration_result.message.serialize();
