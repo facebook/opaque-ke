@@ -15,7 +15,7 @@ use crate::{
     keypair::{KeyPair, SizedBytesExt},
     map_to_curve::GroupWithMapToCurve,
     oprf,
-    serialization::{serialize, tokenize, CredentialType},
+    serialization::CredentialType,
     slow_hash::SlowHash,
     CredentialFinalization, CredentialRequest, CredentialResponse, RegistrationRequest,
     RegistrationResponse, RegistrationUpload,
@@ -435,10 +435,6 @@ where
 
 /// The state elements the client holds to perform a login
 pub struct ClientLogin<CS: CipherSuite> {
-    /// User identity
-    id_u: Vec<u8>,
-    /// Server identity
-    id_s: Vec<u8>,
     /// token containing the client's password and the blinding factor
     token: oprf::Token<CS::Group>,
     ke1_state: <CS::KeyExchange as KeyExchange<CS::Hash, CS::KeyFormat>>::KE1State,
@@ -447,22 +443,19 @@ pub struct ClientLogin<CS: CipherSuite> {
 impl<CS: CipherSuite> TryFrom<&[u8]> for ClientLogin<CS> {
     type Error = ProtocolError;
     fn try_from(input: &[u8]) -> Result<Self, Self::Error> {
-        let (id_u, bytes) = tokenize(&input, 2)?;
-        let (id_s, bytes) = tokenize(&bytes, 2)?;
-
         let scalar_len = <CS::Group as Group>::ScalarLen::to_usize();
         let ke1_state_size =
             <CS::KeyExchange as KeyExchange<CS::Hash, CS::KeyFormat>>::ke1_state_size();
 
         let min_expected_len = scalar_len + ke1_state_size;
-        let checked_slice = (if bytes.len() <= min_expected_len {
+        let checked_slice = (if input.len() <= min_expected_len {
             Err(InternalPakeError::SizeError {
                 name: "client_login_bytes",
                 len: min_expected_len,
-                actual_len: bytes.len(),
+                actual_len: input.len(),
             })
         } else {
-            Ok(bytes.clone())
+            Ok(input.clone())
         })?;
 
         let blinding_factor_bytes = GenericArray::from_slice(&checked_slice[..scalar_len]);
@@ -471,10 +464,8 @@ impl<CS: CipherSuite> TryFrom<&[u8]> for ClientLogin<CS> {
             <CS::KeyExchange as KeyExchange<CS::Hash, CS::KeyFormat>>::KE1State::try_from(
                 &checked_slice[scalar_len..scalar_len + ke1_state_size],
             )?;
-        let password = bytes[scalar_len + ke1_state_size..].to_vec();
+        let password = input[scalar_len + ke1_state_size..].to_vec();
         Ok(Self {
-            id_u,
-            id_s,
             token: oprf::Token {
                 data: password,
                 blind: blinding_factor,
@@ -488,8 +479,6 @@ impl<CS: CipherSuite> ClientLogin<CS> {
     /// byte representation for the client's login state
     pub fn to_bytes(&self) -> Vec<u8> {
         let output: Vec<u8> = [
-            &serialize(&self.id_u, 2),
-            &serialize(&self.id_s, 2),
             &CS::Group::scalar_as_bytes(&self.token.blind)[..],
             &self.ke1_state.to_bytes(),
             &self.token.data,
@@ -503,13 +492,11 @@ impl<CS: CipherSuite> ClientLogin<CS> {
 pub enum ClientLoginStartParameters {
     /// Specifying an info field that will be sent to the server
     WithInfo(Vec<u8>),
-    /// Specifying the info field along with idU and idS
-    WithInfoAndIdentifiers(Vec<u8>, Vec<u8>, Vec<u8>),
 }
 
 impl Default for ClientLoginStartParameters {
     fn default() -> Self {
-        Self::WithInfoAndIdentifiers(Vec::new(), Vec::new(), Vec::new())
+        Self::WithInfo(Vec::new())
     }
 }
 
@@ -525,11 +512,14 @@ pub struct ClientLoginStartResult<CS: CipherSuite> {
 pub enum ClientLoginFinishParameters {
     /// Specifying an info and confidential info field that will be sent to the server
     WithInfo(Vec<u8>, Vec<u8>),
+    /// Specifying an info, confidential info that will be sent to the server,
+    /// along with an id_u and id_s that will be matched against the server
+    WithInfoAndIdentifiers(Vec<u8>, Vec<u8>, Vec<u8>, Vec<u8>),
 }
 
 impl Default for ClientLoginFinishParameters {
     fn default() -> Self {
-        Self::WithInfo(Vec::new(), Vec::new())
+        Self::WithInfoAndIdentifiers(Vec::new(), Vec::new(), Vec::new(), Vec::new())
     }
 }
 
@@ -582,11 +572,8 @@ impl<CS: CipherSuite> ClientLogin<CS> {
         params: ClientLoginStartParameters,
         #[cfg(test)] postprocess: fn(<CS::Group as Group>::Scalar) -> <CS::Group as Group>::Scalar,
     ) -> Result<ClientLoginStartResult<CS>, ProtocolError> {
-        let (info, id_u, id_s) = match params {
-            ClientLoginStartParameters::WithInfo(info) => (info, Vec::new(), Vec::new()),
-            ClientLoginStartParameters::WithInfoAndIdentifiers(info, id_u, id_s) => {
-                (info, id_u, id_s)
-            }
+        let info = match params {
+            ClientLoginStartParameters::WithInfo(info) => info,
         };
 
         let (token, alpha) = oprf::blind::<R, CS::Group, CS::Hash>(
@@ -603,12 +590,7 @@ impl<CS: CipherSuite> ClientLogin<CS> {
 
         Ok(ClientLoginStartResult {
             message: l1,
-            state: Self {
-                id_u,
-                id_s,
-                token,
-                ke1_state,
-            },
+            state: Self { token, ke1_state },
         })
     }
 
@@ -652,8 +634,13 @@ impl<CS: CipherSuite> ClientLogin<CS> {
         l2: CredentialResponse<CS>,
         params: ClientLoginFinishParameters,
     ) -> Result<ClientLoginFinishResult<CS>, ProtocolError> {
-        let (info, e_info) = match params {
-            ClientLoginFinishParameters::WithInfo(info, e_info) => (info, e_info),
+        let (info, e_info, _id_u, _id_s) = match params {
+            ClientLoginFinishParameters::WithInfo(info, e_info) => {
+                (info, e_info, Vec::new(), Vec::new())
+            }
+            ClientLoginFinishParameters::WithInfoAndIdentifiers(info, e_info, id_u, id_s) => {
+                (info, e_info, id_u, id_s)
+            }
         };
 
         let l2_bytes: Vec<u8> = [&l2.beta.to_arr()[..], &l2.envelope.to_bytes()].concat();
@@ -768,8 +755,6 @@ pub struct ServerLoginFinishResult {
     /// The confidential info sent by the client
     pub confidential_info: Vec<u8>,
 }
-
-impl ServerLoginFinishResult {}
 
 impl<CS: CipherSuite> ServerLogin<CS> {
     /// byte representation for the server's login state

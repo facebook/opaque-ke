@@ -34,7 +34,6 @@ impl CipherSuite for Default {
     type SlowHash = crate::slow_hash::NoOpHash;
 }
 
-const MAX_ID_LENGTH: usize = 10;
 const MAX_INFO_LENGTH: usize = 10;
 
 fn random_ristretto_point() -> RistrettoPoint {
@@ -273,13 +272,6 @@ fn login_third_message_roundtrip() {
 fn client_login_roundtrip() {
     let pw = b"hunter2";
     let mut rng = OsRng;
-    let id_u_length: usize = rng.gen_range(0, MAX_ID_LENGTH);
-    let id_s_length: usize = rng.gen_range(0, MAX_ID_LENGTH);
-    let mut id_u = [0u8; MAX_ID_LENGTH];
-    rng.fill_bytes(&mut id_u);
-    let mut id_s = [0u8; MAX_ID_LENGTH];
-    rng.fill_bytes(&mut id_s);
-
     let sc = <RistrettoPoint as Group>::random_scalar(&mut rng);
 
     let client_e_kp = Default::generate_random_keypair(&mut rng).unwrap();
@@ -291,10 +283,8 @@ fn client_login_roundtrip() {
     hasher.update(l1_data);
     let hashed_l1 = hasher.finalize();
 
-    // serialization order: id_u, id_s, scalar, password, ke1_state
+    // serialization order: scalar, password, ke1_state
     let bytes: Vec<u8> = [
-        &serialize(&id_u[..id_u_length], 2)[..],
-        &serialize(&id_s[..id_s_length], 2)[..],
         &sc.as_bytes()[..],
         &pw[..],
         client_e_kp.public(),
