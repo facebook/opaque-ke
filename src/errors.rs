@@ -46,7 +46,13 @@ pub enum InternalPakeError {
     SealOpenHmacError,
     /// This error occurs when the envelope cannot be constructed properly
     /// based on the credentials that were specified to be required.
-    IncompatibleEnvelopeCredentialsError,
+    InvalidEnvelopeStructureError,
+    /// This error occurs when attempting to open an envelope of the wrong
+    /// type (base mode, custom identifier)
+    IncompatibleEnvelopeModeError,
+    /// This error occurs when the envelope is opened and deserialization
+    /// fails
+    UnexpectedEnvelopeContentsError,
 }
 
 /// Represents an error in password checking

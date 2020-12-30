@@ -5,7 +5,7 @@
 
 use crate::{
     ciphersuite::CipherSuite,
-    envelope::Envelope,
+    envelope::{Envelope, InnerEnvelopeMode},
     group::Group,
     key_exchange::{
         traits::{KeyExchange, ToBytes},
@@ -79,6 +79,7 @@ fn server_registration_roundtrip() {
 
     // Construct a mock envelope
     let mut mock_envelope_bytes = Vec::new();
+    mock_envelope_bytes.extend_from_slice(&[0; 1]); // mode = 0
     mock_envelope_bytes.extend_from_slice(&[0; NONCE_LEN]); // empty nonce
     mock_envelope_bytes.extend_from_slice(&[0, 0]); // empty ciphertext
     mock_envelope_bytes.extend_from_slice(&[0, 0]); // empty auth_data
@@ -120,7 +121,6 @@ fn register_second_message_roundtrip() {
     let mut rng = OsRng;
     let skp = Default::generate_random_keypair(&mut rng).unwrap();
     let pubkey_bytes = skp.public().to_arr();
-    let credential_types = [1, 1, 1, 3];
 
     let beta_length: usize = beta_bytes.len();
     let pubkey_length: usize = pubkey_bytes.len();
@@ -130,7 +130,6 @@ fn register_second_message_roundtrip() {
     input.extend_from_slice(beta_bytes.as_slice());
     input.extend_from_slice(&pubkey_length.to_be_bytes()[std::mem::size_of::<usize>() - 2..]);
     input.extend_from_slice(&pubkey_bytes.as_slice());
-    input.extend_from_slice(&credential_types);
 
     let r2 = RegistrationResponse::<RistrettoPoint>::deserialize(input.as_slice()).unwrap();
     let r2_bytes = r2.serialize();
@@ -149,8 +148,14 @@ fn register_third_message_roundtrip() {
     let mut msg = [0u8; 32];
     rng.fill_bytes(&mut msg);
 
-    let (envelope, _) =
-        Envelope::<sha2::Sha256>::seal_raw(&key, &msg, &pubkey_bytes, &mut rng).unwrap();
+    let (envelope, _) = Envelope::<sha2::Sha256>::seal_raw(
+        &mut rng,
+        &key,
+        &msg,
+        &pubkey_bytes,
+        InnerEnvelopeMode::Base,
+    )
+    .unwrap();
     let envelope_bytes = envelope.serialize();
 
     let pubkey_length: usize = pubkey_bytes.len();
@@ -205,6 +210,7 @@ fn login_second_message_roundtrip() {
     let mut rng = OsRng;
     let skp = Default::generate_random_keypair(&mut rng).unwrap();
     let pubkey_bytes = skp.public().to_arr();
+    let pubkey_length: usize = pubkey_bytes.len();
 
     let mut key = [0u8; 32];
     rng.fill_bytes(&mut key);
@@ -212,8 +218,14 @@ fn login_second_message_roundtrip() {
     let mut msg = [0u8; 32];
     rng.fill_bytes(&mut msg);
 
-    let (envelope, _) =
-        Envelope::<sha2::Sha256>::seal_raw(&key, &msg, &pubkey_bytes, &mut rng).unwrap();
+    let (envelope, _) = Envelope::<sha2::Sha256>::seal_raw(
+        &mut rng,
+        &key,
+        &msg,
+        &pubkey_bytes,
+        InnerEnvelopeMode::Base,
+    )
+    .unwrap();
 
     let server_e_kp = Default::generate_random_keypair(&mut rng).unwrap();
     let mut mac = [0u8; 32];
@@ -238,6 +250,8 @@ fn login_second_message_roundtrip() {
     let mut input = Vec::new();
     input.extend_from_slice(&pt_bytes.len().to_be_bytes()[std::mem::size_of::<usize>() - 2..]);
     input.extend_from_slice(pt_bytes.as_slice());
+    input.extend_from_slice(&pubkey_length.to_be_bytes()[std::mem::size_of::<usize>() - 2..]);
+    input.extend_from_slice(&pubkey_bytes.as_slice());
     input.extend_from_slice(&envelope.serialize());
     input.extend_from_slice(&ke2m[..]);
 
