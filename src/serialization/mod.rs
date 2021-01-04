@@ -5,26 +5,6 @@
 
 use crate::errors::PakeError;
 
-#[derive(Copy, Clone, Eq, Hash, PartialEq)]
-pub enum CredentialType {
-    SkU,
-    PkU,
-    PkS,
-    IdU,
-    IdS,
-}
-
-pub(crate) fn u8_to_credential_type(x: u8) -> Option<CredentialType> {
-    match x {
-        1 => Some(CredentialType::SkU),
-        2 => Some(CredentialType::PkU),
-        3 => Some(CredentialType::PkS),
-        4 => Some(CredentialType::IdU),
-        5 => Some(CredentialType::IdS),
-        _ => None,
-    }
-}
-
 // Corresponds to the I2OSP() function from RFC8017
 pub(crate) fn i2osp(input: usize, length: usize) -> Vec<u8> {
     if length <= std::mem::size_of::<usize>() {

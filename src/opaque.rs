@@ -7,7 +7,7 @@
 
 use crate::{
     ciphersuite::CipherSuite,
-    envelope::{Envelope, EnvelopeCredentialsFormat, ExportKeySize},
+    envelope::{mode_from_ids, Envelope, ExportKeySize},
     errors::{utils::check_slice_size_atleast, InternalPakeError, PakeError, ProtocolError},
     group::Group,
     hash::Hash,
@@ -15,7 +15,7 @@ use crate::{
     keypair::{KeyPair, SizedBytesExt},
     map_to_curve::GroupWithMapToCurve,
     oprf,
-    serialization::{serialize, tokenize, CredentialType},
+    serialization::serialize,
     slow_hash::SlowHash,
     CredentialFinalization, CredentialRequest, CredentialResponse, RegistrationRequest,
     RegistrationResponse, RegistrationUpload,
@@ -23,7 +23,6 @@ use crate::{
 use generic_array::{typenum::Unsigned, GenericArray};
 use generic_bytes::SizedBytes;
 use rand_core::{CryptoRng, RngCore};
-use std::collections::HashMap;
 use std::{convert::TryFrom, marker::PhantomData};
 use zeroize::Zeroize;
 
@@ -81,13 +80,15 @@ impl<CS: CipherSuite> ClientRegistration<CS> {
 
 /// Optional parameters for client registration finish
 pub enum ClientRegistrationFinishParameters {
-    /// Specifying the identifiers idU and idS
+    /// Specifying the identifiers idU and idS (corresponding to custom identifier mode)
     WithIdentifiers(Vec<u8>, Vec<u8>),
+    /// No identifiers specified (corresponding to base mode)
+    Default,
 }
 
 impl Default for ClientRegistrationFinishParameters {
     fn default() -> Self {
-        Self::WithIdentifiers(Vec::new(), Vec::new())
+        Self::Default
     }
 }
 
@@ -176,7 +177,7 @@ impl<CS: CipherSuite> ClientRegistration<CS> {
     /// }
     /// let mut client_rng = OsRng;
     /// let mut server_rng = OsRng;
-    /// let server_kp = X25519KeyPair::generate_random(&mut server_rng)?;
+    /// let server_kp = Default::generate_random_keypair(&mut server_rng)?;
     /// let client_registration_start_result = ClientRegistration::<Default>::start(&mut client_rng, b"hunter2")?;
     /// let server_registration_start_result =
     /// ServerRegistration::<Default>::start(&mut server_rng, client_registration_start_result.message, server_kp.public())?;
@@ -190,29 +191,22 @@ impl<CS: CipherSuite> ClientRegistration<CS> {
         r2: RegistrationResponse<CS::Group>,
         params: ClientRegistrationFinishParameters,
     ) -> Result<ClientRegistrationFinishResult<CS::KeyFormat, CS::Hash>, ProtocolError> {
-        let (id_u, id_s) = match params {
-            ClientRegistrationFinishParameters::WithIdentifiers(id_u, id_s) => (id_u, id_s),
+        let optional_ids = match params {
+            ClientRegistrationFinishParameters::WithIdentifiers(id_u, id_s) => Some((id_u, id_s)),
+            ClientRegistrationFinishParameters::Default => None,
         };
-        let client_static_keypair = CS::KeyFormat::generate_random(rng)?;
+        let client_static_keypair = CS::generate_random_keypair(rng)?;
 
         let password_derived_key =
             get_password_derived_key::<CS::Group, CS::SlowHash, CS::Hash>(&self.token, r2.beta)?;
 
-        let mut credentials_map: HashMap<CredentialType, Vec<u8>> = HashMap::new();
-        credentials_map.insert(
-            CredentialType::SkU,
-            client_static_keypair.private().to_arr().to_vec(),
-        );
-        credentials_map.insert(
-            CredentialType::PkU,
-            client_static_keypair.public().to_arr().to_vec(),
-        );
-        credentials_map.insert(CredentialType::PkS, r2.server_s_pk);
-        credentials_map.insert(CredentialType::IdU, id_u);
-        credentials_map.insert(CredentialType::IdS, id_s);
-
-        let (envelope, export_key) =
-            Envelope::<CS::Hash>::seal(&password_derived_key, r2.ecf, credentials_map, rng)?;
+        let (envelope, export_key) = Envelope::<CS::Hash>::seal(
+            rng,
+            &password_derived_key,
+            &client_static_keypair.private().to_arr().to_vec(),
+            &r2.server_s_pk,
+            optional_ids,
+        )?;
 
         Ok(ClientRegistrationFinishResult {
             message: RegistrationUpload {
@@ -357,7 +351,7 @@ where
     /// }
     /// let mut client_rng = OsRng;
     /// let mut server_rng = OsRng;
-    /// let server_kp = X25519KeyPair::generate_random(&mut server_rng)?;
+    /// let server_kp = Default::generate_random_keypair(&mut server_rng)?;
     /// let client_registration_start_result = ClientRegistration::<Default>::start(&mut client_rng, b"hunter2")?;
     /// let server_registration_start_result = ServerRegistration::<Default>::start(&mut server_rng, client_registration_start_result.message, server_kp.public())?;
     /// # Ok::<(), ProtocolError>(())
@@ -377,7 +371,6 @@ where
             message: RegistrationResponse {
                 beta,
                 server_s_pk: server_s_pk.to_arr().to_vec(),
-                ecf: EnvelopeCredentialsFormat::default()?,
             },
             state: Self {
                 envelope: None,
@@ -410,7 +403,7 @@ where
     /// }
     /// let mut client_rng = OsRng;
     /// let mut server_rng = OsRng;
-    /// let server_kp = X25519KeyPair::generate_random(&mut server_rng)?;
+    /// let server_kp = Default::generate_random_keypair(&mut server_rng)?;
     /// let client_registration_start_result = ClientRegistration::<Default>::start(&mut client_rng, b"hunter2")?;
     /// let server_registration_start_result = ServerRegistration::<Default>::start(&mut server_rng, client_registration_start_result.message, server_kp.public())?;
     /// let mut client_rng = OsRng;
@@ -435,10 +428,6 @@ where
 
 /// The state elements the client holds to perform a login
 pub struct ClientLogin<CS: CipherSuite> {
-    /// User identity
-    id_u: Vec<u8>,
-    /// Server identity
-    id_s: Vec<u8>,
     /// token containing the client's password and the blinding factor
     token: oprf::Token<CS::Group>,
     ke1_state: <CS::KeyExchange as KeyExchange<CS::Hash, CS::KeyFormat>>::KE1State,
@@ -447,22 +436,19 @@ pub struct ClientLogin<CS: CipherSuite> {
 impl<CS: CipherSuite> TryFrom<&[u8]> for ClientLogin<CS> {
     type Error = ProtocolError;
     fn try_from(input: &[u8]) -> Result<Self, Self::Error> {
-        let (id_u, bytes) = tokenize(&input, 2)?;
-        let (id_s, bytes) = tokenize(&bytes, 2)?;
-
         let scalar_len = <CS::Group as Group>::ScalarLen::to_usize();
         let ke1_state_size =
             <CS::KeyExchange as KeyExchange<CS::Hash, CS::KeyFormat>>::ke1_state_size();
 
         let min_expected_len = scalar_len + ke1_state_size;
-        let checked_slice = (if bytes.len() <= min_expected_len {
+        let checked_slice = (if input.len() <= min_expected_len {
             Err(InternalPakeError::SizeError {
                 name: "client_login_bytes",
                 len: min_expected_len,
-                actual_len: bytes.len(),
+                actual_len: input.len(),
             })
         } else {
-            Ok(bytes.clone())
+            Ok(input)
         })?;
 
         let blinding_factor_bytes = GenericArray::from_slice(&checked_slice[..scalar_len]);
@@ -471,10 +457,8 @@ impl<CS: CipherSuite> TryFrom<&[u8]> for ClientLogin<CS> {
             <CS::KeyExchange as KeyExchange<CS::Hash, CS::KeyFormat>>::KE1State::try_from(
                 &checked_slice[scalar_len..scalar_len + ke1_state_size],
             )?;
-        let password = bytes[scalar_len + ke1_state_size..].to_vec();
+        let password = input[scalar_len + ke1_state_size..].to_vec();
         Ok(Self {
-            id_u,
-            id_s,
             token: oprf::Token {
                 data: password,
                 blind: blinding_factor,
@@ -488,8 +472,6 @@ impl<CS: CipherSuite> ClientLogin<CS> {
     /// byte representation for the client's login state
     pub fn to_bytes(&self) -> Vec<u8> {
         let output: Vec<u8> = [
-            &serialize(&self.id_u, 2),
-            &serialize(&self.id_s, 2),
             &CS::Group::scalar_as_bytes(&self.token.blind)[..],
             &self.ke1_state.to_bytes(),
             &self.token.data,
@@ -503,13 +485,11 @@ impl<CS: CipherSuite> ClientLogin<CS> {
 pub enum ClientLoginStartParameters {
     /// Specifying an info field that will be sent to the server
     WithInfo(Vec<u8>),
-    /// Specifying the info field along with idU and idS
-    WithInfoAndIdentifiers(Vec<u8>, Vec<u8>, Vec<u8>),
 }
 
 impl Default for ClientLoginStartParameters {
     fn default() -> Self {
-        Self::WithInfoAndIdentifiers(Vec::new(), Vec::new(), Vec::new())
+        Self::WithInfo(Vec::new())
     }
 }
 
@@ -525,11 +505,18 @@ pub struct ClientLoginStartResult<CS: CipherSuite> {
 pub enum ClientLoginFinishParameters {
     /// Specifying an info and confidential info field that will be sent to the server
     WithInfo(Vec<u8>, Vec<u8>),
+    /// Specifying an id_u and id_s that will be matched against the server
+    WithIdentifiers(Vec<u8>, Vec<u8>),
+    /// Specifying an info, confidential info that will be sent to the server,
+    /// along with an id_u and id_s that will be matched against the server
+    WithInfoAndIdentifiers(Vec<u8>, Vec<u8>, Vec<u8>, Vec<u8>),
+    /// No info and no custom identifiers
+    Default,
 }
 
 impl Default for ClientLoginFinishParameters {
     fn default() -> Self {
-        Self::WithInfo(Vec::new(), Vec::new())
+        Self::Default
     }
 }
 
@@ -543,8 +530,6 @@ pub struct ClientLoginFinishResult<CS: CipherSuite> {
     pub export_key: GenericArray<u8, ExportKeySize>,
     /// The server's static public key
     pub server_s_pk: Vec<u8>,
-    /// An optional id_s if supplied by the server
-    pub id_s: Option<Vec<u8>>,
     /// The plaintext info sent by the client
     pub plain_info: Vec<u8>,
     /// The confidential info sent by the client
@@ -582,12 +567,7 @@ impl<CS: CipherSuite> ClientLogin<CS> {
         params: ClientLoginStartParameters,
         #[cfg(test)] postprocess: fn(<CS::Group as Group>::Scalar) -> <CS::Group as Group>::Scalar,
     ) -> Result<ClientLoginStartResult<CS>, ProtocolError> {
-        let (info, id_u, id_s) = match params {
-            ClientLoginStartParameters::WithInfo(info) => (info, Vec::new(), Vec::new()),
-            ClientLoginStartParameters::WithInfoAndIdentifiers(info, id_u, id_s) => {
-                (info, id_u, id_s)
-            }
-        };
+        let ClientLoginStartParameters::WithInfo(info) = params;
 
         let (token, alpha) = oprf::blind::<R, CS::Group, CS::Hash>(
             &password,
@@ -603,12 +583,7 @@ impl<CS: CipherSuite> ClientLogin<CS> {
 
         Ok(ClientLoginStartResult {
             message: l1,
-            state: Self {
-                id_u,
-                id_s,
-                token,
-                ke1_state,
-            },
+            state: Self { token, ke1_state },
         })
     }
 
@@ -638,7 +613,7 @@ impl<CS: CipherSuite> ClientLogin<CS> {
     /// let mut client_rng = OsRng;
     /// # let mut server_rng = OsRng;
     /// # let client_registration_start_result = ClientRegistration::<Default>::start(&mut client_rng, b"hunter2")?;
-    /// # let server_kp = X25519KeyPair::generate_random(&mut server_rng)?;
+    /// # let server_kp = Default::generate_random_keypair(&mut server_rng)?;
     /// # let server_registration_start_result = ServerRegistration::<Default>::start(&mut server_rng, client_registration_start_result.message, server_kp.public())?;
     /// # let client_registration_finish_result = client_registration_start_result.state.finish(&mut client_rng, server_registration_start_result.message, ClientRegistrationFinishParameters::default())?;
     /// # let p_file = server_registration_start_result.state.finish(client_registration_finish_result.message)?;
@@ -652,48 +627,62 @@ impl<CS: CipherSuite> ClientLogin<CS> {
         l2: CredentialResponse<CS>,
         params: ClientLoginFinishParameters,
     ) -> Result<ClientLoginFinishResult<CS>, ProtocolError> {
-        let (info, e_info) = match params {
-            ClientLoginFinishParameters::WithInfo(info, e_info) => (info, e_info),
+        let (info, e_info, optional_ids) = match params {
+            ClientLoginFinishParameters::Default => (Vec::new(), Vec::new(), None),
+            ClientLoginFinishParameters::WithInfo(info, e_info) => (info, e_info, None),
+            ClientLoginFinishParameters::WithIdentifiers(id_u, id_s) => {
+                (Vec::new(), Vec::new(), Some((id_u, id_s)))
+            }
+            ClientLoginFinishParameters::WithInfoAndIdentifiers(info, e_info, id_u, id_s) => {
+                (info, e_info, Some((id_u, id_s)))
+            }
         };
 
-        let l2_bytes: Vec<u8> = [&l2.beta.to_arr()[..], &l2.envelope.to_bytes()].concat();
+        let l2_beta_bytes = &l2.beta.to_arr()[..];
 
         let password_derived_key =
             get_password_derived_key::<CS::Group, CS::SlowHash, CS::Hash>(&self.token, l2.beta)?;
 
         let opened_envelope = &l2
             .envelope
-            .open(&password_derived_key)
+            .open(
+                &password_derived_key,
+                &l2.server_s_pk.to_arr().to_vec(),
+                &optional_ids,
+            )
             .map_err(|e| match e {
                 InternalPakeError::SealOpenHmacError => PakeError::InvalidLoginError,
                 err => PakeError::from(err),
             })?;
 
-        let client_s_sk = <CS::KeyFormat as KeyPair>::Repr::from_bytes(
-            &opened_envelope.credentials_map[&CredentialType::SkU],
-        )?;
-        let server_s_pk = <CS::KeyFormat as KeyPair>::Repr::from_bytes(
-            &opened_envelope.credentials_map[&CredentialType::PkS],
-        )?;
+        let client_s_sk =
+            <CS::KeyFormat as KeyPair>::Repr::from_bytes(&opened_envelope.client_s_sk)?;
 
-        let id_u = match opened_envelope.credentials_map.get(&CredentialType::IdU) {
-            Some(id_u) => id_u.clone(),
-            None => CS::KeyFormat::public_from_private(&client_s_sk)
-                .to_arr()
-                .to_vec(),
+        let server_s_pk_bytes = l2.server_s_pk.to_arr().to_vec();
+
+        let (id_u, id_s) = match optional_ids {
+            None => (
+                CS::KeyFormat::public_from_private(&client_s_sk)
+                    .to_arr()
+                    .to_vec(),
+                server_s_pk_bytes.clone(),
+            ),
+            Some((id_u, id_s)) => (id_u, id_s),
         };
 
-        let (id_s, ret_id_s) = match opened_envelope.credentials_map.get(&CredentialType::IdS) {
-            Some(id_s) => (id_s.clone(), Some(id_s.clone())),
-            None => (server_s_pk.to_arr().to_vec(), None),
-        };
+        let l2_bytes: Vec<u8> = [
+            serialize(&l2_beta_bytes, 2),
+            serialize(&server_s_pk_bytes, 2),
+            l2.envelope.to_bytes(),
+        ]
+        .concat();
 
         let (plain_info, confidential_info, shared_secret, ke3_message) =
             CS::KeyExchange::generate_ke3(
                 l2_bytes,
                 l2.ke2_message,
                 &self.ke1_state,
-                server_s_pk.clone(),
+                l2.server_s_pk,
                 client_s_sk,
                 id_u,
                 id_s,
@@ -707,8 +696,7 @@ impl<CS: CipherSuite> ClientLogin<CS> {
             message: CredentialFinalization { ke3_message },
             shared_secret,
             export_key: opened_envelope.export_key,
-            server_s_pk: server_s_pk.to_arr().to_vec(),
-            id_s: ret_id_s,
+            server_s_pk: server_s_pk_bytes,
         })
     }
 }
@@ -736,6 +724,8 @@ impl<CS: CipherSuite> TryFrom<&[u8]> for ServerLogin<CS> {
 pub enum ServerLoginStartParameters {
     /// Specifying an info and confidential info field that will be sent to the client
     WithInfo(Vec<u8>, Vec<u8>),
+    /// Specifying an id_u and id_s that will be matched against the client
+    WithIdentifiers(Vec<u8>, Vec<u8>),
     /// Specifying an info, confidential info that will be sent to the client,
     /// along with an id_u and id_s that will be matched against the client
     WithInfoAndIdentifiers(Vec<u8>, Vec<u8>, Vec<u8>, Vec<u8>),
@@ -769,8 +759,6 @@ pub struct ServerLoginFinishResult {
     pub confidential_info: Vec<u8>,
 }
 
-impl ServerLoginFinishResult {}
-
 impl<CS: CipherSuite> ServerLogin<CS> {
     /// byte representation for the server's login state
     pub fn to_bytes(&self) -> Vec<u8> {
@@ -802,7 +790,7 @@ impl<CS: CipherSuite> ServerLogin<CS> {
     /// }
     /// let mut client_rng = OsRng;
     /// let mut server_rng = OsRng;
-    /// let server_kp = X25519KeyPair::generate_random(&mut server_rng)?;
+    /// let server_kp = Default::generate_random_keypair(&mut server_rng)?;
     /// # let client_registration_start_result = ClientRegistration::<Default>::start(&mut client_rng, b"hunter2")?;
     /// # let server_registration_start_result = ServerRegistration::<Default>::start(&mut server_rng, client_registration_start_result.message, server_kp.public())?;
     /// # let client_registration_finish_result = client_registration_start_result.state.finish(&mut client_rng, server_registration_start_result.message, ClientRegistrationFinishParameters::default())?;
@@ -822,29 +810,42 @@ impl<CS: CipherSuite> ServerLogin<CS> {
             .client_s_pk
             .ok_or(InternalPakeError::SealError)?;
 
-        let (info, e_info, id_u, id_s) = match params {
-            ServerLoginStartParameters::WithInfo(info, e_info) => (info, e_info, None, None),
+        let (info, e_info, optional_ids) = match params {
+            ServerLoginStartParameters::WithInfo(info, e_info) => (info, e_info, None),
+            ServerLoginStartParameters::WithIdentifiers(id_u, id_s) => {
+                (Vec::new(), Vec::new(), Some((id_u, id_s)))
+            }
             ServerLoginStartParameters::WithInfoAndIdentifiers(info, e_info, id_u, id_s) => {
-                (info, e_info, Some(id_u), Some(id_s))
+                (info, e_info, Some((id_u, id_s)))
             }
         };
 
-        let id_u = match id_u {
-            Some(id_u) => id_u,
-            None => client_s_pk.to_arr().to_vec(),
-        };
+        let envelope = password_file.envelope.ok_or(InternalPakeError::SealError)?;
+        if envelope.get_mode() != mode_from_ids(&optional_ids) {
+            return Err(InternalPakeError::IncompatibleEnvelopeModeError.into());
+        }
 
-        let id_s = match id_s {
-            Some(id_s) => id_s,
-            None => CS::KeyFormat::public_from_private(server_s_sk)
-                .to_arr()
-                .to_vec(),
+        let (id_u, id_s) = match optional_ids {
+            None => (
+                client_s_pk.to_arr().to_vec(),
+                CS::KeyFormat::public_from_private(server_s_sk)
+                    .to_arr()
+                    .to_vec(),
+            ),
+            Some((id_u, id_s)) => (id_u, id_s),
         };
 
         let l1_bytes = &l1.to_bytes();
         let beta = oprf::evaluate(l1.alpha, &password_file.oprf_key);
-        let envelope = password_file.envelope.ok_or(InternalPakeError::SealError)?;
-        let l2_component: Vec<u8> = [&beta.to_arr()[..], &envelope.to_bytes()].concat();
+
+        let server_s_pk = CS::KeyFormat::public_from_private(&server_s_sk);
+
+        let l2_component: Vec<u8> = [
+            serialize(&beta.to_arr()[..], 2),
+            serialize(&server_s_pk.to_arr()[..], 2),
+            envelope.to_bytes(),
+        ]
+        .concat();
 
         let (plain_info, ke2_state, ke2_message) = CS::KeyExchange::generate_ke2(
             rng,
@@ -861,6 +862,7 @@ impl<CS: CipherSuite> ServerLogin<CS> {
 
         let l2 = CredentialResponse {
             beta,
+            server_s_pk,
             envelope,
             ke2_message,
         };
@@ -901,7 +903,7 @@ impl<CS: CipherSuite> ServerLogin<CS> {
     /// }
     /// let mut client_rng = OsRng;
     /// let mut server_rng = OsRng;
-    /// let server_kp = X25519KeyPair::generate_random(&mut server_rng)?;
+    /// let server_kp = Default::generate_random_keypair(&mut server_rng)?;
     /// # let client_registration_start_result = ClientRegistration::<Default>::start(&mut client_rng, b"hunter2")?;
     /// # let server_registration_start_result = ServerRegistration::<Default>::start(&mut server_rng, client_registration_start_result.message, server_kp.public())?;
     /// # let client_registration_finish_result = client_registration_start_result.state.finish(&mut client_rng, server_registration_start_result.message, ClientRegistrationFinishParameters::default())?;

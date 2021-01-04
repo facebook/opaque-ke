@@ -468,3 +468,8 @@ pub use crate::opaque::{
     ClientLoginFinishParameters, ClientLoginStartParameters, ClientRegistrationFinishParameters,
     ServerLoginStartParameters,
 };
+pub use crate::opaque::{
+    ClientLoginFinishResult, ClientLoginStartResult, ClientRegistrationFinishResult,
+    ClientRegistrationStartResult, ServerLoginFinishResult, ServerLoginStartResult,
+    ServerRegistrationStartResult,
+};

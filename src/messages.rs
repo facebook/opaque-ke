@@ -7,7 +7,7 @@
 
 use crate::{
     ciphersuite::CipherSuite,
-    envelope::{Envelope, EnvelopeCredentialsFormat},
+    envelope::Envelope,
     errors::{
         utils::{check_slice_size, check_slice_size_atleast},
         PakeError, ProtocolError,
@@ -16,7 +16,7 @@ use crate::{
     hash::Hash,
     key_exchange::traits::{KeyExchange, ToBytes},
     keypair::{KeyPair, SizedBytesExt},
-    serialization::{serialize, tokenize, u8_to_credential_type, CredentialType},
+    serialization::{serialize, tokenize},
 };
 use generic_array::{typenum::Unsigned, GenericArray};
 use generic_bytes::SizedBytes;
@@ -84,8 +84,6 @@ pub struct RegistrationResponse<Grp> {
     pub(crate) beta: Grp,
     /// Server's static public key
     pub(crate) server_s_pk: Vec<u8>,
-    /// Envelope credentials format
-    pub(crate) ecf: EnvelopeCredentialsFormat,
 }
 
 impl<Grp> TryFrom<&[u8]> for RegistrationResponse<Grp>
@@ -103,16 +101,10 @@ where
         let arr = GenericArray::from_slice(&checked_slice[..elem_len]);
         let beta = Grp::from_element_slice(arr)?;
 
+        // FIXME check public key bytes
         let server_s_pk = checked_slice[elem_len..].to_vec();
 
-        // Note that we use a default envelope credentials format here, since it
-        // is not included in the byte representation
-        let ecf = EnvelopeCredentialsFormat::default()?;
-        Ok(Self {
-            beta,
-            server_s_pk,
-            ecf,
-        })
+        Ok(Self { beta, server_s_pk })
     }
 }
 
@@ -131,27 +123,6 @@ where
         let mut registration_response: Vec<u8> = Vec::new();
         registration_response.extend_from_slice(&serialize(&self.beta.to_arr(), 2));
         registration_response.extend_from_slice(&serialize(&self.server_s_pk, 2));
-
-        // Handle ecf serialization
-        let secret_credentials: Vec<u8> = self
-            .ecf
-            .secret_credentials
-            .iter()
-            .map(|&x| x as u8 + 1)
-            .collect();
-        let cleartext_credentials: Vec<u8> = self
-            .ecf
-            .cleartext_credentials
-            .iter()
-            .map(|&x| x as u8 + 1)
-            .collect();
-        let ecf_serialized = [
-            serialize(&secret_credentials, 1),
-            serialize(&cleartext_credentials, 1),
-        ]
-        .concat();
-        registration_response.extend_from_slice(&ecf_serialized);
-
         registration_response
     }
 
@@ -159,19 +130,6 @@ where
     pub fn deserialize(input: &[u8]) -> Result<Self, ProtocolError> {
         let (beta_bytes, remainder) = tokenize(&input, 2)?;
         let (server_s_pk, remainder) = tokenize(&remainder, 2)?;
-
-        // Handle ecf deserialization
-        let (secret_credentials, remainder) = tokenize(&remainder, 1)?;
-        let (cleartext_credentials, remainder) = tokenize(&remainder, 1)?;
-        let sc = secret_credentials
-            .iter()
-            .map(|x| u8_to_credential_type(*x).ok_or(PakeError::SerializationError))
-            .collect::<Result<Vec<CredentialType>, _>>()?;
-        let cc = cleartext_credentials
-            .iter()
-            .map(|x| u8_to_credential_type(*x).ok_or(PakeError::SerializationError))
-            .collect::<Result<Vec<CredentialType>, _>>()?;
-        let ecf = EnvelopeCredentialsFormat::new(sc, cc)?;
 
         if !remainder.is_empty() {
             return Err(PakeError::SerializationError.into());
@@ -186,11 +144,7 @@ where
         // correct subgroup
         let arr = GenericArray::from_slice(&checked_slice);
         let beta = Grp::from_element_slice(arr)?;
-        Ok(Self {
-            ecf,
-            server_s_pk,
-            beta,
-        })
+        Ok(Self { server_s_pk, beta })
     }
 }
 
@@ -309,6 +263,7 @@ impl<CS: CipherSuite> CredentialRequest<CS> {
 pub struct CredentialResponse<CS: CipherSuite> {
     /// the server's oprf output
     pub(crate) beta: CS::Group,
+    pub(crate) server_s_pk: <CS::KeyFormat as KeyPair>::Repr,
     /// the user's sealed information,
     pub(crate) envelope: Envelope<CS::Hash>,
     pub(crate) ke2_message: <CS::KeyExchange as KeyExchange<CS::Hash, CS::KeyFormat>>::KE2Message,
@@ -319,6 +274,7 @@ impl<CS: CipherSuite> CredentialResponse<CS> {
     pub fn serialize(&self) -> Vec<u8> {
         let mut credential_response: Vec<u8> = Vec::new();
         credential_response.extend_from_slice(&serialize(&self.beta.to_arr(), 2));
+        credential_response.extend_from_slice(&serialize(&self.server_s_pk.to_arr().to_vec(), 2));
         credential_response.extend_from_slice(&self.envelope.to_bytes());
         credential_response.extend_from_slice(&self.ke2_message.to_bytes());
         credential_response
@@ -326,8 +282,12 @@ impl<CS: CipherSuite> CredentialResponse<CS> {
 
     /// Deserialization from bytes
     pub fn deserialize(input: &[u8]) -> Result<Self, ProtocolError> {
-        let (beta_bytes, envelope_and_ke2m_bytes) = tokenize(&input, 2)?;
-        let concatenated = [&beta_bytes[..], &envelope_and_ke2m_bytes[..]].concat();
+        let (beta_bytes, server_s_pk_and_envelope_and_ke2m_bytes) = tokenize(&input, 2)?;
+        let concatenated = [
+            &beta_bytes[..],
+            &server_s_pk_and_envelope_and_ke2m_bytes[..],
+        ]
+        .concat();
         Self::try_from(&concatenated[..])
     }
 }
@@ -345,7 +305,17 @@ impl<CS: CipherSuite> TryFrom<&[u8]> for CredentialResponse<CS> {
         let arr = GenericArray::from_slice(beta_bytes);
         let beta = CS::Group::from_element_slice(arr)?;
 
-        let (envelope, remainder) = Envelope::<CS::Hash>::deserialize(&checked_slice[elem_len..])?;
+        let (serialized_server_s_pk, remainder) = tokenize(&checked_slice[elem_len..], 2)?;
+        let sized_server_s_pk = check_slice_size(
+            &serialized_server_s_pk[..],
+            <<CS::KeyFormat as KeyPair>::Repr as SizedBytes>::Len::to_usize(),
+            "server_s_pk in credential_response",
+        )?;
+        let unchecked_server_s_pk =
+            <CS::KeyFormat as KeyPair>::Repr::from_bytes(&sized_server_s_pk[..])?;
+        let server_s_pk = CS::KeyFormat::check_public_key(unchecked_server_s_pk)?;
+
+        let (envelope, remainder) = Envelope::<CS::Hash>::deserialize(&remainder)?;
 
         let ke2_message_size = CS::KeyExchange::ke2_message_size();
         let checked_remainder =
@@ -357,6 +327,7 @@ impl<CS: CipherSuite> TryFrom<&[u8]> for CredentialResponse<CS> {
 
         Ok(Self {
             beta,
+            server_s_pk,
             envelope,
             ke2_message,
         })

@@ -19,14 +19,14 @@ use hkdf::Hkdf;
 /// A subtrait of Group specifying how to hash a password into a point
 pub trait GroupWithMapToCurve: Group {
     /// The ciphersuite identifier as dictated by
-    /// https://www.ietf.org/archive/id/draft-irtf-cfrg-voprf-05.txt
+    /// <https://www.ietf.org/archive/id/draft-irtf-cfrg-voprf-05.txt>
     const SUITE_ID: usize;
 
     /// transforms a password and domain separation tag (DST) into a curve point
     fn map_to_curve<H: Hash>(msg: &[u8], dst: &[u8]) -> Result<Self, InternalPakeError>;
 
     /// Generates the contextString parameter as defined in
-    /// https://www.ietf.org/archive/id/draft-irtf-cfrg-voprf-05.txt
+    /// <https://www.ietf.org/archive/id/draft-irtf-cfrg-voprf-05.txt>
     fn get_context_string(mode: u8) -> Vec<u8> {
         [i2osp(mode as usize, 1), i2osp(Self::SUITE_ID, 2)].concat()
     }

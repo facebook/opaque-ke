@@ -6,7 +6,7 @@
 use crate::{
     errors::{InternalPakeError, PakeError, ProtocolError},
     hash::Hash,
-    serialization::{serialize, tokenize, u8_to_credential_type, CredentialType},
+    serialization::{serialize, tokenize},
 };
 use digest::Digest;
 use generic_array::{
@@ -16,7 +16,7 @@ use generic_array::{
 use hkdf::Hkdf;
 use hmac::{Hmac, Mac, NewMac};
 use rand_core::{CryptoRng, RngCore};
-use std::collections::HashMap;
+use std::convert::TryFrom;
 
 // Constant string used as salt for HKDF computation
 const STR_ENVU: &[u8] = b"EnvU";
@@ -26,6 +26,23 @@ const STR_ENVU: &[u8] = b"EnvU";
 pub(crate) type ExportKeySize = U32;
 
 const NONCE_LEN: usize = 32;
+
+#[derive(Clone, Copy, PartialEq)]
+pub(crate) enum InnerEnvelopeMode {
+    Base = 0,
+    CustomIdentifier = 1,
+}
+
+impl TryFrom<u8> for InnerEnvelopeMode {
+    type Error = PakeError;
+    fn try_from(x: u8) -> Result<Self, Self::Error> {
+        match x {
+            0 => Ok(InnerEnvelopeMode::Base),
+            1 => Ok(InnerEnvelopeMode::CustomIdentifier),
+            _ => Err(PakeError::SerializationError),
+        }
+    }
+}
 
 /// This struct is an instantiation of the envelope as described in
 /// https://tools.ietf.org/html/draft-krawczyk-cfrg-opaque-06#section-4
@@ -38,59 +55,21 @@ const NONCE_LEN: usize = 32;
 /// an XOR-based approach without compromising on security, and to avoid
 /// the confusion around the implementation of an RKR-secure encryption.
 pub(crate) struct Envelope<D: Hash> {
+    mode: InnerEnvelopeMode,
     nonce: Vec<u8>,
     ciphertext: Vec<u8>,
     auth_data: Vec<u8>,
     hmac: GenericArray<u8, <D as Digest>::OutputSize>,
 }
 
-pub(crate) struct OpenedEnvelopeECF {
-    pub(crate) credentials_map: HashMap<CredentialType, Vec<u8>>,
+pub(crate) struct OpenedEnvelope {
+    pub(crate) client_s_sk: Vec<u8>,
     pub(crate) export_key: GenericArray<u8, ExportKeySize>,
 }
 
-pub(crate) struct OpenedEnvelope {
+pub(crate) struct OpenedInnerEnvelope {
     pub(crate) plaintext: Vec<u8>,
     pub(crate) export_key: GenericArray<u8, ExportKeySize>,
-}
-
-/// Representation for the format of the envelope
-pub struct EnvelopeCredentialsFormat {
-    pub(crate) secret_credentials: Vec<CredentialType>,
-    pub(crate) cleartext_credentials: Vec<CredentialType>,
-}
-
-impl EnvelopeCredentialsFormat {
-    /// Creates a new envelope credentials format with validity checking
-    /// An ECF is valid if:
-    /// - skU is a secret credential
-    /// - pkS is either a secret or cleartext credential
-    pub fn new(
-        secret_credentials: Vec<CredentialType>,
-        cleartext_credentials: Vec<CredentialType>,
-    ) -> Result<Self, ProtocolError> {
-        if !secret_credentials.iter().any(|&v| v == CredentialType::SkU) {
-            // No skU found in secret credentials
-            return Err(ProtocolError::ServerInvalidEnvelopeCredentialsFormatError);
-        }
-        if !secret_credentials.iter().any(|&v| v == CredentialType::PkS)
-            && !cleartext_credentials
-                .iter()
-                .any(|&v| v == CredentialType::PkS)
-        {
-            // No pkS found in either secret credentials or cleartext_credentials
-            return Err(ProtocolError::ServerInvalidEnvelopeCredentialsFormatError);
-        }
-        Ok(Self {
-            secret_credentials,
-            cleartext_credentials,
-        })
-    }
-
-    /// Uses the default setting for the envelope credentials format
-    pub fn default() -> Result<Self, ProtocolError> {
-        Self::new(vec![CredentialType::SkU], vec![CredentialType::PkS])
-    }
 }
 
 impl<D: Hash> Envelope<D> {
@@ -107,13 +86,19 @@ impl<D: Hash> Envelope<D> {
         ExportKeySize::to_usize()
     }
 
+    pub(crate) fn get_mode(&self) -> InnerEnvelopeMode {
+        self.mode
+    }
+
     pub(crate) fn new(
+        mode: InnerEnvelopeMode,
         nonce: Vec<u8>,
         ciphertext: Vec<u8>,
         auth_data: Vec<u8>,
         hmac: GenericArray<u8, <D as Digest>::OutputSize>,
     ) -> Self {
         Self {
+            mode,
             nonce,
             ciphertext,
             auth_data,
@@ -122,13 +107,13 @@ impl<D: Hash> Envelope<D> {
     }
 
     /// The format of the output is:
-    /// nonce             | ciphertext       | hmac
-    /// nonce_size bytes  | variable length  | hmac_size bytes
+    /// mode | nonce             | ciphertext       | hmac
+    /// u8   | nonce_size bytes  | variable length  | hmac_size bytes
     pub(crate) fn from_bytes(bytes: &[u8]) -> Result<Self, InternalPakeError> {
         let (result, remainder) = Self::deserialize(bytes)
-            .map_err(|_| InternalPakeError::IncompatibleEnvelopeCredentialsError)?;
+            .map_err(|_| InternalPakeError::InvalidEnvelopeStructureError)?;
         if !remainder.is_empty() {
-            return Err(InternalPakeError::IncompatibleEnvelopeCredentialsError);
+            return Err(InternalPakeError::InvalidEnvelopeStructureError);
         }
         Ok(result)
     }
@@ -139,6 +124,7 @@ impl<D: Hash> Envelope<D> {
 
     pub(crate) fn serialize(&self) -> Vec<u8> {
         [
+            &[self.mode as u8],
             &self.nonce[..],
             &serialize(&self.ciphertext, 2)[..],
             &serialize(&self.auth_data, 2)[..],
@@ -148,18 +134,27 @@ impl<D: Hash> Envelope<D> {
     }
 
     pub(crate) fn deserialize(input: &[u8]) -> Result<(Self, Vec<u8>), ProtocolError> {
-        if input.len() < NONCE_LEN {
+        if input.is_empty() {
+            return Err(ProtocolError::VerificationError(
+                PakeError::SerializationError,
+            ));
+        }
+        let mode = InnerEnvelopeMode::try_from(input[0])?;
+
+        let bytes = &input[1..];
+        if bytes.len() < NONCE_LEN {
             return Err(ProtocolError::VerificationError(
                 PakeError::SerializationError,
             ));
         }
 
-        let nonce = &input[..NONCE_LEN];
-        let (ciphertext, remainder) = tokenize(&input[NONCE_LEN..], 2)?;
+        let nonce = &bytes[..NONCE_LEN];
+        let (ciphertext, remainder) = tokenize(&bytes[NONCE_LEN..], 2)?;
         let (auth_data, remainder) = tokenize(&remainder, 2)?;
         let (hmac, remainder) = tokenize(&remainder, 2)?;
         Ok((
             Self::new(
+                mode,
                 nonce.to_vec(),
                 ciphertext,
                 auth_data,
@@ -169,58 +164,26 @@ impl<D: Hash> Envelope<D> {
         ))
     }
 
-    fn serialize_extensions(
-        cred_format: Vec<CredentialType>,
-        credentials: &HashMap<CredentialType, Vec<u8>>,
-    ) -> Result<Vec<u8>, InternalPakeError> {
-        let mut ret = Vec::new();
-        for index_type in cred_format {
-            match &credentials.get(&index_type) {
-                Some(v) => {
-                    ret.push(index_type as u8 + 1);
-                    ret.extend(serialize(&v, 2));
-                }
-                None => return Err(InternalPakeError::IncompatibleEnvelopeCredentialsError),
-            }
-        }
-        Ok(ret)
-    }
-
-    fn deserialize_extensions(
-        bytes: &[u8],
-    ) -> Result<HashMap<CredentialType, Vec<u8>>, InternalPakeError> {
-        let mut credentials: HashMap<CredentialType, Vec<u8>> = HashMap::new();
-        let mut bytes_copy: Vec<u8> = Vec::new();
-        bytes_copy.extend_from_slice(&bytes);
-        while !bytes_copy.is_empty() {
-            let t = u8_to_credential_type(bytes_copy[0])
-                .ok_or(InternalPakeError::IncompatibleEnvelopeCredentialsError)?;
-            let (cred, remainder) = tokenize(&bytes_copy[1..], 2)
-                .map_err(|_| InternalPakeError::IncompatibleEnvelopeCredentialsError)?;
-            bytes_copy = remainder;
-            credentials.insert(t, cred);
-        }
-        Ok(credentials)
-    }
-
     pub(crate) fn seal<R: RngCore + CryptoRng>(
-        key: &[u8],
-        ecf: EnvelopeCredentialsFormat,
-        credentials: HashMap<CredentialType, Vec<u8>>,
         rng: &mut R,
+        key: &[u8],
+        client_s_sk: &[u8],
+        server_s_pk: &[u8],
+        optional_ids: Option<(Vec<u8>, Vec<u8>)>,
     ) -> Result<(Self, GenericArray<u8, ExportKeySize>), InternalPakeError> {
-        let plaintext = Self::serialize_extensions(ecf.secret_credentials, &credentials)?;
-        let aad = Self::serialize_extensions(ecf.cleartext_credentials, &credentials)?;
-        Self::seal_raw(key, &plaintext, &aad, rng)
+        let plaintext = serialize(&client_s_sk, 2);
+        let aad = construct_aad(server_s_pk, &optional_ids);
+        Self::seal_raw(rng, key, &plaintext, &aad, mode_from_ids(&optional_ids))
     }
 
     /// Uses a key to convert the plaintext into an envelope, authenticated by the aad field.
     /// Note that a new nonce is sampled for each call to seal.
     pub(crate) fn seal_raw<R: RngCore + CryptoRng>(
+        rng: &mut R,
         key: &[u8],
         plaintext: &[u8],
         aad: &[u8],
-        rng: &mut R,
+        mode: InnerEnvelopeMode,
     ) -> Result<(Self, GenericArray<u8, ExportKeySize>), InternalPakeError> {
         let mut nonce = vec![0u8; NONCE_LEN];
         rng.fill_bytes(&mut nonce);
@@ -247,6 +210,7 @@ impl<D: Hash> Envelope<D> {
 
         Ok((
             Self::new(
+                mode,
                 nonce,
                 ciphertext.to_vec(),
                 aad.to_vec(),
@@ -256,21 +220,29 @@ impl<D: Hash> Envelope<D> {
         ))
     }
 
-    pub(crate) fn open(&self, key: &[u8]) -> Result<OpenedEnvelopeECF, InternalPakeError> {
-        let mut credentials_map = Self::deserialize_extensions(&self.auth_data)?;
-        let opened = self.open_raw(key, &self.auth_data)?;
-        let plaintext_map = Self::deserialize_extensions(&opened.plaintext)?;
-
-        for (i, plaintext) in plaintext_map {
-            if credentials_map.contains_key(&i) {
-                // Trying to set a credential that was already provided in the aad
-                return Err(InternalPakeError::IncompatibleEnvelopeCredentialsError);
-            }
-            credentials_map.insert(i, plaintext);
+    pub(crate) fn open(
+        &self,
+        key: &[u8],
+        server_s_pk: &[u8],
+        optional_ids: &Option<(Vec<u8>, Vec<u8>)>,
+    ) -> Result<OpenedEnvelope, InternalPakeError> {
+        // First, check that mode matches
+        if self.mode != mode_from_ids(optional_ids) {
+            return Err(InternalPakeError::IncompatibleEnvelopeModeError);
         }
 
-        Ok(OpenedEnvelopeECF {
-            credentials_map,
+        let aad = construct_aad(server_s_pk, optional_ids);
+        let opened = self.open_raw(key, &aad)?;
+
+        let (client_s_sk, remainder) = tokenize(&opened.plaintext, 2)
+            .map_err(|_| InternalPakeError::UnexpectedEnvelopeContentsError)?;
+        if !remainder.is_empty() {
+            // Should not have anything else in plaintext
+            return Err(InternalPakeError::UnexpectedEnvelopeContentsError);
+        }
+
+        Ok(OpenedEnvelope {
+            client_s_sk,
             export_key: opened.export_key,
         })
     }
@@ -281,7 +253,7 @@ impl<D: Hash> Envelope<D> {
         &self,
         key: &[u8],
         aad: &[u8],
-    ) -> Result<OpenedEnvelope, InternalPakeError> {
+    ) -> Result<OpenedInnerEnvelope, InternalPakeError> {
         let h = Hkdf::<D>::new(Some(&self.nonce), &key);
         let mut okm =
             vec![0u8; self.ciphertext.len() + Self::hmac_key_size() + Self::export_key_size()];
@@ -305,10 +277,26 @@ impl<D: Hash> Envelope<D> {
             .zip(self.ciphertext.iter())
             .map(|(&x1, &x2)| x1 ^ x2)
             .collect();
-        Ok(OpenedEnvelope {
+        Ok(OpenedInnerEnvelope {
             plaintext,
             export_key: *GenericArray::from_slice(&export_key),
         })
+    }
+}
+
+// Helper functions
+
+fn construct_aad(server_s_pk: &[u8], optional_ids: &Option<(Vec<u8>, Vec<u8>)>) -> Vec<u8> {
+    optional_ids
+        .iter()
+        .flat_map(|(l, r)| [serialize(server_s_pk, 2), serialize(l, 2), serialize(r, 2)].concat())
+        .collect()
+}
+
+pub(crate) fn mode_from_ids(optional_ids: &Option<(Vec<u8>, Vec<u8>)>) -> InnerEnvelopeMode {
+    match optional_ids {
+        Some(_) => InnerEnvelopeMode::CustomIdentifier,
+        None => InnerEnvelopeMode::Base,
     }
 }
 
@@ -326,8 +314,14 @@ mod tests {
         let mut msg = [0u8; 100];
         rng.fill_bytes(&mut msg);
 
-        let (envelope, export_key_1) =
-            Envelope::<sha2::Sha256>::seal_raw(&key, &msg, b"aad", &mut rng).unwrap();
+        let (envelope, export_key_1) = Envelope::<sha2::Sha256>::seal_raw(
+            &mut rng,
+            &key,
+            &msg,
+            b"aad",
+            InnerEnvelopeMode::Base,
+        )
+        .unwrap();
         let opened_envelope = envelope.open_raw(&key, b"aad").unwrap();
         assert_eq!(&msg.to_vec(), &opened_envelope.plaintext);
         assert_eq!(&export_key_1.to_vec(), &opened_envelope.export_key.to_vec());
