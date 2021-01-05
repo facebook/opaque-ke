@@ -593,10 +593,6 @@ fn test_credential_response() -> Result<(), ProtocolError> {
         hex::encode(server_login_start_result.plain_info),
     );
     assert_eq!(
-        hex::encode(&parameters.client_s_pk),
-        hex::encode(server_login_start_result.client_s_pk),
-    );
-    assert_eq!(
         hex::encode(&parameters.credential_response),
         hex::encode(server_login_start_result.message.serialize())
     );
@@ -636,7 +632,7 @@ fn test_key_exchange() -> Result<(), ProtocolError> {
     );
     assert_eq!(
         hex::encode(&parameters.server_s_pk),
-        hex::encode(&client_login_finish_result.server_s_pk)
+        hex::encode(&client_login_finish_result.server_s_pk.to_arr().to_vec())
     );
     assert_eq!(
         hex::encode(&parameters.shared_secret),

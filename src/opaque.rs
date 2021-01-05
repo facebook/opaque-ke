@@ -483,7 +483,7 @@ impl<CS: CipherSuite> ClientLogin<CS> {
 
 /// Optional parameters for client login start
 pub enum ClientLoginStartParameters {
-    /// Specifying an info field that will be sent to the server
+    /// Specifying a plaintext info field that will be sent to the server
     WithInfo(Vec<u8>),
 }
 
@@ -503,12 +503,13 @@ pub struct ClientLoginStartResult<CS: CipherSuite> {
 
 /// Optional parameters for client login finish
 pub enum ClientLoginFinishParameters {
-    /// Specifying an info and confidential info field that will be sent to the server
+    /// Specifying a plaintext info and confidential info field that will be sent to the server
     WithInfo(Vec<u8>, Vec<u8>),
-    /// Specifying an id_u and id_s that will be matched against the server
+    /// Specifying a user identifier and server identifier that will be matched against the client
     WithIdentifiers(Vec<u8>, Vec<u8>),
-    /// Specifying an info, confidential info that will be sent to the server,
-    /// along with an id_u and id_s that will be matched against the server
+    /// Specifying a plaintext info and confidential info that will be sent to the server,
+    /// along with a user identifier and and server identifier that will be matched against the server
+    /// (in that order)
     WithInfoAndIdentifiers(Vec<u8>, Vec<u8>, Vec<u8>, Vec<u8>),
     /// No info and no custom identifiers
     Default,
@@ -529,7 +530,7 @@ pub struct ClientLoginFinishResult<CS: CipherSuite> {
     /// The client-side export key
     pub export_key: GenericArray<u8, ExportKeySize>,
     /// The server's static public key
-    pub server_s_pk: Vec<u8>,
+    pub server_s_pk: <CS::KeyFormat as KeyPair>::Repr,
     /// The plaintext info sent by the client
     pub plain_info: Vec<u8>,
     /// The confidential info sent by the client
@@ -639,17 +640,14 @@ impl<CS: CipherSuite> ClientLogin<CS> {
         };
 
         let l2_beta_bytes = &l2.beta.to_arr()[..];
+        let server_s_pk_bytes = l2.server_s_pk.to_arr().to_vec();
 
         let password_derived_key =
             get_password_derived_key::<CS::Group, CS::SlowHash, CS::Hash>(&self.token, l2.beta)?;
 
         let opened_envelope = &l2
             .envelope
-            .open(
-                &password_derived_key,
-                &l2.server_s_pk.to_arr().to_vec(),
-                &optional_ids,
-            )
+            .open(&password_derived_key, &server_s_pk_bytes, &optional_ids)
             .map_err(|e| match e {
                 InternalPakeError::SealOpenHmacError => PakeError::InvalidLoginError,
                 err => PakeError::from(err),
@@ -657,8 +655,6 @@ impl<CS: CipherSuite> ClientLogin<CS> {
 
         let client_s_sk =
             <CS::KeyFormat as KeyPair>::Repr::from_bytes(&opened_envelope.client_s_sk)?;
-
-        let server_s_pk_bytes = l2.server_s_pk.to_arr().to_vec();
 
         let (id_u, id_s) = match optional_ids {
             None => (
@@ -682,7 +678,7 @@ impl<CS: CipherSuite> ClientLogin<CS> {
                 l2_bytes,
                 l2.ke2_message,
                 &self.ke1_state,
-                l2.server_s_pk,
+                l2.server_s_pk.clone(),
                 client_s_sk,
                 id_u,
                 id_s,
@@ -696,7 +692,7 @@ impl<CS: CipherSuite> ClientLogin<CS> {
             message: CredentialFinalization { ke3_message },
             shared_secret,
             export_key: opened_envelope.export_key,
-            server_s_pk: server_s_pk_bytes,
+            server_s_pk: l2.server_s_pk,
         })
     }
 }
@@ -722,12 +718,13 @@ impl<CS: CipherSuite> TryFrom<&[u8]> for ServerLogin<CS> {
 
 /// Optional parameters for server login start
 pub enum ServerLoginStartParameters {
-    /// Specifying an info and confidential info field that will be sent to the client
+    /// Specifying a plaintext info and confidential info field that will be sent to the client
     WithInfo(Vec<u8>, Vec<u8>),
-    /// Specifying an id_u and id_s that will be matched against the client
+    /// Specifying a user identifier and server identifier that will be matched against the client
     WithIdentifiers(Vec<u8>, Vec<u8>),
-    /// Specifying an info, confidential info that will be sent to the client,
-    /// along with an id_u and id_s that will be matched against the client
+    /// Specifying a plaintext info and confidential info that will be sent to the client,
+    /// along with a user identifier and and server identifier that will be matched against the client
+    /// (in that order)
     WithInfoAndIdentifiers(Vec<u8>, Vec<u8>, Vec<u8>, Vec<u8>),
 }
 
@@ -743,8 +740,6 @@ pub struct ServerLoginStartResult<CS: CipherSuite> {
     pub message: CredentialResponse<CS>,
     /// The state that the server must keep in order to finish the protocl
     pub state: ServerLogin<CS>,
-    /// The client's static public key
-    pub client_s_pk: Vec<u8>,
     /// The plaintext info sent by the client
     pub plain_info: Vec<u8>,
 }
@@ -852,7 +847,7 @@ impl<CS: CipherSuite> ServerLogin<CS> {
             l1_bytes.to_vec(),
             l2_component,
             l1.ke1_message,
-            client_s_pk.clone(),
+            client_s_pk,
             server_s_sk.clone(),
             id_u,
             id_s,
@@ -874,7 +869,6 @@ impl<CS: CipherSuite> ServerLogin<CS> {
                 _cs: PhantomData,
                 ke2_state,
             },
-            client_s_pk: client_s_pk.to_arr().to_vec(),
         })
     }
 

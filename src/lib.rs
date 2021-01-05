@@ -65,7 +65,7 @@
 //!
 //! ### Client Registration Start
 //! In the first step of registration, the client chooses as input a registration password. The client runs [ClientRegistration::start]
-//! to produce an output consisting of a [RegistrationRequest] to be sent to the server, and
+//! to produce a [ClientRegistrationStartResult], which consists of a [RegistrationRequest] to be sent to the server and
 //! a [ClientRegistration] which must be persisted on the client for the final step of client registration.
 //! ```
 //! # use opaque_ke::{
@@ -96,8 +96,8 @@
 //! ### Server Registration Start
 //! In the second step of registration, the server takes as input the instance of [RegistrationRequest] from the client, and
 //! the server's public key `server_kp.public()`.
-//! The server runs [ServerRegistration::start] to produce an output consisting of
-//! a [RegistrationResponse] to be returned to the client, and
+//! The server runs [ServerRegistration::start] to produce an a [ServerRegistrationStartResult], which consists of
+//! a [RegistrationResponse] to be returned to the client and
 //! a [ServerRegistration] which must be persisted on the server for the final step of server registration.
 //! ```
 //! # use opaque_ke::{
@@ -136,8 +136,8 @@
 //! In the third step of registration, the client takes as input
 //! a [RegistrationResponse] from the server, and
 //! a [ClientRegistration] from the first step of registration.
-//! The client runs [ClientRegistration::finish] to produce an output consisting of a [RegistrationUpload]
-//! to be sent to the server.
+//! The client runs [ClientRegistration::finish] to produce a [ClientRegistrationFinishResult], which consists of a [RegistrationUpload]
+//! to be sent to the server and an `export_key` field which can be used optionally as described in the [Export Key](#export-key) section.
 //! ```
 //! # use opaque_ke::{
 //! #   errors::ProtocolError,
@@ -347,13 +347,9 @@
 //! # let server_login_start_result =
 //! #     ServerLogin::start(&mut server_rng, password_file, &server_kp.private(), client_login_start_result.message, ServerLoginStartParameters::default())?;
 //! let client_login_finish_result = client_login_start_result.state.finish(
-//!   server_login_start_result.message,
-//!   ClientLoginFinishParameters::default(),
+//!     server_login_start_result.message,
+//!     ClientLoginFinishParameters::default(),
 //! )?;
-//! assert_eq!(
-//!     client_registration_finish_result.export_key,
-//!     client_login_finish_result.export_key,
-//! );
 //! # Ok::<(), ProtocolError>(())
 //! ```
 //!
@@ -404,8 +400,9 @@
 //! #   ClientLoginFinishParameters::default(),
 //! # )?;
 //! let server_login_finish_result = server_login_start_result.state.finish(
-//!    client_login_finish_result.message,
+//!     client_login_finish_result.message,
 //! )?;
+//!
 //! assert_eq!(
 //!    client_login_finish_result.shared_secret,
 //!    server_login_finish_result.shared_secret,
@@ -413,7 +410,330 @@
 //! # Ok::<(), ProtocolError>(())
 //! ```
 //! If the protocol completes successfully, then the server obtains a `server_login_finish_result.shared_secret` which is guaranteed to
-//! match `client_login_finish_result.shared_secret`. Otherwise, on failure, the [ServerLogin::finish] algorithm outputs the error [InvalidLoginError](errors::PakeError::InvalidLoginError).
+//! match `client_login_finish_result.shared_secret` (see the [Shared Secret](#shared-secret) section).
+//! Otherwise, on failure, the [ServerLogin::finish] algorithm outputs the error [InvalidLoginError](errors::PakeError::InvalidLoginError).
+//!
+//! # Advanced Usage
+//!
+//! This implementation offers support for several optional features of OPAQUE, described below. They are not critical to the
+//! execution of the main protocol, but can provide additional security benefits which can be suitable for various applications that rely on
+//! OPAQUE for authentication.
+//!
+//! ## Shared Secret
+//!
+//! Upon a successful completion of the OPAQUE protocol (the client runs login with the same password used during registration),
+//! the client and server have access to a shared secret, which is a pseudorandomly distributed 32-byte string which only the client
+//! and server know. Multiple login runs using the same password for the same client will produce different shared secrets, distributed
+//! as uniformly random strings. Thus, the shared secret can be used as a session secret for a secure channel between the client and server.
+//!
+//! The shared secret can be accessed from the `shared_secret` field of [ClientLoginFinishResult] and [ServerLoginFinishResult]. See
+//! the combination of [Client Login Finish](#client-login-finish) and [Server Login Finish](#server-login-finish) for example usage.
+//!
+//! ## Checking Server Consistency
+//!
+//! A [ClientLoginFinishResult] contains the `server_s_pk` field, which is represents the static public key of the server that is established
+//! during the setup phase. This can be used by the client to verify the authenticity of the server it engages with during the login phase. In particular,
+//! the client can check that the static public key of the server supplied during registration matches this field during login.
+//! ```
+//! # use opaque_ke::{
+//! #   errors::ProtocolError,
+//! #   ClientRegistration, ClientRegistrationFinishParameters, ServerRegistration, ClientLogin, ClientLoginStartParameters, ClientLoginFinishParameters, ServerLogin, ServerLoginStartParameters, CredentialFinalization,
+//! #   keypair::{KeyPair, X25519KeyPair},
+//! #   slow_hash::NoOpHash,
+//! # };
+//! # use opaque_ke::ciphersuite::CipherSuite;
+//! # struct Default;
+//! # impl CipherSuite for Default {
+//! #     type Group = curve25519_dalek::ristretto::RistrettoPoint;
+//! #     type KeyFormat = opaque_ke::keypair::X25519KeyPair;
+//! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
+//! #     type Hash = sha2::Sha256;
+//! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
+//! # }
+//! # use rand_core::{OsRng, RngCore};
+//! # let mut client_rng = OsRng;
+//! # let client_registration_start_result = ClientRegistration::<Default>::start(
+//! #     &mut client_rng,
+//! #     b"password",
+//! # )?;
+//! # let mut server_rng = OsRng;
+//! // During setup, server generates its static keypair
+//! let server_kp = Default::generate_random_keypair(&mut server_rng)?;
+//! # let server_registration_start_result = ServerRegistration::<Default>::start(&mut server_rng, client_registration_start_result.message, server_kp.public())?;
+//!
+//! // During setup or registration, the server transmits its static public key to the client
+//! let server_s_pk = server_kp.public(); // obtained from the server
+//! # let client_registration_finish_result = client_registration_start_result.state.finish(&mut client_rng, server_registration_start_result.message, ClientRegistrationFinishParameters::default())?;
+//! # let password_file_bytes = server_registration_start_result.state.finish(client_registration_finish_result.message)?.to_bytes();
+//! # let client_login_start_result = ClientLogin::<Default>::start(
+//! #     &mut client_rng,
+//! #     b"password",
+//! #     ClientLoginStartParameters::default(),
+//! # )?;
+//! # use std::convert::TryFrom;
+//! # let password_file =
+//! #   ServerRegistration::<Default>::try_from(
+//! #     &password_file_bytes[..],
+//! #   )?;
+//! # let server_login_start_result =
+//! #     ServerLogin::start(&mut server_rng, password_file, &server_kp.private(), client_login_start_result.message, ServerLoginStartParameters::default())?;
+//!
+//! // And then later, during login...
+//! let client_login_finish_result = client_login_start_result.state.finish(
+//!     server_login_start_result.message,
+//!     ClientLoginFinishParameters::default(),
+//! )?;
+//!
+//! // Check that the server's static public key matches what was obtained during
+//! // setup or registration
+//! assert_eq!(
+//!     &client_login_finish_result.server_s_pk,
+//!     server_s_pk,
+//! );
+//! # Ok::<(), ProtocolError>(())
+//! ```
+//!
+//! Note that without this check over the consistency of the server's static public key, a malicious actor could impersonate the registration server if it were able to copy the password
+//! file output during registration! Therefore, it is recommended to perform the following check in the application layer if the client can obtain a copy of the server's static
+//! public key beforehand.
+//!
+//!
+//! ## Export Key
+//!
+//! The export key is a pseudorandomly distributed 32-byte string output by both the
+//! [Client Registration Finish](#client-registration-finish) and [Client Login Finish](#client-login-finish) steps.
+//! The same export key string will be output by both functions only if the exact same password is passed to [ClientRegistration::start] and [ClientLogin::start].
+//!
+//! The export key retains as much secrecy as the password itself, and is similarly derived through an evaluation of the slow hashing function. Hence, only the parties which
+//! know the password the client uses during registration and login can recover this secret, as it is never exposed to the server. As a result, the export key
+//! can be used (separately from the OPAQUE protocol) to provide confidentiality and integrity to other data which only the client should be able to process.
+//! For instance, if the server is expected to maintain any client-side secrets which require a password to access, then this export key can be used to encrypt
+//! these secrets so that they remain hidden from the server.
+//!
+//! You can access the export key from the `export_key` field of [ClientRegistrationFinishResult] and [ClientLoginFinishResult].
+//!
+//! ```
+//! # use opaque_ke::{
+//! #   errors::ProtocolError,
+//! #   ClientRegistration, ClientRegistrationFinishParameters, ServerRegistration, ClientLogin, ClientLoginStartParameters, ClientLoginFinishParameters, ServerLogin, ServerLoginStartParameters, CredentialFinalization,
+//! #   keypair::{KeyPair, X25519KeyPair},
+//! #   slow_hash::NoOpHash,
+//! # };
+//! # use opaque_ke::ciphersuite::CipherSuite;
+//! # struct Default;
+//! # impl CipherSuite for Default {
+//! #     type Group = curve25519_dalek::ristretto::RistrettoPoint;
+//! #     type KeyFormat = opaque_ke::keypair::X25519KeyPair;
+//! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
+//! #     type Hash = sha2::Sha256;
+//! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
+//! # }
+//! # use rand_core::{OsRng, RngCore};
+//! # let mut client_rng = OsRng;
+//! # let client_registration_start_result = ClientRegistration::<Default>::start(
+//! #     &mut client_rng,
+//! #     b"password",
+//! # )?;
+//! # let mut server_rng = OsRng;
+//! # let server_kp = Default::generate_random_keypair(&mut server_rng)?;
+//! # let server_registration_start_result = ServerRegistration::<Default>::start(&mut server_rng, client_registration_start_result.message, server_kp.public())?;
+//! // During registration...
+//! let client_registration_finish_result = client_registration_start_result.state.finish(
+//!     &mut client_rng,
+//!     server_registration_start_result.message,
+//!     ClientRegistrationFinishParameters::default()
+//! )?;
+//! # let password_file_bytes = server_registration_start_result.state.finish(client_registration_finish_result.message)?.to_bytes();
+//! # let client_login_start_result = ClientLogin::<Default>::start(
+//! #     &mut client_rng,
+//! #     b"password",
+//! #     ClientLoginStartParameters::default(),
+//! # )?;
+//! # use std::convert::TryFrom;
+//! # let password_file =
+//! #   ServerRegistration::<Default>::try_from(
+//! #     &password_file_bytes[..],
+//! #   )?;
+//! # let server_login_start_result =
+//! #     ServerLogin::start(&mut server_rng, password_file, &server_kp.private(), client_login_start_result.message, ServerLoginStartParameters::default())?;
+//!
+//! // And then later, during login...
+//! let client_login_finish_result = client_login_start_result.state.finish(
+//!     server_login_start_result.message,
+//!     ClientLoginFinishParameters::default(),
+//! )?;
+//!
+//! assert_eq!(
+//!     client_registration_finish_result.export_key,
+//!     client_login_finish_result.export_key,
+//! );
+//! # Ok::<(), ProtocolError>(())
+//! ```
+//!
+//! ## Custom Identifiers
+//!
+//! Typically when applications use OPAQUE to authenticate a client to a server, the client has a registered "username" which is sent to the server to
+//! identify the corresponding password file established during registration. The server may also have an identifier corresponding to an entity (e.g. facebook.com).
+//! By default, neither of these public identifiers need to be supplied to the OPAQUE protocol.
+//!
+//! But, for applications that wish to cryptographically bind these identities to
+//! the registered password file as well as the shared secret output by the login phase, these custom identifiers can be specified through
+//! [ClientRegistrationFinishParameters::WithIdentifiers] in [Client Registration Finish](#client-registration-finish):
+//! ```
+//! # use opaque_ke::{
+//! #   errors::ProtocolError,
+//! #   ClientRegistration, ClientRegistrationFinishParameters, ServerRegistration,
+//! #   keypair::{KeyPair, X25519KeyPair},
+//! #   slow_hash::NoOpHash,
+//! # };
+//! # use opaque_ke::ciphersuite::CipherSuite;
+//! # struct Default;
+//! # impl CipherSuite for Default {
+//! #     type Group = curve25519_dalek::ristretto::RistrettoPoint;
+//! #     type KeyFormat = opaque_ke::keypair::X25519KeyPair;
+//! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
+//! #     type Hash = sha2::Sha256;
+//! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
+//! # }
+//! # use rand_core::{OsRng, RngCore};
+//! # let mut client_rng = OsRng;
+//! # let client_registration_start_result = ClientRegistration::<Default>::start(
+//! #     &mut client_rng,
+//! #     b"password",
+//! # )?;
+//! # let mut server_rng = OsRng;
+//! # let server_kp = Default::generate_random_keypair(&mut server_rng)?;
+//! # let server_registration_start_result = ServerRegistration::<Default>::start(&mut server_rng, client_registration_start_result.message, server_kp.public())?;
+//! let client_registration_finish_result = client_registration_start_result.state.finish(
+//!     &mut client_rng,
+//!     server_registration_start_result.message,
+//!     ClientRegistrationFinishParameters::WithIdentifiers(
+//!         b"username".to_vec(),
+//!         b"facebook.com".to_vec(),
+//!     ),
+//! )?;
+//! # Ok::<(), ProtocolError>(())
+//! ```
+//!
+//! The same identifiers must also be supplied using [ServerLoginStartParameters::WithIdentifiers] in [Server Login Start](#server-login-start):
+//! ```
+//! # use opaque_ke::{
+//! #   errors::ProtocolError,
+//! #   ClientRegistration, ClientRegistrationFinishParameters, ServerRegistration, ClientLogin, ClientLoginStartParameters, CredentialFinalization,
+//! #   keypair::{KeyPair, X25519KeyPair},
+//! #   slow_hash::NoOpHash,
+//! # };
+//! # use opaque_ke::ciphersuite::CipherSuite;
+//! # struct Default;
+//! # impl CipherSuite for Default {
+//! #     type Group = curve25519_dalek::ristretto::RistrettoPoint;
+//! #     type KeyFormat = opaque_ke::keypair::X25519KeyPair;
+//! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
+//! #     type Hash = sha2::Sha256;
+//! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
+//! # }
+//! # use rand_core::{OsRng, RngCore};
+//! # let mut client_rng = OsRng;
+//! # let client_registration_start_result = ClientRegistration::<Default>::start(
+//! #     &mut client_rng,
+//! #     b"password",
+//! # )?;
+//! # let mut server_rng = OsRng;
+//! # let server_kp = Default::generate_random_keypair(&mut server_rng)?;
+//! # let server_registration_start_result = ServerRegistration::<Default>::start(&mut server_rng, client_registration_start_result.message, server_kp.public())?;
+//! # let client_registration_finish_result = client_registration_start_result.state.finish(&mut client_rng, server_registration_start_result.message, ClientRegistrationFinishParameters::WithIdentifiers(b"username".to_vec(), b"facebook.com".to_vec()))?;
+//! # let password_file_bytes = server_registration_start_result.state.finish(client_registration_finish_result.message)?.to_bytes();
+//! # let client_login_start_result = ClientLogin::<Default>::start(
+//! #   &mut client_rng,
+//! #   b"password",
+//! #   ClientLoginStartParameters::default(),
+//! # )?;
+//! # use opaque_ke::{ServerLogin, ServerLoginStartParameters};
+//! # use std::convert::TryFrom;
+//! # let password_file = ServerRegistration::<Default>::try_from(&password_file_bytes[..])?;
+//! # let mut server_rng = OsRng;
+//! let server_login_start_result = ServerLogin::start(
+//!     &mut server_rng,
+//!     password_file,
+//!     &server_kp.private(),
+//!     client_login_start_result.message,
+//!     ServerLoginStartParameters::WithIdentifiers(
+//!         b"username".to_vec(),
+//!         b"facebook.com".to_vec(),
+//!     ),
+//! )?;
+//! # Ok::<(), ProtocolError>(())
+//! ```
+//!
+//! as well as [ClientLoginFinishParameters::WithIdentifiers] in [Client Login Finish](#client-login-finish):
+//! ```
+//! # use opaque_ke::{
+//! #   errors::ProtocolError,
+//! #   ClientRegistration, ClientRegistrationFinishParameters, ServerRegistration, ClientLogin, ClientLoginStartParameters, ClientLoginFinishParameters, ServerLogin, ServerLoginStartParameters, CredentialFinalization,
+//! #   keypair::{KeyPair, X25519KeyPair},
+//! #   slow_hash::NoOpHash,
+//! # };
+//! # use opaque_ke::ciphersuite::CipherSuite;
+//! # struct Default;
+//! # impl CipherSuite for Default {
+//! #     type Group = curve25519_dalek::ristretto::RistrettoPoint;
+//! #     type KeyFormat = opaque_ke::keypair::X25519KeyPair;
+//! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
+//! #     type Hash = sha2::Sha256;
+//! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
+//! # }
+//! # use rand_core::{OsRng, RngCore};
+//! # let mut client_rng = OsRng;
+//! # let client_registration_start_result = ClientRegistration::<Default>::start(
+//! #     &mut client_rng,
+//! #     b"password",
+//! # )?;
+//! # let mut server_rng = OsRng;
+//! # let server_kp = Default::generate_random_keypair(&mut server_rng)?;
+//! # let server_registration_start_result = ServerRegistration::<Default>::start(&mut server_rng, client_registration_start_result.message, server_kp.public())?;
+//! # let client_registration_finish_result = client_registration_start_result.state.finish(&mut client_rng, server_registration_start_result.message, ClientRegistrationFinishParameters::WithIdentifiers(b"username".to_vec(), b"facebook.com".to_vec()))?;
+//! # let password_file_bytes = server_registration_start_result.state.finish(client_registration_finish_result.message)?.to_bytes();
+//! # let client_login_start_result = ClientLogin::<Default>::start(
+//! #     &mut client_rng,
+//! #     b"password",
+//! #     ClientLoginStartParameters::default(),
+//! # )?;
+//! # use std::convert::TryFrom;
+//! # let password_file =
+//! #   ServerRegistration::<Default>::try_from(
+//! #     &password_file_bytes[..],
+//! #   )?;
+//! # let server_login_start_result =
+//! #     ServerLogin::start(&mut server_rng, password_file, &server_kp.private(), client_login_start_result.message, ServerLoginStartParameters::WithIdentifiers(b"username".to_vec(), b"facebook.com".to_vec()))?;
+//! let client_login_finish_result = client_login_start_result.state.finish(
+//!     server_login_start_result.message,
+//!     ClientLoginFinishParameters::WithIdentifiers(
+//!         b"username".to_vec(),
+//!         b"facebook.com".to_vec(),
+//!     ),
+//! )?;
+//! # Ok::<(), ProtocolError>(())
+//! ```
+//! Failing to supply the same pair of custom identifiers in any of the three steps above will result in an error in attempting to complete
+//! the protocol!
+//!
+//! ## Key Exchange Additional Data
+//!
+//! A key exchange protocol typically supports the passing of data between the two parties before the exchange is complete, so as to bind the integrity
+//! and/or confidentiality of application-specific data to the security of the key exchange. During the login phase, the client and server can pass
+//! additional data alongside the first three messages of the protocol, with confidential data being supported for the second and third messages.
+//!
+//! The following three messages support passing of additional data:
+//! - The first login message, where the client can populate [ClientLoginStartParameters::WithInfo] with plaintext additional data, and
+//! the server can retrieve using the `plain_info` field of [ServerLoginStartResult].
+//! - The second login message, where the server can populate [ServerLoginStartParameters::WithInfo] with plaintext and confidential additional data,
+//! and the client can retrieve using the `plain_info` and `confidential_info` fields of [ClientLoginFinishResult].
+//! - The third login message, where the client can populate [ClientLoginFinishParameters::WithInfo] with plaintext and confidential
+//! additional info, and the server can retrieve using the `plain_info` and `confidential_info` fields of [ServerLoginFinishResult].
+//!
+//! The `WithInfoAndIdentifiers` variant of each of these enums representing optional parameters can be used to specify these fields in addition to
+//! [custom identifiers](#custom-identifiers), with the ordering of the fields as `WithInfoAndIdentifiers(plain_info, confidential_info, username, server_name)`.
+//!
 //!
 
 #![cfg_attr(not(feature = "bench"), deny(missing_docs))]
