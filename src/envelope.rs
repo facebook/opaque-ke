@@ -287,10 +287,11 @@ impl<D: Hash> Envelope<D> {
 // Helper functions
 
 fn construct_aad(server_s_pk: &[u8], optional_ids: &Option<(Vec<u8>, Vec<u8>)>) -> Vec<u8> {
-    optional_ids
+    let ids = optional_ids
         .iter()
-        .flat_map(|(l, r)| [serialize(server_s_pk, 2), serialize(l, 2), serialize(r, 2)].concat())
-        .collect()
+        .flat_map(|(l, r)| [serialize(l, 2), serialize(r, 2)].concat())
+        .collect();
+    [serialize(server_s_pk, 2), ids].concat()
 }
 
 pub(crate) fn mode_from_ids(optional_ids: &Option<(Vec<u8>, Vec<u8>)>) -> InnerEnvelopeMode {
