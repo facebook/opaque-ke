@@ -35,7 +35,6 @@ pub trait KeyExchange<D: Hash, KeyFormat: KeyPair> {
         server_s_sk: KeyFormat::Repr,
         id_u: Vec<u8>,
         id_s: Vec<u8>,
-        info: Vec<u8>,
         e_info: Vec<u8>,
     ) -> Result<(Vec<u8>, Self::KE2State, Self::KE2Message), ProtocolError>;
 
@@ -48,15 +47,13 @@ pub trait KeyExchange<D: Hash, KeyFormat: KeyPair> {
         client_s_sk: KeyFormat::Repr,
         id_u: Vec<u8>,
         id_s: Vec<u8>,
-        info: Vec<u8>,
-        e_info: Vec<u8>,
-    ) -> Result<(Vec<u8>, Vec<u8>, Vec<u8>, Self::KE3Message), ProtocolError>;
+    ) -> Result<(Vec<u8>, Vec<u8>, Self::KE3Message), ProtocolError>;
 
     #[allow(clippy::type_complexity)]
     fn finish_ke(
         ke3_message: Self::KE3Message,
         ke2_state: &Self::KE2State,
-    ) -> Result<(Vec<u8>, Vec<u8>, Vec<u8>), ProtocolError>;
+    ) -> Result<Vec<u8>, ProtocolError>;
 
     fn ke1_state_size() -> usize;
 

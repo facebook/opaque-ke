@@ -503,14 +503,8 @@ pub struct ClientLoginStartResult<CS: CipherSuite> {
 
 /// Optional parameters for client login finish
 pub enum ClientLoginFinishParameters {
-    /// Specifying a plaintext info and confidential info field that will be sent to the server
-    WithInfo(Vec<u8>, Vec<u8>),
     /// Specifying a user identifier and server identifier that will be matched against the client
     WithIdentifiers(Vec<u8>, Vec<u8>),
-    /// Specifying a plaintext info and confidential info that will be sent to the server,
-    /// along with a user identifier and and server identifier that will be matched against the server
-    /// (in that order)
-    WithInfoAndIdentifiers(Vec<u8>, Vec<u8>, Vec<u8>, Vec<u8>),
     /// No info and no custom identifiers
     Default,
 }
@@ -531,8 +525,6 @@ pub struct ClientLoginFinishResult<CS: CipherSuite> {
     pub export_key: GenericArray<u8, ExportKeySize>,
     /// The server's static public key
     pub server_s_pk: <CS::KeyFormat as KeyPair>::Repr,
-    /// The plaintext info sent by the client
-    pub plain_info: Vec<u8>,
     /// The confidential info sent by the client
     pub confidential_info: Vec<u8>,
 }
@@ -628,15 +620,9 @@ impl<CS: CipherSuite> ClientLogin<CS> {
         l2: CredentialResponse<CS>,
         params: ClientLoginFinishParameters,
     ) -> Result<ClientLoginFinishResult<CS>, ProtocolError> {
-        let (info, e_info, optional_ids) = match params {
-            ClientLoginFinishParameters::Default => (Vec::new(), Vec::new(), None),
-            ClientLoginFinishParameters::WithInfo(info, e_info) => (info, e_info, None),
-            ClientLoginFinishParameters::WithIdentifiers(id_u, id_s) => {
-                (Vec::new(), Vec::new(), Some((id_u, id_s)))
-            }
-            ClientLoginFinishParameters::WithInfoAndIdentifiers(info, e_info, id_u, id_s) => {
-                (info, e_info, Some((id_u, id_s)))
-            }
+        let optional_ids = match params {
+            ClientLoginFinishParameters::Default => None,
+            ClientLoginFinishParameters::WithIdentifiers(id_u, id_s) => Some((id_u, id_s)),
         };
 
         let l2_beta_bytes = &l2.beta.to_arr()[..];
@@ -673,21 +659,17 @@ impl<CS: CipherSuite> ClientLogin<CS> {
         ]
         .concat();
 
-        let (plain_info, confidential_info, shared_secret, ke3_message) =
-            CS::KeyExchange::generate_ke3(
-                l2_bytes,
-                l2.ke2_message,
-                &self.ke1_state,
-                l2.server_s_pk.clone(),
-                client_s_sk,
-                id_u,
-                id_s,
-                info,
-                e_info,
-            )?;
+        let (confidential_info, shared_secret, ke3_message) = CS::KeyExchange::generate_ke3(
+            l2_bytes,
+            l2.ke2_message,
+            &self.ke1_state,
+            l2.server_s_pk.clone(),
+            client_s_sk,
+            id_u,
+            id_s,
+        )?;
 
         Ok(ClientLoginFinishResult {
-            plain_info,
             confidential_info,
             message: CredentialFinalization { ke3_message },
             shared_secret,
@@ -718,19 +700,19 @@ impl<CS: CipherSuite> TryFrom<&[u8]> for ServerLogin<CS> {
 
 /// Optional parameters for server login start
 pub enum ServerLoginStartParameters {
-    /// Specifying a plaintext info and confidential info field that will be sent to the client
-    WithInfo(Vec<u8>, Vec<u8>),
+    /// Specifying a confidential info field that will be sent to the client
+    WithInfo(Vec<u8>),
     /// Specifying a user identifier and server identifier that will be matched against the client
     WithIdentifiers(Vec<u8>, Vec<u8>),
-    /// Specifying a plaintext info and confidential info that will be sent to the client,
+    /// Specifying a confidential info field that will be sent to the client,
     /// along with a user identifier and and server identifier that will be matched against the client
     /// (in that order)
-    WithInfoAndIdentifiers(Vec<u8>, Vec<u8>, Vec<u8>, Vec<u8>),
+    WithInfoAndIdentifiers(Vec<u8>, Vec<u8>, Vec<u8>),
 }
 
 impl Default for ServerLoginStartParameters {
     fn default() -> Self {
-        Self::WithInfo(Vec::new(), Vec::new())
+        Self::WithInfo(Vec::new())
     }
 }
 
@@ -748,10 +730,6 @@ pub struct ServerLoginStartResult<CS: CipherSuite> {
 pub struct ServerLoginFinishResult {
     /// The shared session secret between client and server
     pub shared_secret: Vec<u8>,
-    /// The plaintext info sent by the client
-    pub plain_info: Vec<u8>,
-    /// The confidential info sent by the client
-    pub confidential_info: Vec<u8>,
 }
 
 impl<CS: CipherSuite> ServerLogin<CS> {
@@ -805,13 +783,13 @@ impl<CS: CipherSuite> ServerLogin<CS> {
             .client_s_pk
             .ok_or(InternalPakeError::SealError)?;
 
-        let (info, e_info, optional_ids) = match params {
-            ServerLoginStartParameters::WithInfo(info, e_info) => (info, e_info, None),
+        let (e_info, optional_ids) = match params {
+            ServerLoginStartParameters::WithInfo(e_info) => (e_info, None),
             ServerLoginStartParameters::WithIdentifiers(id_u, id_s) => {
-                (Vec::new(), Vec::new(), Some((id_u, id_s)))
+                (Vec::new(), Some((id_u, id_s)))
             }
-            ServerLoginStartParameters::WithInfoAndIdentifiers(info, e_info, id_u, id_s) => {
-                (info, e_info, Some((id_u, id_s)))
+            ServerLoginStartParameters::WithInfoAndIdentifiers(e_info, id_u, id_s) => {
+                (e_info, Some((id_u, id_s)))
             }
         };
 
@@ -851,7 +829,6 @@ impl<CS: CipherSuite> ServerLogin<CS> {
             server_s_sk.clone(),
             id_u,
             id_s,
-            info,
             e_info,
         )?;
 
@@ -912,23 +889,18 @@ impl<CS: CipherSuite> ServerLogin<CS> {
         &self,
         message: CredentialFinalization<CS>,
     ) -> Result<ServerLoginFinishResult, ProtocolError> {
-        let (plain_info, confidential_info, shared_secret) =
-            <CS::KeyExchange as KeyExchange<CS::Hash, CS::KeyFormat>>::finish_ke(
-                message.ke3_message,
-                &self.ke2_state,
-            )
-            .map_err(|e| match e {
-                ProtocolError::VerificationError(PakeError::KeyExchangeMacValidationError) => {
-                    ProtocolError::VerificationError(PakeError::InvalidLoginError)
-                }
-                err => err,
-            })?;
+        let shared_secret = <CS::KeyExchange as KeyExchange<CS::Hash, CS::KeyFormat>>::finish_ke(
+            message.ke3_message,
+            &self.ke2_state,
+        )
+        .map_err(|e| match e {
+            ProtocolError::VerificationError(PakeError::KeyExchangeMacValidationError) => {
+                ProtocolError::VerificationError(PakeError::InvalidLoginError)
+            }
+            err => err,
+        })?;
 
-        Ok(ServerLoginFinishResult {
-            plain_info,
-            confidential_info,
-            shared_secret,
-        })
+        Ok(ServerLoginFinishResult { shared_secret })
     }
 }
 
