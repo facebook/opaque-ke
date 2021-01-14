@@ -233,14 +233,11 @@ fn login_second_message_roundtrip() {
     let mut server_nonce = [0u8; NONCE_LEN];
     rng.fill_bytes(&mut server_nonce);
 
-    let mut info = [0u8; MAX_INFO_LENGTH];
-    rng.fill_bytes(&mut info);
     let mut e_info = [0u8; MAX_INFO_LENGTH];
     rng.fill_bytes(&mut e_info);
 
     let ke2m: Vec<u8> = [
         &server_nonce[..],
-        &serialize(&info.to_vec(), 2),
         &server_e_kp.public(),
         &serialize(&e_info.to_vec(), 2),
         &mac[..],
@@ -263,19 +260,10 @@ fn login_second_message_roundtrip() {
 #[test]
 fn login_third_message_roundtrip() {
     let mut rng = OsRng;
-    let mut info = [0u8; MAX_INFO_LENGTH];
-    rng.fill_bytes(&mut info);
-    let mut e_info = [0u8; MAX_INFO_LENGTH];
-    rng.fill_bytes(&mut e_info);
     let mut mac = [0u8; 32];
     rng.fill_bytes(&mut mac);
 
-    let input: Vec<u8> = [
-        &serialize(&info.to_vec(), 2),
-        &serialize(&e_info.to_vec(), 2),
-        &mac[..],
-    ]
-    .concat();
+    let input: Vec<u8> = [&mac[..]].concat();
 
     let l3 = CredentialFinalization::<Default>::deserialize(&input).unwrap();
     let l3_bytes = l3.serialize();
@@ -328,8 +316,11 @@ fn ke1_message_roundtrip() {
         &client_e_kp.public(),
     ]
     .concat();
-    let reg =
-        <TripleDH as KeyExchange<sha2::Sha256, crate::keypair::X25519KeyPair>>::KE1Message::try_from(&ke1m[..]).unwrap();
+    let reg = <TripleDH as KeyExchange<
+        sha2::Sha256,
+        crate::keypair::X25519KeyPair,
+    >>::KE1Message::try_from(&ke1m[..])
+    .unwrap();
     let reg_bytes = reg.to_bytes();
     assert_eq!(reg_bytes, ke1m);
 }
@@ -343,22 +334,22 @@ fn ke2_message_roundtrip() {
     rng.fill_bytes(&mut mac);
     let mut server_nonce = [0u8; NONCE_LEN];
     rng.fill_bytes(&mut server_nonce);
-    let mut info = [0u8; MAX_INFO_LENGTH];
-    rng.fill_bytes(&mut info);
     let mut e_info = [0u8; MAX_INFO_LENGTH];
     rng.fill_bytes(&mut e_info);
 
     let ke2m: Vec<u8> = [
         &server_nonce[..],
-        &serialize(&info.to_vec(), 2),
         &server_e_kp.public(),
         &serialize(&e_info.to_vec(), 2),
         &mac[..],
     ]
     .concat();
 
-    let reg =
-        <TripleDH as KeyExchange<sha2::Sha256, crate::keypair::X25519KeyPair>>::KE2Message::try_from(&ke2m[..]).unwrap();
+    let reg = <TripleDH as KeyExchange<
+        sha2::Sha256,
+        crate::keypair::X25519KeyPair,
+    >>::KE2Message::try_from(&ke2m[..])
+    .unwrap();
     let reg_bytes = reg.to_bytes();
     assert_eq!(reg_bytes, ke2m);
 }
@@ -366,22 +357,16 @@ fn ke2_message_roundtrip() {
 #[test]
 fn ke3_message_roundtrip() {
     let mut rng = OsRng;
-    let mut info = [0u8; MAX_INFO_LENGTH];
-    rng.fill_bytes(&mut info);
-    let mut e_info = [0u8; MAX_INFO_LENGTH];
-    rng.fill_bytes(&mut e_info);
     let mut mac = [0u8; 32];
     rng.fill_bytes(&mut mac);
 
-    let ke3m: Vec<u8> = [
-        &serialize(&info.to_vec(), 2),
-        &serialize(&e_info.to_vec(), 2),
-        &mac[..],
-    ]
-    .concat();
+    let ke3m: Vec<u8> = [&mac[..]].concat();
 
-    let reg =
-        <TripleDH as KeyExchange<sha2::Sha256, crate::keypair::X25519KeyPair>>::KE3Message::try_from(&ke3m[..]).unwrap();
+    let reg = <TripleDH as KeyExchange<
+        sha2::Sha256,
+        crate::keypair::X25519KeyPair,
+    >>::KE3Message::try_from(&ke3m[..])
+    .unwrap();
     let reg_bytes = reg.to_bytes();
     assert_eq!(reg_bytes, ke3m);
 }

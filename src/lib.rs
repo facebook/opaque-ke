@@ -15,8 +15,9 @@
 //! * a finite cyclic group along with a point representation,
 //! * a keypair type,
 //! * a key exchange protocol,
-//! * a hashing function, and
-//! * a slow hashing function.
+//! * a hashing function,
+//! * a slow hashing function, and
+//! * an authenticated encryption algorithm.
 //!
 //! We will use the following choices in this example:
 //! ```
@@ -721,18 +722,16 @@
 //!
 //! A key exchange protocol typically supports the passing of data between the two parties before the exchange is complete, so as to bind the integrity
 //! and/or confidentiality of application-specific data to the security of the key exchange. During the login phase, the client and server can pass
-//! additional data alongside the first three messages of the protocol, with confidential data being supported for the second and third messages.
+//! additional data alongside the first two messages of the protocol, with confidential data being supported for the second message.
 //!
 //! The following three messages support passing of additional data:
 //! - The first login message, where the client can populate [ClientLoginStartParameters::WithInfo] with plaintext additional data, and
 //! the server can retrieve using the `plain_info` field of [ServerLoginStartResult].
-//! - The second login message, where the server can populate [ServerLoginStartParameters::WithInfo] with plaintext and confidential additional data,
-//! and the client can retrieve using the `plain_info` and `confidential_info` fields of [ClientLoginFinishResult].
-//! - The third login message, where the client can populate [ClientLoginFinishParameters::WithInfo] with plaintext and confidential
-//! additional info, and the server can retrieve using the `plain_info` and `confidential_info` fields of [ServerLoginFinishResult].
+//! - The second login message, where the server can populate [ServerLoginStartParameters::WithInfo] with confidential additional data,
+//! and the client can retrieve using the `confidential_info` field of [ClientLoginFinishResult].
 //!
-//! The `WithInfoAndIdentifiers` variant of each of these enums representing optional parameters can be used to specify these fields in addition to
-//! [custom identifiers](#custom-identifiers), with the ordering of the fields as `WithInfoAndIdentifiers(plain_info, confidential_info, username, server_name)`.
+//! For the second login message, the `WithInfoAndIdentifiers` variant can be used to specify these fields in addition to
+//! [custom identifiers](#custom-identifiers), with the ordering of the fields as `WithInfoAndIdentifiers(confidential_info, username, server_name)`.
 //!
 //!
 
