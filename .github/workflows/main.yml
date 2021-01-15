@@ -91,6 +91,26 @@ jobs:
       - name: Run expect (which then runs cargo run)
         run: expect -f scripts/simple_login.exp
 
+  digital-locker-test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+    name: test digital_locker command-line example
+    steps:
+      - name: install expect
+        run: sudo apt-get install expect
+      - name: Checkout sources
+        uses: actions/checkout@v2
+      - name: install rust
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: nightly
+          override: true
+          components: rustfmt, clippy
+      - name: Run expect (which then runs cargo run)
+        run: expect -f scripts/digital_locker.exp
+
   benches:
     name: cargo bench compilation
     runs-on: ubuntu-latest
