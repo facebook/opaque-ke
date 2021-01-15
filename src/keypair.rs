@@ -31,7 +31,7 @@ pub(crate) trait SizedBytesExt: SizedBytes {
 impl<T> SizedBytesExt for T where T: SizedBytes {}
 
 /// A Keypair trait with public-private verification
-pub trait KeyPair: Sized {
+pub trait KeyPair: Sized + Clone {
     /// The single key representation must have a specific byte size itself
     type Repr: SizedBytes + Clone;
 
@@ -60,6 +60,13 @@ pub trait KeyPair: Sized {
 
     /// Computes the diffie hellman function on a public key and private key
     fn diffie_hellman(pk: Self::Repr, sk: Self::Repr) -> Vec<u8>;
+
+    /// Obtains a KeyPair from a slice representing the private key
+    fn from_private_key_slice(input: &[u8]) -> Result<Self, InternalPakeError> {
+        let sk = Self::Repr::from_arr(GenericArray::from_slice(&input))?;
+        let pk = Self::public_from_private(&sk);
+        Self::new(pk, sk)
+    }
 }
 
 #[cfg(test)]
@@ -110,7 +117,7 @@ impl SizedBytes for Key {
 }
 
 /// A representation of an X25519 keypair according to RFC7748
-#[derive(Debug, PartialEq, Eq, SizedBytes, TryFromForSizedBytes)]
+#[derive(Clone, Debug, PartialEq, Eq, SizedBytes, TryFromForSizedBytes)]
 #[ErrorType = "::generic_bytes::TryFromSizedBytesError"]
 pub struct X25519KeyPair {
     pk: Key,
@@ -205,7 +212,6 @@ mod tests {
             prop_assert_eq!(&X25519KeyPair::public_from_private(sk), pk);
         }
 
-
         #[test]
         fn test_x25519_dh(kp1 in X25519KeyPair::uniform_keypair_strategy(),
                           kp2 in X25519KeyPair::uniform_keypair_strategy()) {
@@ -214,6 +220,16 @@ mod tests {
             let dh2 = X25519KeyPair::diffie_hellman(kp2.public().clone(), kp1.private().clone());
 
             prop_assert_eq!(dh1,dh2);
+        }
+
+        #[test]
+        fn test_private_key_slice(kp in X25519KeyPair::uniform_keypair_strategy()) {
+            let sk_bytes = kp.private().to_vec();
+
+            let kp2 = X25519KeyPair::from_private_key_slice(&sk_bytes)?;
+            let kp2_private_bytes = kp2.private().to_vec();
+
+            prop_assert_eq!(sk_bytes, kp2_private_bytes);
         }
     }
 }
