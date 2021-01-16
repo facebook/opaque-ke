@@ -56,8 +56,6 @@ pub trait KeyExchange<D: Hash, G: Group> {
         ke2_state: &Self::KE2State,
     ) -> Result<Vec<u8>, ProtocolError>;
 
-    fn ke1_state_size() -> usize;
-
     fn ke2_message_size() -> usize;
 }
 

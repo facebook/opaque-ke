@@ -17,7 +17,6 @@ use rand::{rngs::StdRng, SeedableRng};
 use rand_core::{CryptoRng, RngCore};
 use std::fmt::Debug;
 use std::marker::PhantomData;
-
 use std::ops::Deref;
 
 // Pub(crate) convenience extension trait of SizedBytes for our purposes
