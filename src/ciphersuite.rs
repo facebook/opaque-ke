@@ -6,7 +6,7 @@
 //! Defines the CipherSuite trait to specify the underlying primitives for OPAQUE
 
 use crate::{
-    errors::InternalPakeError, hash::Hash, key_exchange::traits::KeyExchange, keypair::KeyPair,
+    hash::Hash, key_exchange::traits::KeyExchange, keypair::KeyPair,
     map_to_curve::GroupWithMapToCurve, slow_hash::SlowHash,
 };
 
@@ -17,7 +17,6 @@ use rand_core::{CryptoRng, RngCore};
 ///   with an extension trait PasswordToCurve that allows some customization on
 ///   how to hash a password to a curve point. See `group::Group` and
 ///   `map_to_curve::GroupWithMapToCurve`.
-/// * `KeyFormat`: a keypair type composed of public and private components
 /// * `KeyExchange`: The key exchange protocol to use in the login step
 /// * `Hash`: The main hashing function to use
 /// * `SlowHash`: A slow hashing function, typically used for password hashing
@@ -27,18 +26,15 @@ pub trait CipherSuite {
     /// how to hash a password to a curve point. See `group::Group` and
     /// `map_to_curve::GroupWithMapToCurve`.
     type Group: GroupWithMapToCurve;
-    /// A keypair type composed of public and private components
-    type KeyFormat: KeyPair + PartialEq;
     /// A key exchange protocol
-    type KeyExchange: KeyExchange<Self::Hash, Self::KeyFormat>;
+    type KeyExchange: KeyExchange<Self::Hash, Self::Group>;
     /// The main hash function use (for HKDF computations and hashing transcripts)
     type Hash: Hash;
     /// A slow hashing function, typically used for password hashing
     type SlowHash: SlowHash<Self::Hash>;
+
     /// Generating a random key pair given a cryptographic rng
-    fn generate_random_keypair<R: RngCore + CryptoRng>(
-        rng: &mut R,
-    ) -> Result<Self::KeyFormat, InternalPakeError> {
-        Self::KeyFormat::generate_random(rng)
+    fn generate_random_keypair<R: RngCore + CryptoRng>(rng: &mut R) -> KeyPair<Self::Group> {
+        KeyPair::<Self::Group>::generate_random(rng)
     }
 }

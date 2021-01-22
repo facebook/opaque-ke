@@ -5,14 +5,15 @@
 
 use crate::{
     errors::{PakeError, ProtocolError},
+    group::Group,
     hash::Hash,
-    keypair::KeyPair,
+    keypair::Key,
 };
 use rand_core::{CryptoRng, RngCore};
 
 use std::convert::TryFrom;
 
-pub trait KeyExchange<D: Hash, KeyFormat: KeyPair> {
+pub trait KeyExchange<D: Hash, G: Group> {
     type KE1State: for<'r> TryFrom<&'r [u8], Error = PakeError> + ToBytes;
     type KE2State: for<'r> TryFrom<&'r [u8], Error = PakeError> + ToBytes;
     type KE1Message: for<'r> TryFrom<&'r [u8], Error = PakeError> + ToBytes;
@@ -31,8 +32,8 @@ pub trait KeyExchange<D: Hash, KeyFormat: KeyPair> {
         l1_bytes: Vec<u8>,
         l2_bytes: Vec<u8>,
         ke1_message: Self::KE1Message,
-        client_s_pk: KeyFormat::Repr,
-        server_s_sk: KeyFormat::Repr,
+        client_s_pk: Key,
+        server_s_sk: Key,
         id_u: Vec<u8>,
         id_s: Vec<u8>,
         e_info: Vec<u8>,
@@ -43,8 +44,8 @@ pub trait KeyExchange<D: Hash, KeyFormat: KeyPair> {
         l2_component: Vec<u8>,
         ke2_message: Self::KE2Message,
         ke1_state: &Self::KE1State,
-        server_s_pk: KeyFormat::Repr,
-        client_s_sk: KeyFormat::Repr,
+        server_s_pk: Key,
+        client_s_sk: Key,
         id_u: Vec<u8>,
         id_s: Vec<u8>,
     ) -> Result<(Vec<u8>, Vec<u8>, Self::KE3Message), ProtocolError>;

@@ -13,7 +13,6 @@
 //! OPAQUE is a protocol between a client and a server. They must first agree on a collection of primitives
 //! to be kept consistent throughout protocol execution. These include:
 //! * a finite cyclic group along with a point representation,
-//! * a keypair type,
 //! * a key exchange protocol,
 //! * a hashing function,
 //! * a slow hashing function, and
@@ -25,9 +24,8 @@
 //! struct Default;
 //! impl CipherSuite for Default {
 //!     type Group = curve25519_dalek::ristretto::RistrettoPoint;
-//!     type KeyFormat = opaque_ke::keypair::X25519KeyPair;
 //!     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
-//!     type Hash = sha2::Sha256;
+//!     type Hash = sha2::Sha512;
 //!     type SlowHash = opaque_ke::slow_hash::NoOpHash;
 //! }
 //! ```
@@ -41,20 +39,18 @@
 //! ## Setup
 //! To set up the protocol, the server begins by generating a static keypair:
 //! ```
-//! # use opaque_ke::keypair::{KeyPair, X25519KeyPair};
 //! # use opaque_ke::errors::ProtocolError;
 //! # use opaque_ke::ciphersuite::CipherSuite;
 //! # struct Default;
 //! # impl CipherSuite for Default {
 //! #     type Group = curve25519_dalek::ristretto::RistrettoPoint;
-//! #     type KeyFormat = opaque_ke::keypair::X25519KeyPair;
 //! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
-//! #     type Hash = sha2::Sha256;
+//! #     type Hash = sha2::Sha512;
 //! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
 //! # }
 //! use rand_core::{OsRng, RngCore};
 //! let mut rng = OsRng;
-//! let server_kp = Default::generate_random_keypair(&mut rng)?;
+//! let server_kp = Default::generate_random_keypair(&mut rng);
 //! # Ok::<(), ProtocolError>(())
 //! ```
 //! The server must persist this keypair for the registration and login steps, where the public component will be
@@ -74,16 +70,14 @@
 //! # use opaque_ke::{
 //! #   errors::ProtocolError,
 //! #   ServerRegistration,
-//! #   keypair::{KeyPair, X25519KeyPair},
 //! #   slow_hash::NoOpHash,
 //! # };
 //! # use opaque_ke::ciphersuite::CipherSuite;
 //! # struct Default;
 //! # impl CipherSuite for Default {
 //! #     type Group = curve25519_dalek::ristretto::RistrettoPoint;
-//! #     type KeyFormat = opaque_ke::keypair::X25519KeyPair;
 //! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
-//! #     type Hash = sha2::Sha256;
+//! #     type Hash = sha2::Sha512;
 //! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
 //! # }
 //! use opaque_ke::ClientRegistration;
@@ -106,16 +100,14 @@
 //! # use opaque_ke::{
 //! #   errors::ProtocolError,
 //! #   ClientRegistration,
-//! #   keypair::{KeyPair, X25519KeyPair},
 //! #   slow_hash::NoOpHash,
 //! # };
 //! # use opaque_ke::ciphersuite::CipherSuite;
 //! # struct Default;
 //! # impl CipherSuite for Default {
 //! #     type Group = curve25519_dalek::ristretto::RistrettoPoint;
-//! #     type KeyFormat = opaque_ke::keypair::X25519KeyPair;
 //! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
-//! #     type Hash = sha2::Sha256;
+//! #     type Hash = sha2::Sha512;
 //! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
 //! # }
 //! # use rand_core::{OsRng, RngCore};
@@ -126,7 +118,7 @@
 //! # )?;
 //! use opaque_ke::ServerRegistration;
 //! let mut server_rng = OsRng;
-//! let server_kp = Default::generate_random_keypair(&mut server_rng)?;
+//! let server_kp = Default::generate_random_keypair(&mut server_rng);
 //! let server_registration_start_result = ServerRegistration::<Default>::start(
 //!     &mut server_rng,
 //!     client_registration_start_result.message,
@@ -145,16 +137,14 @@
 //! # use opaque_ke::{
 //! #   errors::ProtocolError,
 //! #   ClientRegistration, ClientRegistrationFinishParameters, ServerRegistration,
-//! #   keypair::{KeyPair, X25519KeyPair},
 //! #   slow_hash::NoOpHash,
 //! # };
 //! # use opaque_ke::ciphersuite::CipherSuite;
 //! # struct Default;
 //! # impl CipherSuite for Default {
 //! #     type Group = curve25519_dalek::ristretto::RistrettoPoint;
-//! #     type KeyFormat = opaque_ke::keypair::X25519KeyPair;
 //! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
-//! #     type Hash = sha2::Sha256;
+//! #     type Hash = sha2::Sha512;
 //! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
 //! # }
 //! # use rand_core::{OsRng, RngCore};
@@ -164,7 +154,7 @@
 //! #     b"password",
 //! # )?;
 //! # let mut server_rng = OsRng;
-//! # let server_kp = Default::generate_random_keypair(&mut server_rng)?;
+//! # let server_kp = Default::generate_random_keypair(&mut server_rng);
 //! # let server_registration_start_result = ServerRegistration::<Default>::start(&mut server_rng, client_registration_start_result.message, server_kp.public())?;
 //! let client_registration_finish_result = client_registration_start_result.state.finish(
 //!     &mut client_rng,
@@ -185,16 +175,14 @@
 //! # use opaque_ke::{
 //! #   errors::ProtocolError,
 //! #   ClientRegistration, ClientRegistrationFinishParameters, ServerRegistration,
-//! #   keypair::{KeyPair, X25519KeyPair},
 //! #   slow_hash::NoOpHash,
 //! # };
 //! # use opaque_ke::ciphersuite::CipherSuite;
 //! # struct Default;
 //! # impl CipherSuite for Default {
 //! #     type Group = curve25519_dalek::ristretto::RistrettoPoint;
-//! #     type KeyFormat = opaque_ke::keypair::X25519KeyPair;
 //! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
-//! #     type Hash = sha2::Sha256;
+//! #     type Hash = sha2::Sha512;
 //! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
 //! # }
 //! # use rand_core::{OsRng, RngCore};
@@ -204,7 +192,7 @@
 //! #     b"password",
 //! # )?;
 //! # let mut server_rng = OsRng;
-//! # let server_kp = Default::generate_random_keypair(&mut server_rng)?;
+//! # let server_kp = Default::generate_random_keypair(&mut server_rng);
 //! # let server_registration_start_result = ServerRegistration::<Default>::start(&mut server_rng, client_registration_start_result.message, server_kp.public())?;
 //! # let client_registration_finish_result = client_registration_start_result.state.finish(&mut client_rng, server_registration_start_result.message, ClientRegistrationFinishParameters::default())?;
 //! let password_file = server_registration_start_result.state.finish(
@@ -228,16 +216,14 @@
 //! # use opaque_ke::{
 //! #   errors::ProtocolError,
 //! #   ClientRegistration, ServerRegistration, ServerLogin, CredentialFinalization,
-//! #   keypair::{KeyPair, X25519KeyPair},
 //! #   slow_hash::NoOpHash,
 //! # };
 //! # use opaque_ke::ciphersuite::CipherSuite;
 //! # struct Default;
 //! # impl CipherSuite for Default {
 //! #     type Group = curve25519_dalek::ristretto::RistrettoPoint;
-//! #     type KeyFormat = opaque_ke::keypair::X25519KeyPair;
 //! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
-//! #     type Hash = sha2::Sha256;
+//! #     type Hash = sha2::Sha512;
 //! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
 //! # }
 //! # use rand_core::{OsRng, RngCore};
@@ -263,16 +249,14 @@
 //! # use opaque_ke::{
 //! #   errors::ProtocolError,
 //! #   ClientRegistration, ClientRegistrationFinishParameters, ServerRegistration, ClientLogin, ClientLoginStartParameters, CredentialFinalization,
-//! #   keypair::{KeyPair, X25519KeyPair},
 //! #   slow_hash::NoOpHash,
 //! # };
 //! # use opaque_ke::ciphersuite::CipherSuite;
 //! # struct Default;
 //! # impl CipherSuite for Default {
 //! #     type Group = curve25519_dalek::ristretto::RistrettoPoint;
-//! #     type KeyFormat = opaque_ke::keypair::X25519KeyPair;
 //! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
-//! #     type Hash = sha2::Sha256;
+//! #     type Hash = sha2::Sha512;
 //! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
 //! # }
 //! # use rand_core::{OsRng, RngCore};
@@ -282,7 +266,7 @@
 //! #     b"password",
 //! # )?;
 //! # let mut server_rng = OsRng;
-//! # let server_kp = Default::generate_random_keypair(&mut server_rng)?;
+//! # let server_kp = Default::generate_random_keypair(&mut server_rng);
 //! # let server_registration_start_result = ServerRegistration::<Default>::start(&mut server_rng, client_registration_start_result.message, server_kp.public())?;
 //! # let client_registration_finish_result = client_registration_start_result.state.finish(&mut client_rng, server_registration_start_result.message, ClientRegistrationFinishParameters::default())?;
 //! # let password_file_bytes = server_registration_start_result.state.finish(client_registration_finish_result.message)?.to_bytes();
@@ -314,16 +298,14 @@
 //! # use opaque_ke::{
 //! #   errors::ProtocolError,
 //! #   ClientRegistration, ClientRegistrationFinishParameters, ServerRegistration, ClientLogin, ClientLoginStartParameters, ClientLoginFinishParameters, ServerLogin, ServerLoginStartParameters, CredentialFinalization,
-//! #   keypair::{KeyPair, X25519KeyPair},
 //! #   slow_hash::NoOpHash,
 //! # };
 //! # use opaque_ke::ciphersuite::CipherSuite;
 //! # struct Default;
 //! # impl CipherSuite for Default {
 //! #     type Group = curve25519_dalek::ristretto::RistrettoPoint;
-//! #     type KeyFormat = opaque_ke::keypair::X25519KeyPair;
 //! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
-//! #     type Hash = sha2::Sha256;
+//! #     type Hash = sha2::Sha512;
 //! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
 //! # }
 //! # use rand_core::{OsRng, RngCore};
@@ -333,7 +315,7 @@
 //! #     b"password",
 //! # )?;
 //! # let mut server_rng = OsRng;
-//! # let server_kp = Default::generate_random_keypair(&mut server_rng)?;
+//! # let server_kp = Default::generate_random_keypair(&mut server_rng);
 //! # let server_registration_start_result = ServerRegistration::<Default>::start(&mut server_rng, client_registration_start_result.message, server_kp.public())?;
 //! # let client_registration_finish_result = client_registration_start_result.state.finish(&mut client_rng, server_registration_start_result.message, ClientRegistrationFinishParameters::default())?;
 //! # let password_file_bytes = server_registration_start_result.state.finish(client_registration_finish_result.message)?.to_bytes();
@@ -363,16 +345,14 @@
 //! # use opaque_ke::{
 //! #   errors::ProtocolError,
 //! #   ClientRegistration, ClientRegistrationFinishParameters, ServerRegistration, ClientLogin, ClientLoginStartParameters, ClientLoginFinishParameters, ServerLogin, ServerLoginStartParameters, CredentialFinalization,
-//! #   keypair::{KeyPair, X25519KeyPair},
 //! #   slow_hash::NoOpHash,
 //! # };
 //! # use opaque_ke::ciphersuite::CipherSuite;
 //! # struct Default;
 //! # impl CipherSuite for Default {
 //! #     type Group = curve25519_dalek::ristretto::RistrettoPoint;
-//! #     type KeyFormat = opaque_ke::keypair::X25519KeyPair;
 //! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
-//! #     type Hash = sha2::Sha256;
+//! #     type Hash = sha2::Sha512;
 //! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
 //! # }
 //! # use rand_core::{OsRng, RngCore};
@@ -382,7 +362,7 @@
 //! #     b"password",
 //! # )?;
 //! # let mut server_rng = OsRng;
-//! # let server_kp = Default::generate_random_keypair(&mut server_rng)?;
+//! # let server_kp = Default::generate_random_keypair(&mut server_rng);
 //! # let server_registration_start_result = ServerRegistration::<Default>::start(&mut server_rng, client_registration_start_result.message, server_kp.public())?;
 //! # let client_registration_finish_result = client_registration_start_result.state.finish(&mut client_rng, server_registration_start_result.message, ClientRegistrationFinishParameters::default())?;
 //! # let password_file_bytes = server_registration_start_result.state.finish(client_registration_finish_result.message)?.to_bytes();
@@ -441,16 +421,14 @@
 //! # use opaque_ke::{
 //! #   errors::ProtocolError,
 //! #   ClientRegistration, ClientRegistrationFinishParameters, ServerRegistration, ClientLogin, ClientLoginStartParameters, ClientLoginFinishParameters, ServerLogin, ServerLoginStartParameters, CredentialFinalization,
-//! #   keypair::{KeyPair, X25519KeyPair},
 //! #   slow_hash::NoOpHash,
 //! # };
 //! # use opaque_ke::ciphersuite::CipherSuite;
 //! # struct Default;
 //! # impl CipherSuite for Default {
 //! #     type Group = curve25519_dalek::ristretto::RistrettoPoint;
-//! #     type KeyFormat = opaque_ke::keypair::X25519KeyPair;
 //! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
-//! #     type Hash = sha2::Sha256;
+//! #     type Hash = sha2::Sha512;
 //! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
 //! # }
 //! # use rand_core::{OsRng, RngCore};
@@ -461,7 +439,7 @@
 //! # )?;
 //! # let mut server_rng = OsRng;
 //! // During setup, server generates its static keypair
-//! let server_kp = Default::generate_random_keypair(&mut server_rng)?;
+//! let server_kp = Default::generate_random_keypair(&mut server_rng);
 //! # let server_registration_start_result = ServerRegistration::<Default>::start(&mut server_rng, client_registration_start_result.message, server_kp.public())?;
 //!
 //! // During setup or registration, the server transmits its static public key to the client
@@ -520,16 +498,14 @@
 //! # use opaque_ke::{
 //! #   errors::ProtocolError,
 //! #   ClientRegistration, ClientRegistrationFinishParameters, ServerRegistration, ClientLogin, ClientLoginStartParameters, ClientLoginFinishParameters, ServerLogin, ServerLoginStartParameters, CredentialFinalization,
-//! #   keypair::{KeyPair, X25519KeyPair},
 //! #   slow_hash::NoOpHash,
 //! # };
 //! # use opaque_ke::ciphersuite::CipherSuite;
 //! # struct Default;
 //! # impl CipherSuite for Default {
 //! #     type Group = curve25519_dalek::ristretto::RistrettoPoint;
-//! #     type KeyFormat = opaque_ke::keypair::X25519KeyPair;
 //! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
-//! #     type Hash = sha2::Sha256;
+//! #     type Hash = sha2::Sha512;
 //! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
 //! # }
 //! # use rand_core::{OsRng, RngCore};
@@ -539,7 +515,7 @@
 //! #     b"password",
 //! # )?;
 //! # let mut server_rng = OsRng;
-//! # let server_kp = Default::generate_random_keypair(&mut server_rng)?;
+//! # let server_kp = Default::generate_random_keypair(&mut server_rng);
 //! # let server_registration_start_result = ServerRegistration::<Default>::start(&mut server_rng, client_registration_start_result.message, server_kp.public())?;
 //! // During registration...
 //! let client_registration_finish_result = client_registration_start_result.state.finish(
@@ -587,16 +563,14 @@
 //! # use opaque_ke::{
 //! #   errors::ProtocolError,
 //! #   ClientRegistration, ClientRegistrationFinishParameters, ServerRegistration,
-//! #   keypair::{KeyPair, X25519KeyPair},
 //! #   slow_hash::NoOpHash,
 //! # };
 //! # use opaque_ke::ciphersuite::CipherSuite;
 //! # struct Default;
 //! # impl CipherSuite for Default {
 //! #     type Group = curve25519_dalek::ristretto::RistrettoPoint;
-//! #     type KeyFormat = opaque_ke::keypair::X25519KeyPair;
 //! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
-//! #     type Hash = sha2::Sha256;
+//! #     type Hash = sha2::Sha512;
 //! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
 //! # }
 //! # use rand_core::{OsRng, RngCore};
@@ -606,7 +580,7 @@
 //! #     b"password",
 //! # )?;
 //! # let mut server_rng = OsRng;
-//! # let server_kp = Default::generate_random_keypair(&mut server_rng)?;
+//! # let server_kp = Default::generate_random_keypair(&mut server_rng);
 //! # let server_registration_start_result = ServerRegistration::<Default>::start(&mut server_rng, client_registration_start_result.message, server_kp.public())?;
 //! let client_registration_finish_result = client_registration_start_result.state.finish(
 //!     &mut client_rng,
@@ -624,16 +598,14 @@
 //! # use opaque_ke::{
 //! #   errors::ProtocolError,
 //! #   ClientRegistration, ClientRegistrationFinishParameters, ServerRegistration, ClientLogin, ClientLoginStartParameters, CredentialFinalization,
-//! #   keypair::{KeyPair, X25519KeyPair},
 //! #   slow_hash::NoOpHash,
 //! # };
 //! # use opaque_ke::ciphersuite::CipherSuite;
 //! # struct Default;
 //! # impl CipherSuite for Default {
 //! #     type Group = curve25519_dalek::ristretto::RistrettoPoint;
-//! #     type KeyFormat = opaque_ke::keypair::X25519KeyPair;
 //! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
-//! #     type Hash = sha2::Sha256;
+//! #     type Hash = sha2::Sha512;
 //! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
 //! # }
 //! # use rand_core::{OsRng, RngCore};
@@ -643,7 +615,7 @@
 //! #     b"password",
 //! # )?;
 //! # let mut server_rng = OsRng;
-//! # let server_kp = Default::generate_random_keypair(&mut server_rng)?;
+//! # let server_kp = Default::generate_random_keypair(&mut server_rng);
 //! # let server_registration_start_result = ServerRegistration::<Default>::start(&mut server_rng, client_registration_start_result.message, server_kp.public())?;
 //! # let client_registration_finish_result = client_registration_start_result.state.finish(&mut client_rng, server_registration_start_result.message, ClientRegistrationFinishParameters::WithIdentifiers(b"username".to_vec(), b"facebook.com".to_vec()))?;
 //! # let password_file_bytes = server_registration_start_result.state.finish(client_registration_finish_result.message)?.to_bytes();
@@ -674,16 +646,14 @@
 //! # use opaque_ke::{
 //! #   errors::ProtocolError,
 //! #   ClientRegistration, ClientRegistrationFinishParameters, ServerRegistration, ClientLogin, ClientLoginStartParameters, ClientLoginFinishParameters, ServerLogin, ServerLoginStartParameters, CredentialFinalization,
-//! #   keypair::{KeyPair, X25519KeyPair},
 //! #   slow_hash::NoOpHash,
 //! # };
 //! # use opaque_ke::ciphersuite::CipherSuite;
 //! # struct Default;
 //! # impl CipherSuite for Default {
 //! #     type Group = curve25519_dalek::ristretto::RistrettoPoint;
-//! #     type KeyFormat = opaque_ke::keypair::X25519KeyPair;
 //! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
-//! #     type Hash = sha2::Sha256;
+//! #     type Hash = sha2::Sha512;
 //! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
 //! # }
 //! # use rand_core::{OsRng, RngCore};
@@ -693,7 +663,7 @@
 //! #     b"password",
 //! # )?;
 //! # let mut server_rng = OsRng;
-//! # let server_kp = Default::generate_random_keypair(&mut server_rng)?;
+//! # let server_kp = Default::generate_random_keypair(&mut server_rng);
 //! # let server_registration_start_result = ServerRegistration::<Default>::start(&mut server_rng, client_registration_start_result.message, server_kp.public())?;
 //! # let client_registration_finish_result = client_registration_start_result.state.finish(&mut client_rng, server_registration_start_result.message, ClientRegistrationFinishParameters::WithIdentifiers(b"username".to_vec(), b"facebook.com".to_vec()))?;
 //! # let password_file_bytes = server_registration_start_result.state.finish(client_registration_finish_result.message)?.to_bytes();
@@ -759,7 +729,6 @@ pub mod ciphersuite;
 mod envelope;
 pub mod hash;
 
-mod elligator;
 pub mod group;
 
 pub mod map_to_curve;

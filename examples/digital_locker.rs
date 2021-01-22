@@ -33,10 +33,10 @@ use std::convert::TryFrom;
 use std::process::exit;
 
 use opaque_ke::{
-    ciphersuite::CipherSuite, keypair::KeyPair, ClientLogin, ClientLoginFinishParameters,
-    ClientLoginStartParameters, ClientRegistration, ClientRegistrationFinishParameters,
-    CredentialRequest, CredentialResponse, RegistrationRequest, RegistrationResponse,
-    RegistrationUpload, ServerLogin, ServerLoginStartParameters, ServerRegistration,
+    ciphersuite::CipherSuite, ClientLogin, ClientLoginFinishParameters, ClientLoginStartParameters,
+    ClientRegistration, ClientRegistrationFinishParameters, CredentialRequest, CredentialResponse,
+    RegistrationRequest, RegistrationResponse, RegistrationUpload, ServerLogin,
+    ServerLoginStartParameters, ServerRegistration,
 };
 
 // The ciphersuite trait allows to specify the underlying primitives
@@ -45,7 +45,6 @@ use opaque_ke::{
 struct Default;
 impl CipherSuite for Default {
     type Group = curve25519_dalek::ristretto::RistrettoPoint;
-    type KeyFormat = opaque_ke::keypair::X25519KeyPair;
     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
     type Hash = sha2::Sha256;
     type SlowHash = opaque_ke::slow_hash::NoOpHash;
@@ -82,7 +81,7 @@ fn decrypt(key: &[u8], ciphertext: &[u8]) -> Vec<u8> {
 
 // Password-based registration and encryption of client secret message between a client and server
 fn register_locker(
-    server_kp: &opaque_ke::keypair::X25519KeyPair,
+    server_kp: &opaque_ke::keypair::KeyPair<curve25519_dalek::ristretto::RistrettoPoint>,
     password: String,
     secret_message: String,
 ) -> Locker {
@@ -135,7 +134,7 @@ fn register_locker(
 
 // Open the contents of a locker with a password between a client and server
 fn open_locker(
-    server_kp: &opaque_ke::keypair::X25519KeyPair,
+    server_kp: &opaque_ke::keypair::KeyPair<curve25519_dalek::ristretto::RistrettoPoint>,
     password: String,
     locker: &Locker,
 ) -> Result<String, String> {
@@ -182,7 +181,7 @@ fn open_locker(
 
 fn main() {
     let mut rng = OsRng;
-    let server_kp = Default::generate_random_keypair(&mut rng).unwrap();
+    let server_kp = Default::generate_random_keypair(&mut rng);
 
     let mut rl = Editor::<()>::new();
     let mut registered_lockers: Vec<Locker> = vec![];

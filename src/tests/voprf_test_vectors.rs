@@ -3,10 +3,10 @@
 // This source code is licensed under the MIT license found in the
 // LICENSE file in the root directory of this source tree.
 
+use crate::tests::mock_rng::CycleRng;
 use crate::{errors::*, group::Group, oprf};
 use curve25519_dalek::ristretto::RistrettoPoint;
 use generic_array::GenericArray;
-use rand_core::OsRng;
 use serde_json::Value;
 use sha2::Sha512;
 
@@ -69,40 +69,15 @@ fn populate_test_vectors(values: &Value) -> VOPRFTestVectorParameters {
     }
 }
 
-// For fixing the blinding factor
-
-fn postprocess_blinding_factor_oprf_ristretto255_sha512_0<G: Group>(_: G::Scalar) -> G::Scalar {
-    let parameters =
-        populate_test_vectors(&serde_json::from_str(OPRF_RISTRETTO255_SHA512[0]).unwrap());
-    G::from_scalar_slice(GenericArray::from_slice(&parameters.blind[..])).unwrap()
-}
-
-fn postprocess_blinding_factor_oprf_ristretto255_sha512_1<G: Group>(_: G::Scalar) -> G::Scalar {
-    let parameters =
-        populate_test_vectors(&serde_json::from_str(OPRF_RISTRETTO255_SHA512[1]).unwrap());
-    G::from_scalar_slice(GenericArray::from_slice(&parameters.blind[..])).unwrap()
-}
-
 // Tests input -> blind, blinded_element
 #[test]
 fn test_blind() -> Result<(), PakeError> {
-    for (i, tv) in OPRF_RISTRETTO255_SHA512.iter().enumerate() {
+    for tv in OPRF_RISTRETTO255_SHA512 {
         let parameters = populate_test_vectors(&serde_json::from_str(tv).unwrap());
-        let mut rng = OsRng;
+        let mut rng = CycleRng::new(parameters.blind.to_vec());
 
-        let postprocess_fn: fn(
-            <RistrettoPoint as Group>::Scalar,
-        ) -> <RistrettoPoint as Group>::Scalar = match i {
-            0 => postprocess_blinding_factor_oprf_ristretto255_sha512_0::<RistrettoPoint>,
-            1 => postprocess_blinding_factor_oprf_ristretto255_sha512_1::<RistrettoPoint>,
-            _ => panic!("Need to cover each test vector"),
-        };
-
-        let (token, blinded_element) = oprf::blind::<OsRng, RistrettoPoint, Sha512>(
-            &parameters.input,
-            &mut rng,
-            postprocess_fn,
-        )?;
+        let (token, blinded_element) =
+            oprf::blind::<_, RistrettoPoint, Sha512>(&parameters.input, &mut rng)?;
 
         assert_eq!(
             &parameters.blind,

@@ -8,14 +8,13 @@ use crate::{
     errors::*,
     group::Group,
     key_exchange::tripledh::{TripleDH, NONCE_LEN},
-    keypair::{Key, KeyPair, X25519KeyPair},
+    keypair::Key,
     opaque::*,
     slow_hash::NoOpHash,
     tests::mock_rng::CycleRng,
     *,
 };
-use curve25519_dalek::edwards::EdwardsPoint;
-use generic_array::GenericArray;
+use curve25519_dalek::ristretto::RistrettoPoint;
 use generic_bytes::SizedBytes;
 use rand_core::{OsRng, RngCore};
 use serde_json::Value;
@@ -24,12 +23,11 @@ use std::convert::TryFrom;
 // Tests
 // =====
 
-struct X255193dhNoSlowHash;
-impl CipherSuite for X255193dhNoSlowHash {
-    type Group = EdwardsPoint;
-    type KeyFormat = X25519KeyPair;
+struct RistrettoSha5123dhNoSlowHash;
+impl CipherSuite for RistrettoSha5123dhNoSlowHash {
+    type Group = RistrettoPoint;
     type KeyExchange = TripleDH;
-    type Hash = sha2::Sha256;
+    type Hash = sha2::Sha512;
     type SlowHash = NoOpHash;
 }
 
@@ -69,37 +67,37 @@ pub struct TestVectorParameters {
 
 static TEST_VECTOR: &str = r#"
 {
-    "client_s_pk": "d762053e2da32c990b1edb22408138369282462feeaa68fc0acfd157c2745740",
-    "client_s_sk": "b06303fb12bde8fb2875ffc052c0c0cdb4bbef7b6a32ec9bb4a00a3a56fb9545",
-    "client_e_pk": "0375e9aa445b859a02e9ccacd45772758e560f8640ee067319a86374cd93a435",
-    "client_e_sk": "c835f5854f1651c8551e24aee6ab1b81bf44e4cb906d0ac9fcf1aaa26ef3b872",
-    "server_s_pk": "b7d6d756fb2b3972125245f53c042c53c8b3bf5e9d2b576809548c5510f33136",
-    "server_s_sk": "b81e81698a315f4ee817e5c9bd4426db1bf8dd9fec2e6fc82639d08d90509e6f",
-    "server_e_pk": "6ce63bc56b7b2141680b4fc4c8d3b4d09b903c5a2d657fc79432c586d0e9bd64",
-    "server_e_sk": "a0f3efd594b41deaba4480cae066c658529b90754f5109f9b0b61d42266f234e",
+    "client_s_pk": "64b071d0b8eccc39673b16384e86df49f258a12bad24f21f5d5f4a9a8f45561c",
+    "client_s_sk": "98a23d0757ac5c7aba8b218c5643c3a3029fb815a656de24cfc05df877925809",
+    "client_e_pk": "3a575317d7a6269bc4e76074ec906d8886b4c135fb6b590972f6fdd6c1a55676",
+    "client_e_sk": "163b91328785a5e84e21579e941be1dd7bdbc44d4c959f603d7f79417ab6b201",
+    "server_s_pk": "fc0d7d59e0fabe7c876c01c8d5408fc60dc5fdec7b89acdc5af2bc7c0de26d75",
+    "server_s_sk": "f7068582fdf2a57f7da63e6f5142abda805a7b508ce171c84f58a4e5e634a406",
+    "server_e_pk": "8e32a64f670b9d2115eba0006b00667972523bf2f8686933ef2a2819d6b5a13b",
+    "server_e_sk": "a3a06d81eeb60aeedaee96769149ae5f45184eec66e1b2bdeb04114d27019206",
     "id_u": "696455",
     "id_s": "696453",
     "password": "70617373776f7264",
-    "blinding_factor": "78b54192e145ff02458385f8540fdf54e94c2a20f0a7f8f98944bc17af795e04",
-    "oprf_key": "98a9232ccfda91d14ea305e5cfb4e552ab8aa972ac6c79befe15ccf9f4f2970a",
-    "envelope_nonce": "46c395bdc879bfebae229024f0004721448e713643a341146310d50c84cef011",
-    "client_nonce": "197b1147bb214fafde9f5ce6f5e903d69be0ca006c51ac8f949ce7ab73a828ed",
-    "server_nonce": "73a56c702168d9d534429fd45c37390ed6f55b6ea79f2025e4584a04d35aa229",
+    "blinding_factor": "3497d8c6728a3dc0873e363dcd60acd95f7897d15d33cdf1d49c8b856f061900",
+    "oprf_key": "c728d1ea06fb94f577ef63d50d1645e9fea14575987971e4a64e05dda367c703",
+    "envelope_nonce": "d7d138a3a4cb796662814391f5221e05b66438a92e5f57cc9624e6227da34eab",
+    "client_nonce": "ad87ae4609f1f56aeb1de0f4760120fa75ceff39751dffc35d25ff3f2896bb60",
+    "server_nonce": "d7a8cd7cd2c4f0f7650390f6f2d4858ae99ac79f2769a9e15583d570b11c434c",
     "info1": "696e666f31",
     "einfo2": "65696e666f32",
-    "registration_request": "0020ed5ca18ae23e622694611af62744f21c70f68d495ce36ae17784f03d225b573c",
-    "registration_response": "002078b592b789e7239481637419438333cbdcd3dd909534ac28e5473683d023719d0020b7d6d756fb2b3972125245f53c042c53c8b3bf5e9d2b576809548c5510f33136",
-    "registration_upload": "0146c395bdc879bfebae229024f0004721448e713643a341146310d50c84cef0110022f6906b64d3d45c4d77dd8c002b841749f716efc9e3e2cff762004b4878e75c0a7abe002c0020b7d6d756fb2b3972125245f53c042c53c8b3bf5e9d2b576809548c5510f33136000369645500036964530020e4444a287fc0bc8921d0c6423d36948fa176f68671196592cb947984b082bacd0020d762053e2da32c990b1edb22408138369282462feeaa68fc0acfd157c2745740",
-    "credential_request": "0020ed5ca18ae23e622694611af62744f21c70f68d495ce36ae17784f03d225b573c197b1147bb214fafde9f5ce6f5e903d69be0ca006c51ac8f949ce7ab73a828ed0005696e666f310375e9aa445b859a02e9ccacd45772758e560f8640ee067319a86374cd93a435",
-    "credential_response": "002078b592b789e7239481637419438333cbdcd3dd909534ac28e5473683d023719d0020b7d6d756fb2b3972125245f53c042c53c8b3bf5e9d2b576809548c5510f331360146c395bdc879bfebae229024f0004721448e713643a341146310d50c84cef0110022f6906b64d3d45c4d77dd8c002b841749f716efc9e3e2cff762004b4878e75c0a7abe002c0020b7d6d756fb2b3972125245f53c042c53c8b3bf5e9d2b576809548c5510f33136000369645500036964530020e4444a287fc0bc8921d0c6423d36948fa176f68671196592cb947984b082bacda0f3efd594b41deaba4480cae066c658529b90754f5109f9b0b61d42266f234e6ce63bc56b7b2141680b4fc4c8d3b4d09b903c5a2d657fc79432c586d0e9bd6400061e51f6093a7669db4e4a493137440cada18dcff631462e349de1d043a14a7a1de77b85638fbd",
-    "key_exchange": "11d1a3f15b490c059bfa06f7d0fae9cde9ff6af80270f3327161a362ec84570e",
-    "client_registration_state": "78b54192e145ff02458385f8540fdf54e94c2a20f0a7f8f98944bc17af795e0470617373776f7264",
-    "client_login_state": "78b54192e145ff02458385f8540fdf54e94c2a20f0a7f8f98944bc17af795e04c835f5854f1651c8551e24aee6ab1b81bf44e4cb906d0ac9fcf1aaa26ef3b872197b1147bb214fafde9f5ce6f5e903d69be0ca006c51ac8f949ce7ab73a828ed3a139e3e250129a1d3e7633052f853006a501e24b1d3c6ba6403aeb9cca7eda170617373776f7264",
-    "server_registration_state": "98a9232ccfda91d14ea305e5cfb4e552ab8aa972ac6c79befe15ccf9f4f2970a",
-    "server_login_state": "8be81bab99a1ce566adb4f33d14b012a8583f0ecf8b467bad1930a6adbf7178dcc8daa2de4be476dde1d8193f9fe7786601d7db0af7302c19501b516ad5e53329706a48a68a6bbf3dea894447a53b423fc5b5e561c9c3fa9b1b278d6790bbb74",
-    "password_file": "98a9232ccfda91d14ea305e5cfb4e552ab8aa972ac6c79befe15ccf9f4f2970ad762053e2da32c990b1edb22408138369282462feeaa68fc0acfd157c27457400146c395bdc879bfebae229024f0004721448e713643a341146310d50c84cef0110022f6906b64d3d45c4d77dd8c002b841749f716efc9e3e2cff762004b4878e75c0a7abe002c0020b7d6d756fb2b3972125245f53c042c53c8b3bf5e9d2b576809548c5510f33136000369645500036964530020e4444a287fc0bc8921d0c6423d36948fa176f68671196592cb947984b082bacd",
-    "export_key": "3cdf9ad930b46fad7855faab02a7f2e28282cc73f82fdd411f1a7f6c300c8ab1",
-    "shared_secret": "9706a48a68a6bbf3dea894447a53b423fc5b5e561c9c3fa9b1b278d6790bbb74"
+    "registration_request": "002096738fbc9883a85a8067763abe33efadce0adb2bc64857d3cd0a6cc92e9ce325",
+    "registration_response": "0020a86baffac435f6239cfe5f61d823e7458ac211dce1d3c364375e9d1f40843c750020fc0d7d59e0fabe7c876c01c8d5408fc60dc5fdec7b89acdc5af2bc7c0de26d75",
+    "registration_upload": "01d7d138a3a4cb796662814391f5221e05b66438a92e5f57cc9624e6227da34eab002229979df679067f8baecbbe063ee97e2b5be88c2b99163d595b32a74d640138771d70002c0020fc0d7d59e0fabe7c876c01c8d5408fc60dc5fdec7b89acdc5af2bc7c0de26d750003696455000369645300400b6119d0de405d85e0e6b1748eb66194b1768ea71fd47c103f8e1fcbc837add2b282889469921798d626a02b6dd763ee9cd028f333386a19c13a3d4d4c6a3312002064b071d0b8eccc39673b16384e86df49f258a12bad24f21f5d5f4a9a8f45561c",
+    "credential_request": "002096738fbc9883a85a8067763abe33efadce0adb2bc64857d3cd0a6cc92e9ce325ad87ae4609f1f56aeb1de0f4760120fa75ceff39751dffc35d25ff3f2896bb600005696e666f313a575317d7a6269bc4e76074ec906d8886b4c135fb6b590972f6fdd6c1a55676",
+    "credential_response": "0020a86baffac435f6239cfe5f61d823e7458ac211dce1d3c364375e9d1f40843c750020fc0d7d59e0fabe7c876c01c8d5408fc60dc5fdec7b89acdc5af2bc7c0de26d7501d7d138a3a4cb796662814391f5221e05b66438a92e5f57cc9624e6227da34eab002229979df679067f8baecbbe063ee97e2b5be88c2b99163d595b32a74d640138771d70002c0020fc0d7d59e0fabe7c876c01c8d5408fc60dc5fdec7b89acdc5af2bc7c0de26d750003696455000369645300400b6119d0de405d85e0e6b1748eb66194b1768ea71fd47c103f8e1fcbc837add2b282889469921798d626a02b6dd763ee9cd028f333386a19c13a3d4d4c6a3312a3a06d81eeb60aeedaee96769149ae5f45184eec66e1b2bdeb04114d270192068e32a64f670b9d2115eba0006b00667972523bf2f8686933ef2a2819d6b5a13b00066c7c22ba8dbae814beb02d1b89659379ca61697cd3212169d387b61f5659b77f6993833a1542a692cb5ad259244a1d53a51243fb5366a5bd8e4ed7eb2f50caa9a568fc8267e9",
+    "key_exchange": "3f9d3754920514328529bf4e78d4c2d0f411dfb871a4ef83c87d3462119b836381bdc651096cb62ca96de5f4b5a9acaa87b180d2acefebd2f3feb5785adcd038",
+    "client_registration_state": "3497d8c6728a3dc0873e363dcd60acd95f7897d15d33cdf1d49c8b856f06190070617373776f7264",
+    "client_login_state": "3497d8c6728a3dc0873e363dcd60acd95f7897d15d33cdf1d49c8b856f061900163b91328785a5e84e21579e941be1dd7bdbc44d4c959f603d7f79417ab6b201ad87ae4609f1f56aeb1de0f4760120fa75ceff39751dffc35d25ff3f2896bb607962b421c96efcfdb465365eea8fe9914e6ac5c0b216e2b07c7fb3b17fa0d21ee8c37373fee8dfec6a5eae559f21c8c4e1505ed974ce8baff3529304cb4d90b570617373776f7264",
+    "server_registration_state": "c728d1ea06fb94f577ef63d50d1645e9fea14575987971e4a64e05dda367c703",
+    "server_login_state": "644fb6d36a91e0197f5d82d17f04354f9e24794988923160534d99c80970b66fe54a3d8b36d5a4d21eaf0fa7bb4717ed1741be3f7d24b96d27aeb7f4b59a72bf80d0d969a2398ea5a5232d3257c60516dcc0de65b66fc5a07b8e2f58523eb0079ac09798a23cee0e31454594d25e40f34b10b92195fea6f90e197c0fbc8658bb3435bb6179370029f03d2dbd5efa2d0f8b8f4f69ca42ef70245686f70c2d7f326d0a8bc596145099e6a668d23ce1a93f9a3f83bfdddde15c78f467a639f124dd",
+    "password_file": "c728d1ea06fb94f577ef63d50d1645e9fea14575987971e4a64e05dda367c70364b071d0b8eccc39673b16384e86df49f258a12bad24f21f5d5f4a9a8f45561c01d7d138a3a4cb796662814391f5221e05b66438a92e5f57cc9624e6227da34eab002229979df679067f8baecbbe063ee97e2b5be88c2b99163d595b32a74d640138771d70002c0020fc0d7d59e0fabe7c876c01c8d5408fc60dc5fdec7b89acdc5af2bc7c0de26d750003696455000369645300400b6119d0de405d85e0e6b1748eb66194b1768ea71fd47c103f8e1fcbc837add2b282889469921798d626a02b6dd763ee9cd028f333386a19c13a3d4d4c6a3312",
+    "export_key": "005ba69bed794d3e24ac750ed575165a0235e103d1f8d7ca1b9aa0cfc2c3d9b6",
+    "shared_secret": "3435bb6179370029f03d2dbd5efa2d0f8b8f4f69ca42ef70245686f70c2d7f326d0a8bc596145099e6a668d23ce1a93f9a3f83bfdddde15c78f467a639f124dd"
 }
 "#;
 
@@ -255,30 +253,17 @@ fn stringify_test_vectors(p: &TestVectorParameters) -> String {
     s
 }
 
-fn generate_parameters<CS: CipherSuite>() -> TestVectorParameters
-where
-    // Unsightly constraints due to the (required) use of the SizedBytes
-    // instance for KP in ServerRegistration::start. See also the impl
-    // Tryfrom<&[u8]> for ServerRegistration (those are the same constraints).
-    <<CS::KeyFormat as KeyPair>::Repr as SizedBytes>::Len:
-        std::ops::Add<<<CS::KeyFormat as KeyPair>::Repr as SizedBytes>::Len>,
-    generic_array::typenum::Sum<
-        <<CS::KeyFormat as KeyPair>::Repr as SizedBytes>::Len,
-        <<CS::KeyFormat as KeyPair>::Repr as SizedBytes>::Len,
-    >: generic_array::ArrayLength<u8>,
-{
+fn generate_parameters<CS: CipherSuite>() -> TestVectorParameters {
     let mut rng = OsRng;
 
     // Inputs
-    let server_s_kp = CS::generate_random_keypair(&mut rng).unwrap();
-    let server_e_kp = CS::generate_random_keypair(&mut rng).unwrap();
-    let client_s_kp = CS::generate_random_keypair(&mut rng).unwrap();
-    let client_e_kp = CS::generate_random_keypair(&mut rng).unwrap();
+    let server_s_kp = CS::generate_random_keypair(&mut rng);
+    let server_e_kp = CS::generate_random_keypair(&mut rng);
+    let client_s_kp = CS::generate_random_keypair(&mut rng);
+    let client_e_kp = CS::generate_random_keypair(&mut rng);
     let id_u = b"idU";
     let id_s = b"idS";
     let password = b"password";
-    let mut blinding_factor_raw = [0u8; 64];
-    rng.fill_bytes(&mut blinding_factor_raw);
     let mut oprf_key_raw = [0u8; 32];
     rng.fill_bytes(&mut oprf_key_raw);
     let mut envelope_nonce = [0u8; 32];
@@ -288,22 +273,26 @@ where
     let mut server_nonce = [0u8; NONCE_LEN];
     rng.fill_bytes(&mut server_nonce);
 
+    let blinding_factor = CS::Group::random_scalar(&mut rng);
+    let blinding_factor_bytes = CS::Group::scalar_as_bytes(&blinding_factor).clone();
+
     let info1 = b"info1";
     let einfo2 = b"einfo2";
 
-    let mut blinding_factor_registration_rng = CycleRng::new(blinding_factor_raw.to_vec());
-    let client_registration_start_result = ClientRegistration::<CS>::start(
-        &mut blinding_factor_registration_rng,
-        password,
-        std::convert::identity,
-    )
-    .unwrap();
+    let mut blinding_factor_registration_rng = CycleRng::new(blinding_factor_bytes.to_vec());
+    let client_registration_start_result =
+        ClientRegistration::<CS>::start(&mut blinding_factor_registration_rng, password).unwrap();
+    let blinding_factor_bytes_returned =
+        CS::Group::scalar_as_bytes(&client_registration_start_result.state.token.blind).clone();
+    assert_eq!(
+        hex::encode(&blinding_factor_bytes),
+        hex::encode(&blinding_factor_bytes_returned)
+    );
+
     let registration_request_bytes = client_registration_start_result
         .message
         .serialize()
         .to_vec();
-    let blinding_factor_bytes =
-        CS::Group::scalar_as_bytes(&client_registration_start_result.state.token.blind).clone();
     let client_registration_state = client_registration_start_result.state.to_bytes().to_vec();
 
     let mut oprf_key_rng = CycleRng::new(oprf_key_raw.to_vec());
@@ -346,7 +335,7 @@ where
     let password_file_bytes = password_file.to_bytes();
 
     let mut client_login_start: Vec<u8> = Vec::new();
-    client_login_start.extend_from_slice(&blinding_factor_raw);
+    client_login_start.extend_from_slice(&blinding_factor_bytes);
     client_login_start.extend_from_slice(&client_e_kp.private().to_arr());
     client_login_start.extend_from_slice(&client_nonce);
 
@@ -355,7 +344,6 @@ where
         &mut client_login_start_rng,
         password,
         ClientLoginStartParameters::WithInfo(info1.to_vec()),
-        std::convert::identity,
     )
     .unwrap();
     let credential_request_bytes = client_login_start_result.message.serialize().to_vec();
@@ -423,25 +411,16 @@ where
 
 #[test]
 fn generate_test_vectors() {
-    let parameters = generate_parameters::<X255193dhNoSlowHash>();
+    let parameters = generate_parameters::<RistrettoSha5123dhNoSlowHash>();
     println!("{}", stringify_test_vectors(&parameters));
-}
-
-// For fixing the blinding factor
-fn postprocess_blinding_factor<G: Group>(_: G::Scalar) -> G::Scalar {
-    let parameters = populate_test_vectors(&serde_json::from_str(TEST_VECTOR).unwrap());
-    G::from_scalar_slice(GenericArray::from_slice(&parameters.blinding_factor[..])).unwrap()
 }
 
 #[test]
 fn test_registration_request() -> Result<(), ProtocolError> {
     let parameters = populate_test_vectors(&serde_json::from_str(TEST_VECTOR).unwrap());
-    let mut rng = OsRng;
-    let client_registration_start_result = ClientRegistration::<X255193dhNoSlowHash>::start(
-        &mut rng,
-        &parameters.password,
-        postprocess_blinding_factor::<<X255193dhNoSlowHash as CipherSuite>::Group>,
-    )?;
+    let mut rng = CycleRng::new(parameters.blinding_factor.to_vec());
+    let client_registration_start_result =
+        ClientRegistration::<RistrettoSha5123dhNoSlowHash>::start(&mut rng, &parameters.password)?;
     assert_eq!(
         hex::encode(&parameters.registration_request),
         hex::encode(client_registration_start_result.message.serialize())
@@ -457,11 +436,12 @@ fn test_registration_request() -> Result<(), ProtocolError> {
 fn test_registration_response() -> Result<(), ProtocolError> {
     let parameters = populate_test_vectors(&serde_json::from_str(TEST_VECTOR).unwrap());
     let mut oprf_key_rng = CycleRng::new(parameters.oprf_key);
-    let server_registration_start_result = ServerRegistration::<X255193dhNoSlowHash>::start(
-        &mut oprf_key_rng,
-        RegistrationRequest::deserialize(&parameters.registration_request[..]).unwrap(),
-        &Key::try_from(&parameters.server_s_pk[..]).unwrap(),
-    )?;
+    let server_registration_start_result =
+        ServerRegistration::<RistrettoSha5123dhNoSlowHash>::start(
+            &mut oprf_key_rng,
+            RegistrationRequest::deserialize(&parameters.registration_request[..]).unwrap(),
+            &Key::try_from(&parameters.server_s_pk[..]).unwrap(),
+        )?;
     assert_eq!(
         hex::encode(parameters.registration_response),
         hex::encode(server_registration_start_result.message.serialize())
@@ -480,7 +460,7 @@ fn test_registration_upload() -> Result<(), ProtocolError> {
     let client_s_sk_and_nonce: Vec<u8> =
         [parameters.client_s_sk, parameters.envelope_nonce].concat();
     let mut finish_registration_rng = CycleRng::new(client_s_sk_and_nonce);
-    let result = ClientRegistration::<X255193dhNoSlowHash>::try_from(
+    let result = ClientRegistration::<RistrettoSha5123dhNoSlowHash>::try_from(
         &parameters.client_registration_state[..],
     )?
     .finish(
@@ -505,7 +485,7 @@ fn test_registration_upload() -> Result<(), ProtocolError> {
 fn test_password_file() -> Result<(), ProtocolError> {
     let parameters = populate_test_vectors(&serde_json::from_str(TEST_VECTOR).unwrap());
 
-    let server_registration = ServerRegistration::<X255193dhNoSlowHash>::try_from(
+    let server_registration = ServerRegistration::<RistrettoSha5123dhNoSlowHash>::try_from(
         &parameters.server_registration_state[..],
     )?;
     let password_file = server_registration
@@ -522,18 +502,17 @@ fn test_password_file() -> Result<(), ProtocolError> {
 fn test_credential_request() -> Result<(), ProtocolError> {
     let parameters = populate_test_vectors(&serde_json::from_str(TEST_VECTOR).unwrap());
 
-    let client_login_start = [
-        vec![0u8; 64], // FIXME: don't hardcode this
+    let client_login_start_rng = [
+        parameters.blinding_factor,
         parameters.client_e_sk,
         parameters.client_nonce,
     ]
     .concat();
-    let mut client_login_start_rng = CycleRng::new(client_login_start);
-    let client_login_start_result = ClientLogin::<X255193dhNoSlowHash>::start(
+    let mut client_login_start_rng = CycleRng::new(client_login_start_rng);
+    let client_login_start_result = ClientLogin::<RistrettoSha5123dhNoSlowHash>::start(
         &mut client_login_start_rng,
         &parameters.password,
         ClientLoginStartParameters::WithInfo(parameters.info1),
-        postprocess_blinding_factor::<<X255193dhNoSlowHash as CipherSuite>::Group>,
     )?;
     assert_eq!(
         hex::encode(&parameters.credential_request),
@@ -551,12 +530,14 @@ fn test_credential_response() -> Result<(), ProtocolError> {
     let parameters = populate_test_vectors(&serde_json::from_str(TEST_VECTOR).unwrap());
 
     let mut server_e_sk_rng = CycleRng::new(parameters.server_e_sk);
-    let server_login_start_result = ServerLogin::<X255193dhNoSlowHash>::start(
+    let server_login_start_result = ServerLogin::<RistrettoSha5123dhNoSlowHash>::start(
         &mut server_e_sk_rng,
         ServerRegistration::try_from(&parameters.password_file[..]).unwrap(),
         &Key::try_from(&parameters.server_s_sk[..]).unwrap(),
-        CredentialRequest::<X255193dhNoSlowHash>::deserialize(&parameters.credential_request[..])
-            .unwrap(),
+        CredentialRequest::<RistrettoSha5123dhNoSlowHash>::deserialize(
+            &parameters.credential_request[..],
+        )
+        .unwrap(),
         ServerLoginStartParameters::WithInfoAndIdentifiers(
             parameters.einfo2.to_vec(),
             parameters.id_u,
@@ -583,10 +564,10 @@ fn test_key_exchange() -> Result<(), ProtocolError> {
     let parameters = populate_test_vectors(&serde_json::from_str(TEST_VECTOR).unwrap());
 
     let client_login_finish_result =
-        ClientLogin::<X255193dhNoSlowHash>::try_from(&parameters.client_login_state[..])
+        ClientLogin::<RistrettoSha5123dhNoSlowHash>::try_from(&parameters.client_login_state[..])
             .unwrap()
             .finish(
-                CredentialResponse::<X255193dhNoSlowHash>::deserialize(
+                CredentialResponse::<RistrettoSha5123dhNoSlowHash>::deserialize(
                     &parameters.credential_response[..],
                 )?,
                 ClientLoginFinishParameters::WithIdentifiers(parameters.id_u, parameters.id_s),
@@ -621,9 +602,10 @@ fn test_server_login_finish() -> Result<(), ProtocolError> {
     let parameters = populate_test_vectors(&serde_json::from_str(TEST_VECTOR).unwrap());
 
     let server_login_result =
-        ServerLogin::<X255193dhNoSlowHash>::try_from(&parameters.server_login_state[..])?.finish(
-            CredentialFinalization::try_from(&parameters.key_exchange[..])?,
-        )?;
+        ServerLogin::<RistrettoSha5123dhNoSlowHash>::try_from(&parameters.server_login_state[..])?
+            .finish(CredentialFinalization::try_from(
+                &parameters.key_exchange[..],
+            )?)?;
 
     assert_eq!(
         hex::encode(parameters.shared_secret),
@@ -639,17 +621,18 @@ fn test_complete_flow(
 ) -> Result<(), ProtocolError> {
     let mut client_rng = OsRng;
     let mut server_rng = OsRng;
-    let server_kp = X255193dhNoSlowHash::generate_random_keypair(&mut server_rng)?;
-    let client_registration_start_result = ClientRegistration::<X255193dhNoSlowHash>::start(
-        &mut client_rng,
-        registration_password,
-        std::convert::identity,
-    )?;
-    let server_registration_start_result = ServerRegistration::<X255193dhNoSlowHash>::start(
-        &mut server_rng,
-        client_registration_start_result.message,
-        server_kp.public(),
-    )?;
+    let server_kp = RistrettoSha5123dhNoSlowHash::generate_random_keypair(&mut server_rng);
+    let client_registration_start_result =
+        ClientRegistration::<RistrettoSha5123dhNoSlowHash>::start(
+            &mut client_rng,
+            registration_password,
+        )?;
+    let server_registration_start_result =
+        ServerRegistration::<RistrettoSha5123dhNoSlowHash>::start(
+            &mut server_rng,
+            client_registration_start_result.message,
+            server_kp.public(),
+        )?;
     let client_registration_finish_result = client_registration_start_result.state.finish(
         &mut client_rng,
         server_registration_start_result.message,
@@ -658,13 +641,12 @@ fn test_complete_flow(
     let p_file = server_registration_start_result
         .state
         .finish(client_registration_finish_result.message)?;
-    let client_login_start_result = ClientLogin::<X255193dhNoSlowHash>::start(
+    let client_login_start_result = ClientLogin::<RistrettoSha5123dhNoSlowHash>::start(
         &mut client_rng,
         login_password,
         ClientLoginStartParameters::default(),
-        std::convert::identity,
     )?;
-    let server_login_start_result = ServerLogin::<X255193dhNoSlowHash>::start(
+    let server_login_start_result = ServerLogin::<RistrettoSha5123dhNoSlowHash>::start(
         &mut server_rng,
         p_file,
         &server_kp.private(),
