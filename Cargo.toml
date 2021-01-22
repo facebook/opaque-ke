@@ -37,6 +37,7 @@ zeroize = "1.1.1"
 [dev-dependencies]
 anyhow = "1.0.35"
 base64 = "0.13.0"
+chacha20poly1305 = "0.7.1"
 criterion = "0.3.3"
 hex = "0.4.2"
 lazy_static = "1.4.0"

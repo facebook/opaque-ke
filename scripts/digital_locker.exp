@@ -1,0 +1,84 @@
+#!/bin/expect -f
+# Copyright (c) Facebook, Inc. and its affiliates.
+#
+# This source code is licensed under the MIT license found in the
+# LICENSE file in the root directory of this source tree.
+
+set timeout 1
+spawn cargo run --example digital_locker
+match_max 100000
+sleep 1
+expect "*
+\r
+Currently registered locker numbers: \\\[\\\]\r
+\r
+Enter an option (1 or 2):\r
+1) Register a locker\r
+2) Open a locker\r
+\r
+"
+sleep .1
+send -- "1\r"
+expect "Choose a password: \r"
+send -- "foo\r"
+expect "Set a secret message: \r"
+send -- "bar\r"
+expect "*
+\r
+Currently registered locker numbers: \\\[0\\\]\r
+\r
+Enter an option (1 or 2):\r
+1) Register a locker\r
+2) Open a locker\r
+\r
+"
+sleep .1
+send -- "2\r"
+expect "Choose a locker number: \r"
+send -- "1\r"
+expect "Password: \r"
+send -- "foo\r"
+expect "*Error: Could not find locker number\r
+\r
+Currently registered locker numbers: \\\[0\\\]\r
+\r
+Enter an option (1 or 2):\r
+1) Register a locker\r
+2) Open a locker\r
+\r
+"
+sleep .1
+send -- "2\r"
+expect "Choose a locker number: \r"
+send -- "0\r"
+expect "Password: \r"
+send -- "baz\r"
+expect "*Error encountered, could not open locker: Incorrect password, please try again.\r
+\r
+Currently registered locker numbers: \\\[0\\\]\r
+\r
+Enter an option (1 or 2):\r
+1) Register a locker\r
+2) Open a locker\r
+\r
+"
+sleep .1
+send -- "2\r"
+expect "Choose a locker number: \r"
+send -- "0\r"
+expect "Password: \r"
+send -- "foo\r"
+expect "*
+\r
+*Success! Contents: bar\r
+\r
+Currently registered locker numbers: \\\[0\\\]\r
+\r
+Enter an option (1 or 2):\r
+1) Register a locker\r
+2) Open a locker\r
+\r
+"
+sleep .1
+send -- ""
+expect eof

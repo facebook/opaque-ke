@@ -3,8 +3,12 @@
 // This source code is licensed under the MIT license found in the
 // LICENSE file in the root directory of this source tree.
 
-//! Demonstrates a simple client-server password-based login protocol
-//! using OPAQUE, over a command-line interface
+//! Demonstrates an implementation of a server-side secured digital locker using
+//! the client's OPAQUE export key, over a command-line interface
+//!
+//! A client can password-protect a secret message to be stored in a digital locker,
+//! controlled by the server. The locker's contents are only revealed to the holder
+//! of the password when attempting to open the locker.
 //!
 //! The client-server interactions are executed in a three-step protocol
 //! within the account_registration (for password registration) and
@@ -20,19 +24,19 @@
 //! messages over "the wire" to the server. These bytes are serialized
 //! and explicitly annotated in the below functions.
 
-use rand_core::OsRng;
+use chacha20poly1305::aead::{Aead, NewAead};
+use chacha20poly1305::{ChaCha20Poly1305, Key, Nonce};
+use rand_core::{OsRng, RngCore};
 use rustyline::error::ReadlineError;
 use rustyline::Editor;
-use std::collections::HashMap;
 use std::convert::TryFrom;
 use std::process::exit;
 
 use opaque_ke::{
     ciphersuite::CipherSuite, keypair::KeyPair, ClientLogin, ClientLoginFinishParameters,
     ClientLoginStartParameters, ClientRegistration, ClientRegistrationFinishParameters,
-    CredentialFinalization, CredentialRequest, CredentialResponse, RegistrationRequest,
-    RegistrationResponse, RegistrationUpload, ServerLogin, ServerLoginStartParameters,
-    ServerRegistration,
+    CredentialRequest, CredentialResponse, RegistrationRequest, RegistrationResponse,
+    RegistrationUpload, ServerLogin, ServerLoginStartParameters, ServerRegistration,
 };
 
 // The ciphersuite trait allows to specify the underlying primitives
@@ -47,11 +51,41 @@ impl CipherSuite for Default {
     type SlowHash = opaque_ke::slow_hash::NoOpHash;
 }
 
-// Password-based registration between a client and server
-fn account_registration(
+struct Locker {
+    contents: Vec<u8>,
+    password_file: Vec<u8>,
+}
+
+// Given a key and plaintext, produce an AEAD ciphertext along with a nonce
+fn encrypt(key: &[u8], plaintext: &[u8]) -> Vec<u8> {
+    let cipher = ChaCha20Poly1305::new(Key::from_slice(&key));
+
+    let mut rng = OsRng;
+    let mut nonce_bytes = [0u8; 12];
+    rng.fill_bytes(&mut nonce_bytes);
+    let nonce = Nonce::from_slice(&nonce_bytes);
+
+    let ciphertext = cipher.encrypt(nonce, plaintext.as_ref()).unwrap();
+    [nonce_bytes.to_vec(), ciphertext].concat()
+}
+
+// Decrypt using a key and a ciphertext (nonce included) to recover the original plaintext
+fn decrypt(key: &[u8], ciphertext: &[u8]) -> Vec<u8> {
+    let cipher = ChaCha20Poly1305::new(Key::from_slice(&key));
+    cipher
+        .decrypt(
+            Nonce::from_slice(&ciphertext[..12]),
+            ciphertext[12..].as_ref(),
+        )
+        .unwrap()
+}
+
+// Password-based registration and encryption of client secret message between a client and server
+fn register_locker(
     server_kp: &opaque_ke::keypair::X25519KeyPair,
     password: String,
-) -> Vec<u8> {
+    secret_message: String,
+) -> Locker {
     let mut client_rng = OsRng;
     let client_registration_start_result =
         ClientRegistration::<Default>::start(&mut client_rng, password.as_bytes()).unwrap();
@@ -80,21 +114,31 @@ fn account_registration(
         .unwrap();
     let message_bytes = client_finish_registration_result.message.serialize();
 
+    // Client encrypts secret message using export key
+    let ciphertext = encrypt(
+        &client_finish_registration_result.export_key,
+        secret_message.as_bytes(),
+    );
+
     // Client sends message_bytes to server
 
     let password_file = server_registration_start_result
         .state
         .finish(RegistrationUpload::deserialize(&message_bytes[..]).unwrap())
         .unwrap();
-    password_file.to_bytes()
+
+    Locker {
+        contents: ciphertext,
+        password_file: password_file.to_bytes(),
+    }
 }
 
-// Password-based login between a client and server
-fn account_login(
+// Open the contents of a locker with a password between a client and server
+fn open_locker(
     server_kp: &opaque_ke::keypair::X25519KeyPair,
     password: String,
-    password_file_bytes: &[u8],
-) -> bool {
+    locker: &Locker,
+) -> Result<String, String> {
     let mut client_rng = OsRng;
     let client_login_start_result = ClientLogin::<Default>::start(
         &mut client_rng,
@@ -106,7 +150,7 @@ fn account_login(
 
     // Client sends credential_request_bytes to server
 
-    let password_file = ServerRegistration::<Default>::try_from(password_file_bytes).unwrap();
+    let password_file = ServerRegistration::<Default>::try_from(&locker.password_file[..]).unwrap();
     let mut server_rng = OsRng;
     let server_login_start_result = ServerLogin::start(
         &mut server_rng,
@@ -127,19 +171,13 @@ fn account_login(
 
     if result.is_err() {
         // Client-detected login failure
-        return false;
+        return Err(String::from("Incorrect password, please try again."));
     }
     let client_login_finish_result = result.unwrap();
-    let credential_finalization_bytes = client_login_finish_result.message.serialize();
 
-    // Client sends credential_finalization_bytes to server
-
-    let server_login_finish_result = server_login_start_result
-        .state
-        .finish(CredentialFinalization::deserialize(&credential_finalization_bytes[..]).unwrap())
-        .unwrap();
-
-    client_login_finish_result.shared_secret == server_login_finish_result.shared_secret
+    // Decrypt contents of locker
+    let plaintext = decrypt(&client_login_finish_result.export_key, &locker.contents);
+    String::from_utf8(plaintext).map_err(|_| String::from("UTF8 error"))
 }
 
 fn main() {
@@ -147,16 +185,13 @@ fn main() {
     let server_kp = Default::generate_random_keypair(&mut rng).unwrap();
 
     let mut rl = Editor::<()>::new();
-    let mut registered_users = HashMap::<String, Vec<u8>>::new();
+    let mut registered_lockers: Vec<Locker> = vec![];
     loop {
-        println!(
-            "\nCurrently registered usernames: {:?}\n",
-            registered_users.keys()
-        );
+        display_lockers(&registered_lockers);
 
         println!("Enter an option (1 or 2):");
-        println!("1) Register a user");
-        println!("2) Login as a user\n");
+        println!("1) Register a locker");
+        println!("2) Open a locker\n");
         let readline = rl.readline("> ");
         match readline {
             Ok(line) => {
@@ -164,28 +199,53 @@ fn main() {
                     println!("Error: Invalid option (either specify 1 or 2)");
                     continue;
                 }
-                let (username, password) = get_two_strings("Username", "Password", &mut rl, None);
                 match line.as_ref() {
                     "1" => {
-                        registered_users
-                            .insert(username, account_registration(&server_kp, password));
+                        let (password, secret_message) = get_two_strings(
+                            "Choose a password",
+                            "Set a secret message",
+                            &mut rl,
+                            None,
+                        );
+                        registered_lockers.push(register_locker(
+                            &server_kp,
+                            password,
+                            secret_message,
+                        ));
                         continue;
                     }
-                    "2" => match registered_users.get(&username) {
-                        Some(password_file_bytes) => {
-                            if account_login(&server_kp, password, password_file_bytes) {
-                                println!("\nLogin success!");
-                            } else {
-                                // Note that at this point, the client knows whether or not the login
-                                // succeeded. In this example, we simply rely on client-reported result
-                                // of login, but in a real client-server implementation, the server may not
-                                // know the outcome of login yet, and extra care must be taken to ensure
-                                // that the server can learn the outcome as well.
-                                println!("\nIncorrect password, please try again.");
+                    "2" => {
+                        let (locker, password) = get_two_strings(
+                            "Choose a locker number",
+                            "Enter the password",
+                            &mut rl,
+                            None,
+                        );
+                        let locker_index: usize = match locker.parse() {
+                            Ok(index) => index,
+                            Err(_) => {
+                                println!("Could not find locker number");
+                                continue;
+                            }
+                        };
+
+                        if locker_index >= registered_lockers.len() {
+                            println!("Could not find locker number");
+                            continue;
+                        }
+
+                        match open_locker(&server_kp, password, &registered_lockers[locker_index]) {
+                            Ok(contents) => {
+                                println!("\n\nSuccess! Contents: {}\n\n", contents);
+                            }
+                            Err(err) => {
+                                println!(
+                                    "\n\nError encountered, could not open locker: {}\n\n",
+                                    err
+                                );
                             }
                         }
-                        None => println!("Error: Could not find username registered"),
-                    },
+                    }
                     _ => exit(0),
                 }
             }
@@ -198,6 +258,18 @@ fn main() {
 }
 
 // Helper functions
+
+fn display_lockers(lockers: &Vec<Locker>) {
+    let mut locker_numbers = vec![];
+    for (i, _) in lockers.iter().enumerate() {
+        locker_numbers.push(i);
+    }
+
+    println!(
+        "\nCurrently registered locker numbers: {:?}\n",
+        locker_numbers
+    );
+}
 
 // Handle readline errors
 fn handle_error(err: ReadlineError) {
