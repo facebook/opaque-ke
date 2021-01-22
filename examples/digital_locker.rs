@@ -224,13 +224,13 @@ fn main() {
                         let locker_index: usize = match locker.parse() {
                             Ok(index) => index,
                             Err(_) => {
-                                println!("Could not find locker number");
+                                println!("Error: Could not find locker number");
                                 continue;
                             }
                         };
 
                         if locker_index >= registered_lockers.len() {
-                            println!("Could not find locker number");
+                            println!("Error: Could not find locker number");
                             continue;
                         }
 

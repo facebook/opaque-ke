@@ -88,8 +88,7 @@ pub(crate) fn expand_message_xmd<H: Hash>(
     let l_i_b_str = i2osp(len_in_bytes, 2);
     let msg_prime = [&z_pad, msg, &l_i_b_str, &i2osp(0, 1), &dst_prime].concat();
 
-    let mut b: Vec<Vec<u8>> = Vec::new();
-    b.push(H::digest(&msg_prime).to_vec()); // b[0]
+    let mut b: Vec<Vec<u8>> = vec![H::digest(&msg_prime).to_vec()]; // b[0]
 
     let mut h = H::new();
     h.update(&b[0]);
