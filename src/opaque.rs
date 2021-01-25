@@ -12,7 +12,7 @@ use crate::{
     group::Group,
     hash::Hash,
     key_exchange::traits::{KeyExchange, ToBytes},
-    keypair::{KeyPair, SizedBytesExt},
+    keypair::{Key, KeyPair, SizedBytesExt},
     map_to_curve::GroupWithMapToCurve,
     oprf,
     serialization::serialize,
@@ -116,9 +116,8 @@ impl<CS: CipherSuite> ClientRegistration<CS> {
     /// struct Default;
     /// impl CipherSuite for Default {
     ///     type Group = curve25519_dalek::ristretto::RistrettoPoint;
-    ///     type KeyFormat = opaque_ke::keypair::X25519KeyPair;
     ///     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
-    ///     type Hash = sha2::Sha256;
+    ///     type Hash = sha2::Sha512;
     ///     type SlowHash = opaque_ke::slow_hash::NoOpHash;
     /// }
     /// let mut client_rng = OsRng;
@@ -128,14 +127,8 @@ impl<CS: CipherSuite> ClientRegistration<CS> {
     pub fn start<R: RngCore + CryptoRng>(
         blinding_factor_rng: &mut R,
         password: &[u8],
-        #[cfg(test)] postprocess: fn(<CS::Group as Group>::Scalar) -> <CS::Group as Group>::Scalar,
     ) -> Result<ClientRegistrationStartResult<CS>, ProtocolError> {
-        let (token, alpha) = oprf::blind::<R, CS::Group, CS::Hash>(
-            &password,
-            blinding_factor_rng,
-            #[cfg(test)]
-            postprocess,
-        )?;
+        let (token, alpha) = oprf::blind::<R, CS::Group, CS::Hash>(&password, blinding_factor_rng)?;
 
         Ok(ClientRegistrationStartResult {
             message: RegistrationRequest::<CS::Group> { alpha },
@@ -145,11 +138,12 @@ impl<CS: CipherSuite> ClientRegistration<CS> {
 }
 
 /// Contains the fields that are returned by a client registration finish
-pub struct ClientRegistrationFinishResult<KeyFormat: KeyPair, D: Hash> {
+pub struct ClientRegistrationFinishResult<D: Hash, G: Group> {
     /// The registration upload message to be sent to the server
-    pub message: RegistrationUpload<KeyFormat, D>,
+    pub message: RegistrationUpload<D, G>,
     /// The export key output by client registration
     pub export_key: GenericArray<u8, ExportKeySize>,
+    _g: PhantomData<G>,
 }
 
 impl<CS: CipherSuite> ClientRegistration<CS> {
@@ -162,7 +156,7 @@ impl<CS: CipherSuite> ClientRegistration<CS> {
     /// # Example
     ///
     /// ```
-    /// use opaque_ke::{ClientRegistration, ClientRegistrationFinishParameters, ServerRegistration, keypair::X25519KeyPair};
+    /// use opaque_ke::{ClientRegistration, ClientRegistrationFinishParameters, ServerRegistration};
     /// # use opaque_ke::errors::ProtocolError;
     /// # use opaque_ke::keypair::KeyPair;
     /// use rand_core::{OsRng, RngCore};
@@ -170,14 +164,13 @@ impl<CS: CipherSuite> ClientRegistration<CS> {
     /// struct Default;
     /// impl CipherSuite for Default {
     ///     type Group = curve25519_dalek::ristretto::RistrettoPoint;
-    ///     type KeyFormat = opaque_ke::keypair::X25519KeyPair;
     ///     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
-    ///     type Hash = sha2::Sha256;
+    ///     type Hash = sha2::Sha512;
     ///     type SlowHash = opaque_ke::slow_hash::NoOpHash;
     /// }
     /// let mut client_rng = OsRng;
     /// let mut server_rng = OsRng;
-    /// let server_kp = Default::generate_random_keypair(&mut server_rng)?;
+    /// let server_kp = Default::generate_random_keypair(&mut server_rng);
     /// let client_registration_start_result = ClientRegistration::<Default>::start(&mut client_rng, b"hunter2")?;
     /// let server_registration_start_result =
     /// ServerRegistration::<Default>::start(&mut server_rng, client_registration_start_result.message, server_kp.public())?;
@@ -190,12 +183,12 @@ impl<CS: CipherSuite> ClientRegistration<CS> {
         rng: &mut R,
         r2: RegistrationResponse<CS::Group>,
         params: ClientRegistrationFinishParameters,
-    ) -> Result<ClientRegistrationFinishResult<CS::KeyFormat, CS::Hash>, ProtocolError> {
+    ) -> Result<ClientRegistrationFinishResult<CS::Hash, CS::Group>, ProtocolError> {
         let optional_ids = match params {
             ClientRegistrationFinishParameters::WithIdentifiers(id_u, id_s) => Some((id_u, id_s)),
             ClientRegistrationFinishParameters::Default => None,
         };
-        let client_static_keypair = CS::generate_random_keypair(rng)?;
+        let client_static_keypair = CS::generate_random_keypair(rng);
 
         let password_derived_key =
             get_password_derived_key::<CS::Group, CS::SlowHash, CS::Hash>(&self.token, r2.beta)?;
@@ -212,8 +205,10 @@ impl<CS: CipherSuite> ClientRegistration<CS> {
             message: RegistrationUpload {
                 envelope,
                 client_s_pk: client_static_keypair.public().clone(),
+                _g: PhantomData,
             },
             export_key,
+            _g: PhantomData,
         })
     }
 }
@@ -257,19 +252,11 @@ pub struct ServerRegistrationStartResult<CS: CipherSuite> {
 /// The state elements the server holds to record a registration
 pub struct ServerRegistration<CS: CipherSuite> {
     envelope: Option<Envelope<CS::Hash>>,
-    client_s_pk: Option<<CS::KeyFormat as KeyPair>::Repr>,
+    client_s_pk: Option<Key>,
     pub(crate) oprf_key: <CS::Group as Group>::Scalar,
 }
 
-impl<CS: CipherSuite> TryFrom<&[u8]> for ServerRegistration<CS>
-where
-    <<CS::KeyFormat as KeyPair>::Repr as SizedBytes>::Len:
-        std::ops::Add<<<CS::KeyFormat as KeyPair>::Repr as SizedBytes>::Len>,
-    generic_array::typenum::Sum<
-        <<CS::KeyFormat as KeyPair>::Repr as SizedBytes>::Len,
-        <<CS::KeyFormat as KeyPair>::Repr as SizedBytes>::Len,
-    >: generic_array::ArrayLength<u8>,
-{
+impl<CS: CipherSuite> TryFrom<&[u8]> for ServerRegistration<CS> {
     type Error = ProtocolError;
 
     /// The format of a serialized ServerRegistration object:
@@ -285,17 +272,16 @@ where
         }
 
         // Need to do this check manually because envelope is variable-size
-        let key_len = <<CS::KeyFormat as KeyPair>::Repr as SizedBytes>::Len::to_usize();
+        let key_len = <Key as SizedBytes>::Len::to_usize();
 
         let checked_bytes =
             check_slice_size_atleast(&input, scalar_len + key_len, "server_registration_bytes")?;
 
         let oprf_key_bytes = GenericArray::from_slice(&checked_bytes[..scalar_len]);
         let oprf_key = CS::Group::from_scalar_slice(oprf_key_bytes)?;
-        let unchecked_client_s_pk = <CS::KeyFormat as KeyPair>::Repr::from_bytes(
-            &checked_bytes[scalar_len..scalar_len + key_len],
-        )?;
-        let client_s_pk = CS::KeyFormat::check_public_key(unchecked_client_s_pk)?;
+        let unchecked_client_s_pk =
+            Key::from_bytes(&checked_bytes[scalar_len..scalar_len + key_len])?;
+        let client_s_pk = KeyPair::<CS::Group>::check_public_key(unchecked_client_s_pk)?;
 
         let envelope = Envelope::<CS::Hash>::from_bytes(&checked_bytes[scalar_len + key_len..])?;
 
@@ -307,15 +293,7 @@ where
     }
 }
 
-impl<CS: CipherSuite> ServerRegistration<CS>
-where
-    <<CS::KeyFormat as KeyPair>::Repr as SizedBytes>::Len:
-        std::ops::Add<<<CS::KeyFormat as KeyPair>::Repr as SizedBytes>::Len>,
-    generic_array::typenum::Sum<
-        <<CS::KeyFormat as KeyPair>::Repr as SizedBytes>::Len,
-        <<CS::KeyFormat as KeyPair>::Repr as SizedBytes>::Len,
-    >: generic_array::ArrayLength<u8>,
-{
+impl<CS: CipherSuite> ServerRegistration<CS> {
     /// byte representation for the server's registration state
     pub fn to_bytes(&self) -> Vec<u8> {
         let mut output: Vec<u8> = CS::Group::scalar_as_bytes(&self.oprf_key).to_vec();
@@ -337,21 +315,20 @@ where
     /// # Example
     ///
     /// ```
-    /// use opaque_ke::{*, keypair::{KeyPair, X25519KeyPair}};
+    /// use opaque_ke::*;
     /// # use opaque_ke::errors::ProtocolError;
     /// use rand_core::{OsRng, RngCore};
     /// use opaque_ke::ciphersuite::CipherSuite;
     /// struct Default;
     /// impl CipherSuite for Default {
     ///     type Group = curve25519_dalek::ristretto::RistrettoPoint;
-    ///     type KeyFormat = opaque_ke::keypair::X25519KeyPair;
     ///     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
-    ///     type Hash = sha2::Sha256;
+    ///     type Hash = sha2::Sha512;
     ///     type SlowHash = opaque_ke::slow_hash::NoOpHash;
     /// }
     /// let mut client_rng = OsRng;
     /// let mut server_rng = OsRng;
-    /// let server_kp = Default::generate_random_keypair(&mut server_rng)?;
+    /// let server_kp = Default::generate_random_keypair(&mut server_rng);
     /// let client_registration_start_result = ClientRegistration::<Default>::start(&mut client_rng, b"hunter2")?;
     /// let server_registration_start_result = ServerRegistration::<Default>::start(&mut server_rng, client_registration_start_result.message, server_kp.public())?;
     /// # Ok::<(), ProtocolError>(())
@@ -359,7 +336,7 @@ where
     pub fn start<R: RngCore + CryptoRng>(
         rng: &mut R,
         message: RegistrationRequest<CS::Group>,
-        server_s_pk: &<CS::KeyFormat as KeyPair>::Repr,
+        server_s_pk: &Key,
     ) -> Result<ServerRegistrationStartResult<CS>, ProtocolError> {
         // RFC: generate oprf_key (salt) and v_u = g^oprf_key
         let oprf_key = CS::Group::random_scalar(rng);
@@ -389,21 +366,20 @@ where
     /// # Example
     ///
     /// ```
-    /// use opaque_ke::{*, keypair::{KeyPair, X25519KeyPair}};
+    /// use opaque_ke::{*, keypair::KeyPair};
     /// # use opaque_ke::errors::ProtocolError;
     /// use rand_core::{OsRng, RngCore};
     /// use opaque_ke::ciphersuite::CipherSuite;
     /// struct Default;
     /// impl CipherSuite for Default {
     ///     type Group = curve25519_dalek::ristretto::RistrettoPoint;
-    ///     type KeyFormat = opaque_ke::keypair::X25519KeyPair;
     ///     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
-    ///     type Hash = sha2::Sha256;
+    ///     type Hash = sha2::Sha512;
     ///     type SlowHash = opaque_ke::slow_hash::NoOpHash;
     /// }
     /// let mut client_rng = OsRng;
     /// let mut server_rng = OsRng;
-    /// let server_kp = Default::generate_random_keypair(&mut server_rng)?;
+    /// let server_kp = Default::generate_random_keypair(&mut server_rng);
     /// let client_registration_start_result = ClientRegistration::<Default>::start(&mut client_rng, b"hunter2")?;
     /// let server_registration_start_result = ServerRegistration::<Default>::start(&mut server_rng, client_registration_start_result.message, server_kp.public())?;
     /// let mut client_rng = OsRng;
@@ -413,7 +389,7 @@ where
     /// ```
     pub fn finish(
         self,
-        message: RegistrationUpload<CS::KeyFormat, CS::Hash>,
+        message: RegistrationUpload<CS::Hash, CS::Group>,
     ) -> Result<Self, ProtocolError> {
         Ok(Self {
             envelope: Some(message.envelope),
@@ -430,7 +406,7 @@ where
 pub struct ClientLogin<CS: CipherSuite> {
     /// token containing the client's password and the blinding factor
     token: oprf::Token<CS::Group>,
-    ke1_state: <CS::KeyExchange as KeyExchange<CS::Hash, CS::KeyFormat>>::KE1State,
+    ke1_state: <CS::KeyExchange as KeyExchange<CS::Hash, CS::Group>>::KE1State,
 }
 
 impl<CS: CipherSuite> TryFrom<&[u8]> for ClientLogin<CS> {
@@ -438,7 +414,7 @@ impl<CS: CipherSuite> TryFrom<&[u8]> for ClientLogin<CS> {
     fn try_from(input: &[u8]) -> Result<Self, Self::Error> {
         let scalar_len = <CS::Group as Group>::ScalarLen::to_usize();
         let ke1_state_size =
-            <CS::KeyExchange as KeyExchange<CS::Hash, CS::KeyFormat>>::ke1_state_size();
+            <CS::KeyExchange as KeyExchange<CS::Hash, CS::Group>>::ke1_state_size();
 
         let min_expected_len = scalar_len + ke1_state_size;
         let checked_slice = (if input.len() <= min_expected_len {
@@ -453,10 +429,9 @@ impl<CS: CipherSuite> TryFrom<&[u8]> for ClientLogin<CS> {
 
         let blinding_factor_bytes = GenericArray::from_slice(&checked_slice[..scalar_len]);
         let blinding_factor = CS::Group::from_scalar_slice(blinding_factor_bytes)?;
-        let ke1_state =
-            <CS::KeyExchange as KeyExchange<CS::Hash, CS::KeyFormat>>::KE1State::try_from(
-                &checked_slice[scalar_len..scalar_len + ke1_state_size],
-            )?;
+        let ke1_state = <CS::KeyExchange as KeyExchange<CS::Hash, CS::Group>>::KE1State::try_from(
+            &checked_slice[scalar_len..scalar_len + ke1_state_size],
+        )?;
         let password = input[scalar_len + ke1_state_size..].to_vec();
         Ok(Self {
             token: oprf::Token {
@@ -524,7 +499,7 @@ pub struct ClientLoginFinishResult<CS: CipherSuite> {
     /// The client-side export key
     pub export_key: GenericArray<u8, ExportKeySize>,
     /// The server's static public key
-    pub server_s_pk: <CS::KeyFormat as KeyPair>::Repr,
+    pub server_s_pk: Key,
     /// The confidential info sent by the client
     pub confidential_info: Vec<u8>,
 }
@@ -545,9 +520,8 @@ impl<CS: CipherSuite> ClientLogin<CS> {
     /// struct Default;
     /// impl CipherSuite for Default {
     ///     type Group = curve25519_dalek::ristretto::RistrettoPoint;
-    ///     type KeyFormat = opaque_ke::keypair::X25519KeyPair;
     ///     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
-    ///     type Hash = sha2::Sha256;
+    ///     type Hash = sha2::Sha512;
     ///     type SlowHash = opaque_ke::slow_hash::NoOpHash;
     /// }
     /// let mut client_rng = OsRng;
@@ -558,16 +532,10 @@ impl<CS: CipherSuite> ClientLogin<CS> {
         rng: &mut R,
         password: &[u8],
         params: ClientLoginStartParameters,
-        #[cfg(test)] postprocess: fn(<CS::Group as Group>::Scalar) -> <CS::Group as Group>::Scalar,
     ) -> Result<ClientLoginStartResult<CS>, ProtocolError> {
         let ClientLoginStartParameters::WithInfo(info) = params;
 
-        let (token, alpha) = oprf::blind::<R, CS::Group, CS::Hash>(
-            &password,
-            rng,
-            #[cfg(test)]
-            postprocess,
-        )?;
+        let (token, alpha) = oprf::blind::<R, CS::Group, CS::Hash>(&password, rng)?;
 
         let (ke1_state, ke1_message) =
             CS::KeyExchange::generate_ke1(alpha.to_arr().to_vec(), info, rng)?;
@@ -592,21 +560,20 @@ impl<CS: CipherSuite> ClientLogin<CS> {
     /// use opaque_ke::{ClientLogin, ClientLoginStartParameters, ClientLoginFinishParameters, ServerLogin, ServerLoginStartParameters};
     /// # use opaque_ke::{ClientRegistration, ClientRegistrationFinishParameters, ServerRegistration};
     /// # use opaque_ke::errors::ProtocolError;
-    /// # use opaque_ke::keypair::{X25519KeyPair, KeyPair};
+    /// # use opaque_ke::keypair::KeyPair;
     /// use rand_core::{OsRng, RngCore};
     /// use opaque_ke::ciphersuite::CipherSuite;
     /// struct Default;
     /// impl CipherSuite for Default {
     ///     type Group = curve25519_dalek::ristretto::RistrettoPoint;
-    ///     type KeyFormat = opaque_ke::keypair::X25519KeyPair;
     ///     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
-    ///     type Hash = sha2::Sha256;
+    ///     type Hash = sha2::Sha512;
     ///     type SlowHash = opaque_ke::slow_hash::NoOpHash;
     /// }
     /// let mut client_rng = OsRng;
     /// # let mut server_rng = OsRng;
     /// # let client_registration_start_result = ClientRegistration::<Default>::start(&mut client_rng, b"hunter2")?;
-    /// # let server_kp = Default::generate_random_keypair(&mut server_rng)?;
+    /// # let server_kp = Default::generate_random_keypair(&mut server_rng);
     /// # let server_registration_start_result = ServerRegistration::<Default>::start(&mut server_rng, client_registration_start_result.message, server_kp.public())?;
     /// # let client_registration_finish_result = client_registration_start_result.state.finish(&mut client_rng, server_registration_start_result.message, ClientRegistrationFinishParameters::default())?;
     /// # let p_file = server_registration_start_result.state.finish(client_registration_finish_result.message)?;
@@ -639,12 +606,11 @@ impl<CS: CipherSuite> ClientLogin<CS> {
                 err => PakeError::from(err),
             })?;
 
-        let client_s_sk =
-            <CS::KeyFormat as KeyPair>::Repr::from_bytes(&opened_envelope.client_s_sk)?;
+        let client_s_sk = Key::from_bytes(&opened_envelope.client_s_sk)?;
 
         let (id_u, id_s) = match optional_ids {
             None => (
-                CS::KeyFormat::public_from_private(&client_s_sk)
+                KeyPair::<CS::Group>::public_from_private(&client_s_sk)
                     .to_arr()
                     .to_vec(),
                 server_s_pk_bytes.clone(),
@@ -681,7 +647,7 @@ impl<CS: CipherSuite> ClientLogin<CS> {
 
 /// The state elements the server holds to record a login
 pub struct ServerLogin<CS: CipherSuite> {
-    ke2_state: <CS::KeyExchange as KeyExchange<CS::Hash, CS::KeyFormat>>::KE2State,
+    ke2_state: <CS::KeyExchange as KeyExchange<CS::Hash, CS::Group>>::KE2State,
     _cs: PhantomData<CS>,
 }
 
@@ -690,10 +656,9 @@ impl<CS: CipherSuite> TryFrom<&[u8]> for ServerLogin<CS> {
     fn try_from(bytes: &[u8]) -> Result<Self, Self::Error> {
         Ok(Self {
             _cs: PhantomData,
-            ke2_state:
-                <CS::KeyExchange as KeyExchange<CS::Hash, CS::KeyFormat>>::KE2State::try_from(
-                    bytes,
-                )?,
+            ke2_state: <CS::KeyExchange as KeyExchange<CS::Hash, CS::Group>>::KE2State::try_from(
+                bytes,
+            )?,
         })
     }
 }
@@ -750,20 +715,19 @@ impl<CS: CipherSuite> ServerLogin<CS> {
     /// use opaque_ke::{ClientLogin, ClientLoginStartParameters, ServerLogin, ServerLoginStartParameters};
     /// # use opaque_ke::{ClientRegistration, ClientRegistrationFinishParameters, ServerRegistration};
     /// # use opaque_ke::errors::ProtocolError;
-    /// # use opaque_ke::keypair::{KeyPair, X25519KeyPair};
+    /// # use opaque_ke::keypair::KeyPair;
     /// use rand_core::{OsRng, RngCore};
     /// use opaque_ke::ciphersuite::CipherSuite;
     /// struct Default;
     /// impl CipherSuite for Default {
     ///     type Group = curve25519_dalek::ristretto::RistrettoPoint;
-    ///     type KeyFormat = opaque_ke::keypair::X25519KeyPair;
     ///     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
-    ///     type Hash = sha2::Sha256;
+    ///     type Hash = sha2::Sha512;
     ///     type SlowHash = opaque_ke::slow_hash::NoOpHash;
     /// }
     /// let mut client_rng = OsRng;
     /// let mut server_rng = OsRng;
-    /// let server_kp = Default::generate_random_keypair(&mut server_rng)?;
+    /// let server_kp = Default::generate_random_keypair(&mut server_rng);
     /// # let client_registration_start_result = ClientRegistration::<Default>::start(&mut client_rng, b"hunter2")?;
     /// # let server_registration_start_result = ServerRegistration::<Default>::start(&mut server_rng, client_registration_start_result.message, server_kp.public())?;
     /// # let client_registration_finish_result = client_registration_start_result.state.finish(&mut client_rng, server_registration_start_result.message, ClientRegistrationFinishParameters::default())?;
@@ -775,7 +739,7 @@ impl<CS: CipherSuite> ServerLogin<CS> {
     pub fn start<R: RngCore + CryptoRng>(
         rng: &mut R,
         password_file: ServerRegistration<CS>,
-        server_s_sk: &<CS::KeyFormat as KeyPair>::Repr,
+        server_s_sk: &Key,
         l1: CredentialRequest<CS>,
         params: ServerLoginStartParameters,
     ) -> Result<ServerLoginStartResult<CS>, ProtocolError> {
@@ -801,7 +765,7 @@ impl<CS: CipherSuite> ServerLogin<CS> {
         let (id_u, id_s) = match optional_ids {
             None => (
                 client_s_pk.to_arr().to_vec(),
-                CS::KeyFormat::public_from_private(server_s_sk)
+                KeyPair::<CS::Group>::public_from_private(server_s_sk)
                     .to_arr()
                     .to_vec(),
             ),
@@ -811,7 +775,7 @@ impl<CS: CipherSuite> ServerLogin<CS> {
         let l1_bytes = &l1.to_bytes();
         let beta = oprf::evaluate(l1.alpha, &password_file.oprf_key);
 
-        let server_s_pk = CS::KeyFormat::public_from_private(&server_s_sk);
+        let server_s_pk = KeyPair::<CS::Group>::public_from_private(&server_s_sk);
 
         let l2_component: Vec<u8> = [
             serialize(&beta.to_arr()[..], 2),
@@ -861,20 +825,19 @@ impl<CS: CipherSuite> ServerLogin<CS> {
     /// use opaque_ke::{ClientLogin, ClientLoginFinishParameters, ClientLoginStartParameters, ServerLogin, ServerLoginStartParameters};
     /// # use opaque_ke::{ClientRegistration, ClientRegistrationFinishParameters, ServerRegistration};
     /// # use opaque_ke::errors::ProtocolError;
-    /// # use opaque_ke::keypair::{KeyPair, X25519KeyPair};
+    /// # use opaque_ke::keypair::KeyPair;
     /// use rand_core::{OsRng, RngCore};
     /// use opaque_ke::ciphersuite::CipherSuite;
     /// struct Default;
     /// impl CipherSuite for Default {
     ///     type Group = curve25519_dalek::ristretto::RistrettoPoint;
-    ///     type KeyFormat = opaque_ke::keypair::X25519KeyPair;
     ///     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
-    ///     type Hash = sha2::Sha256;
+    ///     type Hash = sha2::Sha512;
     ///     type SlowHash = opaque_ke::slow_hash::NoOpHash;
     /// }
     /// let mut client_rng = OsRng;
     /// let mut server_rng = OsRng;
-    /// let server_kp = Default::generate_random_keypair(&mut server_rng)?;
+    /// let server_kp = Default::generate_random_keypair(&mut server_rng);
     /// # let client_registration_start_result = ClientRegistration::<Default>::start(&mut client_rng, b"hunter2")?;
     /// # let server_registration_start_result = ServerRegistration::<Default>::start(&mut server_rng, client_registration_start_result.message, server_kp.public())?;
     /// # let client_registration_finish_result = client_registration_start_result.state.finish(&mut client_rng, server_registration_start_result.message, ClientRegistrationFinishParameters::default())?;
@@ -889,7 +852,7 @@ impl<CS: CipherSuite> ServerLogin<CS> {
         &self,
         message: CredentialFinalization<CS>,
     ) -> Result<ServerLoginFinishResult, ProtocolError> {
-        let shared_secret = <CS::KeyExchange as KeyExchange<CS::Hash, CS::KeyFormat>>::finish_ke(
+        let shared_secret = <CS::KeyExchange as KeyExchange<CS::Hash, CS::Group>>::finish_ke(
             message.ke3_message,
             &self.ke2_state,
         )

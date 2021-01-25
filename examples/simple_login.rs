@@ -28,11 +28,10 @@ use std::convert::TryFrom;
 use std::process::exit;
 
 use opaque_ke::{
-    ciphersuite::CipherSuite, keypair::KeyPair, ClientLogin, ClientLoginFinishParameters,
-    ClientLoginStartParameters, ClientRegistration, ClientRegistrationFinishParameters,
-    CredentialFinalization, CredentialRequest, CredentialResponse, RegistrationRequest,
-    RegistrationResponse, RegistrationUpload, ServerLogin, ServerLoginStartParameters,
-    ServerRegistration,
+    ciphersuite::CipherSuite, ClientLogin, ClientLoginFinishParameters, ClientLoginStartParameters,
+    ClientRegistration, ClientRegistrationFinishParameters, CredentialFinalization,
+    CredentialRequest, CredentialResponse, RegistrationRequest, RegistrationResponse,
+    RegistrationUpload, ServerLogin, ServerLoginStartParameters, ServerRegistration,
 };
 
 // The ciphersuite trait allows to specify the underlying primitives
@@ -41,7 +40,6 @@ use opaque_ke::{
 struct Default;
 impl CipherSuite for Default {
     type Group = curve25519_dalek::ristretto::RistrettoPoint;
-    type KeyFormat = opaque_ke::keypair::X25519KeyPair;
     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
     type Hash = sha2::Sha256;
     type SlowHash = opaque_ke::slow_hash::NoOpHash;
@@ -49,7 +47,7 @@ impl CipherSuite for Default {
 
 // Password-based registration between a client and server
 fn account_registration(
-    server_kp: &opaque_ke::keypair::X25519KeyPair,
+    server_kp: &opaque_ke::keypair::KeyPair<curve25519_dalek::ristretto::RistrettoPoint>,
     password: String,
 ) -> Vec<u8> {
     let mut client_rng = OsRng;
@@ -91,7 +89,7 @@ fn account_registration(
 
 // Password-based login between a client and server
 fn account_login(
-    server_kp: &opaque_ke::keypair::X25519KeyPair,
+    server_kp: &opaque_ke::keypair::KeyPair<curve25519_dalek::ristretto::RistrettoPoint>,
     password: String,
     password_file_bytes: &[u8],
 ) -> bool {
@@ -144,7 +142,7 @@ fn account_login(
 
 fn main() {
     let mut rng = OsRng;
-    let server_kp = Default::generate_random_keypair(&mut rng).unwrap();
+    let server_kp = Default::generate_random_keypair(&mut rng);
 
     let mut rl = Editor::<()>::new();
     let mut registered_users = HashMap::<String, Vec<u8>>::new();

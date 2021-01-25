@@ -6,17 +6,17 @@
 //! Contains the keypair types that must be supplied for the OPAQUE API
 
 use crate::errors::InternalPakeError;
+use crate::group::Group;
 use generic_array::{typenum::U32, GenericArray};
 use generic_bytes::{SizedBytes, TryFromSizedBytesError};
-use generic_bytes_derive::{SizedBytes, TryFromForSizedBytes};
+use generic_bytes_derive::TryFromForSizedBytes;
 #[cfg(test)]
 use proptest::prelude::*;
 #[cfg(test)]
 use rand::{rngs::StdRng, SeedableRng};
 use rand_core::{CryptoRng, RngCore};
-use std::convert::TryInto;
 use std::fmt::Debug;
-use x25519_dalek::{PublicKey, StaticSecret};
+use std::marker::PhantomData;
 
 use std::ops::Deref;
 
@@ -31,46 +31,79 @@ pub(crate) trait SizedBytesExt: SizedBytes {
 impl<T> SizedBytesExt for T where T: SizedBytes {}
 
 /// A Keypair trait with public-private verification
-pub trait KeyPair: Sized + Clone {
-    /// The single key representation must have a specific byte size itself
-    type Repr: SizedBytes + Clone;
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct KeyPair<G> {
+    pk: Key,
+    sk: Key,
+    _g: PhantomData<G>,
+}
 
+impl<G: Group> KeyPair<G> {
     /// The public key component
-    fn public(&self) -> &Self::Repr;
+    pub fn public(&self) -> &Key {
+        &self.pk
+    }
 
     /// The private key component
-    fn private(&self) -> &Self::Repr;
+    pub fn private(&self) -> &Key {
+        &self.sk
+    }
 
     /// A constructor that receives public and private key independently as
     /// bytes
-    fn new(public: Self::Repr, private: Self::Repr) -> Result<Self, InternalPakeError>;
+    pub fn new(public: Key, private: Key) -> Result<Self, InternalPakeError> {
+        Ok(Self {
+            pk: public,
+            sk: private,
+            _g: PhantomData,
+        })
+    }
 
     /// Generating a random key pair given a cryptographic rng
-    fn generate_random<R: RngCore + CryptoRng>(rng: &mut R) -> Result<Self, InternalPakeError>;
+    pub(crate) fn generate_random<R: RngCore + CryptoRng>(rng: &mut R) -> Self {
+        let sk = G::random_scalar(rng);
+        let sk_bytes = G::scalar_as_bytes(&sk);
+        let pk = G::base_point().mult_by_slice(&sk_bytes);
+        Self {
+            pk: Key(pk.to_arr().to_vec()),
+            sk: Key(sk_bytes.to_vec()),
+            _g: PhantomData,
+        }
+    }
 
     /// Obtaining a public key from secret bytes. At all times, we should have
     /// &public_from_private(self.private()) == self.public()
-    fn public_from_private(secret: &Self::Repr) -> Self::Repr;
+    pub(crate) fn public_from_private(bytes: &Key) -> Key {
+        let bytes_data = GenericArray::<u8, G::ScalarLen>::from_slice(&bytes.0[..]);
+        Key(G::base_point().mult_by_slice(&bytes_data).to_arr().to_vec())
+    }
 
     /// Check whether a public key is valid. This is meant to be applied on
     /// material provided through the network which fits the key
     /// representation (i.e. can be mapped to a curve point), but presents
     /// some risk - e.g. small subgroup check
-    fn check_public_key(key: Self::Repr) -> Result<Self::Repr, InternalPakeError>;
+    pub(crate) fn check_public_key(key: Key) -> Result<Key, InternalPakeError> {
+        G::from_element_slice(GenericArray::from_slice(&key.0)).map(|_| key)
+    }
 
     /// Computes the diffie hellman function on a public key and private key
-    fn diffie_hellman(pk: Self::Repr, sk: Self::Repr) -> Vec<u8>;
+    pub(crate) fn diffie_hellman(pk: Key, sk: Key) -> Result<Vec<u8>, InternalPakeError> {
+        let pk_data = GenericArray::<u8, G::ElemLen>::from_slice(&pk.0[..]);
+        let point = G::from_element_slice(&pk_data)?;
+        let secret_data = GenericArray::<u8, G::ScalarLen>::from_slice(&sk.0[..]);
+        Ok(G::mult_by_slice(&point, &secret_data).to_arr().to_vec())
+    }
 
     /// Obtains a KeyPair from a slice representing the private key
-    fn from_private_key_slice(input: &[u8]) -> Result<Self, InternalPakeError> {
-        let sk = Self::Repr::from_arr(GenericArray::from_slice(&input))?;
+    pub fn from_private_key_slice(input: &[u8]) -> Result<Self, InternalPakeError> {
+        let sk = Key::from_arr(GenericArray::from_slice(&input))?;
         let pk = Self::public_from_private(&sk);
         Self::new(pk, sk)
     }
 }
 
 #[cfg(test)]
-trait KeyPairExt: KeyPair + Debug {
+impl<G: Group + Debug> KeyPair<G> {
     /// Test-only strategy returning a proptest Strategy based on
     /// generate_random
     fn uniform_keypair_strategy() -> BoxedStrategy<Self> {
@@ -79,16 +112,12 @@ trait KeyPairExt: KeyPair + Debug {
         any::<[u8; 32]>()
             .prop_filter_map("valid random keypair", |seed| {
                 let mut rng = StdRng::from_seed(seed);
-                Self::generate_random(&mut rng).ok()
+                Some(Self::generate_random(&mut rng))
             })
             .no_shrink()
             .boxed()
     }
 }
-
-// blanket implementation
-#[cfg(test)]
-impl<KP> KeyPairExt for KP where KP: KeyPair + Debug {}
 
 /// A minimalist key type built around [u8;32]
 #[derive(Debug, PartialEq, Eq, Clone, TryFromForSizedBytes)]
@@ -116,117 +145,40 @@ impl SizedBytes for Key {
     }
 }
 
-/// A representation of an X25519 keypair according to RFC7748
-#[derive(Clone, Debug, PartialEq, Eq, SizedBytes, TryFromForSizedBytes)]
-#[ErrorType = "::generic_bytes::TryFromSizedBytesError"]
-pub struct X25519KeyPair {
-    pk: Key,
-    sk: Key,
-}
-
-impl X25519KeyPair {
-    fn gen<R: RngCore + CryptoRng>(rng: &mut R) -> (Vec<u8>, Vec<u8>) {
-        let sk = StaticSecret::new(rng);
-        let pk = PublicKey::from(&sk);
-        (pk.as_bytes().to_vec(), sk.to_bytes().to_vec())
-    }
-}
-
-impl KeyPair for X25519KeyPair {
-    type Repr = Key;
-
-    fn public(&self) -> &Self::Repr {
-        &self.pk
-    }
-
-    fn private(&self) -> &Self::Repr {
-        &self.sk
-    }
-
-    fn new(public: Self::Repr, private: Self::Repr) -> Result<Self, InternalPakeError> {
-        Ok(X25519KeyPair {
-            pk: public,
-            sk: private,
-        })
-    }
-
-    fn generate_random<R: RngCore + CryptoRng>(rng: &mut R) -> Result<Self, InternalPakeError> {
-        let (public, private) = X25519KeyPair::gen(rng);
-        Ok(X25519KeyPair {
-            pk: Key(public),
-            sk: Key(private),
-        })
-    }
-
-    fn public_from_private(secret: &Self::Repr) -> Self::Repr {
-        let secret_data: [u8; 32] = (&secret.0[..])
-            .try_into()
-            .expect("Keypair::Repr invariant broken");
-        let base_data = ::x25519_dalek::X25519_BASEPOINT_BYTES;
-        Key(::x25519_dalek::x25519(secret_data, base_data).to_vec())
-    }
-
-    fn check_public_key(key: Self::Repr) -> Result<Self::Repr, InternalPakeError> {
-        let key_bytes: [u8; 32] =
-            (&key[..])
-                .try_into()
-                .map_err(|_| InternalPakeError::SizeError {
-                    name: "key",
-                    len: 32,
-                    actual_len: key.len(),
-                })?;
-        let point = ::curve25519_dalek::montgomery::MontgomeryPoint(key_bytes)
-            .to_edwards(1)
-            .ok_or(InternalPakeError::PointError)?;
-        if !point.is_torsion_free() {
-            Err(InternalPakeError::SubGroupError)
-        } else {
-            Ok(key)
-        }
-    }
-
-    fn diffie_hellman(pk: Self::Repr, sk: Self::Repr) -> Vec<u8> {
-        let mut pk_data = [0; 32];
-        pk_data.copy_from_slice(&pk.0[..]);
-        let mut sk_data = [0; 32];
-        sk_data.copy_from_slice(&sk.0[..]);
-        ::x25519_dalek::x25519(sk_data, pk_data).to_vec()
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use curve25519_dalek::ristretto::RistrettoPoint;
 
     proptest! {
         #[test]
-        fn test_x25519_check(kp in X25519KeyPair::uniform_keypair_strategy()) {
+        fn test_ristretto_check(kp in KeyPair::<RistrettoPoint>::uniform_keypair_strategy()) {
             let pk = kp.public();
-            prop_assert!(X25519KeyPair::check_public_key(pk.clone()).is_ok());
+            prop_assert!(KeyPair::<RistrettoPoint>::check_public_key(pk.clone()).is_ok());
         }
 
         #[test]
-        fn test_x25519_pub_from_priv(kp in X25519KeyPair::uniform_keypair_strategy()) {
+        fn test_ristretto_pub_from_priv(kp in KeyPair::<RistrettoPoint>::uniform_keypair_strategy()) {
             let pk = kp.public();
             let sk = kp.private();
-            prop_assert_eq!(&X25519KeyPair::public_from_private(sk), pk);
+            prop_assert_eq!(&KeyPair::<RistrettoPoint>::public_from_private(sk), pk);
         }
 
         #[test]
-        fn test_x25519_dh(kp1 in X25519KeyPair::uniform_keypair_strategy(),
-                          kp2 in X25519KeyPair::uniform_keypair_strategy()) {
+        fn test_ristretto_dh(kp1 in KeyPair::<RistrettoPoint>::uniform_keypair_strategy(),
+                          kp2 in KeyPair::<RistrettoPoint>::uniform_keypair_strategy()) {
 
-            let dh1 = X25519KeyPair::diffie_hellman(kp1.public().clone(), kp2.private().clone());
-            let dh2 = X25519KeyPair::diffie_hellman(kp2.public().clone(), kp1.private().clone());
+            let dh1 = KeyPair::<RistrettoPoint>::diffie_hellman(kp1.public().clone(), kp2.private().clone())?;
+            let dh2 = KeyPair::<RistrettoPoint>::diffie_hellman(kp2.public().clone(), kp1.private().clone())?;
 
-            prop_assert_eq!(dh1,dh2);
+            prop_assert_eq!(dh1, dh2);
         }
 
         #[test]
-        fn test_private_key_slice(kp in X25519KeyPair::uniform_keypair_strategy()) {
+        fn test_private_key_slice(kp in KeyPair::<RistrettoPoint>::uniform_keypair_strategy()) {
             let sk_bytes = kp.private().to_vec();
 
-            let kp2 = X25519KeyPair::from_private_key_slice(&sk_bytes)?;
+            let kp2 = KeyPair::<RistrettoPoint>::from_private_key_slice(&sk_bytes)?;
             let kp2_private_bytes = kp2.private().to_vec();
 
             prop_assert_eq!(sk_bytes, kp2_private_bytes);

@@ -11,7 +11,6 @@ use crate::{
         traits::{KeyExchange, ToBytes},
         tripledh::{TripleDH, NONCE_LEN},
     },
-    keypair::{KeyPair, X25519KeyPair},
     opaque::*,
     serialization::{i2osp, os2ip, serialize},
     *,
@@ -22,19 +21,19 @@ use generic_bytes::SizedBytes;
 use proptest::{collection::vec, prelude::*};
 use rand_core::{OsRng, RngCore};
 
-use sha2::{Digest, Sha256};
+use sha2::{Digest, Sha512};
 use std::convert::TryFrom;
 
 struct Default;
 impl CipherSuite for Default {
     type Group = RistrettoPoint;
-    type KeyFormat = crate::keypair::X25519KeyPair;
     type KeyExchange = TripleDH;
-    type Hash = sha2::Sha256;
+    type Hash = sha2::Sha512;
     type SlowHash = crate::slow_hash::NoOpHash;
 }
 
 const MAX_INFO_LENGTH: usize = 10;
+const MAC_SIZE: usize = 64; // Because of SHA512
 
 fn random_ristretto_point() -> RistrettoPoint {
     let mut rng = OsRng;
@@ -83,11 +82,11 @@ fn server_registration_roundtrip() {
     mock_envelope_bytes.extend_from_slice(&[0; NONCE_LEN]); // empty nonce
     mock_envelope_bytes.extend_from_slice(&[0, 0]); // empty ciphertext
     mock_envelope_bytes.extend_from_slice(&[0, 0]); // empty auth_data
-                                                    // length-32 hmac
-    mock_envelope_bytes.extend_from_slice(&[0, 32]);
-    mock_envelope_bytes.extend_from_slice(&[0; 32]);
+                                                    // length-MAC_SIZE hmac
+    mock_envelope_bytes.extend_from_slice(&[0, MAC_SIZE as u8]);
+    mock_envelope_bytes.extend_from_slice(&[0; MAC_SIZE]);
 
-    let mock_client_kp = Default::generate_random_keypair(&mut rng).unwrap();
+    let mock_client_kp = Default::generate_random_keypair(&mut rng);
     // serialization order: oprf_key, public key, envelope
     let mut bytes = Vec::<u8>::new();
     bytes.extend_from_slice(oprf_key.as_bytes());
@@ -119,7 +118,7 @@ fn register_second_message_roundtrip() {
     let pt = random_ristretto_point();
     let beta_bytes = pt.to_arr();
     let mut rng = OsRng;
-    let skp = Default::generate_random_keypair(&mut rng).unwrap();
+    let skp = Default::generate_random_keypair(&mut rng);
     let pubkey_bytes = skp.public().to_arr();
 
     let beta_length: usize = beta_bytes.len();
@@ -139,7 +138,7 @@ fn register_second_message_roundtrip() {
 #[test]
 fn register_third_message_roundtrip() {
     let mut rng = OsRng;
-    let skp = Default::generate_random_keypair(&mut rng).unwrap();
+    let skp = Default::generate_random_keypair(&mut rng);
     let pubkey_bytes = skp.public().to_arr();
 
     let mut key = [0u8; 32];
@@ -148,7 +147,7 @@ fn register_third_message_roundtrip() {
     let mut msg = [0u8; 32];
     rng.fill_bytes(&mut msg);
 
-    let (envelope, _) = Envelope::<sha2::Sha256>::seal_raw(
+    let (envelope, _) = Envelope::<sha2::Sha512>::seal_raw(
         &mut rng,
         &key,
         &msg,
@@ -165,7 +164,7 @@ fn register_third_message_roundtrip() {
     input.extend_from_slice(&pubkey_length.to_be_bytes()[std::mem::size_of::<usize>() - 2..]);
     input.extend_from_slice(&pubkey_bytes[..]);
 
-    let r3 = RegistrationUpload::<X25519KeyPair, sha2::Sha256>::deserialize(&input[..]).unwrap();
+    let r3 = RegistrationUpload::<sha2::Sha512, RistrettoPoint>::deserialize(&input[..]).unwrap();
     let r3_bytes = r3.serialize();
     assert_eq!(input, r3_bytes);
 }
@@ -176,7 +175,7 @@ fn login_first_message_roundtrip() {
     let alpha = random_ristretto_point();
     let alpha_bytes = alpha.to_arr().to_vec();
 
-    let client_e_kp = Default::generate_random_keypair(&mut rng).unwrap();
+    let client_e_kp = Default::generate_random_keypair(&mut rng);
     let mut client_nonce = [0u8; NONCE_LEN];
     rng.fill_bytes(&mut client_nonce);
 
@@ -208,7 +207,7 @@ fn login_second_message_roundtrip() {
     let pt_bytes = pt.to_arr().to_vec();
 
     let mut rng = OsRng;
-    let skp = Default::generate_random_keypair(&mut rng).unwrap();
+    let skp = Default::generate_random_keypair(&mut rng);
     let pubkey_bytes = skp.public().to_arr();
     let pubkey_length: usize = pubkey_bytes.len();
 
@@ -218,7 +217,7 @@ fn login_second_message_roundtrip() {
     let mut msg = [0u8; 32];
     rng.fill_bytes(&mut msg);
 
-    let (envelope, _) = Envelope::<sha2::Sha256>::seal_raw(
+    let (envelope, _) = Envelope::<sha2::Sha512>::seal_raw(
         &mut rng,
         &key,
         &msg,
@@ -227,8 +226,8 @@ fn login_second_message_roundtrip() {
     )
     .unwrap();
 
-    let server_e_kp = Default::generate_random_keypair(&mut rng).unwrap();
-    let mut mac = [0u8; 32];
+    let server_e_kp = Default::generate_random_keypair(&mut rng);
+    let mut mac = [0u8; MAC_SIZE];
     rng.fill_bytes(&mut mac);
     let mut server_nonce = [0u8; NONCE_LEN];
     rng.fill_bytes(&mut server_nonce);
@@ -260,7 +259,7 @@ fn login_second_message_roundtrip() {
 #[test]
 fn login_third_message_roundtrip() {
     let mut rng = OsRng;
-    let mut mac = [0u8; 32];
+    let mut mac = [0u8; MAC_SIZE];
     rng.fill_bytes(&mut mac);
 
     let input: Vec<u8> = [&mac[..]].concat();
@@ -276,12 +275,12 @@ fn client_login_roundtrip() {
     let mut rng = OsRng;
     let sc = <RistrettoPoint as Group>::random_scalar(&mut rng);
 
-    let client_e_kp = Default::generate_random_keypair(&mut rng).unwrap();
+    let client_e_kp = Default::generate_random_keypair(&mut rng);
     let mut client_nonce = [0u8; NONCE_LEN];
     rng.fill_bytes(&mut client_nonce);
 
     let l1_data = [&sc.to_bytes()[..], &client_nonce, client_e_kp.public()].concat();
-    let mut hasher = Sha256::new();
+    let mut hasher = Sha512::new();
     hasher.update(l1_data);
     let hashed_l1 = hasher.finalize();
 
@@ -303,7 +302,7 @@ fn client_login_roundtrip() {
 fn ke1_message_roundtrip() {
     let mut rng = OsRng;
 
-    let client_e_kp = Default::generate_random_keypair(&mut rng).unwrap();
+    let client_e_kp = Default::generate_random_keypair(&mut rng);
     let mut client_nonce = [0u8; NONCE_LEN];
     rng.fill_bytes(&mut client_nonce);
 
@@ -316,11 +315,9 @@ fn ke1_message_roundtrip() {
         &client_e_kp.public(),
     ]
     .concat();
-    let reg = <TripleDH as KeyExchange<
-        sha2::Sha256,
-        crate::keypair::X25519KeyPair,
-    >>::KE1Message::try_from(&ke1m[..])
-    .unwrap();
+    let reg =
+        <TripleDH as KeyExchange<sha2::Sha512, RistrettoPoint>>::KE1Message::try_from(&ke1m[..])
+            .unwrap();
     let reg_bytes = reg.to_bytes();
     assert_eq!(reg_bytes, ke1m);
 }
@@ -329,8 +326,8 @@ fn ke1_message_roundtrip() {
 fn ke2_message_roundtrip() {
     let mut rng = OsRng;
 
-    let server_e_kp = Default::generate_random_keypair(&mut rng).unwrap();
-    let mut mac = [0u8; 32];
+    let server_e_kp = Default::generate_random_keypair(&mut rng);
+    let mut mac = [0u8; MAC_SIZE];
     rng.fill_bytes(&mut mac);
     let mut server_nonce = [0u8; NONCE_LEN];
     rng.fill_bytes(&mut server_nonce);
@@ -345,11 +342,9 @@ fn ke2_message_roundtrip() {
     ]
     .concat();
 
-    let reg = <TripleDH as KeyExchange<
-        sha2::Sha256,
-        crate::keypair::X25519KeyPair,
-    >>::KE2Message::try_from(&ke2m[..])
-    .unwrap();
+    let reg =
+        <TripleDH as KeyExchange<sha2::Sha512, RistrettoPoint>>::KE2Message::try_from(&ke2m[..])
+            .unwrap();
     let reg_bytes = reg.to_bytes();
     assert_eq!(reg_bytes, ke2m);
 }
@@ -357,16 +352,14 @@ fn ke2_message_roundtrip() {
 #[test]
 fn ke3_message_roundtrip() {
     let mut rng = OsRng;
-    let mut mac = [0u8; 32];
+    let mut mac = [0u8; MAC_SIZE];
     rng.fill_bytes(&mut mac);
 
     let ke3m: Vec<u8> = [&mac[..]].concat();
 
-    let reg = <TripleDH as KeyExchange<
-        sha2::Sha256,
-        crate::keypair::X25519KeyPair,
-    >>::KE3Message::try_from(&ke3m[..])
-    .unwrap();
+    let reg =
+        <TripleDH as KeyExchange<sha2::Sha512, RistrettoPoint>>::KE3Message::try_from(&ke3m[..])
+            .unwrap();
     let reg_bytes = reg.to_bytes();
     assert_eq!(reg_bytes, ke3m);
 }
@@ -390,7 +383,7 @@ fn test_nocrash_register_second_message(bytes in vec(any::<u8>(), 0..200)) {
 
 #[test]
 fn test_nocrash_register_third_message(bytes in vec(any::<u8>(), 0..200)) {
-    RegistrationUpload::<crate::keypair::X25519KeyPair, sha2::Sha512>::try_from(&bytes[..]).map_or(true, |_| true);
+    RegistrationUpload::<sha2::Sha512, RistrettoPoint>::try_from(&bytes[..]).map_or(true, |_| true);
 }
 
 #[test]

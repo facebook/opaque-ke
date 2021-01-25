@@ -28,16 +28,10 @@ static MODE_BASE: u8 = 0x00;
 pub(crate) fn blind<R: RngCore + CryptoRng, G: GroupWithMapToCurve, H: Hash>(
     input: &[u8],
     blinding_factor_rng: &mut R,
-    #[cfg(test)] postprocess: fn(G::Scalar) -> G::Scalar,
 ) -> Result<(Token<G>, G), InternalPakeError> {
+    let blind = G::random_scalar(blinding_factor_rng);
     let dst = [STR_VOPRF, &G::get_context_string(MODE_BASE)].concat();
     let mapped_point = G::map_to_curve::<H>(input, &dst)?;
-    let blinding_factor = G::random_scalar(blinding_factor_rng);
-    #[cfg(test)]
-    let blind = postprocess(blinding_factor);
-    #[cfg(not(test))]
-    let blind = blinding_factor;
-
     let blind_token = mapped_point * &blind;
     Ok((
         Token {
@@ -88,12 +82,7 @@ pub fn blind_shim<R: RngCore + CryptoRng, G: GroupWithMapToCurve, H: Hash>(
     input: &[u8],
     blinding_factor_rng: &mut R,
 ) -> Result<(Token<G>, G), InternalPakeError> {
-    blind::<R, G, H>(
-        input,
-        blinding_factor_rng,
-        #[cfg(test)]
-        std::convert::identity,
-    )
+    blind::<R, G, H>(input, blinding_factor_rng)
 }
 
 #[cfg(feature = "bench")]
@@ -129,27 +118,23 @@ mod tests {
     use curve25519_dalek::ristretto::RistrettoPoint;
     use generic_array::{arr, GenericArray};
     use rand_core::OsRng;
-    use sha2::Sha256;
+    use sha2::Sha512;
 
-    fn prf(
-        input: &[u8],
-        oprf_key: &[u8; 32],
-    ) -> GenericArray<u8, <RistrettoPoint as Group>::ElemLen> {
+    fn prf(input: &[u8], oprf_key: &[u8; 32]) -> GenericArray<u8, <Sha512 as Digest>::OutputSize> {
         let dst = [STR_VOPRF, &RistrettoPoint::get_context_string(MODE_BASE)].concat();
-        let point = RistrettoPoint::map_to_curve::<Sha256>(input, &dst).unwrap();
+        let point = RistrettoPoint::map_to_curve::<Sha512>(input, &dst).unwrap();
         let scalar =
             RistrettoPoint::from_scalar_slice(GenericArray::from_slice(&oprf_key[..])).unwrap();
         let res = point * scalar;
 
-        finalize::<RistrettoPoint, sha2::Sha256>(&input, &res.to_arr().to_vec(), b"")
+        finalize::<RistrettoPoint, sha2::Sha512>(&input, &res.to_arr().to_vec(), b"")
     }
 
     #[test]
     fn oprf_retrieval() -> Result<(), InternalPakeError> {
         let input = b"hunter2";
         let mut rng = OsRng;
-        let (token, alpha) =
-            blind::<_, RistrettoPoint, Sha256>(&input[..], &mut rng, std::convert::identity)?;
+        let (token, alpha) = blind::<_, RistrettoPoint, Sha512>(&input[..], &mut rng)?;
         let oprf_key_bytes = arr![
             u8; 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23,
             24, 25, 26, 27, 28, 29, 30, 31, 32,
@@ -157,7 +142,7 @@ mod tests {
         let oprf_key = RistrettoPoint::from_scalar_slice(&oprf_key_bytes)?;
         let beta = evaluate::<RistrettoPoint>(alpha, &oprf_key);
         let res =
-            finalize::<RistrettoPoint, sha2::Sha256>(&token.data, &unblind(&token, beta), b"");
+            finalize::<RistrettoPoint, sha2::Sha512>(&token.data, &unblind(&token, beta), b"");
         let res2 = prf(&input[..], &oprf_key.as_bytes());
         assert_eq!(res, res2);
         Ok(())
@@ -168,14 +153,13 @@ mod tests {
         let mut rng = OsRng;
         let mut input = vec![0u8; 64];
         rng.fill_bytes(&mut input);
-        let (token, alpha) =
-            blind::<_, RistrettoPoint, Sha256>(&input, &mut rng, std::convert::identity).unwrap();
+        let (token, alpha) = blind::<_, RistrettoPoint, sha2::Sha512>(&input, &mut rng).unwrap();
         let res =
-            finalize::<RistrettoPoint, sha2::Sha256>(&token.data, &unblind(&token, alpha), b"");
+            finalize::<RistrettoPoint, sha2::Sha512>(&token.data, &unblind(&token, alpha), b"");
 
         let dst = [STR_VOPRF, &RistrettoPoint::get_context_string(MODE_BASE)].concat();
-        let point = RistrettoPoint::map_to_curve::<Sha256>(&input, &dst).unwrap();
-        let res2 = finalize::<RistrettoPoint, sha2::Sha256>(&input, &point.to_arr().to_vec(), b"");
+        let point = RistrettoPoint::map_to_curve::<Sha512>(&input, &dst).unwrap();
+        let res2 = finalize::<RistrettoPoint, sha2::Sha512>(&input, &point.to_arr().to_vec(), b"");
 
         assert_eq!(res, res2);
     }

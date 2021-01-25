@@ -10,11 +10,10 @@ use crate::errors::InternalPakeError;
 use crate::group::Group;
 use crate::hash::Hash;
 use crate::serialization::i2osp;
-use curve25519_dalek::{edwards::EdwardsPoint, ristretto::RistrettoPoint};
+use curve25519_dalek::ristretto::RistrettoPoint;
 use digest::{BlockInput, Digest};
 use generic_array::typenum::Unsigned;
 use generic_array::GenericArray;
-use hkdf::Hkdf;
 
 /// A subtrait of Group specifying how to hash a password into a point
 pub trait GroupWithMapToCurve: Group {
@@ -38,19 +37,11 @@ impl GroupWithMapToCurve for RistrettoPoint {
     // Implements the hash_to_ristretto255() function from
     // https://www.ietf.org/archive/id/draft-irtf-cfrg-hash-to-curve-10.txt
     fn map_to_curve<H: Hash>(msg: &[u8], dst: &[u8]) -> Result<Self, InternalPakeError> {
-        let uniform_bytes = expand_message_xmd::<H>(msg, dst, 64)?;
+        // FIXME use generic_array and turn this into a compile-time error if size mismatch
+        let uniform_bytes =
+            expand_message_xmd::<H>(msg, dst, <H as Digest>::OutputSize::to_usize())?;
         Ok(<Self as Group>::hash_to_curve(
             &GenericArray::clone_from_slice(&uniform_bytes[..]),
-        ))
-    }
-}
-
-impl GroupWithMapToCurve for EdwardsPoint {
-    const SUITE_ID: usize = 0x0009; // FIXME, seemingly unsupported by VOPRF RFC?
-    fn map_to_curve<H: Hash>(msg: &[u8], dst: &[u8]) -> Result<Self, InternalPakeError> {
-        let (hashed_input, _) = Hkdf::<H>::extract(Some(dst), msg);
-        Ok(<Self as Group>::hash_to_curve(
-            &GenericArray::clone_from_slice(&hashed_input[..]),
         ))
     }
 }
