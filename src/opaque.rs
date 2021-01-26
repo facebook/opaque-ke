@@ -7,7 +7,7 @@
 
 use crate::{
     ciphersuite::CipherSuite,
-    envelope::{mode_from_ids, Envelope, ExportKeySize},
+    envelope::{mode_from_ids, Envelope},
     errors::{utils::check_slice_size_atleast, InternalPakeError, PakeError, ProtocolError},
     group::Group,
     hash::Hash,
@@ -15,18 +15,19 @@ use crate::{
     keypair::{Key, KeyPair, SizedBytesExt},
     map_to_curve::GroupWithMapToCurve,
     oprf,
-    serialization::serialize,
+    serialization::{serialize, tokenize},
     slow_hash::SlowHash,
     CredentialFinalization, CredentialRequest, CredentialResponse, RegistrationRequest,
     RegistrationResponse, RegistrationUpload,
 };
+use digest::Digest;
 use generic_array::{typenum::Unsigned, GenericArray};
 use generic_bytes::SizedBytes;
 use rand_core::{CryptoRng, RngCore};
 use std::{convert::TryFrom, marker::PhantomData};
 use zeroize::Zeroize;
 
-static STR_OPAQUE_VERSION: &[u8] = b"OPAQUE00";
+static STR_OPAQUE_VERSION: &[u8] = b"OPAQUE01";
 
 // Registration
 // ============
@@ -142,7 +143,7 @@ pub struct ClientRegistrationFinishResult<D: Hash, G: Group> {
     /// The registration upload message to be sent to the server
     pub message: RegistrationUpload<D, G>,
     /// The export key output by client registration
-    pub export_key: GenericArray<u8, ExportKeySize>,
+    pub export_key: GenericArray<u8, <D as Digest>::OutputSize>,
     _g: PhantomData<G>,
 }
 
@@ -413,14 +414,10 @@ impl<CS: CipherSuite> TryFrom<&[u8]> for ClientLogin<CS> {
     type Error = ProtocolError;
     fn try_from(input: &[u8]) -> Result<Self, Self::Error> {
         let scalar_len = <CS::Group as Group>::ScalarLen::to_usize();
-        let ke1_state_size =
-            <CS::KeyExchange as KeyExchange<CS::Hash, CS::Group>>::ke1_state_size();
-
-        let min_expected_len = scalar_len + ke1_state_size;
-        let checked_slice = (if input.len() <= min_expected_len {
+        let checked_slice = (if input.len() <= scalar_len {
             Err(InternalPakeError::SizeError {
                 name: "client_login_bytes",
-                len: min_expected_len,
+                len: scalar_len,
                 actual_len: input.len(),
             })
         } else {
@@ -429,10 +426,12 @@ impl<CS: CipherSuite> TryFrom<&[u8]> for ClientLogin<CS> {
 
         let blinding_factor_bytes = GenericArray::from_slice(&checked_slice[..scalar_len]);
         let blinding_factor = CS::Group::from_scalar_slice(blinding_factor_bytes)?;
+
+        let (ke1_state_bytes, password) = tokenize(&checked_slice[scalar_len..], 2)?;
+
         let ke1_state = <CS::KeyExchange as KeyExchange<CS::Hash, CS::Group>>::KE1State::try_from(
-            &checked_slice[scalar_len..scalar_len + ke1_state_size],
+            &ke1_state_bytes[..],
         )?;
-        let password = input[scalar_len + ke1_state_size..].to_vec();
         Ok(Self {
             token: oprf::Token {
                 data: password,
@@ -448,7 +447,7 @@ impl<CS: CipherSuite> ClientLogin<CS> {
     pub fn to_bytes(&self) -> Vec<u8> {
         let output: Vec<u8> = [
             &CS::Group::scalar_as_bytes(&self.token.blind)[..],
-            &self.ke1_state.to_bytes(),
+            &serialize(&self.ke1_state.to_bytes(), 2),
             &self.token.data,
         ]
         .concat();
@@ -497,7 +496,7 @@ pub struct ClientLoginFinishResult<CS: CipherSuite> {
     /// The shared session secret
     pub shared_secret: Vec<u8>,
     /// The client-side export key
-    pub export_key: GenericArray<u8, ExportKeySize>,
+    pub export_key: GenericArray<u8, <CS::Hash as Digest>::OutputSize>,
     /// The server's static public key
     pub server_s_pk: Key,
     /// The confidential info sent by the client
@@ -597,7 +596,6 @@ impl<CS: CipherSuite> ClientLogin<CS> {
 
         let password_derived_key =
             get_password_derived_key::<CS::Group, CS::SlowHash, CS::Hash>(&self.token, l2.beta)?;
-
         let opened_envelope = &l2
             .envelope
             .open(&password_derived_key, &server_s_pk_bytes, &optional_ids)
@@ -619,9 +617,9 @@ impl<CS: CipherSuite> ClientLogin<CS> {
         };
 
         let l2_bytes: Vec<u8> = [
-            serialize(&l2_beta_bytes, 2),
-            serialize(&server_s_pk_bytes, 2),
-            l2.envelope.to_bytes(),
+            l2_beta_bytes,
+            &serialize(&server_s_pk_bytes, 2),
+            &l2.envelope.to_bytes(),
         ]
         .concat();
 
@@ -639,7 +637,7 @@ impl<CS: CipherSuite> ClientLogin<CS> {
             confidential_info,
             message: CredentialFinalization { ke3_message },
             shared_secret,
-            export_key: opened_envelope.export_key,
+            export_key: opened_envelope.export_key.clone(),
             server_s_pk: l2.server_s_pk,
         })
     }
@@ -777,10 +775,11 @@ impl<CS: CipherSuite> ServerLogin<CS> {
 
         let server_s_pk = KeyPair::<CS::Group>::public_from_private(&server_s_sk);
 
+        // TODO: must match serialization of credential response, could be done more cleanly
         let l2_component: Vec<u8> = [
-            serialize(&beta.to_arr()[..], 2),
-            serialize(&server_s_pk.to_arr()[..], 2),
-            envelope.to_bytes(),
+            &beta.to_arr()[..],
+            &serialize(&server_s_pk.to_arr()[..], 2),
+            &envelope.to_bytes()[..],
         ]
         .concat();
 

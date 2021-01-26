@@ -4,26 +4,22 @@
 // LICENSE file in the root directory of this source tree.
 
 use crate::{
-    errors::{InternalPakeError, PakeError, ProtocolError},
+    errors::{utils::check_slice_size_atleast, InternalPakeError, PakeError, ProtocolError},
     hash::Hash,
     serialization::{serialize, tokenize},
 };
 use digest::Digest;
-use generic_array::{
-    typenum::{Unsigned, U32},
-    GenericArray,
-};
+use generic_array::{typenum::Unsigned, GenericArray};
 use hkdf::Hkdf;
 use hmac::{Hmac, Mac, NewMac};
 use rand_core::{CryptoRng, RngCore};
 use std::convert::TryFrom;
 
 // Constant string used as salt for HKDF computation
-const STR_ENVU: &[u8] = b"EnvU";
-
-/// The length of the "export key" output by the client registration
-/// and login finish steps
-pub(crate) type ExportKeySize = U32;
+const STR_RWDU: &[u8] = b"rwdU";
+const STR_PAD: &[u8] = b"Pad";
+const STR_AUTH_KEY: &[u8] = b"AuthKey";
+const STR_EXPORT_KEY: &[u8] = b"ExportKey";
 
 const NONCE_LEN: usize = 32;
 
@@ -44,91 +40,18 @@ impl TryFrom<u8> for InnerEnvelopeMode {
     }
 }
 
-/// This struct is an instantiation of the envelope as described in
-/// https://tools.ietf.org/html/draft-krawczyk-cfrg-opaque-06#section-4
-///
-/// Note that earlier versions of this specification described an
-/// implementation of this envelope using an encryption scheme that
-/// satisfied random-key robustness
-/// (https://tools.ietf.org/html/draft-krawczyk-cfrg-opaque-05#section-4).
-/// The specification update has simplified this assumption by taking
-/// an XOR-based approach without compromising on security, and to avoid
-/// the confusion around the implementation of an RKR-secure encryption.
-pub(crate) struct Envelope<D: Hash> {
+pub(crate) struct InnerEnvelope {
     mode: InnerEnvelopeMode,
     nonce: Vec<u8>,
     ciphertext: Vec<u8>,
-    auth_data: Vec<u8>,
-    hmac: GenericArray<u8, <D as Digest>::OutputSize>,
 }
 
-pub(crate) struct OpenedEnvelope {
-    pub(crate) client_s_sk: Vec<u8>,
-    pub(crate) export_key: GenericArray<u8, ExportKeySize>,
-}
-
-pub(crate) struct OpenedInnerEnvelope {
-    pub(crate) plaintext: Vec<u8>,
-    pub(crate) export_key: GenericArray<u8, ExportKeySize>,
-}
-
-impl<D: Hash> Envelope<D> {
-    /// The additional number of bytes added to the plaintext
-    pub(crate) fn additional_size() -> usize {
-        NONCE_LEN + <D as Digest>::OutputSize::to_usize()
-    }
-
-    fn hmac_key_size() -> usize {
-        <D as Digest>::OutputSize::to_usize()
-    }
-
-    fn export_key_size() -> usize {
-        ExportKeySize::to_usize()
-    }
-
-    pub(crate) fn get_mode(&self) -> InnerEnvelopeMode {
-        self.mode
-    }
-
-    pub(crate) fn new(
-        mode: InnerEnvelopeMode,
-        nonce: Vec<u8>,
-        ciphertext: Vec<u8>,
-        auth_data: Vec<u8>,
-        hmac: GenericArray<u8, <D as Digest>::OutputSize>,
-    ) -> Self {
-        Self {
-            mode,
-            nonce,
-            ciphertext,
-            auth_data,
-            hmac,
-        }
-    }
-
-    /// The format of the output is:
-    /// mode | nonce             | ciphertext       | hmac
-    /// u8   | nonce_size bytes  | variable length  | hmac_size bytes
-    pub(crate) fn from_bytes(bytes: &[u8]) -> Result<Self, InternalPakeError> {
-        let (result, remainder) = Self::deserialize(bytes)
-            .map_err(|_| InternalPakeError::InvalidEnvelopeStructureError)?;
-        if !remainder.is_empty() {
-            return Err(InternalPakeError::InvalidEnvelopeStructureError);
-        }
-        Ok(result)
-    }
-
-    pub(crate) fn to_bytes(&self) -> Vec<u8> {
-        self.serialize()
-    }
-
+impl InnerEnvelope {
     pub(crate) fn serialize(&self) -> Vec<u8> {
         [
             &[self.mode as u8],
             &self.nonce[..],
             &serialize(&self.ciphertext, 2)[..],
-            &serialize(&self.auth_data, 2)[..],
-            &serialize(&self.hmac, 2)[..],
         ]
         .concat()
     }
@@ -150,17 +73,94 @@ impl<D: Hash> Envelope<D> {
 
         let nonce = &bytes[..NONCE_LEN];
         let (ciphertext, remainder) = tokenize(&bytes[NONCE_LEN..], 2)?;
-        let (auth_data, remainder) = tokenize(&remainder, 2)?;
-        let (hmac, remainder) = tokenize(&remainder, 2)?;
+
         Ok((
-            Self::new(
+            Self {
                 mode,
-                nonce.to_vec(),
+                nonce: nonce.to_vec(),
                 ciphertext,
-                auth_data,
-                GenericArray::clone_from_slice(&hmac[..]),
-            ),
+            },
             remainder,
+        ))
+    }
+}
+
+/// This struct is an instantiation of the envelope as described in
+/// https://tools.ietf.org/html/draft-krawczyk-cfrg-opaque-06#section-4
+///
+/// Note that earlier versions of this specification described an
+/// implementation of this envelope using an encryption scheme that
+/// satisfied random-key robustness
+/// (https://tools.ietf.org/html/draft-krawczyk-cfrg-opaque-05#section-4).
+/// The specification update has simplified this assumption by taking
+/// an XOR-based approach without compromising on security, and to avoid
+/// the confusion around the implementation of an RKR-secure encryption.
+pub(crate) struct Envelope<D: Hash> {
+    inner_envelope: InnerEnvelope,
+    hmac: GenericArray<u8, <D as Digest>::OutputSize>,
+}
+
+pub(crate) struct OpenedEnvelope<D: Hash> {
+    pub(crate) client_s_sk: Vec<u8>,
+    pub(crate) export_key: GenericArray<u8, <D as Digest>::OutputSize>,
+}
+
+pub(crate) struct OpenedInnerEnvelope<D: Hash> {
+    pub(crate) plaintext: Vec<u8>,
+    pub(crate) export_key: GenericArray<u8, <D as Digest>::OutputSize>,
+}
+
+impl<D: Hash> Envelope<D> {
+    /// The additional number of bytes added to the plaintext
+    pub(crate) fn additional_size() -> usize {
+        NONCE_LEN + <D as Digest>::OutputSize::to_usize()
+    }
+
+    fn hmac_key_size() -> usize {
+        <D as Digest>::OutputSize::to_usize()
+    }
+
+    fn export_key_size() -> usize {
+        <D as Digest>::OutputSize::to_usize()
+    }
+
+    pub(crate) fn get_mode(&self) -> InnerEnvelopeMode {
+        self.inner_envelope.mode
+    }
+
+    /// The format of the output is:
+    /// mode | nonce             | ciphertext       | hmac
+    /// u8   | nonce_size bytes  | variable length  | hmac_size bytes
+    pub(crate) fn from_bytes(bytes: &[u8]) -> Result<Self, InternalPakeError> {
+        let (result, remainder) = Self::deserialize(bytes)
+            .map_err(|_| InternalPakeError::InvalidEnvelopeStructureError)?;
+        if !remainder.is_empty() {
+            return Err(InternalPakeError::InvalidEnvelopeStructureError);
+        }
+        Ok(result)
+    }
+
+    pub(crate) fn to_bytes(&self) -> Vec<u8> {
+        self.serialize()
+    }
+
+    pub(crate) fn serialize(&self) -> Vec<u8> {
+        [&self.inner_envelope.serialize(), &self.hmac[..]].concat()
+    }
+
+    pub(crate) fn deserialize(input: &[u8]) -> Result<(Self, Vec<u8>), ProtocolError> {
+        let (inner_envelope, remainder) = InnerEnvelope::deserialize(input)?;
+
+        let hmac_key_size = Self::hmac_key_size();
+        let hmac_and_remainder =
+            check_slice_size_atleast(&remainder, hmac_key_size, "hmac_key_size")?;
+
+        Ok((
+            Self {
+                inner_envelope,
+                hmac: GenericArray::clone_from_slice(&hmac_and_remainder[..hmac_key_size]),
+            },
+            hmac_and_remainder[hmac_key_size..].to_vec(),
         ))
     }
 
@@ -170,7 +170,7 @@ impl<D: Hash> Envelope<D> {
         client_s_sk: &[u8],
         server_s_pk: &[u8],
         optional_ids: Option<(Vec<u8>, Vec<u8>)>,
-    ) -> Result<(Self, GenericArray<u8, ExportKeySize>), InternalPakeError> {
+    ) -> Result<(Self, GenericArray<u8, <D as Digest>::OutputSize>), InternalPakeError> {
         let plaintext = serialize(&client_s_sk, 2);
         let aad = construct_aad(server_s_pk, &optional_ids);
         Self::seal_raw(rng, key, &plaintext, &aad, mode_from_ids(&optional_ids))
@@ -184,17 +184,27 @@ impl<D: Hash> Envelope<D> {
         plaintext: &[u8],
         aad: &[u8],
         mode: InnerEnvelopeMode,
-    ) -> Result<(Self, GenericArray<u8, ExportKeySize>), InternalPakeError> {
+    ) -> Result<(Self, GenericArray<u8, <D as Digest>::OutputSize>), InternalPakeError> {
         let mut nonce = vec![0u8; NONCE_LEN];
         rng.fill_bytes(&mut nonce);
 
-        let h = Hkdf::<D>::new(Some(&nonce), &key);
-        let mut okm = vec![0u8; plaintext.len() + Self::hmac_key_size() + Self::export_key_size()];
-        h.expand(STR_ENVU, &mut okm)
+        let h = Hkdf::<D>::new(Some(STR_RWDU), &key);
+        let mut xor_key = vec![0u8; plaintext.len()];
+        let mut hmac_key = vec![0u8; Self::hmac_key_size()];
+        let mut export_key = vec![0u8; Self::export_key_size()];
+
+        h.expand(&[nonce.clone(), STR_PAD.to_vec()].concat(), &mut xor_key)
             .map_err(|_| InternalPakeError::HkdfError)?;
-        let xor_key = &okm[..plaintext.len()];
-        let hmac_key = &okm[plaintext.len()..plaintext.len() + Self::hmac_key_size()];
-        let export_key = &okm[plaintext.len() + Self::hmac_key_size()..];
+        h.expand(
+            &[nonce.clone(), STR_AUTH_KEY.to_vec()].concat(),
+            &mut hmac_key,
+        )
+        .map_err(|_| InternalPakeError::HkdfError)?;
+        h.expand(
+            &[nonce.clone(), STR_EXPORT_KEY.to_vec()].concat(),
+            &mut export_key,
+        )
+        .map_err(|_| InternalPakeError::HkdfError)?;
 
         let ciphertext: Vec<u8> = xor_key
             .iter()
@@ -202,21 +212,25 @@ impl<D: Hash> Envelope<D> {
             .map(|(&x1, &x2)| x1 ^ x2)
             .collect();
 
+        let inner_envelope = InnerEnvelope {
+            mode,
+            nonce,
+            ciphertext,
+        };
+
         let mut hmac =
             Hmac::<D>::new_varkey(&hmac_key).map_err(|_| InternalPakeError::HmacError)?;
-        hmac.update(&nonce);
-        hmac.update(&ciphertext);
+        hmac.update(&inner_envelope.serialize());
         hmac.update(&aad);
 
+        let hmac_bytes = hmac.finalize().into_bytes();
+
         Ok((
-            Self::new(
-                mode,
-                nonce,
-                ciphertext.to_vec(),
-                aad.to_vec(),
-                hmac.finalize().into_bytes(),
-            ),
-            *GenericArray::from_slice(&export_key),
+            Self {
+                inner_envelope,
+                hmac: hmac_bytes,
+            },
+            GenericArray::clone_from_slice(&export_key),
         ))
     }
 
@@ -225,9 +239,9 @@ impl<D: Hash> Envelope<D> {
         key: &[u8],
         server_s_pk: &[u8],
         optional_ids: &Option<(Vec<u8>, Vec<u8>)>,
-    ) -> Result<OpenedEnvelope, InternalPakeError> {
+    ) -> Result<OpenedEnvelope<D>, InternalPakeError> {
         // First, check that mode matches
-        if self.mode != mode_from_ids(optional_ids) {
+        if self.inner_envelope.mode != mode_from_ids(optional_ids) {
             return Err(InternalPakeError::IncompatibleEnvelopeModeError);
         }
 
@@ -253,20 +267,31 @@ impl<D: Hash> Envelope<D> {
         &self,
         key: &[u8],
         aad: &[u8],
-    ) -> Result<OpenedInnerEnvelope, InternalPakeError> {
-        let h = Hkdf::<D>::new(Some(&self.nonce), &key);
-        let mut okm =
-            vec![0u8; self.ciphertext.len() + Self::hmac_key_size() + Self::export_key_size()];
-        h.expand(STR_ENVU, &mut okm)
-            .map_err(|_| InternalPakeError::HkdfError)?;
-        let xor_key = &okm[..self.ciphertext.len()];
-        let hmac_key = &okm[self.ciphertext.len()..self.ciphertext.len() + Self::hmac_key_size()];
-        let export_key = &okm[self.ciphertext.len() + Self::hmac_key_size()..];
+    ) -> Result<OpenedInnerEnvelope<D>, InternalPakeError> {
+        let h = Hkdf::<D>::new(Some(STR_RWDU), &key);
+        let mut xor_key = vec![0u8; self.inner_envelope.ciphertext.len()];
+        let mut hmac_key = vec![0u8; Self::hmac_key_size()];
+        let mut export_key = vec![0u8; Self::export_key_size()];
+
+        h.expand(
+            &[self.inner_envelope.nonce.clone(), STR_PAD.to_vec()].concat(),
+            &mut xor_key,
+        )
+        .map_err(|_| InternalPakeError::HkdfError)?;
+        h.expand(
+            &[self.inner_envelope.nonce.clone(), STR_AUTH_KEY.to_vec()].concat(),
+            &mut hmac_key,
+        )
+        .map_err(|_| InternalPakeError::HkdfError)?;
+        h.expand(
+            &[self.inner_envelope.nonce.clone(), STR_EXPORT_KEY.to_vec()].concat(),
+            &mut export_key,
+        )
+        .map_err(|_| InternalPakeError::HkdfError)?;
 
         let mut hmac =
             Hmac::<D>::new_varkey(&hmac_key).map_err(|_| InternalPakeError::HmacError)?;
-        hmac.update(&self.nonce);
-        hmac.update(&self.ciphertext);
+        hmac.update(&self.inner_envelope.serialize());
         hmac.update(aad);
         if hmac.verify(&self.hmac).is_err() {
             return Err(InternalPakeError::SealOpenHmacError);
@@ -274,12 +299,14 @@ impl<D: Hash> Envelope<D> {
 
         let plaintext: Vec<u8> = xor_key
             .iter()
-            .zip(self.ciphertext.iter())
+            .zip(self.inner_envelope.ciphertext.iter())
             .map(|(&x1, &x2)| x1 ^ x2)
             .collect();
         Ok(OpenedInnerEnvelope {
             plaintext,
-            export_key: *GenericArray::from_slice(&export_key),
+            export_key: GenericArray::<u8, <D as Digest>::OutputSize>::clone_from_slice(
+                &export_key,
+            ),
         })
     }
 }

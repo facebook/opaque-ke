@@ -54,22 +54,13 @@ impl<Grp: Group> RegistrationRequest<Grp> {
 
     /// Serialization into bytes
     pub fn serialize(&self) -> Vec<u8> {
-        serialize(&self.alpha.to_arr(), 2)
+        self.alpha.to_arr().to_vec()
     }
 
     /// Deserialization from bytes
     pub fn deserialize(input: &[u8]) -> Result<Self, ProtocolError> {
-        let (alpha_bytes, remainder) = tokenize(&input, 2)?;
-
-        if !remainder.is_empty() {
-            return Err(PakeError::SerializationError.into());
-        }
-
-        let checked_slice = check_slice_size(
-            &alpha_bytes,
-            Grp::ElemLen::to_usize(),
-            "first_message_bytes",
-        )?;
+        let checked_slice =
+            check_slice_size(&input, Grp::ElemLen::to_usize(), "first_message_bytes")?;
         // Check that the message is actually containing an element of the
         // correct subgroup
         let arr = GenericArray::from_slice(checked_slice);
@@ -122,29 +113,26 @@ where
     /// Serialization into bytes
     pub fn serialize(&self) -> Vec<u8> {
         let mut registration_response: Vec<u8> = Vec::new();
-        registration_response.extend_from_slice(&serialize(&self.beta.to_arr(), 2));
+        registration_response.extend_from_slice(&self.beta.to_arr());
         registration_response.extend_from_slice(&serialize(&self.server_s_pk, 2));
         registration_response
     }
 
     /// Deserialization from bytes
     pub fn deserialize(input: &[u8]) -> Result<Self, ProtocolError> {
-        let (beta_bytes, remainder) = tokenize(&input, 2)?;
-        let (server_s_pk, remainder) = tokenize(&remainder, 2)?;
+        let checked_slice =
+            check_slice_size_atleast(&input, Grp::ElemLen::to_usize(), "second_message_bytes")?;
 
+        // Check that the message is actually containing an element of the
+        // correct subgroup
+        let arr = GenericArray::from_slice(&checked_slice[..Grp::ElemLen::to_usize()]);
+        let beta = Grp::from_element_slice(arr)?;
+
+        let (server_s_pk, remainder) = tokenize(&checked_slice[Grp::ElemLen::to_usize()..], 2)?;
         if !remainder.is_empty() {
             return Err(PakeError::SerializationError.into());
         }
 
-        let checked_slice = check_slice_size(
-            &beta_bytes,
-            Grp::ElemLen::to_usize(),
-            "second_message_bytes",
-        )?;
-        // Check that the message is actually containing an element of the
-        // correct subgroup
-        let arr = GenericArray::from_slice(&checked_slice);
-        let beta = Grp::from_element_slice(arr)?;
         Ok(Self { server_s_pk, beta })
     }
 }
@@ -186,15 +174,15 @@ impl<D: Hash, G: Group> RegistrationUpload<D, G> {
     /// Serialization into bytes
     pub fn serialize(&self) -> Vec<u8> {
         let mut message: Vec<u8> = Vec::new();
-        message.extend_from_slice(&self.envelope.serialize());
         message.extend_from_slice(&serialize(&self.client_s_pk.to_arr(), 2));
+        message.extend_from_slice(&self.envelope.serialize());
         message
     }
 
     /// Deserialization from bytes
     pub fn deserialize(input: &[u8]) -> Result<Self, ProtocolError> {
-        let (envelope, remainder) = Envelope::<D>::deserialize(&input)?;
-        let (client_s_pk, remainder) = tokenize(&remainder, 2)?;
+        let (client_s_pk, remainder) = tokenize(&input, 2)?;
+        let (envelope, remainder) = Envelope::<D>::deserialize(&remainder)?;
 
         if !remainder.is_empty() {
             return Err(PakeError::SerializationError.into());
@@ -231,22 +219,27 @@ impl<CS: CipherSuite> CredentialRequest<CS> {
     /// Serialization into bytes
     pub fn serialize(&self) -> Vec<u8> {
         let mut credential_request: Vec<u8> = Vec::new();
-        credential_request.extend_from_slice(&serialize(&self.alpha.to_arr(), 2));
+        credential_request.extend_from_slice(&self.alpha.to_arr());
         credential_request.extend_from_slice(&self.ke1_message.to_bytes());
         credential_request
     }
 
     /// Deserialization from bytes
     pub fn deserialize(input: &[u8]) -> Result<Self, ProtocolError> {
-        let (alpha_bytes, ke1m) = tokenize(&input, 2)?;
-
         let elem_len = <CS::Group as Group>::ElemLen::to_usize();
-        let checked_slice = check_slice_size(&alpha_bytes, elem_len, "login_first_message_bytes")?;
+
+        let checked_slice =
+            check_slice_size_atleast(&input, elem_len, "login_first_message_bytes")?;
+
+        // Check that the message is actually containing an element of the
+        // correct subgroup
         let arr = GenericArray::from_slice(&checked_slice[..elem_len]);
-        let alpha = <CS::Group as Group>::from_element_slice(arr)?;
+        let alpha = CS::Group::from_element_slice(arr)?;
 
         let ke1_message =
-            <CS::KeyExchange as KeyExchange<CS::Hash, CS::Group>>::KE1Message::try_from(&ke1m[..])?;
+            <CS::KeyExchange as KeyExchange<CS::Hash, CS::Group>>::KE1Message::try_from(
+                &checked_slice[elem_len..],
+            )?;
 
         Ok(Self { alpha, ke1_message })
     }
@@ -267,7 +260,7 @@ impl<CS: CipherSuite> CredentialResponse<CS> {
     /// Serialization into bytes
     pub fn serialize(&self) -> Vec<u8> {
         let mut credential_response: Vec<u8> = Vec::new();
-        credential_response.extend_from_slice(&serialize(&self.beta.to_arr(), 2));
+        credential_response.extend_from_slice(&self.beta.to_arr());
         credential_response.extend_from_slice(&serialize(&self.server_s_pk.to_arr().to_vec(), 2));
         credential_response.extend_from_slice(&self.envelope.to_bytes());
         credential_response.extend_from_slice(&self.ke2_message.to_bytes());
@@ -276,13 +269,7 @@ impl<CS: CipherSuite> CredentialResponse<CS> {
 
     /// Deserialization from bytes
     pub fn deserialize(input: &[u8]) -> Result<Self, ProtocolError> {
-        let (beta_bytes, server_s_pk_and_envelope_and_ke2m_bytes) = tokenize(&input, 2)?;
-        let concatenated = [
-            &beta_bytes[..],
-            &server_s_pk_and_envelope_and_ke2m_bytes[..],
-        ]
-        .concat();
-        Self::try_from(&concatenated[..])
+        Self::try_from(input)
     }
 }
 

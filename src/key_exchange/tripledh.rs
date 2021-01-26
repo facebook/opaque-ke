@@ -44,14 +44,14 @@ static STR_OPAQUE: &[u8] = b"OPAQUE ";
 pub struct TripleDH;
 
 impl<D: Hash, G: Group> KeyExchange<D, G> for TripleDH {
-    type KE1State = KE1State<<D as FixedOutput>::OutputSize>;
+    type KE1State = KE1State;
     type KE2State = KE2State<<D as FixedOutput>::OutputSize>;
     type KE1Message = KE1Message;
     type KE2Message = KE2Message<<D as FixedOutput>::OutputSize>;
     type KE3Message = KE3Message<<D as FixedOutput>::OutputSize>;
 
     fn generate_ke1<R: RngCore + CryptoRng>(
-        l1_component: Vec<u8>,
+        alpha_bytes: Vec<u8>,
         info: Vec<u8>,
         rng: &mut R,
     ) -> Result<(Self::KE1State, Self::KE1Message), ProtocolError> {
@@ -68,16 +68,14 @@ impl<D: Hash, G: Group> KeyExchange<D, G> for TripleDH {
             client_e_pk: client_e_kp.public().clone(),
         };
 
-        let l1_data: Vec<u8> = [&l1_component[..], &ke1_message.to_bytes()].concat();
-        let mut hasher = D::new();
-        hasher.update(&l1_data);
-        let hashed_l1 = hasher.finalize();
+        // TODO: must match the serialization of a credential request, could be done more cleanly
+        let serialized_credential_request = [alpha_bytes, ke1_message.to_bytes()].concat();
 
         Ok((
             KE1State {
                 client_e_sk: client_e_kp.private().clone(),
                 client_nonce,
-                hashed_l1,
+                serialized_credential_request,
             },
             ke1_message,
         ))
@@ -86,7 +84,7 @@ impl<D: Hash, G: Group> KeyExchange<D, G> for TripleDH {
     #[allow(clippy::type_complexity)]
     fn generate_ke2<R: RngCore + CryptoRng>(
         rng: &mut R,
-        l1_bytes: Vec<u8>,
+        serialized_credential_request: Vec<u8>,
         l2_bytes: Vec<u8>,
         ke1_message: Self::KE1Message,
         client_s_pk: Key,
@@ -118,7 +116,7 @@ impl<D: Hash, G: Group> KeyExchange<D, G> for TripleDH {
         )?;
 
         // Compute encryption of e_info
-        let h = Hkdf::<D>::new(None, &ke2);
+        let h = Hkdf::<D>::from_prk(&ke2).map_err(|_| InternalPakeError::HkdfError)?;
         let mut encryption_pad = vec![0u8; e_info.len()];
         h.expand(STR_ENCRYPTION_PAD, &mut encryption_pad)
             .map_err(|_| InternalPakeError::HkdfError)?;
@@ -128,12 +126,8 @@ impl<D: Hash, G: Group> KeyExchange<D, G> for TripleDH {
             .map(|(&x1, &x2)| x1 ^ x2)
             .collect();
 
-        let mut hasher = D::new();
-        hasher.update(&l1_bytes);
-        let hashed_l1 = hasher.finalize();
-
         let transcript2: Vec<u8> = [
-            &hashed_l1[..],
+            &serialized_credential_request[..],
             &l2_bytes[..],
             &server_nonce[..],
             &server_e_kp.public().to_arr(),
@@ -152,7 +146,6 @@ impl<D: Hash, G: Group> KeyExchange<D, G> for TripleDH {
 
         let mut hasher3 = D::new();
         hasher3.update(&transcript2);
-        hasher3.update(mac.clone());
         let hashed_transcript = hasher3.finalize();
 
         Ok((
@@ -197,7 +190,7 @@ impl<D: Hash, G: Group> KeyExchange<D, G> for TripleDH {
         )?;
 
         let transcript: Vec<u8> = [
-            &ke1_state.hashed_l1[..],
+            &ke1_state.serialized_credential_request[..],
             &l2_component[..],
             &ke2_message.to_bytes_without_mac(),
         ]
@@ -219,7 +212,7 @@ impl<D: Hash, G: Group> KeyExchange<D, G> for TripleDH {
 
         let mut hasher2 = D::new();
         hasher2.update(transcript);
-        hasher2.update(ke2_message.mac.to_vec());
+        // hasher2.update(ke2_message.mac.to_vec()); // FIXME, sync with @caw on including this
         let hashed_transcript = hasher2.finalize();
 
         let mut client_mac =
@@ -227,7 +220,7 @@ impl<D: Hash, G: Group> KeyExchange<D, G> for TripleDH {
         client_mac.update(&hashed_transcript);
 
         // Compute decryption of e_info
-        let h = Hkdf::<D>::new(None, &ke2);
+        let h = Hkdf::<D>::from_prk(&ke2).map_err(|_| InternalPakeError::HkdfError)?;
         let mut encryption_pad = vec![0u8; ke2_message.e_info.len()];
         h.expand(STR_ENCRYPTION_PAD, &mut encryption_pad)
             .map_err(|_| InternalPakeError::HkdfError)?;
@@ -264,10 +257,6 @@ impl<D: Hash, G: Group> KeyExchange<D, G> for TripleDH {
         Ok(ke2_state.session_secret.to_vec())
     }
 
-    fn ke1_state_size() -> usize {
-        NONCE_LEN + KEY_LEN + <<D as FixedOutput>::OutputSize as Unsigned>::to_usize()
-    }
-
     fn ke2_message_size() -> usize {
         NONCE_LEN + KEY_LEN + <<D as FixedOutput>::OutputSize as Unsigned>::to_usize()
     }
@@ -275,10 +264,10 @@ impl<D: Hash, G: Group> KeyExchange<D, G> for TripleDH {
 
 /// The client state produced after the first key exchange message
 #[derive(PartialEq, Eq)]
-pub struct KE1State<HashLen: ArrayLength<u8>> {
+pub struct KE1State {
     client_e_sk: Key,
     client_nonce: GenericArray<u8, NonceLen>,
-    hashed_l1: GenericArray<u8, HashLen>,
+    serialized_credential_request: Vec<u8>,
 }
 
 /// The first key exchange message
@@ -289,32 +278,28 @@ pub struct KE1Message {
     pub(crate) client_e_pk: Key,
 }
 
-impl<HashLen: ArrayLength<u8>> TryFrom<&[u8]> for KE1State<HashLen> {
+impl TryFrom<&[u8]> for KE1State {
     type Error = PakeError;
 
     fn try_from(bytes: &[u8]) -> Result<Self, Self::Error> {
-        let checked_bytes = check_slice_size(
-            bytes,
-            KEY_LEN + NONCE_LEN + HashLen::to_usize(),
-            "ke1_state",
-        )?;
+        let checked_bytes = check_slice_size_atleast(bytes, KEY_LEN + NONCE_LEN, "ke1_state")?;
 
         Ok(Self {
             client_e_sk: Key::from_bytes(&checked_bytes[..KEY_LEN])?,
             client_nonce: GenericArray::clone_from_slice(
                 &checked_bytes[KEY_LEN..KEY_LEN + NONCE_LEN],
             ),
-            hashed_l1: GenericArray::clone_from_slice(&checked_bytes[KEY_LEN + NONCE_LEN..]),
+            serialized_credential_request: checked_bytes[KEY_LEN + NONCE_LEN..].to_vec(),
         })
     }
 }
 
-impl<HashLen: ArrayLength<u8>> ToBytes for KE1State<HashLen> {
+impl ToBytes for KE1State {
     fn to_bytes(&self) -> Vec<u8> {
         let output: Vec<u8> = [
             &self.client_e_sk.to_arr(),
             &self.client_nonce[..],
-            &self.hashed_l1[..],
+            &self.serialized_credential_request[..],
         ]
         .concat();
         output
@@ -505,6 +490,7 @@ fn derive_3dh_keys<D: Hash, G: Group>(
     let extracted_ikm = Hkdf::<D>::new(None, &ikm);
     let handshake_secret = derive_secrets::<D>(&extracted_ikm, &STR_HANDSHAKE_SECRET, &info)?;
     let session_secret = derive_secrets::<D>(&extracted_ikm, &STR_SESSION_SECRET, &info)?;
+
     let km2 = hkdf_expand_label::<D>(
         &handshake_secret,
         &STR_SERVER_MAC,
@@ -538,7 +524,7 @@ fn hkdf_expand_label<D: Hash>(
     context: &[u8],
     length: usize,
 ) -> Result<Vec<u8>, ProtocolError> {
-    let h = Hkdf::<D>::new(None, secret);
+    let h = Hkdf::<D>::from_prk(secret).map_err(|_| InternalPakeError::HkdfError)?;
     hkdf_expand_label_extracted(&h, label, context, length)
 }
 

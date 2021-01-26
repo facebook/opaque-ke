@@ -21,7 +21,7 @@ use generic_bytes::SizedBytes;
 use proptest::{collection::vec, prelude::*};
 use rand_core::{OsRng, RngCore};
 
-use sha2::{Digest, Sha512};
+use sha2::Digest;
 use std::convert::TryFrom;
 
 struct Default;
@@ -81,10 +81,7 @@ fn server_registration_roundtrip() {
     mock_envelope_bytes.extend_from_slice(&[0; 1]); // mode = 0
     mock_envelope_bytes.extend_from_slice(&[0; NONCE_LEN]); // empty nonce
     mock_envelope_bytes.extend_from_slice(&[0, 0]); // empty ciphertext
-    mock_envelope_bytes.extend_from_slice(&[0, 0]); // empty auth_data
-                                                    // length-MAC_SIZE hmac
-    mock_envelope_bytes.extend_from_slice(&[0, MAC_SIZE as u8]);
-    mock_envelope_bytes.extend_from_slice(&[0; MAC_SIZE]);
+    mock_envelope_bytes.extend_from_slice(&[0; MAC_SIZE]); // length-MAC_SIZE hmac
 
     let mock_client_kp = Default::generate_random_keypair(&mut rng);
     // serialization order: oprf_key, public key, envelope
@@ -102,10 +99,7 @@ fn register_first_message_roundtrip() {
     let pt = random_ristretto_point();
     let pt_bytes = pt.to_arr().to_vec();
 
-    let alpha_length: usize = 32;
-
     let mut input = Vec::new();
-    input.extend_from_slice(&alpha_length.to_be_bytes()[std::mem::size_of::<usize>() - 2..]);
     input.extend_from_slice(pt_bytes.as_slice());
 
     let r1 = RegistrationRequest::<RistrettoPoint>::deserialize(input.as_slice()).unwrap();
@@ -121,11 +115,9 @@ fn register_second_message_roundtrip() {
     let skp = Default::generate_random_keypair(&mut rng);
     let pubkey_bytes = skp.public().to_arr();
 
-    let beta_length: usize = beta_bytes.len();
     let pubkey_length: usize = pubkey_bytes.len();
 
     let mut input = Vec::new();
-    input.extend_from_slice(&beta_length.to_be_bytes()[std::mem::size_of::<usize>() - 2..]);
     input.extend_from_slice(beta_bytes.as_slice());
     input.extend_from_slice(&pubkey_length.to_be_bytes()[std::mem::size_of::<usize>() - 2..]);
     input.extend_from_slice(&pubkey_bytes.as_slice());
@@ -160,9 +152,9 @@ fn register_third_message_roundtrip() {
     let pubkey_length: usize = pubkey_bytes.len();
 
     let mut input = Vec::new();
-    input.extend_from_slice(&envelope_bytes);
     input.extend_from_slice(&pubkey_length.to_be_bytes()[std::mem::size_of::<usize>() - 2..]);
     input.extend_from_slice(&pubkey_bytes[..]);
+    input.extend_from_slice(&envelope_bytes);
 
     let r3 = RegistrationUpload::<sha2::Sha512, RistrettoPoint>::deserialize(&input[..]).unwrap();
     let r3_bytes = r3.serialize();
@@ -189,10 +181,7 @@ fn login_first_message_roundtrip() {
     ]
     .concat();
 
-    let alpha_length = alpha_bytes.len();
-
     let mut input = Vec::new();
-    input.extend_from_slice(&alpha_length.to_be_bytes()[std::mem::size_of::<usize>() - 2..]);
     input.extend_from_slice(&alpha_bytes);
     input.extend_from_slice(&ke1m[..]);
 
@@ -244,7 +233,6 @@ fn login_second_message_roundtrip() {
     .concat();
 
     let mut input = Vec::new();
-    input.extend_from_slice(&pt_bytes.len().to_be_bytes()[std::mem::size_of::<usize>() - 2..]);
     input.extend_from_slice(pt_bytes.as_slice());
     input.extend_from_slice(&pubkey_length.to_be_bytes()[std::mem::size_of::<usize>() - 2..]);
     input.extend_from_slice(&pubkey_bytes.as_slice());
@@ -280,19 +268,9 @@ fn client_login_roundtrip() {
     rng.fill_bytes(&mut client_nonce);
 
     let l1_data = [&sc.to_bytes()[..], &client_nonce, client_e_kp.public()].concat();
-    let mut hasher = Sha512::new();
-    hasher.update(l1_data);
-    let hashed_l1 = hasher.finalize();
 
     // serialization order: scalar, password, ke1_state
-    let bytes: Vec<u8> = [
-        &sc.as_bytes()[..],
-        &pw[..],
-        client_e_kp.public(),
-        &client_nonce,
-        hashed_l1.as_slice(),
-    ]
-    .concat();
+    let bytes: Vec<u8> = [&sc.as_bytes()[..], &serialize(&l1_data, 2), &pw[..]].concat();
     let reg = ClientLogin::<Default>::try_from(&bytes[..]).unwrap();
     let reg_bytes = reg.to_bytes();
     assert_eq!(reg_bytes, bytes);
