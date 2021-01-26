@@ -46,7 +46,7 @@ struct Default;
 impl CipherSuite for Default {
     type Group = curve25519_dalek::ristretto::RistrettoPoint;
     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
-    type Hash = sha2::Sha256;
+    type Hash = sha2::Sha512;
     type SlowHash = opaque_ke::slow_hash::NoOpHash;
 }
 
@@ -57,7 +57,7 @@ struct Locker {
 
 // Given a key and plaintext, produce an AEAD ciphertext along with a nonce
 fn encrypt(key: &[u8], plaintext: &[u8]) -> Vec<u8> {
-    let cipher = ChaCha20Poly1305::new(Key::from_slice(&key));
+    let cipher = ChaCha20Poly1305::new(Key::from_slice(&key[..32]));
 
     let mut rng = OsRng;
     let mut nonce_bytes = [0u8; 12];
@@ -70,7 +70,7 @@ fn encrypt(key: &[u8], plaintext: &[u8]) -> Vec<u8> {
 
 // Decrypt using a key and a ciphertext (nonce included) to recover the original plaintext
 fn decrypt(key: &[u8], ciphertext: &[u8]) -> Vec<u8> {
-    let cipher = ChaCha20Poly1305::new(Key::from_slice(&key));
+    let cipher = ChaCha20Poly1305::new(Key::from_slice(&key[..32]));
     cipher
         .decrypt(
             Nonce::from_slice(&ciphertext[..12]),
