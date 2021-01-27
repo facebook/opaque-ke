@@ -9,6 +9,7 @@ use crate::{
     hash::Hash, key_exchange::traits::KeyExchange, keypair::KeyPair,
     map_to_curve::GroupWithMapToCurve, slow_hash::SlowHash,
 };
+use digest::Digest;
 
 use rand_core::{CryptoRng, RngCore};
 
@@ -25,7 +26,7 @@ pub trait CipherSuite {
     /// an extension trait PasswordToCurve that allows some customization on
     /// how to hash a password to a curve point. See `group::Group` and
     /// `map_to_curve::GroupWithMapToCurve`.
-    type Group: GroupWithMapToCurve;
+    type Group: GroupWithMapToCurve<UniformBytesLen = <Self::Hash as Digest>::OutputSize>;
     /// A key exchange protocol
     type KeyExchange: KeyExchange<Self::Hash, Self::Group>;
     /// The main hash function use (for HKDF computations and hashing transcripts)
