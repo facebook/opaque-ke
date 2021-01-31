@@ -37,7 +37,6 @@ impl GroupWithMapToCurve for RistrettoPoint {
     // Implements the hash_to_ristretto255() function from
     // https://www.ietf.org/archive/id/draft-irtf-cfrg-hash-to-curve-10.txt
     fn map_to_curve<H: Hash>(msg: &[u8], dst: &[u8]) -> Result<Self, InternalPakeError> {
-        // FIXME use generic_array and turn this into a compile-time error if size mismatch
         let uniform_bytes =
             expand_message_xmd::<H>(msg, dst, <H as Digest>::OutputSize::to_usize())?;
         Ok(<Self as Group>::hash_to_curve(

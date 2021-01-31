@@ -259,12 +259,24 @@ pub struct CredentialResponse<CS: CipherSuite> {
 impl<CS: CipherSuite> CredentialResponse<CS> {
     /// Serialization into bytes
     pub fn serialize(&self) -> Vec<u8> {
-        let mut credential_response: Vec<u8> = Vec::new();
-        credential_response.extend_from_slice(&self.beta.to_arr());
-        credential_response.extend_from_slice(&serialize(&self.server_s_pk.to_arr().to_vec(), 2));
-        credential_response.extend_from_slice(&self.envelope.to_bytes());
-        credential_response.extend_from_slice(&self.ke2_message.to_bytes());
-        credential_response
+        [
+            Self::serialize_without_ke(&self.beta, &self.server_s_pk, &self.envelope),
+            self.ke2_message.to_bytes(),
+        ]
+        .concat()
+    }
+
+    pub(crate) fn serialize_without_ke(
+        beta: &CS::Group,
+        server_s_pk: &Key,
+        envelope: &Envelope<CS::Hash>,
+    ) -> Vec<u8> {
+        [
+            &beta.to_arr(),
+            &serialize(&server_s_pk.to_arr().to_vec(), 2)[..],
+            &envelope.to_bytes(),
+        ]
+        .concat()
     }
 
     /// Deserialization from bytes

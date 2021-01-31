@@ -28,7 +28,6 @@ use rand_core::{CryptoRng, RngCore};
 use std::convert::TryFrom;
 
 const KEY_LEN: usize = 32;
-pub(crate) const NONCE_LEN: usize = 32;
 pub(crate) type NonceLen = U32;
 
 static STR_3DH: &[u8] = b"3DH keys";
@@ -51,15 +50,14 @@ impl<D: Hash, G: Group> KeyExchange<D, G> for TripleDH {
     type KE3Message = KE3Message<<D as FixedOutput>::OutputSize>;
 
     fn generate_ke1<R: RngCore + CryptoRng>(
-        alpha_bytes: Vec<u8>,
         info: Vec<u8>,
         rng: &mut R,
     ) -> Result<(Self::KE1State, Self::KE1Message), ProtocolError> {
         let client_e_kp = KeyPair::<G>::generate_random(rng);
         let client_nonce: GenericArray<u8, NonceLen> = {
-            let mut client_nonce_bytes = [0u8; NONCE_LEN];
+            let mut client_nonce_bytes = vec![0u8; NonceLen::to_usize()];
             rng.fill_bytes(&mut client_nonce_bytes);
-            client_nonce_bytes.into()
+            GenericArray::clone_from_slice(&client_nonce_bytes)
         };
 
         let ke1_message = KE1Message {
@@ -68,14 +66,10 @@ impl<D: Hash, G: Group> KeyExchange<D, G> for TripleDH {
             client_e_pk: client_e_kp.public().clone(),
         };
 
-        // TODO: must match the serialization of a credential request, could be done more cleanly
-        let serialized_credential_request = [alpha_bytes, ke1_message.to_bytes()].concat();
-
         Ok((
             KE1State {
                 client_e_sk: client_e_kp.private().clone(),
                 client_nonce,
-                serialized_credential_request,
             },
             ke1_message,
         ))
@@ -95,9 +89,9 @@ impl<D: Hash, G: Group> KeyExchange<D, G> for TripleDH {
     ) -> Result<(Vec<u8>, Self::KE2State, Self::KE2Message), ProtocolError> {
         let server_e_kp = KeyPair::<G>::generate_random(rng);
         let server_nonce: GenericArray<u8, NonceLen> = {
-            let mut server_nonce_bytes = [0u8; NONCE_LEN];
+            let mut server_nonce_bytes = vec![0u8; NonceLen::to_usize()];
             rng.fill_bytes(&mut server_nonce_bytes);
-            server_nonce_bytes.into()
+            GenericArray::clone_from_slice(&server_nonce_bytes)
         };
 
         let (session_secret, km2, ke2, km3) = derive_3dh_keys::<D, G>(
@@ -169,6 +163,7 @@ impl<D: Hash, G: Group> KeyExchange<D, G> for TripleDH {
         l2_component: Vec<u8>,
         ke2_message: Self::KE2Message,
         ke1_state: &Self::KE1State,
+        serialized_credential_request: &[u8],
         server_s_pk: Key,
         client_s_sk: Key,
         id_u: Vec<u8>,
@@ -190,7 +185,7 @@ impl<D: Hash, G: Group> KeyExchange<D, G> for TripleDH {
         )?;
 
         let transcript: Vec<u8> = [
-            &ke1_state.serialized_credential_request[..],
+            &serialized_credential_request,
             &l2_component[..],
             &ke2_message.to_bytes_without_mac(),
         ]
@@ -258,7 +253,7 @@ impl<D: Hash, G: Group> KeyExchange<D, G> for TripleDH {
     }
 
     fn ke2_message_size() -> usize {
-        NONCE_LEN + KEY_LEN + <<D as FixedOutput>::OutputSize as Unsigned>::to_usize()
+        NonceLen::to_usize() + KEY_LEN + <<D as FixedOutput>::OutputSize as Unsigned>::to_usize()
     }
 }
 
@@ -267,7 +262,6 @@ impl<D: Hash, G: Group> KeyExchange<D, G> for TripleDH {
 pub struct KE1State {
     client_e_sk: Key,
     client_nonce: GenericArray<u8, NonceLen>,
-    serialized_credential_request: Vec<u8>,
 }
 
 /// The first key exchange message
@@ -282,26 +276,21 @@ impl TryFrom<&[u8]> for KE1State {
     type Error = PakeError;
 
     fn try_from(bytes: &[u8]) -> Result<Self, Self::Error> {
-        let checked_bytes = check_slice_size_atleast(bytes, KEY_LEN + NONCE_LEN, "ke1_state")?;
+        let nonce_len = NonceLen::to_usize();
+        let checked_bytes = check_slice_size_atleast(bytes, KEY_LEN + nonce_len, "ke1_state")?;
 
         Ok(Self {
             client_e_sk: Key::from_bytes(&checked_bytes[..KEY_LEN])?,
             client_nonce: GenericArray::clone_from_slice(
-                &checked_bytes[KEY_LEN..KEY_LEN + NONCE_LEN],
+                &checked_bytes[KEY_LEN..KEY_LEN + nonce_len],
             ),
-            serialized_credential_request: checked_bytes[KEY_LEN + NONCE_LEN..].to_vec(),
         })
     }
 }
 
 impl ToBytes for KE1State {
     fn to_bytes(&self) -> Vec<u8> {
-        let output: Vec<u8> = [
-            &self.client_e_sk.to_arr(),
-            &self.client_nonce[..],
-            &self.serialized_credential_request[..],
-        ]
-        .concat();
+        let output: Vec<u8> = [&self.client_e_sk.to_arr(), &self.client_nonce[..]].concat();
         output
     }
 }
@@ -321,15 +310,16 @@ impl TryFrom<&[u8]> for KE1Message {
     type Error = PakeError;
 
     fn try_from(ke1_message_bytes: &[u8]) -> Result<Self, Self::Error> {
+        let nonce_len = NonceLen::to_usize();
         let checked_nonce =
-            check_slice_size_atleast(ke1_message_bytes, NONCE_LEN, "ke1_message nonce")?;
+            check_slice_size_atleast(ke1_message_bytes, nonce_len, "ke1_message nonce")?;
 
-        let (info, remainder) = tokenize(&checked_nonce[NONCE_LEN..], 2)?;
+        let (info, remainder) = tokenize(&checked_nonce[nonce_len..], 2)?;
 
         let checked_client_e_pk = check_slice_size(&remainder, KEY_LEN, "ke1_message client_e_pk")?;
 
         Ok(Self {
-            client_nonce: GenericArray::clone_from_slice(&checked_nonce[..NONCE_LEN]),
+            client_nonce: GenericArray::clone_from_slice(&checked_nonce[..nonce_len]),
             info,
             client_e_pk: Key::from_bytes(&checked_client_e_pk)?,
         })
@@ -401,9 +391,10 @@ impl<HashLen: ArrayLength<u8>> TryFrom<&[u8]> for KE2Message<HashLen> {
     type Error = PakeError;
 
     fn try_from(input: &[u8]) -> Result<Self, Self::Error> {
-        let checked_nonce = check_slice_size_atleast(input, NONCE_LEN, "ke2_message nonce")?;
+        let nonce_len = NonceLen::to_usize();
+        let checked_nonce = check_slice_size_atleast(input, nonce_len, "ke2_message nonce")?;
         let checked_server_e_pk = check_slice_size_atleast(
-            &checked_nonce[NONCE_LEN..],
+            &checked_nonce[nonce_len..],
             KEY_LEN,
             "ke2_message server_e_pk",
         )?;
@@ -411,7 +402,7 @@ impl<HashLen: ArrayLength<u8>> TryFrom<&[u8]> for KE2Message<HashLen> {
         let checked_mac = check_slice_size(&remainder, HashLen::to_usize(), "ke1_message mac")?;
 
         Ok(Self {
-            server_nonce: GenericArray::clone_from_slice(&checked_nonce[..NONCE_LEN]),
+            server_nonce: GenericArray::clone_from_slice(&checked_nonce[..nonce_len]),
             server_e_pk: Key::from_bytes(&checked_server_e_pk[..KEY_LEN])?,
             e_info,
             mac: GenericArray::clone_from_slice(&checked_mac),

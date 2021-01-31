@@ -408,6 +408,7 @@ pub struct ClientLogin<CS: CipherSuite> {
     /// token containing the client's password and the blinding factor
     token: oprf::Token<CS::Group>,
     ke1_state: <CS::KeyExchange as KeyExchange<CS::Hash, CS::Group>>::KE1State,
+    serialized_credential_request: Vec<u8>,
 }
 
 impl<CS: CipherSuite> TryFrom<&[u8]> for ClientLogin<CS> {
@@ -427,7 +428,8 @@ impl<CS: CipherSuite> TryFrom<&[u8]> for ClientLogin<CS> {
         let blinding_factor_bytes = GenericArray::from_slice(&checked_slice[..scalar_len]);
         let blinding_factor = CS::Group::from_scalar_slice(blinding_factor_bytes)?;
 
-        let (ke1_state_bytes, password) = tokenize(&checked_slice[scalar_len..], 2)?;
+        let (serialized_credential_request, remainder) = tokenize(&checked_slice[scalar_len..], 2)?;
+        let (ke1_state_bytes, password) = tokenize(&remainder, 2)?;
 
         let ke1_state = <CS::KeyExchange as KeyExchange<CS::Hash, CS::Group>>::KE1State::try_from(
             &ke1_state_bytes[..],
@@ -438,6 +440,7 @@ impl<CS: CipherSuite> TryFrom<&[u8]> for ClientLogin<CS> {
                 blind: blinding_factor,
             },
             ke1_state,
+            serialized_credential_request,
         })
     }
 }
@@ -447,6 +450,7 @@ impl<CS: CipherSuite> ClientLogin<CS> {
     pub fn to_bytes(&self) -> Vec<u8> {
         let output: Vec<u8> = [
             &CS::Group::scalar_as_bytes(&self.token.blind)[..],
+            &serialize(&self.serialized_credential_request, 2),
             &serialize(&self.ke1_state.to_bytes(), 2),
             &self.token.data,
         ]
@@ -536,14 +540,18 @@ impl<CS: CipherSuite> ClientLogin<CS> {
 
         let (token, alpha) = oprf::blind::<R, CS::Group, CS::Hash>(&password, rng)?;
 
-        let (ke1_state, ke1_message) =
-            CS::KeyExchange::generate_ke1(alpha.to_arr().to_vec(), info, rng)?;
+        let (ke1_state, ke1_message) = CS::KeyExchange::generate_ke1(info, rng)?;
 
-        let l1 = CredentialRequest { alpha, ke1_message };
+        let credential_request = CredentialRequest { alpha, ke1_message };
+        let serialized_credential_request = credential_request.serialize();
 
         Ok(ClientLoginStartResult {
-            message: l1,
-            state: Self { token, ke1_state },
+            message: credential_request,
+            state: Self {
+                token,
+                ke1_state,
+                serialized_credential_request,
+            },
         })
     }
 
@@ -627,6 +635,7 @@ impl<CS: CipherSuite> ClientLogin<CS> {
             l2_bytes,
             l2.ke2_message,
             &self.ke1_state,
+            &self.serialized_credential_request,
             l2.server_s_pk.clone(),
             client_s_sk,
             id_u,
@@ -772,21 +781,15 @@ impl<CS: CipherSuite> ServerLogin<CS> {
 
         let l1_bytes = &l1.to_bytes();
         let beta = oprf::evaluate(l1.alpha, &password_file.oprf_key);
-
         let server_s_pk = KeyPair::<CS::Group>::public_from_private(&server_s_sk);
 
-        // TODO: must match serialization of credential response, could be done more cleanly
-        let l2_component: Vec<u8> = [
-            &beta.to_arr()[..],
-            &serialize(&server_s_pk.to_arr()[..], 2),
-            &envelope.to_bytes()[..],
-        ]
-        .concat();
+        let credential_response_component =
+            CredentialResponse::<CS>::serialize_without_ke(&beta, &server_s_pk, &envelope);
 
         let (plain_info, ke2_state, ke2_message) = CS::KeyExchange::generate_ke2(
             rng,
             l1_bytes.to_vec(),
-            l2_component,
+            credential_response_component,
             l1.ke1_message,
             client_s_pk,
             server_s_sk.clone(),
@@ -795,7 +798,7 @@ impl<CS: CipherSuite> ServerLogin<CS> {
             e_info,
         )?;
 
-        let l2 = CredentialResponse {
+        let credential_response = CredentialResponse {
             beta,
             server_s_pk,
             envelope,
@@ -804,7 +807,7 @@ impl<CS: CipherSuite> ServerLogin<CS> {
 
         Ok(ServerLoginStartResult {
             plain_info,
-            message: l2,
+            message: credential_response,
             state: Self {
                 _cs: PhantomData,
                 ke2_state,

@@ -34,9 +34,9 @@ use std::process::exit;
 
 use opaque_ke::{
     ciphersuite::CipherSuite, ClientLogin, ClientLoginFinishParameters, ClientLoginStartParameters,
-    ClientRegistration, ClientRegistrationFinishParameters, CredentialRequest, CredentialResponse,
-    RegistrationRequest, RegistrationResponse, RegistrationUpload, ServerLogin,
-    ServerLoginStartParameters, ServerRegistration,
+    ClientRegistration, ClientRegistrationFinishParameters, CredentialFinalization,
+    CredentialRequest, CredentialResponse, RegistrationRequest, RegistrationResponse,
+    RegistrationUpload, ServerLogin, ServerLoginStartParameters, ServerRegistration,
 };
 
 // The ciphersuite trait allows to specify the underlying primitives
@@ -173,9 +173,27 @@ fn open_locker(
         return Err(String::from("Incorrect password, please try again."));
     }
     let client_login_finish_result = result.unwrap();
+    let credential_finalization_bytes = client_login_finish_result.message.serialize();
 
-    // Decrypt contents of locker
-    let plaintext = decrypt(&client_login_finish_result.export_key, &locker.contents);
+    // Client sends credential_finalization_bytes to server
+
+    let server_login_finish_result = server_login_start_result
+        .state
+        .finish(CredentialFinalization::deserialize(&credential_finalization_bytes[..]).unwrap())
+        .unwrap();
+
+    // Server sends locker contents, encrypted under the session key, to the client
+    let encrypted_locker_contents =
+        encrypt(&server_login_finish_result.shared_secret, &locker.contents);
+
+    // Client decrypts contents of locker, first under the shared secret, and then under the export key
+    let plaintext = decrypt(
+        &client_login_finish_result.export_key,
+        &decrypt(
+            &client_login_finish_result.shared_secret,
+            &encrypted_locker_contents,
+        ),
+    );
     String::from_utf8(plaintext).map_err(|_| String::from("UTF8 error"))
 }
 
