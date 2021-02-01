@@ -16,7 +16,6 @@ use rand_core::{CryptoRng, RngCore};
 use std::convert::TryFrom;
 
 // Constant string used as salt for HKDF computation
-const STR_RWDU: &[u8] = b"rwdU";
 const STR_PAD: &[u8] = b"Pad";
 const STR_AUTH_KEY: &[u8] = b"AuthKey";
 const STR_EXPORT_KEY: &[u8] = b"ExportKey";
@@ -191,23 +190,17 @@ impl<D: Hash> Envelope<D> {
         let mut nonce = vec![0u8; NONCE_LEN];
         rng.fill_bytes(&mut nonce);
 
-        let h = Hkdf::<D>::new(Some(STR_RWDU), &key);
+        let h = Hkdf::<D>::new(Some(&nonce), &key);
         let mut xor_key = vec![0u8; plaintext.len()];
         let mut hmac_key = vec![0u8; Self::hmac_key_size()];
         let mut export_key = vec![0u8; Self::export_key_size()];
 
-        h.expand(&[nonce.clone(), STR_PAD.to_vec()].concat(), &mut xor_key)
+        h.expand(STR_PAD, &mut xor_key)
             .map_err(|_| InternalPakeError::HkdfError)?;
-        h.expand(
-            &[nonce.clone(), STR_AUTH_KEY.to_vec()].concat(),
-            &mut hmac_key,
-        )
-        .map_err(|_| InternalPakeError::HkdfError)?;
-        h.expand(
-            &[nonce.clone(), STR_EXPORT_KEY.to_vec()].concat(),
-            &mut export_key,
-        )
-        .map_err(|_| InternalPakeError::HkdfError)?;
+        h.expand(STR_AUTH_KEY, &mut hmac_key)
+            .map_err(|_| InternalPakeError::HkdfError)?;
+        h.expand(STR_EXPORT_KEY, &mut export_key)
+            .map_err(|_| InternalPakeError::HkdfError)?;
 
         let ciphertext: Vec<u8> = xor_key
             .iter()
@@ -271,26 +264,17 @@ impl<D: Hash> Envelope<D> {
         key: &[u8],
         aad: &[u8],
     ) -> Result<OpenedInnerEnvelope<D>, InternalPakeError> {
-        let h = Hkdf::<D>::new(Some(STR_RWDU), &key);
+        let h = Hkdf::<D>::new(Some(&self.inner_envelope.nonce), &key);
         let mut xor_key = vec![0u8; self.inner_envelope.ciphertext.len()];
         let mut hmac_key = vec![0u8; Self::hmac_key_size()];
         let mut export_key = vec![0u8; Self::export_key_size()];
 
-        h.expand(
-            &[self.inner_envelope.nonce.clone(), STR_PAD.to_vec()].concat(),
-            &mut xor_key,
-        )
-        .map_err(|_| InternalPakeError::HkdfError)?;
-        h.expand(
-            &[self.inner_envelope.nonce.clone(), STR_AUTH_KEY.to_vec()].concat(),
-            &mut hmac_key,
-        )
-        .map_err(|_| InternalPakeError::HkdfError)?;
-        h.expand(
-            &[self.inner_envelope.nonce.clone(), STR_EXPORT_KEY.to_vec()].concat(),
-            &mut export_key,
-        )
-        .map_err(|_| InternalPakeError::HkdfError)?;
+        h.expand(STR_PAD, &mut xor_key)
+            .map_err(|_| InternalPakeError::HkdfError)?;
+        h.expand(STR_AUTH_KEY, &mut hmac_key)
+            .map_err(|_| InternalPakeError::HkdfError)?;
+        h.expand(STR_EXPORT_KEY, &mut export_key)
+            .map_err(|_| InternalPakeError::HkdfError)?;
 
         let mut hmac =
             Hmac::<D>::new_varkey(&hmac_key).map_err(|_| InternalPakeError::HmacError)?;

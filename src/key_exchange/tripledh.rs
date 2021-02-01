@@ -34,7 +34,7 @@ static STR_3DH: &[u8] = b"3DH keys";
 static STR_CLIENT_MAC: &[u8] = b"client mac";
 static STR_HANDSHAKE_SECRET: &[u8] = b"handshake secret";
 static STR_SERVER_MAC: &[u8] = b"server mac";
-static STR_SERVER_ENC: &[u8] = b"server enc";
+static STR_SERVER_ENC: &[u8] = b"handshake enc";
 static STR_ENCRYPTION_PAD: &[u8] = b"encryption pad";
 static STR_SESSION_SECRET: &[u8] = b"session secret";
 static STR_OPAQUE: &[u8] = b"OPAQUE ";
@@ -140,6 +140,7 @@ impl<D: Hash, G: Group> KeyExchange<D, G> for TripleDH {
 
         let mut hasher3 = D::new();
         hasher3.update(&transcript2);
+        hasher3.update(&mac);
         let hashed_transcript = hasher3.finalize();
 
         Ok((
@@ -207,7 +208,7 @@ impl<D: Hash, G: Group> KeyExchange<D, G> for TripleDH {
 
         let mut hasher2 = D::new();
         hasher2.update(transcript);
-        // hasher2.update(ke2_message.mac.to_vec()); // FIXME, sync with @caw on including this
+        hasher2.update(ke2_message.mac.to_vec());
         let hashed_transcript = hasher2.finalize();
 
         let mut client_mac =
