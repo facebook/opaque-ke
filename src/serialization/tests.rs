@@ -9,7 +9,7 @@ use crate::{
     group::Group,
     key_exchange::{
         traits::{KeyExchange, ToBytes},
-        tripledh::{TripleDH, NONCE_LEN},
+        tripledh::{NonceLen, TripleDH},
     },
     opaque::*,
     serialization::{i2osp, os2ip, serialize},
@@ -17,6 +17,7 @@ use crate::{
 };
 
 use curve25519_dalek::ristretto::RistrettoPoint;
+use generic_array::typenum::Unsigned;
 use generic_bytes::SizedBytes;
 use proptest::{collection::vec, prelude::*};
 use rand_core::{OsRng, RngCore};
@@ -79,7 +80,7 @@ fn server_registration_roundtrip() {
     // Construct a mock envelope
     let mut mock_envelope_bytes = Vec::new();
     mock_envelope_bytes.extend_from_slice(&[0; 1]); // mode = 0
-    mock_envelope_bytes.extend_from_slice(&[0; NONCE_LEN]); // empty nonce
+    mock_envelope_bytes.extend_from_slice(&vec![0; NonceLen::to_usize()]); // empty nonce
     mock_envelope_bytes.extend_from_slice(&[0, 0]); // empty ciphertext
     mock_envelope_bytes.extend_from_slice(&[0; MAC_SIZE]); // length-MAC_SIZE hmac
 
@@ -168,7 +169,7 @@ fn login_first_message_roundtrip() {
     let alpha_bytes = alpha.to_arr().to_vec();
 
     let client_e_kp = Default::generate_random_keypair(&mut rng);
-    let mut client_nonce = [0u8; NONCE_LEN];
+    let mut client_nonce = vec![0u8; NonceLen::to_usize()];
     rng.fill_bytes(&mut client_nonce);
 
     let mut info = [0u8; MAX_INFO_LENGTH];
@@ -218,7 +219,7 @@ fn login_second_message_roundtrip() {
     let server_e_kp = Default::generate_random_keypair(&mut rng);
     let mut mac = [0u8; MAC_SIZE];
     rng.fill_bytes(&mut mac);
-    let mut server_nonce = [0u8; NONCE_LEN];
+    let mut server_nonce = vec![0u8; NonceLen::to_usize()];
     rng.fill_bytes(&mut server_nonce);
 
     let mut e_info = [0u8; MAX_INFO_LENGTH];
@@ -264,13 +265,20 @@ fn client_login_roundtrip() {
     let sc = <RistrettoPoint as Group>::random_scalar(&mut rng);
 
     let client_e_kp = Default::generate_random_keypair(&mut rng);
-    let mut client_nonce = [0u8; NONCE_LEN];
+    let mut client_nonce = vec![0u8; NonceLen::to_usize()];
     rng.fill_bytes(&mut client_nonce);
 
-    let l1_data = [&sc.to_bytes()[..], &client_nonce, client_e_kp.public()].concat();
+    let serialized_credential_request = b"serialized credential_request".to_vec();
+    let l1_data = [client_e_kp.private().to_arr().to_vec(), client_nonce].concat();
 
-    // serialization order: scalar, password, ke1_state
-    let bytes: Vec<u8> = [&sc.as_bytes()[..], &serialize(&l1_data, 2), &pw[..]].concat();
+    // serialization order: scalar, credential_request, ke1_state, password
+    let bytes: Vec<u8> = [
+        &sc.as_bytes()[..],
+        &serialize(&serialized_credential_request, 2),
+        &serialize(&l1_data, 2),
+        &pw[..],
+    ]
+    .concat();
     let reg = ClientLogin::<Default>::try_from(&bytes[..]).unwrap();
     let reg_bytes = reg.to_bytes();
     assert_eq!(reg_bytes, bytes);
@@ -281,7 +289,7 @@ fn ke1_message_roundtrip() {
     let mut rng = OsRng;
 
     let client_e_kp = Default::generate_random_keypair(&mut rng);
-    let mut client_nonce = [0u8; NONCE_LEN];
+    let mut client_nonce = vec![0u8; NonceLen::to_usize()];
     rng.fill_bytes(&mut client_nonce);
 
     let mut info = [0u8; MAX_INFO_LENGTH];
@@ -307,7 +315,7 @@ fn ke2_message_roundtrip() {
     let server_e_kp = Default::generate_random_keypair(&mut rng);
     let mut mac = [0u8; MAC_SIZE];
     rng.fill_bytes(&mut mac);
-    let mut server_nonce = [0u8; NONCE_LEN];
+    let mut server_nonce = vec![0u8; NonceLen::to_usize()];
     rng.fill_bytes(&mut server_nonce);
     let mut e_info = [0u8; MAX_INFO_LENGTH];
     rng.fill_bytes(&mut e_info);

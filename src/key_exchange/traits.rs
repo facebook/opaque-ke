@@ -21,7 +21,6 @@ pub trait KeyExchange<D: Hash, G: Group> {
     type KE3Message: for<'r> TryFrom<&'r [u8], Error = PakeError> + ToBytes;
 
     fn generate_ke1<R: RngCore + CryptoRng>(
-        l1_component: Vec<u8>,
         info: Vec<u8>,
         rng: &mut R,
     ) -> Result<(Self::KE1State, Self::KE1Message), ProtocolError>;
@@ -44,6 +43,7 @@ pub trait KeyExchange<D: Hash, G: Group> {
         l2_component: Vec<u8>,
         ke2_message: Self::KE2Message,
         ke1_state: &Self::KE1State,
+        serialized_credential_request: &[u8],
         server_s_pk: Key,
         client_s_sk: Key,
         id_u: Vec<u8>,

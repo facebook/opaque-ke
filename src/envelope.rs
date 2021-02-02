@@ -100,6 +100,9 @@ pub(crate) struct Envelope<D: Hash> {
     hmac: GenericArray<u8, <D as Digest>::OutputSize>,
 }
 
+// Note that this struct represents an envelope that has been "opened" with the asssociated
+// key. This key is also used to derive the export_key parameter, which is technically
+// unrelated to the envelope's encrypted and authenticated contents.
 pub(crate) struct OpenedEnvelope<D: Hash> {
     pub(crate) client_s_sk: Vec<u8>,
     pub(crate) export_key: GenericArray<u8, <D as Digest>::OutputSize>,

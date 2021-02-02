@@ -7,7 +7,7 @@ use crate::{
     ciphersuite::CipherSuite,
     errors::*,
     group::Group,
-    key_exchange::tripledh::{TripleDH, NONCE_LEN},
+    key_exchange::tripledh::{NonceLen, TripleDH},
     keypair::Key,
     opaque::*,
     slow_hash::NoOpHash,
@@ -15,6 +15,7 @@ use crate::{
     *,
 };
 use curve25519_dalek::ristretto::RistrettoPoint;
+use generic_array::typenum::Unsigned;
 use generic_bytes::SizedBytes;
 use rand_core::{OsRng, RngCore};
 use serde_json::Value;
@@ -92,7 +93,7 @@ static TEST_VECTOR: &str = r#"
     "credential_response": "2e9bf80e5c101ee2d391ff2aec06af97af17f443fc93a5cc98189681cb943d700020b67d948b98eecfb516a626fab94170e490ccd90da05fce94a016c4d5d6b7136a015dba53e994e82b6d76353341102791cdfb1c2b460e1f913c5741a9c8cf2017c90022f11b89b207eb0735f2bdb2a9968bc9d7c1c962fd0274b4fc1fff2466c769d3710586a3a21ac8ecf13aafe2dc5460eb2f52d8f760396a17beeaf1ef3d1e4e50dd906555832fc51fc474554cb9ff063f6685f9043efc08fd6816666833d68d3b0eb6d913cc5ceb7687d80293005e7f9452ce104d1bac6598dd2265f184cacd558d6b3142103d44b03f3886fe3e419b1b96521fa5a706bb1a4e003907daa381960d664a0006a0f4de671e13c37b24e29138ff9d3df3d55c3b822fedee8dcefd643a1deab7cda5aa1c20f31a0c2a1823c8de3e793f50b257833788b75609fb6c5c4a9cad225f3a981c4ff7b2",
     "credential_finalization": "0640114ec21fbad6da11c61dfa77a48026646a2a1bd091ef5c9dc46b45f9e53c72f5d714e026d808b6de8911947eef437e9f6a6e969e1ea13f2f4880adc7c879",
     "client_registration_state": "a70b37951d84ed312a0a8e025b71eafdd362b4e7db872881762d506a271b6e0770617373776f7264",
-    "client_login_state": "a70b37951d84ed312a0a8e025b71eafdd362b4e7db872881762d506a271b6e0700a728fb3aadbc2716844d8de562d35e61914da734dcea0fa6ebd79603ef9eff4e01488244dbf75f86ebaa30307773d3e0eabccb91be349abef8a69c458dbf236e4cecf819ef83351e4c75e016ef845b62a12c14f397328960574935a42e04e0fa42488244dbf75f86ebaa30307773d3e0eabccb91be349abef8a69c458dbf236e4c0005696e666f3108973113b27d6f2291aaaeb92f34a8438d279a48b1b412bddbf2785be660e47970617373776f7264",
+    "client_login_state": "a70b37951d84ed312a0a8e025b71eafdd362b4e7db872881762d506a271b6e070067ecf819ef83351e4c75e016ef845b62a12c14f397328960574935a42e04e0fa42488244dbf75f86ebaa30307773d3e0eabccb91be349abef8a69c458dbf236e4c0005696e666f3108973113b27d6f2291aaaeb92f34a8438d279a48b1b412bddbf2785be660e479004028fb3aadbc2716844d8de562d35e61914da734dcea0fa6ebd79603ef9eff4e01488244dbf75f86ebaa30307773d3e0eabccb91be349abef8a69c458dbf236e4c70617373776f7264",
     "server_registration_state": "1eaf3cdd64da67e17e3364182f00ed0c323bfb44b20a1b7e0025a0334ab6d40d",
     "server_login_state": "4952acf61167e6d0e799572827724fdf8c80bda8c62ac28deb68d125661dade2cc1136e634d5fb93f1de4d170ae3e2f5885e333ac3b72d630ab56618c2247fa4d5968eefd69cd270ed14fbcb39627fea9a93cd18175e1b5cfceb06f705bbcb5ecddcd0602aacd7cb358f3273b1099895210bf8baa37d2fab5ed8c092fe9e5739bc6c50cf08ca7d4f4107d48057507480e0c9534b4f04d77cd5156cbd112565d8a2d5beaa473003dcf8dd82d4046648a701c72afeed0f627fcb782627dfaed3ca",
     "password_file": "1eaf3cdd64da67e17e3364182f00ed0c323bfb44b20a1b7e0025a0334ab6d40dba8c7e239ed64ea1e6068b52cbd5a34ba6f55d635d20a4593884dc271865ea63015dba53e994e82b6d76353341102791cdfb1c2b460e1f913c5741a9c8cf2017c90022f11b89b207eb0735f2bdb2a9968bc9d7c1c962fd0274b4fc1fff2466c769d3710586a3a21ac8ecf13aafe2dc5460eb2f52d8f760396a17beeaf1ef3d1e4e50dd906555832fc51fc474554cb9ff063f6685f9043efc08fd6816666833d68d3b0eb6d9",
@@ -274,9 +275,9 @@ fn generate_parameters<CS: CipherSuite>() -> TestVectorParameters {
     rng.fill_bytes(&mut oprf_key_raw);
     let mut envelope_nonce = [0u8; 32];
     rng.fill_bytes(&mut envelope_nonce);
-    let mut client_nonce = [0u8; NONCE_LEN];
+    let mut client_nonce = vec![0u8; NonceLen::to_usize()];
     rng.fill_bytes(&mut client_nonce);
-    let mut server_nonce = [0u8; NONCE_LEN];
+    let mut server_nonce = vec![0u8; NonceLen::to_usize()];
     rng.fill_bytes(&mut server_nonce);
 
     let blinding_factor = CS::Group::random_scalar(&mut rng);
@@ -451,8 +452,8 @@ fn test_registration_response() -> Result<(), ProtocolError> {
     let server_registration_start_result =
         ServerRegistration::<RistrettoSha5123dhNoSlowHash>::start(
             &mut oprf_key_rng,
-            RegistrationRequest::deserialize(&parameters.registration_request[..]).unwrap(),
-            &Key::try_from(&parameters.server_s_pk[..]).unwrap(),
+            RegistrationRequest::deserialize(&parameters.registration_request[..])?,
+            &Key::try_from(&parameters.server_s_pk[..])?,
         )?;
     assert_eq!(
         hex::encode(parameters.registration_response),
@@ -477,7 +478,7 @@ fn test_registration_upload() -> Result<(), ProtocolError> {
     )?
     .finish(
         &mut finish_registration_rng,
-        RegistrationResponse::deserialize(&parameters.registration_response[..]).unwrap(),
+        RegistrationResponse::deserialize(&parameters.registration_response[..])?,
         ClientRegistrationFinishParameters::WithIdentifiers(parameters.id_u, parameters.id_s),
     )?;
 
@@ -500,8 +501,9 @@ fn test_password_file() -> Result<(), ProtocolError> {
     let server_registration = ServerRegistration::<RistrettoSha5123dhNoSlowHash>::try_from(
         &parameters.server_registration_state[..],
     )?;
-    let password_file = server_registration
-        .finish(RegistrationUpload::deserialize(&parameters.registration_upload[..]).unwrap())?;
+    let password_file = server_registration.finish(RegistrationUpload::deserialize(
+        &parameters.registration_upload[..],
+    )?)?;
 
     assert_eq!(
         hex::encode(parameters.password_file),
@@ -545,12 +547,11 @@ fn test_credential_response() -> Result<(), ProtocolError> {
         CycleRng::new([parameters.server_e_sk, parameters.server_nonce].concat());
     let server_login_start_result = ServerLogin::<RistrettoSha5123dhNoSlowHash>::start(
         &mut server_e_sk_and_nonce_rng,
-        ServerRegistration::try_from(&parameters.password_file[..]).unwrap(),
-        &Key::try_from(&parameters.server_s_sk[..]).unwrap(),
+        ServerRegistration::try_from(&parameters.password_file[..])?,
+        &Key::try_from(&parameters.server_s_sk[..])?,
         CredentialRequest::<RistrettoSha5123dhNoSlowHash>::deserialize(
             &parameters.credential_request[..],
-        )
-        .unwrap(),
+        )?,
         ServerLoginStartParameters::WithInfoAndIdentifiers(
             parameters.einfo2.to_vec(),
             parameters.id_u,
@@ -577,8 +578,7 @@ fn test_credential_finalization() -> Result<(), ProtocolError> {
     let parameters = populate_test_vectors(&serde_json::from_str(TEST_VECTOR).unwrap());
 
     let client_login_finish_result =
-        ClientLogin::<RistrettoSha5123dhNoSlowHash>::try_from(&parameters.client_login_state[..])
-            .unwrap()
+        ClientLogin::<RistrettoSha5123dhNoSlowHash>::try_from(&parameters.client_login_state[..])?
             .finish(
                 CredentialResponse::<RistrettoSha5123dhNoSlowHash>::deserialize(
                     &parameters.credential_response[..],

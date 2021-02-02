@@ -22,7 +22,6 @@ pub(crate) fn i2osp(input: usize, length: usize) -> Vec<u8> {
 // Corresponds to the OS2IP() function from RFC8017
 pub(crate) fn os2ip(input: &[u8]) -> Result<usize, PakeError> {
     if input.len() > std::mem::size_of::<usize>() {
-        // TODO:: check RFC compliance in refusing this
         return Err(PakeError::SerializationError);
     }
 
