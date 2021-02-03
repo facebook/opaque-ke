@@ -8,7 +8,7 @@
 
 use crate::errors::InternalPakeError;
 
-use curve25519_dalek::{
+use curve25519_dalek_ng::{
     constants::RISTRETTO_BASEPOINT_POINT,
     ristretto::{CompressedRistretto, RistrettoPoint},
     scalar::Scalar,

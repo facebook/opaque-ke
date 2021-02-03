@@ -13,11 +13,11 @@ readme = "README.md"
 default = ["u64_backend"]
 slow-hash = ["scrypt"]
 bench = []
-u64_backend = ["curve25519-dalek/u64_backend"]
-u32_backend = ["curve25519-dalek/u32_backend"]
+u64_backend = ["curve25519-dalek-ng/u64_backend"]
+u32_backend = ["curve25519-dalek-ng/u32_backend"]
 
 [dependencies]
-curve25519-dalek = { version = "3.0.0", default-features = false, features = ["std"] }
+curve25519-dalek-ng = { version = "4.0.0", default-features = false, features = ["std"] }
 digest = "0.9.0"
 displaydoc = "0.1.7"
 generic-array = "0.14.4"
@@ -48,9 +48,3 @@ rustyline = "7.0.0"
 name = "oprf"
 harness = false
 required-features = ["bench"]
-
-# TEMPORARY, DO NOT MERGE
-[patch.crates-io]
-x25519-dalek = { git = "https://github.com/PaulGrandperrin/x25519-dalek.git", branch="patch-1" }
-curve25519-dalek = { git = "https://github.com/PaulGrandperrin/curve25519-dalek.git", branch="patch-1" }
-

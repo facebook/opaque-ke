@@ -39,7 +39,7 @@ use opaque_ke::{
 #[allow(dead_code)]
 struct Default;
 impl CipherSuite for Default {
-    type Group = curve25519_dalek::ristretto::RistrettoPoint;
+    type Group = curve25519_dalek_ng::ristretto::RistrettoPoint;
     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
     type Hash = sha2::Sha512;
     type SlowHash = opaque_ke::slow_hash::NoOpHash;
@@ -47,7 +47,7 @@ impl CipherSuite for Default {
 
 // Password-based registration between a client and server
 fn account_registration(
-    server_kp: &opaque_ke::keypair::KeyPair<curve25519_dalek::ristretto::RistrettoPoint>,
+    server_kp: &opaque_ke::keypair::KeyPair<curve25519_dalek_ng::ristretto::RistrettoPoint>,
     password: String,
 ) -> Vec<u8> {
     let mut client_rng = OsRng;
@@ -89,7 +89,7 @@ fn account_registration(
 
 // Password-based login between a client and server
 fn account_login(
-    server_kp: &opaque_ke::keypair::KeyPair<curve25519_dalek::ristretto::RistrettoPoint>,
+    server_kp: &opaque_ke::keypair::KeyPair<curve25519_dalek_ng::ristretto::RistrettoPoint>,
     password: String,
     password_file_bytes: &[u8],
 ) -> bool {

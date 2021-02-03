@@ -5,7 +5,7 @@
 
 use crate::tests::mock_rng::CycleRng;
 use crate::{errors::*, group::Group, oprf};
-use curve25519_dalek::ristretto::RistrettoPoint;
+use curve25519_dalek_ng::ristretto::RistrettoPoint;
 use generic_array::GenericArray;
 use serde_json::Value;
 use sha2::Sha512;

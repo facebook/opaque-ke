@@ -7,7 +7,7 @@ use crate::{
     ciphersuite::CipherSuite, errors::*, key_exchange::tripledh::TripleDH, keypair::Key, opaque::*,
     slow_hash::NoOpHash, tests::mock_rng::CycleRng, *,
 };
-use curve25519_dalek::ristretto::RistrettoPoint;
+use curve25519_dalek_ng::ristretto::RistrettoPoint;
 use rand_core::OsRng;
 use serde_json::Value;
 use std::convert::TryFrom;

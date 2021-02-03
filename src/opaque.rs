@@ -116,7 +116,7 @@ impl<CS: CipherSuite> ClientRegistration<CS> {
     /// use opaque_ke::ciphersuite::CipherSuite;
     /// struct Default;
     /// impl CipherSuite for Default {
-    ///     type Group = curve25519_dalek::ristretto::RistrettoPoint;
+    ///     type Group = curve25519_dalek_ng::ristretto::RistrettoPoint;
     ///     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
     ///     type Hash = sha2::Sha512;
     ///     type SlowHash = opaque_ke::slow_hash::NoOpHash;
@@ -164,7 +164,7 @@ impl<CS: CipherSuite> ClientRegistration<CS> {
     /// use opaque_ke::ciphersuite::CipherSuite;
     /// struct Default;
     /// impl CipherSuite for Default {
-    ///     type Group = curve25519_dalek::ristretto::RistrettoPoint;
+    ///     type Group = curve25519_dalek_ng::ristretto::RistrettoPoint;
     ///     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
     ///     type Hash = sha2::Sha512;
     ///     type SlowHash = opaque_ke::slow_hash::NoOpHash;
@@ -322,7 +322,7 @@ impl<CS: CipherSuite> ServerRegistration<CS> {
     /// use opaque_ke::ciphersuite::CipherSuite;
     /// struct Default;
     /// impl CipherSuite for Default {
-    ///     type Group = curve25519_dalek::ristretto::RistrettoPoint;
+    ///     type Group = curve25519_dalek_ng::ristretto::RistrettoPoint;
     ///     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
     ///     type Hash = sha2::Sha512;
     ///     type SlowHash = opaque_ke::slow_hash::NoOpHash;
@@ -373,7 +373,7 @@ impl<CS: CipherSuite> ServerRegistration<CS> {
     /// use opaque_ke::ciphersuite::CipherSuite;
     /// struct Default;
     /// impl CipherSuite for Default {
-    ///     type Group = curve25519_dalek::ristretto::RistrettoPoint;
+    ///     type Group = curve25519_dalek_ng::ristretto::RistrettoPoint;
     ///     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
     ///     type Hash = sha2::Sha512;
     ///     type SlowHash = opaque_ke::slow_hash::NoOpHash;
@@ -522,7 +522,7 @@ impl<CS: CipherSuite> ClientLogin<CS> {
     /// use opaque_ke::ciphersuite::CipherSuite;
     /// struct Default;
     /// impl CipherSuite for Default {
-    ///     type Group = curve25519_dalek::ristretto::RistrettoPoint;
+    ///     type Group = curve25519_dalek_ng::ristretto::RistrettoPoint;
     ///     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
     ///     type Hash = sha2::Sha512;
     ///     type SlowHash = opaque_ke::slow_hash::NoOpHash;
@@ -572,7 +572,7 @@ impl<CS: CipherSuite> ClientLogin<CS> {
     /// use opaque_ke::ciphersuite::CipherSuite;
     /// struct Default;
     /// impl CipherSuite for Default {
-    ///     type Group = curve25519_dalek::ristretto::RistrettoPoint;
+    ///     type Group = curve25519_dalek_ng::ristretto::RistrettoPoint;
     ///     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
     ///     type Hash = sha2::Sha512;
     ///     type SlowHash = opaque_ke::slow_hash::NoOpHash;
@@ -727,7 +727,7 @@ impl<CS: CipherSuite> ServerLogin<CS> {
     /// use opaque_ke::ciphersuite::CipherSuite;
     /// struct Default;
     /// impl CipherSuite for Default {
-    ///     type Group = curve25519_dalek::ristretto::RistrettoPoint;
+    ///     type Group = curve25519_dalek_ng::ristretto::RistrettoPoint;
     ///     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
     ///     type Hash = sha2::Sha512;
     ///     type SlowHash = opaque_ke::slow_hash::NoOpHash;
@@ -832,7 +832,7 @@ impl<CS: CipherSuite> ServerLogin<CS> {
     /// use opaque_ke::ciphersuite::CipherSuite;
     /// struct Default;
     /// impl CipherSuite for Default {
-    ///     type Group = curve25519_dalek::ristretto::RistrettoPoint;
+    ///     type Group = curve25519_dalek_ng::ristretto::RistrettoPoint;
     ///     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
     ///     type Hash = sha2::Sha512;
     ///     type SlowHash = opaque_ke::slow_hash::NoOpHash;

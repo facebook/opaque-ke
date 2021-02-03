@@ -14,7 +14,7 @@ use crate::{
     tests::mock_rng::CycleRng,
     *,
 };
-use curve25519_dalek::ristretto::RistrettoPoint;
+use curve25519_dalek_ng::ristretto::RistrettoPoint;
 use generic_array::typenum::Unsigned;
 use generic_bytes::SizedBytes;
 use rand_core::{OsRng, RngCore};

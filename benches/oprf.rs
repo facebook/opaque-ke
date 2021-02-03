@@ -7,7 +7,7 @@
 extern crate criterion;
 
 use criterion::Criterion;
-use curve25519_dalek::ristretto::RistrettoPoint;
+use curve25519_dalek_ng::ristretto::RistrettoPoint;
 use generic_array::arr;
 use opaque_ke::{
     group::Group,

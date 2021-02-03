@@ -10,7 +10,7 @@ use crate::errors::InternalPakeError;
 use crate::group::Group;
 use crate::hash::Hash;
 use crate::serialization::i2osp;
-use curve25519_dalek::ristretto::RistrettoPoint;
+use curve25519_dalek_ng::ristretto::RistrettoPoint;
 use digest::{BlockInput, Digest};
 use generic_array::typenum::Unsigned;
 use generic_array::GenericArray;

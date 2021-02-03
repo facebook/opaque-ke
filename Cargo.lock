@@ -289,14 +289,15 @@ dependencies = [
 ]
 
 [[package]]
-name = "curve25519-dalek"
-version = "3.0.2"
-source = "git+https://github.com/PaulGrandperrin/curve25519-dalek.git?branch=patch-1#d0dacb2699fbf166ca7ae5c68518cb5f44e633e7"
+name = "curve25519-dalek-ng"
+version = "4.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "574d8b2cd0bae5434fd50d53280f8299d95557a978686555880aaf5b8f4f81e9"
 dependencies = [
  "byteorder",
  "digest",
  "rand_core 0.6.1",
- "subtle",
+ "subtle-ng",
  "zeroize",
 ]
 
@@ -576,7 +577,7 @@ dependencies = [
  "base64",
  "chacha20poly1305",
  "criterion",
- "curve25519-dalek",
+ "curve25519-dalek-ng",
  "digest",
  "displaydoc",
  "generic-array",
@@ -663,7 +664,8 @@ dependencies = [
 [[package]]
 name = "proptest"
 version = "0.10.1"
-source = "git+https://github.com/PaulGrandperrin/proptest.git?branch=master#e52c7a52969c64b22df94243b4fa4750c0bfd030"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "12e6c80c1139113c28ee4670dc50cc42915228b51f56a9e407f0ec60f966646f"
 dependencies = [
  "bit-set",
  "bitflags",
@@ -671,8 +673,8 @@ dependencies = [
  "lazy_static",
  "num-traits",
  "quick-error",
- "rand 0.8.3",
- "rand_chacha 0.3.0",
+ "rand 0.7.3",
+ "rand_chacha 0.2.2",
  "rand_xorshift",
  "regex-syntax",
  "rusty-fork",
@@ -700,6 +702,8 @@ version = "0.7.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6a6b1679d49b24bbfe0c803429aa1874472f50d9b363131f0e89fc356b544d03"
 dependencies = [
+ "getrandom 0.1.16",
+ "libc",
  "rand_chacha 0.2.2",
  "rand_core 0.5.1",
  "rand_hc 0.2.0",
@@ -775,11 +779,11 @@ dependencies = [
 
 [[package]]
 name = "rand_xorshift"
-version = "0.3.0"
+version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d25bf25ec5ae4a3f1b92f929810509a2f53d7dca2f50b794ff57e3face536c8f"
+checksum = "77d416b86801d23dde1aa643023b775c3a462efc0ed96443add11546cdf1dca8"
 dependencies = [
- "rand_core 0.6.1",
+ "rand_core 0.5.1",
 ]
 
 [[package]]
@@ -1018,6 +1022,12 @@ name = "subtle"
 version = "2.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1e81da0851ada1f3e9d4312c704aa4f8806f0f9d69faaf8df2f3464b4a9437c2"
+
+[[package]]
+name = "subtle-ng"
+version = "2.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8049cf85f0e715d6af38dde439cb0ccb91f67fb9f5f63c80f8b43e48356e1a3f"
 
 [[package]]
 name = "syn"
@@ -1261,8 +1271,3 @@ name = "zeroize"
 version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "81a974bcdd357f0dca4d41677db03436324d45a4c9ed2d0b873a5a360ce41c36"
-
-[[patch.unused]]
-name = "x25519-dalek"
-version = "1.1.0"
-source = "git+https://github.com/PaulGrandperrin/x25519-dalek.git?branch=patch-1#050034c98c84bfc6ed185147f3e769d0c38c702b"

@@ -16,7 +16,7 @@ use crate::{
     *,
 };
 
-use curve25519_dalek::ristretto::RistrettoPoint;
+use curve25519_dalek_ng::ristretto::RistrettoPoint;
 use generic_array::typenum::Unsigned;
 use generic_bytes::SizedBytes;
 use proptest::{collection::vec, prelude::*};

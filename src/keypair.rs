@@ -147,7 +147,7 @@ impl SizedBytes for Key {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use curve25519_dalek::ristretto::RistrettoPoint;
+    use curve25519_dalek_ng::ristretto::RistrettoPoint;
 
     proptest! {
         #[test]

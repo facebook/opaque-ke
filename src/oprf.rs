@@ -115,7 +115,7 @@ pub fn unblind_and_finalize_shim<G: GroupWithMapToCurve, H: Hash>(
 mod tests {
     use super::*;
     use crate::group::Group;
-    use curve25519_dalek::ristretto::RistrettoPoint;
+    use curve25519_dalek_ng::ristretto::RistrettoPoint;
     use generic_array::{arr, GenericArray};
     use rand_core::OsRng;
     use sha2::Sha512;

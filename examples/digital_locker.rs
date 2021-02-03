@@ -44,7 +44,7 @@ use opaque_ke::{
 #[allow(dead_code)]
 struct Default;
 impl CipherSuite for Default {
-    type Group = curve25519_dalek::ristretto::RistrettoPoint;
+    type Group = curve25519_dalek_ng::ristretto::RistrettoPoint;
     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
     type Hash = sha2::Sha512;
     type SlowHash = opaque_ke::slow_hash::NoOpHash;
@@ -81,7 +81,7 @@ fn decrypt(key: &[u8], ciphertext: &[u8]) -> Vec<u8> {
 
 // Password-based registration and encryption of client secret message between a client and server
 fn register_locker(
-    server_kp: &opaque_ke::keypair::KeyPair<curve25519_dalek::ristretto::RistrettoPoint>,
+    server_kp: &opaque_ke::keypair::KeyPair<curve25519_dalek_ng::ristretto::RistrettoPoint>,
     password: String,
     secret_message: String,
 ) -> Locker {
@@ -134,7 +134,7 @@ fn register_locker(
 
 // Open the contents of a locker with a password between a client and server
 fn open_locker(
-    server_kp: &opaque_ke::keypair::KeyPair<curve25519_dalek::ristretto::RistrettoPoint>,
+    server_kp: &opaque_ke::keypair::KeyPair<curve25519_dalek_ng::ristretto::RistrettoPoint>,
     password: String,
     locker: &Locker,
 ) -> Result<String, String> {
