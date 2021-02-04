@@ -27,7 +27,7 @@ use rand_core::{CryptoRng, RngCore};
 use std::{convert::TryFrom, marker::PhantomData};
 use zeroize::Zeroize;
 
-static STR_OPAQUE_VERSION: &[u8] = b"OPAQUE01";
+static STR_OPAQUE_VERSION: &[u8] = b"OPAQUE";
 
 // Registration
 // ============
