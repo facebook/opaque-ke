@@ -129,19 +129,18 @@ impl<D: Hash, G: Group> KeyExchange<D, G> for TripleDH {
         ]
         .concat();
 
-        let mut hasher2 = D::new();
-        hasher2.update(&transcript2);
-        let hashed_transcript_without_mac = hasher2.finalize();
+        let mut hasher = D::new();
+        hasher.update(&transcript2);
+        let hashed_transcript_without_mac = hasher.finalize_reset();
 
         let mut mac_hasher =
             Hmac::<D>::new_varkey(&km2).map_err(|_| InternalPakeError::HmacError)?;
         mac_hasher.update(&hashed_transcript_without_mac);
         let mac = mac_hasher.finalize().into_bytes();
 
-        let mut hasher3 = D::new();
-        hasher3.update(&transcript2);
-        hasher3.update(&mac);
-        let hashed_transcript = hasher3.finalize();
+        hasher.update(&transcript2);
+        hasher.update(&mac);
+        let hashed_transcript = hasher.finalize();
 
         Ok((
             ke1_message.info,
@@ -194,7 +193,7 @@ impl<D: Hash, G: Group> KeyExchange<D, G> for TripleDH {
 
         let mut hasher = D::new();
         hasher.update(&transcript);
-        let hashed_transcript_without_mac = hasher.finalize();
+        let hashed_transcript_without_mac = hasher.finalize_reset();
 
         let mut server_mac =
             Hmac::<D>::new_varkey(&km2).map_err(|_| InternalPakeError::HmacError)?;
@@ -206,10 +205,9 @@ impl<D: Hash, G: Group> KeyExchange<D, G> for TripleDH {
             ));
         }
 
-        let mut hasher2 = D::new();
-        hasher2.update(transcript);
-        hasher2.update(ke2_message.mac.to_vec());
-        let hashed_transcript = hasher2.finalize();
+        hasher.update(transcript);
+        hasher.update(ke2_message.mac.to_vec());
+        let hashed_transcript = hasher.finalize();
 
         let mut client_mac =
             Hmac::<D>::new_varkey(&km3).map_err(|_| InternalPakeError::HmacError)?;
