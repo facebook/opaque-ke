@@ -84,17 +84,16 @@ pub(crate) fn expand_message_xmd<H: Hash>(
     h.update(&b[0]);
     h.update(&i2osp(1, 1));
     h.update(&dst_prime);
-    b.push(h.finalize().to_vec()); // b[1]
+    b.push(h.finalize_reset().to_vec()); // b[1]
 
     let mut uniform_bytes: Vec<u8> = Vec::new();
     uniform_bytes.extend_from_slice(&b[1]);
 
     for i in 2..(ell + 1) {
-        let mut h = H::new();
         h.update(xor(&b[0], &b[i - 1])?);
         h.update(&i2osp(i, 1));
         h.update(&dst_prime);
-        b.push(h.finalize().to_vec()); // b[i]
+        b.push(h.finalize_reset().to_vec()); // b[i]
         uniform_bytes.extend_from_slice(&b[i]);
     }
 
