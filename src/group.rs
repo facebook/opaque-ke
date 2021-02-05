@@ -79,7 +79,11 @@ impl Group for RistrettoPoint {
     }
     fn random_scalar<R: RngCore + CryptoRng>(rng: &mut R) -> Self::Scalar {
         #[cfg(not(test))]
-        return Scalar::random(rng);
+        {
+            let mut scalar_bytes = [0u8; 64];
+            rng.fill_bytes(&mut scalar_bytes);
+            Scalar::from_bytes_mod_order_wide(&scalar_bytes)
+        }
 
         // Tests need an exact conversion from bytes to scalar, sampling only 32 bytes from rng
         #[cfg(test)]
