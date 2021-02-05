@@ -25,7 +25,7 @@ generic-bytes = { version = "0.1.0" }
 generic-bytes-derive = { version = "0.1.0" }
 hkdf = "0.10.0"
 hmac = "0.10.1"
-rand_core = "0.5.1"
+rand_core = { version = "0.6.0", features = ["getrandom"] }
 scrypt = { version = "0.5.0", optional = true }
 subtle = { version = "2.3.0", default-features = false }
 thiserror = "1.0.22"
@@ -41,7 +41,7 @@ lazy_static = "1.4.0"
 serde_json = "1.0.60"
 sha2 = "0.9.2"
 proptest = "0.10.1"
-rand = "0.7"
+rand = "0.8"
 rustyline = "7.0.0"
 
 [[bench]]
