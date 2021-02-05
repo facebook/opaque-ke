@@ -79,7 +79,7 @@ fn server_registration_roundtrip() {
 
     // Construct a mock envelope
     let mut mock_envelope_bytes = Vec::new();
-    mock_envelope_bytes.extend_from_slice(&[0; 1]); // mode = 0
+    mock_envelope_bytes.extend_from_slice(&[1; 1]); // mode = 1
     mock_envelope_bytes.extend_from_slice(&vec![0; NonceLen::to_usize()]); // empty nonce
     mock_envelope_bytes.extend_from_slice(&[0, 0]); // empty ciphertext
     mock_envelope_bytes.extend_from_slice(&[0; MAC_SIZE]); // length-MAC_SIZE hmac

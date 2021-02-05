@@ -24,16 +24,16 @@ const NONCE_LEN: usize = 32;
 
 #[derive(Clone, Copy, PartialEq)]
 pub(crate) enum InnerEnvelopeMode {
-    Base = 0,
-    CustomIdentifier = 1,
+    Base = 1,
+    CustomIdentifier = 2,
 }
 
 impl TryFrom<u8> for InnerEnvelopeMode {
     type Error = PakeError;
     fn try_from(x: u8) -> Result<Self, Self::Error> {
         match x {
-            0 => Ok(InnerEnvelopeMode::Base),
-            1 => Ok(InnerEnvelopeMode::CustomIdentifier),
+            1 => Ok(InnerEnvelopeMode::Base),
+            2 => Ok(InnerEnvelopeMode::CustomIdentifier),
             _ => Err(PakeError::SerializationError),
         }
     }
