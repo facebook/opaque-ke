@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.3.0 (February 8, 2020)
+
+* General API and documentation improvements, including the support of custom
+  identifiers, optional result parameters, and the use of the export key
+* Compliance with RFC 8017 on data serialization functions (I2OSP / OS2IP)
+* Adherence to protocol format described in
+  https://tools.ietf.org/html/draft-irtf-cfrg-opaque-02
+* Added parameters for key exchange additional data
+* Added simple_login and digital_locker examples
+
 ## 0.2.1 (October 22, 2020)
 
 * Changed visibility of hash module to be public
