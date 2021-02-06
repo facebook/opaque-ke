@@ -184,13 +184,13 @@ fn open_locker(
 
     // Server sends locker contents, encrypted under the session key, to the client
     let encrypted_locker_contents =
-        encrypt(&server_login_finish_result.shared_secret, &locker.contents);
+        encrypt(&server_login_finish_result.session_key, &locker.contents);
 
-    // Client decrypts contents of locker, first under the shared secret, and then under the export key
+    // Client decrypts contents of locker, first under the session key, and then under the export key
     let plaintext = decrypt(
         &client_login_finish_result.export_key,
         &decrypt(
-            &client_login_finish_result.shared_secret,
+            &client_login_finish_result.session_key,
             &encrypted_locker_contents,
         ),
     );

@@ -63,7 +63,7 @@ pub struct TestVectorParameters {
     server_login_state: Vec<u8>,
     pub password_file: Vec<u8>,
     pub export_key: Vec<u8>,
-    pub shared_secret: Vec<u8>,
+    pub session_key: Vec<u8>,
 }
 
 static TEST_VECTOR: &str = r#"
@@ -98,7 +98,7 @@ static TEST_VECTOR: &str = r#"
     "server_login_state": "761333eea593c396021c3930fb36cf97aad7c7ea00f1ff983e4df9ca002885017161427303fddb4508c9136a67612e01b673ed88b1de49ed6628d0a77e43c590595f53bf0b0766c165b876173c509efc982868d3860df5dad3f0753477ec9bdd103b71dab9540537f2b10964da82032a6339da6d663a409f4e8e5dea03e3653bb6202f265ed814df39f446486197e1c6091ec6b74200f18df5eef59813ff7f245d69b34e8843be496630921601ab784b1f3ccbfe2ff014ea132199c5c76deda7",
     "password_file": "f386e8710c12c870a0ec74f09364811142050a5266ca53d36c11e369343a5e092c3247e1d7fcf2bef09a0c6e771c44fe922f36deb5726998c89f7816323bc373022338be69855ad2a280ab5ed67fb04cd96691841241dbb4873ca776adc60d1c930022576b449b09abeb68d5f6c56082b0c2f560c636bff4f0af3b44b6377045201b545598d319af3122041f06e3ab86371bff6c0727557c77d20efeb9a0b9f24573e3646735eeebed45e741d11d0120741af27b04c2716eb6bdfe950daff937cfcae8569e",
     "export_key": "96b95891f06c7f02ab9c508f30e1a82ddea25e2f4fc4ffdafeb199ee65e24e418b2648a201e889eaf84301a1a8d0c3b7fea0ec8d4611686e6daee12430f60c05",
-    "shared_secret": "b6202f265ed814df39f446486197e1c6091ec6b74200f18df5eef59813ff7f245d69b34e8843be496630921601ab784b1f3ccbfe2ff014ea132199c5c76deda7"
+    "session_key": "b6202f265ed814df39f446486197e1c6091ec6b74200f18df5eef59813ff7f245d69b34e8843be496630921601ab784b1f3ccbfe2ff014ea132199c5c76deda7"
 }
 "#;
 
@@ -140,7 +140,7 @@ fn populate_test_vectors(values: &Value) -> TestVectorParameters {
         server_login_state: decode(&values, "server_login_state").unwrap(),
         password_file: decode(&values, "password_file").unwrap(),
         export_key: decode(&values, "export_key").unwrap(),
-        shared_secret: decode(&values, "shared_secret").unwrap(),
+        session_key: decode(&values, "session_key").unwrap(),
     }
 }
 
@@ -255,7 +255,7 @@ fn stringify_test_vectors(p: &TestVectorParameters) -> String {
         .as_str(),
     );
     s.push_str(format!("\"export_key\": \"{}\",\n", hex::encode(&p.export_key)).as_str());
-    s.push_str(format!("\"shared_secret\": \"{}\"\n", hex::encode(&p.shared_secret)).as_str());
+    s.push_str(format!("\"session_key\": \"{}\"\n", hex::encode(&p.session_key)).as_str());
     s.push_str("}\n");
     s
 }
@@ -417,7 +417,7 @@ fn generate_parameters<CS: CipherSuite>() -> TestVectorParameters {
         server_registration_state,
         client_login_state,
         server_login_state,
-        shared_secret: client_login_finish_result.shared_secret,
+        session_key: client_login_finish_result.session_key,
         export_key: client_registration_finish_result.export_key.to_vec(),
     }
 }
@@ -595,8 +595,8 @@ fn test_credential_finalization() -> Result<(), ProtocolError> {
         hex::encode(&client_login_finish_result.server_s_pk.to_arr().to_vec())
     );
     assert_eq!(
-        hex::encode(&parameters.shared_secret),
-        hex::encode(&client_login_finish_result.shared_secret)
+        hex::encode(&parameters.session_key),
+        hex::encode(&client_login_finish_result.session_key)
     );
     assert_eq!(
         hex::encode(&parameters.credential_finalization),
@@ -621,8 +621,8 @@ fn test_server_login_finish() -> Result<(), ProtocolError> {
             )?)?;
 
     assert_eq!(
-        hex::encode(parameters.shared_secret),
-        hex::encode(server_login_result.shared_secret)
+        hex::encode(parameters.session_key),
+        hex::encode(server_login_result.session_key)
     );
 
     Ok(())
@@ -679,8 +679,8 @@ fn test_complete_flow(
             .finish(client_login_finish_result.message)?;
 
         assert_eq!(
-            hex::encode(server_login_finish_result.shared_secret),
-            hex::encode(client_login_finish_result.shared_secret)
+            hex::encode(server_login_finish_result.session_key),
+            hex::encode(client_login_finish_result.session_key)
         );
         assert_eq!(
             hex::encode(client_registration_finish_result.export_key),

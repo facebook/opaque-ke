@@ -497,8 +497,8 @@ impl Default for ClientLoginFinishParameters {
 pub struct ClientLoginFinishResult<CS: CipherSuite> {
     /// The message to send to the server to complete the protocol
     pub message: CredentialFinalization<CS>,
-    /// The shared session secret
-    pub shared_secret: Vec<u8>,
+    /// The session key
+    pub session_key: Vec<u8>,
     /// The client-side export key
     pub export_key: GenericArray<u8, <CS::Hash as Digest>::OutputSize>,
     /// The server's static public key
@@ -631,7 +631,7 @@ impl<CS: CipherSuite> ClientLogin<CS> {
         ]
         .concat();
 
-        let (confidential_info, shared_secret, ke3_message) = CS::KeyExchange::generate_ke3(
+        let (confidential_info, session_key, ke3_message) = CS::KeyExchange::generate_ke3(
             l2_bytes,
             l2.ke2_message,
             &self.ke1_state,
@@ -645,7 +645,7 @@ impl<CS: CipherSuite> ClientLogin<CS> {
         Ok(ClientLoginFinishResult {
             confidential_info,
             message: CredentialFinalization { ke3_message },
-            shared_secret,
+            session_key,
             export_key: opened_envelope.export_key.clone(),
             server_s_pk: l2.server_s_pk,
         })
@@ -700,8 +700,8 @@ pub struct ServerLoginStartResult<CS: CipherSuite> {
 
 /// Contains the fields that are returned by a server login finish
 pub struct ServerLoginFinishResult {
-    /// The shared session secret between client and server
-    pub shared_secret: Vec<u8>,
+    /// The session key between client and server
+    pub session_key: Vec<u8>,
 }
 
 impl<CS: CipherSuite> ServerLogin<CS> {
@@ -854,7 +854,7 @@ impl<CS: CipherSuite> ServerLogin<CS> {
         &self,
         message: CredentialFinalization<CS>,
     ) -> Result<ServerLoginFinishResult, ProtocolError> {
-        let shared_secret = <CS::KeyExchange as KeyExchange<CS::Hash, CS::Group>>::finish_ke(
+        let session_key = <CS::KeyExchange as KeyExchange<CS::Hash, CS::Group>>::finish_ke(
             message.ke3_message,
             &self.ke2_state,
         )
@@ -865,7 +865,7 @@ impl<CS: CipherSuite> ServerLogin<CS> {
             err => err,
         })?;
 
-        Ok(ServerLoginFinishResult { shared_secret })
+        Ok(ServerLoginFinishResult { session_key })
     }
 }
 

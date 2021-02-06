@@ -36,7 +36,7 @@ static STR_HANDSHAKE_SECRET: &[u8] = b"handshake secret";
 static STR_SERVER_MAC: &[u8] = b"server mac";
 static STR_SERVER_ENC: &[u8] = b"handshake enc";
 static STR_ENCRYPTION_PAD: &[u8] = b"encryption pad";
-static STR_SESSION_SECRET: &[u8] = b"session secret";
+static STR_SESSION_KEY: &[u8] = b"session secret";
 static STR_OPAQUE: &[u8] = b"OPAQUE ";
 
 /// The Triple Diffie-Hellman key exchange implementation
@@ -94,7 +94,7 @@ impl<D: Hash, G: Group> KeyExchange<D, G> for TripleDH {
             GenericArray::clone_from_slice(&server_nonce_bytes)
         };
 
-        let (session_secret, km2, ke2, km3) = derive_3dh_keys::<D, G>(
+        let (session_key, km2, ke2, km3) = derive_3dh_keys::<D, G>(
             TripleDHComponents {
                 pk1: ke1_message.client_e_pk.clone(),
                 sk1: server_e_kp.private().clone(),
@@ -147,7 +147,7 @@ impl<D: Hash, G: Group> KeyExchange<D, G> for TripleDH {
             KE2State {
                 km3,
                 hashed_transcript,
-                session_secret,
+                session_key,
             },
             KE2Message {
                 server_nonce,
@@ -169,7 +169,7 @@ impl<D: Hash, G: Group> KeyExchange<D, G> for TripleDH {
         id_u: Vec<u8>,
         id_s: Vec<u8>,
     ) -> Result<(Vec<u8>, Vec<u8>, Self::KE3Message), ProtocolError> {
-        let (session_secret, km2, ke2, km3) = derive_3dh_keys::<D, G>(
+        let (session_key, km2, ke2, km3) = derive_3dh_keys::<D, G>(
             TripleDHComponents {
                 pk1: ke2_message.server_e_pk.clone(),
                 sk1: ke1_state.client_e_sk.clone(),
@@ -226,7 +226,7 @@ impl<D: Hash, G: Group> KeyExchange<D, G> for TripleDH {
 
         Ok((
             plaintext,
-            session_secret.to_vec(),
+            session_key.to_vec(),
             KE3Message {
                 mac: client_mac.finalize().into_bytes(),
             },
@@ -248,7 +248,7 @@ impl<D: Hash, G: Group> KeyExchange<D, G> for TripleDH {
             ));
         }
 
-        Ok(ke2_state.session_secret.to_vec())
+        Ok(ke2_state.session_key.to_vec())
     }
 
     fn ke2_message_size() -> usize {
@@ -328,7 +328,7 @@ impl TryFrom<&[u8]> for KE1Message {
 pub struct KE2State<HashLen: ArrayLength<u8>> {
     km3: GenericArray<u8, HashLen>,
     hashed_transcript: GenericArray<u8, HashLen>,
-    session_secret: GenericArray<u8, HashLen>,
+    session_key: GenericArray<u8, HashLen>,
 }
 
 /// The second key exchange message
@@ -344,7 +344,7 @@ impl<HashLen: ArrayLength<u8>> ToBytes for KE2State<HashLen> {
         [
             &self.km3[..],
             &self.hashed_transcript[..],
-            &self.session_secret[..],
+            &self.session_key[..],
         ]
         .concat()
     }
@@ -362,9 +362,7 @@ impl<HashLen: ArrayLength<u8>> TryFrom<&[u8]> for KE2State<HashLen> {
             hashed_transcript: GenericArray::clone_from_slice(
                 &checked_bytes[hash_len..2 * hash_len],
             ),
-            session_secret: GenericArray::clone_from_slice(
-                &checked_bytes[2 * hash_len..3 * hash_len],
-            ),
+            session_key: GenericArray::clone_from_slice(&checked_bytes[2 * hash_len..3 * hash_len]),
         })
     }
 }
@@ -419,7 +417,7 @@ struct TripleDHComponents {
     sk3: Key,
 }
 
-// Consists of a shared secret, followed by two mac keys and an encryption key: (session_secret, km2, ke2, km3)
+// Consists of a session key, followed by two mac keys and an encryption key: (session_key, km2, ke2, km3)
 type TripleDHDerivationResult<D> = (
     GenericArray<u8, <D as FixedOutput>::OutputSize>,
     GenericArray<u8, <D as FixedOutput>::OutputSize>,
@@ -453,7 +451,7 @@ impl<HashLen: ArrayLength<u8>> TryFrom<&[u8]> for KE3Message<HashLen> {
 // Helper functions
 
 // Internal function which takes the public and private components of the client and server keypairs, along
-// with some auxiliary metadata, to produce the shared secret and two MAC keys
+// with some auxiliary metadata, to produce the session key and two MAC keys
 fn derive_3dh_keys<D: Hash, G: Group>(
     dh: TripleDHComponents,
     client_nonce: &GenericArray<u8, NonceLen>,
@@ -479,7 +477,7 @@ fn derive_3dh_keys<D: Hash, G: Group>(
 
     let extracted_ikm = Hkdf::<D>::new(None, &ikm);
     let handshake_secret = derive_secrets::<D>(&extracted_ikm, &STR_HANDSHAKE_SECRET, &info)?;
-    let session_secret = derive_secrets::<D>(&extracted_ikm, &STR_SESSION_SECRET, &info)?;
+    let session_key = derive_secrets::<D>(&extracted_ikm, &STR_SESSION_KEY, &info)?;
 
     let km2 = hkdf_expand_label::<D>(
         &handshake_secret,
@@ -501,7 +499,7 @@ fn derive_3dh_keys<D: Hash, G: Group>(
     )?;
 
     Ok((
-        GenericArray::clone_from_slice(&session_secret),
+        GenericArray::clone_from_slice(&session_key),
         GenericArray::clone_from_slice(&km2),
         GenericArray::clone_from_slice(&ke2),
         GenericArray::clone_from_slice(&km3),

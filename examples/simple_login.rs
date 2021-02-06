@@ -137,7 +137,7 @@ fn account_login(
         .finish(CredentialFinalization::deserialize(&credential_finalization_bytes[..]).unwrap())
         .unwrap();
 
-    client_login_finish_result.shared_secret == server_login_finish_result.shared_secret
+    client_login_finish_result.session_key == server_login_finish_result.session_key
 }
 
 fn main() {
