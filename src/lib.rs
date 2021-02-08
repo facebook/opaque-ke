@@ -14,9 +14,8 @@
 //! to be kept consistent throughout protocol execution. These include:
 //! * a finite cyclic group along with a point representation,
 //! * a key exchange protocol,
-//! * a hashing function,
-//! * a slow hashing function, and
-//! * an authenticated encryption algorithm.
+//! * a hashing function, and
+//! * a slow hashing function.
 //!
 //! We will use the following choices in this example:
 //! ```
@@ -293,7 +292,7 @@
 //! In the third step of login, the client takes as input a [CredentialResponse] from the server.
 //! The client runs [ClientLogin::finish] and produces an output consisting of
 //! a [CredentialFinalization] to be sent to the server to complete the protocol,
-//! the `shared_secret` sequence of bytes which will match the server's shared secret upon a successful login.
+//! the `session_key` sequence of bytes which will match the server's session key upon a successful login.
 //! ```
 //! # use opaque_ke::{
 //! #   errors::ProtocolError,
@@ -340,7 +339,7 @@
 //!
 //! ### Server Login Finish
 //! In the fourth step of login, the server takes as input a [CredentialFinalization] from the client and runs [ServerLogin::finish] to
-//! produce an output consisting of the `shared_secret` sequence of bytes which will match the client's shared secret upon a successful login.
+//! produce an output consisting of the `session_key` sequence of bytes which will match the client's session key upon a successful login.
 //! ```
 //! # use opaque_ke::{
 //! #   errors::ProtocolError,
@@ -387,13 +386,13 @@
 //! )?;
 //!
 //! assert_eq!(
-//!    client_login_finish_result.shared_secret,
-//!    server_login_finish_result.shared_secret,
+//!    client_login_finish_result.session_key,
+//!    server_login_finish_result.session_key,
 //! );
 //! # Ok::<(), ProtocolError>(())
 //! ```
-//! If the protocol completes successfully, then the server obtains a `server_login_finish_result.shared_secret` which is guaranteed to
-//! match `client_login_finish_result.shared_secret` (see the [Shared Secret](#shared-secret) section).
+//! If the protocol completes successfully, then the server obtains a `server_login_finish_result.session_key` which is guaranteed to
+//! match `client_login_finish_result.session_key` (see the [Session Key](#session-key) section).
 //! Otherwise, on failure, the [ServerLogin::finish] algorithm outputs the error [InvalidLoginError](errors::PakeError::InvalidLoginError).
 //!
 //! # Advanced Usage
@@ -402,14 +401,14 @@
 //! execution of the main protocol, but can provide additional security benefits which can be suitable for various applications that rely on
 //! OPAQUE for authentication.
 //!
-//! ## Shared Secret
+//! ## Session Key
 //!
 //! Upon a successful completion of the OPAQUE protocol (the client runs login with the same password used during registration),
-//! the client and server have access to a shared secret, which is a pseudorandomly distributed 32-byte string which only the client
-//! and server know. Multiple login runs using the same password for the same client will produce different shared secrets, distributed
-//! as uniformly random strings. Thus, the shared secret can be used as a session secret for a secure channel between the client and server.
+//! the client and server have access to a session key, which is a pseudorandomly distributed 32-byte string which only the client
+//! and server know. Multiple login runs using the same password for the same client will produce different session keys, distributed
+//! as uniformly random strings. Thus, the session key can be used to establish a secure channel between the client and server.
 //!
-//! The shared secret can be accessed from the `shared_secret` field of [ClientLoginFinishResult] and [ServerLoginFinishResult]. See
+//! The session key can be accessed from the `session_key` field of [ClientLoginFinishResult] and [ServerLoginFinishResult]. See
 //! the combination of [Client Login Finish](#client-login-finish) and [Server Login Finish](#server-login-finish) for example usage.
 //!
 //! ## Checking Server Consistency
@@ -557,7 +556,7 @@
 //! By default, neither of these public identifiers need to be supplied to the OPAQUE protocol.
 //!
 //! But, for applications that wish to cryptographically bind these identities to
-//! the registered password file as well as the shared secret output by the login phase, these custom identifiers can be specified through
+//! the registered password file as well as the session key output by the login phase, these custom identifiers can be specified through
 //! [ClientRegistrationFinishParameters::WithIdentifiers] in [Client Registration Finish](#client-registration-finish):
 //! ```
 //! # use opaque_ke::{

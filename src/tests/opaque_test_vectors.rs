@@ -523,7 +523,7 @@ fn test_ke3() -> Result<(), ProtocolError> {
         );
         assert_eq!(
             hex::encode(&parameters.session_key),
-            hex::encode(&client_login_finish_result.shared_secret)
+            hex::encode(&client_login_finish_result.session_key)
         );
         assert_eq!(
             hex::encode(&parameters.KE3),
@@ -567,7 +567,7 @@ fn test_server_login_finish() -> Result<(), ProtocolError> {
 
         assert_eq!(
             hex::encode(parameters.session_key),
-            hex::encode(server_login_result.shared_secret)
+            hex::encode(server_login_result.session_key)
         );
     }
     Ok(())
