@@ -47,7 +47,7 @@
 //! #     type Hash = sha2::Sha512;
 //! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
 //! # }
-//! use rand_core::{OsRng, RngCore};
+//! use rand::{rngs::OsRng, RngCore};
 //! let mut rng = OsRng;
 //! let server_kp = Default::generate_random_keypair(&mut rng);
 //! # Ok::<(), ProtocolError>(())
@@ -80,7 +80,7 @@
 //! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
 //! # }
 //! use opaque_ke::ClientRegistration;
-//! use rand_core::{OsRng, RngCore};
+//! use rand::{rngs::OsRng, RngCore};
 //! let mut client_rng = OsRng;
 //! let client_registration_start_result = ClientRegistration::<Default>::start(
 //!     &mut client_rng,
@@ -109,7 +109,7 @@
 //! #     type Hash = sha2::Sha512;
 //! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
 //! # }
-//! # use rand_core::{OsRng, RngCore};
+//! # use rand::{rngs::OsRng, RngCore};
 //! # let mut client_rng = OsRng;
 //! # let client_registration_start_result = ClientRegistration::<Default>::start(
 //! #     &mut client_rng,
@@ -146,7 +146,7 @@
 //! #     type Hash = sha2::Sha512;
 //! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
 //! # }
-//! # use rand_core::{OsRng, RngCore};
+//! # use rand::{rngs::OsRng, RngCore};
 //! # let mut client_rng = OsRng;
 //! # let client_registration_start_result = ClientRegistration::<Default>::start(
 //! #     &mut client_rng,
@@ -184,7 +184,7 @@
 //! #     type Hash = sha2::Sha512;
 //! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
 //! # }
-//! # use rand_core::{OsRng, RngCore};
+//! # use rand::{rngs::OsRng, RngCore};
 //! # let mut client_rng = OsRng;
 //! # let client_registration_start_result = ClientRegistration::<Default>::start(
 //! #     &mut client_rng,
@@ -225,7 +225,7 @@
 //! #     type Hash = sha2::Sha512;
 //! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
 //! # }
-//! # use rand_core::{OsRng, RngCore};
+//! # use rand::{rngs::OsRng, RngCore};
 //! use opaque_ke::{ClientLogin, ClientLoginStartParameters};
 //! let mut client_rng = OsRng;
 //! let client_login_start_result = ClientLogin::<Default>::start(
@@ -258,7 +258,7 @@
 //! #     type Hash = sha2::Sha512;
 //! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
 //! # }
-//! # use rand_core::{OsRng, RngCore};
+//! # use rand::{rngs::OsRng, RngCore};
 //! # let mut client_rng = OsRng;
 //! # let client_registration_start_result = ClientRegistration::<Default>::start(
 //! #     &mut client_rng,
@@ -307,7 +307,7 @@
 //! #     type Hash = sha2::Sha512;
 //! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
 //! # }
-//! # use rand_core::{OsRng, RngCore};
+//! # use rand::{rngs::OsRng, RngCore};
 //! # let mut client_rng = OsRng;
 //! # let client_registration_start_result = ClientRegistration::<Default>::start(
 //! #     &mut client_rng,
@@ -354,7 +354,7 @@
 //! #     type Hash = sha2::Sha512;
 //! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
 //! # }
-//! # use rand_core::{OsRng, RngCore};
+//! # use rand::{rngs::OsRng, RngCore};
 //! # let mut client_rng = OsRng;
 //! # let client_registration_start_result = ClientRegistration::<Default>::start(
 //! #     &mut client_rng,
@@ -430,7 +430,7 @@
 //! #     type Hash = sha2::Sha512;
 //! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
 //! # }
-//! # use rand_core::{OsRng, RngCore};
+//! # use rand::{rngs::OsRng, RngCore};
 //! # let mut client_rng = OsRng;
 //! # let client_registration_start_result = ClientRegistration::<Default>::start(
 //! #     &mut client_rng,
@@ -507,7 +507,7 @@
 //! #     type Hash = sha2::Sha512;
 //! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
 //! # }
-//! # use rand_core::{OsRng, RngCore};
+//! # use rand::{rngs::OsRng, RngCore};
 //! # let mut client_rng = OsRng;
 //! # let client_registration_start_result = ClientRegistration::<Default>::start(
 //! #     &mut client_rng,
@@ -572,7 +572,7 @@
 //! #     type Hash = sha2::Sha512;
 //! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
 //! # }
-//! # use rand_core::{OsRng, RngCore};
+//! # use rand::{rngs::OsRng, RngCore};
 //! # let mut client_rng = OsRng;
 //! # let client_registration_start_result = ClientRegistration::<Default>::start(
 //! #     &mut client_rng,
@@ -607,7 +607,7 @@
 //! #     type Hash = sha2::Sha512;
 //! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
 //! # }
-//! # use rand_core::{OsRng, RngCore};
+//! # use rand::{rngs::OsRng, RngCore};
 //! # let mut client_rng = OsRng;
 //! # let client_registration_start_result = ClientRegistration::<Default>::start(
 //! #     &mut client_rng,
@@ -655,7 +655,7 @@
 //! #     type Hash = sha2::Sha512;
 //! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
 //! # }
-//! # use rand_core::{OsRng, RngCore};
+//! # use rand::{rngs::OsRng, RngCore};
 //! # let mut client_rng = OsRng;
 //! # let client_registration_start_result = ClientRegistration::<Default>::start(
 //! #     &mut client_rng,
@@ -748,6 +748,8 @@ mod serialization;
 mod tests;
 
 // Exports
+
+pub use rand;
 
 pub use crate::messages::{
     CredentialFinalization, CredentialRequest, CredentialResponse, RegistrationRequest,

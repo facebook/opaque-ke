@@ -17,7 +17,7 @@ use crate::{
 use curve25519_dalek::ristretto::RistrettoPoint;
 use generic_array::typenum::Unsigned;
 use generic_bytes::SizedBytes;
-use rand_core::{OsRng, RngCore};
+use rand::{rngs::OsRng, RngCore};
 use serde_json::Value;
 use std::convert::TryFrom;
 

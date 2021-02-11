@@ -19,7 +19,7 @@ use generic_array::{
 };
 use std::convert::TryInto;
 
-use rand_core::{CryptoRng, RngCore};
+use rand::{CryptoRng, RngCore};
 use std::ops::Mul;
 use zeroize::Zeroize;
 

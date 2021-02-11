@@ -9,7 +9,7 @@ use crate::{
     hash::Hash,
     keypair::Key,
 };
-use rand_core::{CryptoRng, RngCore};
+use rand::{CryptoRng, RngCore};
 
 use std::convert::TryFrom;
 

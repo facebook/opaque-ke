@@ -9,7 +9,7 @@ use crate::{
 };
 use digest::Digest;
 use generic_array::GenericArray;
-use rand_core::{CryptoRng, RngCore};
+use rand::{CryptoRng, RngCore};
 
 /// Used to store the OPRF input and blinding factor
 pub struct Token<Grp: Group> {
@@ -117,7 +117,7 @@ mod tests {
     use crate::group::Group;
     use curve25519_dalek::ristretto::RistrettoPoint;
     use generic_array::{arr, GenericArray};
-    use rand_core::OsRng;
+    use rand::rngs::OsRng;
     use sha2::Sha512;
 
     fn prf(input: &[u8], oprf_key: &[u8; 32]) -> GenericArray<u8, <Sha512 as Digest>::OutputSize> {

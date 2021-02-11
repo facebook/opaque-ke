@@ -589,7 +589,6 @@ dependencies = [
  "lazy_static",
  "proptest",
  "rand 0.8.3",
- "rand_core 0.6.1",
  "rustyline",
  "scrypt",
  "serde_json",

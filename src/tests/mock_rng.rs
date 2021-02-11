@@ -3,7 +3,7 @@
 // This source code is licensed under the MIT license found in the
 // LICENSE file in the root directory of this source tree.
 
-use rand_core::{CryptoRng, Error, RngCore};
+use rand::{CryptoRng, Error, RngCore};
 use std::cmp::min;
 
 /// A simple implementation of `RngCore` for testing purposes.

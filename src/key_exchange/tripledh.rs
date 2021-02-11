@@ -23,7 +23,7 @@ use generic_array::{
 use generic_bytes::SizedBytes;
 use hkdf::Hkdf;
 use hmac::{Hmac, Mac, NewMac};
-use rand_core::{CryptoRng, RngCore};
+use rand::{CryptoRng, RngCore};
 
 use std::convert::TryFrom;
 

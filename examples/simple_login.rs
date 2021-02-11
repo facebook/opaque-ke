@@ -20,7 +20,6 @@
 //! messages over "the wire" to the server. These bytes are serialized
 //! and explicitly annotated in the below functions.
 
-use rand_core::OsRng;
 use rustyline::error::ReadlineError;
 use rustyline::Editor;
 use std::collections::HashMap;
@@ -28,10 +27,11 @@ use std::convert::TryFrom;
 use std::process::exit;
 
 use opaque_ke::{
-    ciphersuite::CipherSuite, ClientLogin, ClientLoginFinishParameters, ClientLoginStartParameters,
-    ClientRegistration, ClientRegistrationFinishParameters, CredentialFinalization,
-    CredentialRequest, CredentialResponse, RegistrationRequest, RegistrationResponse,
-    RegistrationUpload, ServerLogin, ServerLoginStartParameters, ServerRegistration,
+    ciphersuite::CipherSuite, rand::rngs::OsRng, ClientLogin, ClientLoginFinishParameters,
+    ClientLoginStartParameters, ClientRegistration, ClientRegistrationFinishParameters,
+    CredentialFinalization, CredentialRequest, CredentialResponse, RegistrationRequest,
+    RegistrationResponse, RegistrationUpload, ServerLogin, ServerLoginStartParameters,
+    ServerRegistration,
 };
 
 // The ciphersuite trait allows to specify the underlying primitives
