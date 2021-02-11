@@ -113,11 +113,6 @@ pub(crate) struct OpenedInnerEnvelope<D: Hash> {
 }
 
 impl<D: Hash> Envelope<D> {
-    /// The additional number of bytes added to the plaintext
-    pub(crate) fn additional_size() -> usize {
-        NONCE_LEN + <D as Digest>::OutputSize::to_usize()
-    }
-
     fn hmac_key_size() -> usize {
         <D as Digest>::OutputSize::to_usize()
     }

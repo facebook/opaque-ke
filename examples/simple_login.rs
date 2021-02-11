@@ -23,7 +23,6 @@
 use rustyline::error::ReadlineError;
 use rustyline::Editor;
 use std::collections::HashMap;
-use std::convert::TryFrom;
 use std::process::exit;
 
 use opaque_ke::{
@@ -84,7 +83,7 @@ fn account_registration(
         .state
         .finish(RegistrationUpload::deserialize(&message_bytes[..]).unwrap())
         .unwrap();
-    password_file.to_bytes()
+    password_file.serialize()
 }
 
 // Password-based login between a client and server
@@ -104,7 +103,7 @@ fn account_login(
 
     // Client sends credential_request_bytes to server
 
-    let password_file = ServerRegistration::<Default>::try_from(password_file_bytes).unwrap();
+    let password_file = ServerRegistration::<Default>::deserialize(password_file_bytes).unwrap();
     let mut server_rng = OsRng;
     let server_login_start_result = ServerLogin::start(
         &mut server_rng,

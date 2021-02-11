@@ -300,7 +300,7 @@ fn generate_parameters<CS: CipherSuite>() -> TestVectorParameters {
         .message
         .serialize()
         .to_vec();
-    let client_registration_state = client_registration_start_result.state.to_bytes().to_vec();
+    let client_registration_state = client_registration_start_result.state.serialize().to_vec();
 
     let mut oprf_key_rng = CycleRng::new(oprf_key_raw.to_vec());
     let server_registration_start_result = ServerRegistration::<CS>::start(
@@ -315,7 +315,7 @@ fn generate_parameters<CS: CipherSuite>() -> TestVectorParameters {
         .to_vec();
     let oprf_key_bytes =
         CS::Group::scalar_as_bytes(&server_registration_start_result.state.oprf_key).clone();
-    let server_registration_state = server_registration_start_result.state.to_bytes().to_vec();
+    let server_registration_state = server_registration_start_result.state.serialize().to_vec();
 
     let mut client_s_sk_and_nonce: Vec<u8> = Vec::new();
     client_s_sk_and_nonce.extend_from_slice(&client_s_kp.private().to_arr());
@@ -339,7 +339,7 @@ fn generate_parameters<CS: CipherSuite>() -> TestVectorParameters {
         .state
         .finish(client_registration_finish_result.message)
         .unwrap();
-    let password_file_bytes = password_file.to_bytes();
+    let password_file_bytes = password_file.serialize();
 
     let mut client_login_start: Vec<u8> = Vec::new();
     client_login_start.extend_from_slice(&blinding_factor_bytes);
@@ -354,7 +354,7 @@ fn generate_parameters<CS: CipherSuite>() -> TestVectorParameters {
     )
     .unwrap();
     let credential_request_bytes = client_login_start_result.message.serialize().to_vec();
-    let client_login_state = client_login_start_result.state.to_bytes().to_vec();
+    let client_login_state = client_login_start_result.state.serialize().to_vec();
 
     let mut server_e_sk_and_nonce_rng = CycleRng::new(
         [
@@ -376,7 +376,7 @@ fn generate_parameters<CS: CipherSuite>() -> TestVectorParameters {
     )
     .unwrap();
     let credential_response_bytes = server_login_start_result.message.serialize().to_vec();
-    let server_login_state = server_login_start_result.state.to_bytes().to_vec();
+    let server_login_state = server_login_start_result.state.serialize().to_vec();
 
     let client_login_finish_result = client_login_start_result
         .state
@@ -385,7 +385,7 @@ fn generate_parameters<CS: CipherSuite>() -> TestVectorParameters {
             ClientLoginFinishParameters::WithIdentifiers(id_u.to_vec(), id_s.to_vec()),
         )
         .unwrap();
-    let credential_finalization_bytes = client_login_finish_result.message.to_bytes().to_vec();
+    let credential_finalization_bytes = client_login_finish_result.message.serialize();
 
     TestVectorParameters {
         client_s_pk: client_s_kp.public().to_arr().to_vec(),
@@ -440,7 +440,7 @@ fn test_registration_request() -> Result<(), ProtocolError> {
     );
     assert_eq!(
         hex::encode(&parameters.client_registration_state),
-        hex::encode(client_registration_start_result.state.to_bytes())
+        hex::encode(client_registration_start_result.state.serialize())
     );
     Ok(())
 }
@@ -461,7 +461,7 @@ fn test_registration_response() -> Result<(), ProtocolError> {
     );
     assert_eq!(
         hex::encode(&parameters.server_registration_state),
-        hex::encode(server_registration_start_result.state.to_bytes())
+        hex::encode(server_registration_start_result.state.serialize())
     );
     Ok(())
 }
@@ -473,7 +473,7 @@ fn test_registration_upload() -> Result<(), ProtocolError> {
     let client_s_sk_and_nonce: Vec<u8> =
         [parameters.client_s_sk, parameters.envelope_nonce].concat();
     let mut finish_registration_rng = CycleRng::new(client_s_sk_and_nonce);
-    let result = ClientRegistration::<RistrettoSha5123dhNoSlowHash>::try_from(
+    let result = ClientRegistration::<RistrettoSha5123dhNoSlowHash>::deserialize(
         &parameters.client_registration_state[..],
     )?
     .finish(
@@ -498,7 +498,7 @@ fn test_registration_upload() -> Result<(), ProtocolError> {
 fn test_password_file() -> Result<(), ProtocolError> {
     let parameters = populate_test_vectors(&serde_json::from_str(TEST_VECTOR).unwrap());
 
-    let server_registration = ServerRegistration::<RistrettoSha5123dhNoSlowHash>::try_from(
+    let server_registration = ServerRegistration::<RistrettoSha5123dhNoSlowHash>::deserialize(
         &parameters.server_registration_state[..],
     )?;
     let password_file = server_registration.finish(RegistrationUpload::deserialize(
@@ -507,7 +507,7 @@ fn test_password_file() -> Result<(), ProtocolError> {
 
     assert_eq!(
         hex::encode(parameters.password_file),
-        hex::encode(password_file.to_bytes())
+        hex::encode(password_file.serialize())
     );
     Ok(())
 }
@@ -534,7 +534,7 @@ fn test_credential_request() -> Result<(), ProtocolError> {
     );
     assert_eq!(
         hex::encode(&parameters.client_login_state),
-        hex::encode(client_login_start_result.state.to_bytes())
+        hex::encode(client_login_start_result.state.serialize())
     );
     Ok(())
 }
@@ -547,7 +547,7 @@ fn test_credential_response() -> Result<(), ProtocolError> {
         CycleRng::new([parameters.server_e_sk, parameters.server_nonce].concat());
     let server_login_start_result = ServerLogin::<RistrettoSha5123dhNoSlowHash>::start(
         &mut server_e_sk_and_nonce_rng,
-        ServerRegistration::try_from(&parameters.password_file[..])?,
+        ServerRegistration::deserialize(&parameters.password_file[..])?,
         &Key::try_from(&parameters.server_s_sk[..])?,
         CredentialRequest::<RistrettoSha5123dhNoSlowHash>::deserialize(
             &parameters.credential_request[..],
@@ -568,7 +568,7 @@ fn test_credential_response() -> Result<(), ProtocolError> {
     );
     assert_eq!(
         hex::encode(&parameters.server_login_state),
-        hex::encode(server_login_start_result.state.to_bytes())
+        hex::encode(server_login_start_result.state.serialize())
     );
     Ok(())
 }
@@ -577,14 +577,15 @@ fn test_credential_response() -> Result<(), ProtocolError> {
 fn test_credential_finalization() -> Result<(), ProtocolError> {
     let parameters = populate_test_vectors(&serde_json::from_str(TEST_VECTOR).unwrap());
 
-    let client_login_finish_result =
-        ClientLogin::<RistrettoSha5123dhNoSlowHash>::try_from(&parameters.client_login_state[..])?
-            .finish(
-                CredentialResponse::<RistrettoSha5123dhNoSlowHash>::deserialize(
-                    &parameters.credential_response[..],
-                )?,
-                ClientLoginFinishParameters::WithIdentifiers(parameters.id_u, parameters.id_s),
-            )?;
+    let client_login_finish_result = ClientLogin::<RistrettoSha5123dhNoSlowHash>::deserialize(
+        &parameters.client_login_state[..],
+    )?
+    .finish(
+        CredentialResponse::<RistrettoSha5123dhNoSlowHash>::deserialize(
+            &parameters.credential_response[..],
+        )?,
+        ClientLoginFinishParameters::WithIdentifiers(parameters.id_u, parameters.id_s),
+    )?;
 
     assert_eq!(
         hex::encode(&parameters.einfo2),
@@ -600,7 +601,7 @@ fn test_credential_finalization() -> Result<(), ProtocolError> {
     );
     assert_eq!(
         hex::encode(&parameters.credential_finalization),
-        hex::encode(client_login_finish_result.message.to_bytes())
+        hex::encode(client_login_finish_result.message.serialize())
     );
     assert_eq!(
         hex::encode(&parameters.export_key),
@@ -614,11 +615,12 @@ fn test_credential_finalization() -> Result<(), ProtocolError> {
 fn test_server_login_finish() -> Result<(), ProtocolError> {
     let parameters = populate_test_vectors(&serde_json::from_str(TEST_VECTOR).unwrap());
 
-    let server_login_result =
-        ServerLogin::<RistrettoSha5123dhNoSlowHash>::try_from(&parameters.server_login_state[..])?
-            .finish(CredentialFinalization::try_from(
-                &parameters.credential_finalization[..],
-            )?)?;
+    let server_login_result = ServerLogin::<RistrettoSha5123dhNoSlowHash>::deserialize(
+        &parameters.server_login_state[..],
+    )?
+    .finish(CredentialFinalization::deserialize(
+        &parameters.credential_finalization[..],
+    )?)?;
 
     assert_eq!(
         hex::encode(parameters.session_key),

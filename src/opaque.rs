@@ -38,9 +38,19 @@ pub struct ClientRegistration<CS: CipherSuite> {
     pub(crate) token: oprf::Token<CS::Group>,
 }
 
-impl<CS: CipherSuite> TryFrom<&[u8]> for ClientRegistration<CS> {
-    type Error = ProtocolError;
-    fn try_from(input: &[u8]) -> Result<Self, Self::Error> {
+impl<CS: CipherSuite> ClientRegistration<CS> {
+    /// Serialization into bytes
+    pub fn serialize(&self) -> Vec<u8> {
+        let output: Vec<u8> = [
+            &CS::Group::scalar_as_bytes(&self.token.blind)[..],
+            &self.token.data,
+        ]
+        .concat();
+        output
+    }
+
+    /// Deserialization from bytes
+    pub fn deserialize(input: &[u8]) -> Result<Self, ProtocolError> {
         let min_expected_len = <CS::Group as Group>::ScalarLen::to_usize();
         let checked_slice = (if input.len() <= min_expected_len {
             Err(InternalPakeError::SizeError {
@@ -64,18 +74,6 @@ impl<CS: CipherSuite> TryFrom<&[u8]> for ClientRegistration<CS> {
                 blind: blinding_factor,
             },
         })
-    }
-}
-
-impl<CS: CipherSuite> ClientRegistration<CS> {
-    /// byte representation for the client's registration state
-    pub fn to_bytes(&self) -> Vec<u8> {
-        let output: Vec<u8> = [
-            &CS::Group::scalar_as_bytes(&self.token.blind)[..],
-            &self.token.data,
-        ]
-        .concat();
-        output
     }
 }
 
@@ -254,12 +252,21 @@ pub struct ServerRegistration<CS: CipherSuite> {
     pub(crate) oprf_key: <CS::Group as Group>::Scalar,
 }
 
-impl<CS: CipherSuite> TryFrom<&[u8]> for ServerRegistration<CS> {
-    type Error = ProtocolError;
+impl<CS: CipherSuite> ServerRegistration<CS> {
+    /// Serialization into bytes
+    pub fn serialize(&self) -> Vec<u8> {
+        let mut output: Vec<u8> = CS::Group::scalar_as_bytes(&self.oprf_key).to_vec();
+        self.client_s_pk
+            .iter()
+            .for_each(|v| output.extend_from_slice(&v.to_arr()));
+        self.envelope
+            .iter()
+            .for_each(|v| output.extend_from_slice(&v.to_bytes()));
+        output
+    }
 
-    /// The format of a serialized ServerRegistration object:
-    /// oprf_key | client_s_pk | envelope
-    fn try_from(input: &[u8]) -> Result<Self, Self::Error> {
+    /// Deserialization from bytes
+    pub fn deserialize(input: &[u8]) -> Result<Self, ProtocolError> {
         let scalar_len = <CS::Group as Group>::ScalarLen::to_usize();
         if input.len() == scalar_len {
             return Ok(Self {
@@ -288,20 +295,6 @@ impl<CS: CipherSuite> TryFrom<&[u8]> for ServerRegistration<CS> {
             client_s_pk: Some(client_s_pk),
             oprf_key,
         })
-    }
-}
-
-impl<CS: CipherSuite> ServerRegistration<CS> {
-    /// byte representation for the server's registration state
-    pub fn to_bytes(&self) -> Vec<u8> {
-        let mut output: Vec<u8> = CS::Group::scalar_as_bytes(&self.oprf_key).to_vec();
-        self.client_s_pk
-            .iter()
-            .for_each(|v| output.extend_from_slice(&v.to_arr()));
-        self.envelope
-            .iter()
-            .for_each(|v| output.extend_from_slice(&v.to_bytes()));
-        output
     }
 
     /// From the client's "blinded" password, returns a response to be
@@ -405,9 +398,21 @@ pub struct ClientLogin<CS: CipherSuite> {
     serialized_credential_request: Vec<u8>,
 }
 
-impl<CS: CipherSuite> TryFrom<&[u8]> for ClientLogin<CS> {
-    type Error = ProtocolError;
-    fn try_from(input: &[u8]) -> Result<Self, Self::Error> {
+impl<CS: CipherSuite> ClientLogin<CS> {
+    /// Serialization into bytes
+    pub fn serialize(&self) -> Vec<u8> {
+        let output: Vec<u8> = [
+            &CS::Group::scalar_as_bytes(&self.token.blind)[..],
+            &serialize(&self.serialized_credential_request, 2),
+            &serialize(&self.ke1_state.to_bytes(), 2),
+            &self.token.data,
+        ]
+        .concat();
+        output
+    }
+
+    /// Deserialization from bytes
+    pub fn deserialize(input: &[u8]) -> Result<Self, ProtocolError> {
         let scalar_len = <CS::Group as Group>::ScalarLen::to_usize();
         let checked_slice = (if input.len() <= scalar_len {
             Err(InternalPakeError::SizeError {
@@ -436,20 +441,6 @@ impl<CS: CipherSuite> TryFrom<&[u8]> for ClientLogin<CS> {
             ke1_state,
             serialized_credential_request,
         })
-    }
-}
-
-impl<CS: CipherSuite> ClientLogin<CS> {
-    /// byte representation for the client's login state
-    pub fn to_bytes(&self) -> Vec<u8> {
-        let output: Vec<u8> = [
-            &CS::Group::scalar_as_bytes(&self.token.blind)[..],
-            &serialize(&self.serialized_credential_request, 2),
-            &serialize(&self.ke1_state.to_bytes(), 2),
-            &self.token.data,
-        ]
-        .concat();
-        output
     }
 }
 
@@ -652,18 +643,6 @@ pub struct ServerLogin<CS: CipherSuite> {
     _cs: PhantomData<CS>,
 }
 
-impl<CS: CipherSuite> TryFrom<&[u8]> for ServerLogin<CS> {
-    type Error = ProtocolError;
-    fn try_from(bytes: &[u8]) -> Result<Self, Self::Error> {
-        Ok(Self {
-            _cs: PhantomData,
-            ke2_state: <CS::KeyExchange as KeyExchange<CS::Hash, CS::Group>>::KE2State::try_from(
-                bytes,
-            )?,
-        })
-    }
-}
-
 /// Optional parameters for server login start
 pub enum ServerLoginStartParameters {
     /// Specifying a confidential info field that will be sent to the client
@@ -699,9 +678,19 @@ pub struct ServerLoginFinishResult {
 }
 
 impl<CS: CipherSuite> ServerLogin<CS> {
-    /// byte representation for the server's login state
-    pub fn to_bytes(&self) -> Vec<u8> {
+    /// Serialization into bytes
+    pub fn serialize(&self) -> Vec<u8> {
         self.ke2_state.to_bytes()
+    }
+
+    /// Deserialization from bytes
+    pub fn deserialize(bytes: &[u8]) -> Result<Self, ProtocolError> {
+        Ok(Self {
+            _cs: PhantomData,
+            ke2_state: <CS::KeyExchange as KeyExchange<CS::Hash, CS::Group>>::KE2State::try_from(
+                bytes,
+            )?,
+        })
     }
 
     /// From the client's "blinded"" password, returns a challenge to be
@@ -773,7 +762,7 @@ impl<CS: CipherSuite> ServerLogin<CS> {
             Some((id_u, id_s)) => (id_u, id_s),
         };
 
-        let l1_bytes = &l1.to_bytes();
+        let l1_bytes = &l1.serialize();
         let beta = oprf::evaluate(l1.alpha, &password_file.oprf_key);
         let server_s_pk = KeyPair::<CS::Group>::public_from_private(&server_s_sk);
 
