@@ -304,7 +304,7 @@ impl<CS: CipherSuite> TryFrom<&[u8]> for CredentialResponse<CS> {
             <Key as SizedBytes>::Len::to_usize(),
             "server_s_pk in credential_response",
         )?;
-        let unchecked_server_s_pk = Key::from_bytes(&sized_server_s_pk[..])?;
+        let unchecked_server_s_pk = Key::from_bytes(sized_server_s_pk)?;
         let server_s_pk = KeyPair::<CS::Group>::check_public_key(unchecked_server_s_pk)?;
 
         let (envelope, remainder) = Envelope::<CS::Hash>::deserialize(&remainder)?;
@@ -350,7 +350,7 @@ impl<CS: CipherSuite> CredentialFinalization<CS> {
 
     /// Deserialization from bytes
     pub fn deserialize(input: &[u8]) -> Result<Self, ProtocolError> {
-        Self::try_from(&input[..])
+        Self::try_from(input)
     }
 
     /// byte representation for the login finalization
