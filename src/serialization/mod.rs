@@ -32,7 +32,7 @@ pub(crate) fn os2ip(input: &[u8]) -> Result<usize, PakeError> {
 
 // Computes I2OSP(len(input), max_bytes) || input
 pub(crate) fn serialize(input: &[u8], max_bytes: usize) -> Vec<u8> {
-    [&i2osp(input.len(), max_bytes), &input[..]].concat()
+    [&i2osp(input.len(), max_bytes), input].concat()
 }
 
 // Tokenizes an input of the format I2OSP(len(input), max_bytes) || input, outputting

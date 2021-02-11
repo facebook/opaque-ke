@@ -39,15 +39,16 @@ static STR_ENCRYPTION_PAD: &[u8] = b"encryption pad";
 static STR_SESSION_KEY: &[u8] = b"session secret";
 static STR_OPAQUE: &[u8] = b"OPAQUE ";
 
+#[allow(clippy::upper_case_acronyms)]
 /// The Triple Diffie-Hellman key exchange implementation
 pub struct TripleDH;
 
 impl<D: Hash, G: Group> KeyExchange<D, G> for TripleDH {
-    type KE1State = KE1State;
-    type KE2State = KE2State<<D as FixedOutput>::OutputSize>;
-    type KE1Message = KE1Message;
-    type KE2Message = KE2Message<<D as FixedOutput>::OutputSize>;
-    type KE3Message = KE3Message<<D as FixedOutput>::OutputSize>;
+    type KE1State = Ke1State;
+    type KE2State = Ke2State<<D as FixedOutput>::OutputSize>;
+    type KE1Message = Ke1Message;
+    type KE2Message = Ke2Message<<D as FixedOutput>::OutputSize>;
+    type KE3Message = Ke3Message<<D as FixedOutput>::OutputSize>;
 
     fn generate_ke1<R: RngCore + CryptoRng>(
         info: Vec<u8>,
@@ -60,14 +61,14 @@ impl<D: Hash, G: Group> KeyExchange<D, G> for TripleDH {
             GenericArray::clone_from_slice(&client_nonce_bytes)
         };
 
-        let ke1_message = KE1Message {
+        let ke1_message = Ke1Message {
             client_nonce,
             info,
             client_e_pk: client_e_kp.public().clone(),
         };
 
         Ok((
-            KE1State {
+            Ke1State {
                 client_e_sk: client_e_kp.private().clone(),
                 client_nonce,
             },
@@ -144,12 +145,12 @@ impl<D: Hash, G: Group> KeyExchange<D, G> for TripleDH {
 
         Ok((
             ke1_message.info,
-            KE2State {
+            Ke2State {
                 km3,
                 hashed_transcript,
                 session_key,
             },
-            KE2Message {
+            Ke2Message {
                 server_nonce,
                 server_e_pk: server_e_kp.public().clone(),
                 e_info: ciphertext,
@@ -227,7 +228,7 @@ impl<D: Hash, G: Group> KeyExchange<D, G> for TripleDH {
         Ok((
             plaintext,
             session_key.to_vec(),
-            KE3Message {
+            Ke3Message {
                 mac: client_mac.finalize().into_bytes(),
             },
         ))
@@ -258,20 +259,20 @@ impl<D: Hash, G: Group> KeyExchange<D, G> for TripleDH {
 
 /// The client state produced after the first key exchange message
 #[derive(PartialEq, Eq)]
-pub struct KE1State {
+pub struct Ke1State {
     client_e_sk: Key,
     client_nonce: GenericArray<u8, NonceLen>,
 }
 
 /// The first key exchange message
 #[derive(PartialEq, Eq)]
-pub struct KE1Message {
+pub struct Ke1Message {
     pub(crate) client_nonce: GenericArray<u8, NonceLen>,
     pub(crate) info: Vec<u8>,
     pub(crate) client_e_pk: Key,
 }
 
-impl TryFrom<&[u8]> for KE1State {
+impl TryFrom<&[u8]> for Ke1State {
     type Error = PakeError;
 
     fn try_from(bytes: &[u8]) -> Result<Self, Self::Error> {
@@ -287,14 +288,14 @@ impl TryFrom<&[u8]> for KE1State {
     }
 }
 
-impl ToBytes for KE1State {
+impl ToBytes for Ke1State {
     fn to_bytes(&self) -> Vec<u8> {
         let output: Vec<u8> = [&self.client_e_sk.to_arr(), &self.client_nonce[..]].concat();
         output
     }
 }
 
-impl ToBytes for KE1Message {
+impl ToBytes for Ke1Message {
     fn to_bytes(&self) -> Vec<u8> {
         [
             &self.client_nonce[..],
@@ -305,7 +306,7 @@ impl ToBytes for KE1Message {
     }
 }
 
-impl TryFrom<&[u8]> for KE1Message {
+impl TryFrom<&[u8]> for Ke1Message {
     type Error = PakeError;
 
     fn try_from(ke1_message_bytes: &[u8]) -> Result<Self, Self::Error> {
@@ -325,21 +326,21 @@ impl TryFrom<&[u8]> for KE1Message {
     }
 }
 /// The server state produced after the second key exchange message
-pub struct KE2State<HashLen: ArrayLength<u8>> {
+pub struct Ke2State<HashLen: ArrayLength<u8>> {
     km3: GenericArray<u8, HashLen>,
     hashed_transcript: GenericArray<u8, HashLen>,
     session_key: GenericArray<u8, HashLen>,
 }
 
 /// The second key exchange message
-pub struct KE2Message<HashLen: ArrayLength<u8>> {
+pub struct Ke2Message<HashLen: ArrayLength<u8>> {
     server_nonce: GenericArray<u8, NonceLen>,
     server_e_pk: Key,
     e_info: Vec<u8>,
     mac: GenericArray<u8, HashLen>,
 }
 
-impl<HashLen: ArrayLength<u8>> ToBytes for KE2State<HashLen> {
+impl<HashLen: ArrayLength<u8>> ToBytes for Ke2State<HashLen> {
     fn to_bytes(&self) -> Vec<u8> {
         [
             &self.km3[..],
@@ -350,7 +351,7 @@ impl<HashLen: ArrayLength<u8>> ToBytes for KE2State<HashLen> {
     }
 }
 
-impl<HashLen: ArrayLength<u8>> TryFrom<&[u8]> for KE2State<HashLen> {
+impl<HashLen: ArrayLength<u8>> TryFrom<&[u8]> for Ke2State<HashLen> {
     type Error = PakeError;
 
     fn try_from(input: &[u8]) -> Result<Self, Self::Error> {
@@ -367,13 +368,13 @@ impl<HashLen: ArrayLength<u8>> TryFrom<&[u8]> for KE2State<HashLen> {
     }
 }
 
-impl<HashLen: ArrayLength<u8>> ToBytes for KE2Message<HashLen> {
+impl<HashLen: ArrayLength<u8>> ToBytes for Ke2Message<HashLen> {
     fn to_bytes(&self) -> Vec<u8> {
         [&self.to_bytes_without_mac(), &self.mac[..]].concat()
     }
 }
 
-impl<HashLen: ArrayLength<u8>> KE2Message<HashLen> {
+impl<HashLen: ArrayLength<u8>> Ke2Message<HashLen> {
     fn to_bytes_without_mac(&self) -> Vec<u8> {
         [
             &self.server_nonce[..],
@@ -384,7 +385,7 @@ impl<HashLen: ArrayLength<u8>> KE2Message<HashLen> {
     }
 }
 
-impl<HashLen: ArrayLength<u8>> TryFrom<&[u8]> for KE2Message<HashLen> {
+impl<HashLen: ArrayLength<u8>> TryFrom<&[u8]> for Ke2Message<HashLen> {
     type Error = PakeError;
 
     fn try_from(input: &[u8]) -> Result<Self, Self::Error> {
@@ -407,6 +408,7 @@ impl<HashLen: ArrayLength<u8>> TryFrom<&[u8]> for KE2Message<HashLen> {
     }
 }
 
+#[allow(clippy::upper_case_acronyms)]
 // The triple of public and private components used in the 3DH computation
 struct TripleDHComponents {
     pk1: Key,
@@ -417,6 +419,7 @@ struct TripleDHComponents {
     sk3: Key,
 }
 
+#[allow(clippy::upper_case_acronyms)]
 // Consists of a session key, followed by two mac keys and an encryption key: (session_key, km2, ke2, km3)
 type TripleDHDerivationResult<D> = (
     GenericArray<u8, <D as FixedOutput>::OutputSize>,
@@ -426,17 +429,17 @@ type TripleDHDerivationResult<D> = (
 );
 
 /// The third key exchange message
-pub struct KE3Message<HashLen: ArrayLength<u8>> {
+pub struct Ke3Message<HashLen: ArrayLength<u8>> {
     mac: GenericArray<u8, HashLen>,
 }
 
-impl<HashLen: ArrayLength<u8>> ToBytes for KE3Message<HashLen> {
+impl<HashLen: ArrayLength<u8>> ToBytes for Ke3Message<HashLen> {
     fn to_bytes(&self) -> Vec<u8> {
         self.mac.to_vec()
     }
 }
 
-impl<HashLen: ArrayLength<u8>> TryFrom<&[u8]> for KE3Message<HashLen> {
+impl<HashLen: ArrayLength<u8>> TryFrom<&[u8]> for Ke3Message<HashLen> {
     type Error = PakeError;
 
     fn try_from(bytes: &[u8]) -> Result<Self, Self::Error> {
