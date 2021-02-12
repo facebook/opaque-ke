@@ -23,7 +23,7 @@ use crate::{
 use digest::Digest;
 use generic_array::{typenum::Unsigned, GenericArray};
 use generic_bytes::SizedBytes;
-use rand_core::{CryptoRng, RngCore};
+use rand::{CryptoRng, RngCore};
 use std::{convert::TryFrom, marker::PhantomData};
 use zeroize::Zeroize;
 
@@ -112,7 +112,7 @@ impl<CS: CipherSuite> ClientRegistration<CS> {
     /// ```
     /// use opaque_ke::ClientRegistration;
     /// # use opaque_ke::errors::ProtocolError;
-    /// use rand_core::{OsRng, RngCore};
+    /// use rand::{rngs::OsRng, RngCore};
     /// use opaque_ke::ciphersuite::CipherSuite;
     /// struct Default;
     /// impl CipherSuite for Default {
@@ -160,7 +160,7 @@ impl<CS: CipherSuite> ClientRegistration<CS> {
     /// use opaque_ke::{ClientRegistration, ClientRegistrationFinishParameters, ServerRegistration};
     /// # use opaque_ke::errors::ProtocolError;
     /// # use opaque_ke::keypair::KeyPair;
-    /// use rand_core::{OsRng, RngCore};
+    /// use rand::{rngs::OsRng, RngCore};
     /// use opaque_ke::ciphersuite::CipherSuite;
     /// struct Default;
     /// impl CipherSuite for Default {
@@ -318,7 +318,7 @@ impl<CS: CipherSuite> ServerRegistration<CS> {
     /// ```
     /// use opaque_ke::*;
     /// # use opaque_ke::errors::ProtocolError;
-    /// use rand_core::{OsRng, RngCore};
+    /// use rand::{rngs::OsRng, RngCore};
     /// use opaque_ke::ciphersuite::CipherSuite;
     /// struct Default;
     /// impl CipherSuite for Default {
@@ -369,7 +369,7 @@ impl<CS: CipherSuite> ServerRegistration<CS> {
     /// ```
     /// use opaque_ke::{*, keypair::KeyPair};
     /// # use opaque_ke::errors::ProtocolError;
-    /// use rand_core::{OsRng, RngCore};
+    /// use rand::{rngs::OsRng, RngCore};
     /// use opaque_ke::ciphersuite::CipherSuite;
     /// struct Default;
     /// impl CipherSuite for Default {
@@ -518,7 +518,7 @@ impl<CS: CipherSuite> ClientLogin<CS> {
     /// ```
     /// use opaque_ke::{ClientLogin, ClientLoginStartParameters};
     /// # use opaque_ke::errors::ProtocolError;
-    /// use rand_core::{OsRng, RngCore};
+    /// use rand::{rngs::OsRng, RngCore};
     /// use opaque_ke::ciphersuite::CipherSuite;
     /// struct Default;
     /// impl CipherSuite for Default {
@@ -568,7 +568,7 @@ impl<CS: CipherSuite> ClientLogin<CS> {
     /// # use opaque_ke::{ClientRegistration, ClientRegistrationFinishParameters, ServerRegistration};
     /// # use opaque_ke::errors::ProtocolError;
     /// # use opaque_ke::keypair::KeyPair;
-    /// use rand_core::{OsRng, RngCore};
+    /// use rand::{rngs::OsRng, RngCore};
     /// use opaque_ke::ciphersuite::CipherSuite;
     /// struct Default;
     /// impl CipherSuite for Default {
@@ -723,7 +723,7 @@ impl<CS: CipherSuite> ServerLogin<CS> {
     /// # use opaque_ke::{ClientRegistration, ClientRegistrationFinishParameters, ServerRegistration};
     /// # use opaque_ke::errors::ProtocolError;
     /// # use opaque_ke::keypair::KeyPair;
-    /// use rand_core::{OsRng, RngCore};
+    /// use rand::{rngs::OsRng, RngCore};
     /// use opaque_ke::ciphersuite::CipherSuite;
     /// struct Default;
     /// impl CipherSuite for Default {
@@ -828,7 +828,7 @@ impl<CS: CipherSuite> ServerLogin<CS> {
     /// # use opaque_ke::{ClientRegistration, ClientRegistrationFinishParameters, ServerRegistration};
     /// # use opaque_ke::errors::ProtocolError;
     /// # use opaque_ke::keypair::KeyPair;
-    /// use rand_core::{OsRng, RngCore};
+    /// use rand::{rngs::OsRng, RngCore};
     /// use opaque_ke::ciphersuite::CipherSuite;
     /// struct Default;
     /// impl CipherSuite for Default {

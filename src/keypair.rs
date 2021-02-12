@@ -14,13 +14,14 @@ use generic_bytes_derive::TryFromForSizedBytes;
 use proptest::prelude::*;
 #[cfg(test)]
 use rand::{rngs::StdRng, SeedableRng};
-use rand_core::{CryptoRng, RngCore};
+use rand::{CryptoRng, RngCore};
 use std::fmt::Debug;
 use std::marker::PhantomData;
 use std::ops::Deref;
 
-// Pub(crate) convenience extension trait of SizedBytes for our purposes
-pub(crate) trait SizedBytesExt: SizedBytes {
+/// Convenience extension trait of SizedBytes
+pub trait SizedBytesExt: SizedBytes {
+    /// Convert from bytes
     fn from_bytes(bytes: &[u8]) -> Result<Self, TryFromSizedBytesError> {
         <Self as SizedBytes>::from_arr(GenericArray::from_slice(bytes))
     }
@@ -118,7 +119,7 @@ impl<G: Group + Debug> KeyPair<G> {
     }
 }
 
-/// A minimalist key type built around [u8;32]
+/// A minimalist key type built around a \[u8; 32\]
 #[derive(Debug, PartialEq, Eq, Clone, TryFromForSizedBytes)]
 #[ErrorType = "::generic_bytes::TryFromSizedBytesError"]
 #[repr(transparent)]

@@ -26,17 +26,18 @@
 
 use chacha20poly1305::aead::{Aead, NewAead};
 use chacha20poly1305::{ChaCha20Poly1305, Key, Nonce};
-use rand_core::{OsRng, RngCore};
 use rustyline::error::ReadlineError;
 use rustyline::Editor;
 use std::convert::TryFrom;
 use std::process::exit;
 
 use opaque_ke::{
-    ciphersuite::CipherSuite, ClientLogin, ClientLoginFinishParameters, ClientLoginStartParameters,
-    ClientRegistration, ClientRegistrationFinishParameters, CredentialFinalization,
-    CredentialRequest, CredentialResponse, RegistrationRequest, RegistrationResponse,
-    RegistrationUpload, ServerLogin, ServerLoginStartParameters, ServerRegistration,
+    ciphersuite::CipherSuite,
+    rand::{rngs::OsRng, RngCore},
+    ClientLogin, ClientLoginFinishParameters, ClientLoginStartParameters, ClientRegistration,
+    ClientRegistrationFinishParameters, CredentialFinalization, CredentialRequest,
+    CredentialResponse, RegistrationRequest, RegistrationResponse, RegistrationUpload, ServerLogin,
+    ServerLoginStartParameters, ServerRegistration,
 };
 
 // The ciphersuite trait allows to specify the underlying primitives

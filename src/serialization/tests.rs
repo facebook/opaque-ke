@@ -20,7 +20,7 @@ use curve25519_dalek::ristretto::RistrettoPoint;
 use generic_array::typenum::Unsigned;
 use generic_bytes::SizedBytes;
 use proptest::{collection::vec, prelude::*};
-use rand_core::{OsRng, RngCore};
+use rand::{rngs::OsRng, RngCore};
 
 use sha2::Digest;
 use std::convert::TryFrom;

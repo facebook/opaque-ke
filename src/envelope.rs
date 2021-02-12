@@ -12,7 +12,7 @@ use digest::Digest;
 use generic_array::{typenum::Unsigned, GenericArray};
 use hkdf::Hkdf;
 use hmac::{Hmac, Mac, NewMac};
-use rand_core::{CryptoRng, RngCore};
+use rand::{CryptoRng, RngCore};
 use std::convert::TryFrom;
 
 // Constant string used as salt for HKDF computation
@@ -318,7 +318,7 @@ pub(crate) fn mode_from_ids(optional_ids: &Option<(Vec<u8>, Vec<u8>)>) -> InnerE
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rand_core::OsRng;
+    use rand::rngs::OsRng;
 
     #[test]
     fn seal_and_open() {

@@ -11,7 +11,7 @@ use crate::{
 };
 use digest::Digest;
 
-use rand_core::{CryptoRng, RngCore};
+use rand::{CryptoRng, RngCore};
 
 /// Configures the underlying primitives used in OPAQUE
 /// * `Group`: a finite cyclic group along with a point representation, along
