@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.1 (February 11, 2020)
+
+* Re-exporting the rand library (and including it as a dependency instead of
+  just rand_core)
+* Exposing a convenience function for converting from byte array to Key type
+
 ## 0.3.0 (February 8, 2020)
 
 * General API and documentation improvements, including the support of custom
