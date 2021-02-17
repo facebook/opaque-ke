@@ -103,7 +103,7 @@ fn register_first_message_roundtrip() {
     let mut input = Vec::new();
     input.extend_from_slice(pt_bytes.as_slice());
 
-    let r1 = RegistrationRequest::<RistrettoPoint>::deserialize(input.as_slice()).unwrap();
+    let r1 = RegistrationRequest::<Default>::deserialize(input.as_slice()).unwrap();
     let r1_bytes = r1.serialize();
     assert_eq!(input, r1_bytes);
 }
@@ -123,7 +123,7 @@ fn register_second_message_roundtrip() {
     input.extend_from_slice(&pubkey_length.to_be_bytes()[std::mem::size_of::<usize>() - 2..]);
     input.extend_from_slice(&pubkey_bytes.as_slice());
 
-    let r2 = RegistrationResponse::<RistrettoPoint>::deserialize(input.as_slice()).unwrap();
+    let r2 = RegistrationResponse::<Default>::deserialize(input.as_slice()).unwrap();
     let r2_bytes = r2.serialize();
     assert_eq!(input, r2_bytes);
 }
@@ -157,7 +157,7 @@ fn register_third_message_roundtrip() {
     input.extend_from_slice(&pubkey_bytes[..]);
     input.extend_from_slice(&envelope_bytes);
 
-    let r3 = RegistrationUpload::<sha2::Sha512, RistrettoPoint>::deserialize(&input[..]).unwrap();
+    let r3 = RegistrationUpload::<Default>::deserialize(&input[..]).unwrap();
     let r3_bytes = r3.serialize();
     assert_eq!(input, r3_bytes);
 }
@@ -359,17 +359,17 @@ fn test_i2osp_os2ip(bytes in vec(any::<u8>(), 0..std::mem::size_of::<usize>())) 
 
 #[test]
 fn test_nocrash_register_first_message(bytes in vec(any::<u8>(), 0..200)) {
-    RegistrationRequest::<RistrettoPoint>::try_from(&bytes[..]).map_or(true, |_| true);
+    RegistrationRequest::<Default>::try_from(&bytes[..]).map_or(true, |_| true);
 }
 
 #[test]
 fn test_nocrash_register_second_message(bytes in vec(any::<u8>(), 0..200)) {
-    RegistrationResponse::<RistrettoPoint>::try_from(&bytes[..]).map_or(true, |_| true);
+    RegistrationResponse::<Default>::try_from(&bytes[..]).map_or(true, |_| true);
 }
 
 #[test]
 fn test_nocrash_register_third_message(bytes in vec(any::<u8>(), 0..200)) {
-    RegistrationUpload::<sha2::Sha512, RistrettoPoint>::try_from(&bytes[..]).map_or(true, |_| true);
+    RegistrationUpload::<Default>::try_from(&bytes[..]).map_or(true, |_| true);
 }
 
 #[test]

@@ -13,7 +13,6 @@ use crate::{
         PakeError, ProtocolError,
     },
     group::Group,
-    hash::Hash,
     key_exchange::traits::{KeyExchange, ToBytes},
     keypair::{Key, KeyPair, SizedBytesExt},
     serialization::{serialize, tokenize},
@@ -21,32 +20,31 @@ use crate::{
 use generic_array::{typenum::Unsigned, GenericArray};
 use generic_bytes::SizedBytes;
 use std::convert::TryFrom;
-use std::marker::PhantomData;
 
 // Messages
 // =========
 
 /// The message sent by the client to the server, to initiate registration
-pub struct RegistrationRequest<Grp> {
+pub struct RegistrationRequest<CS: CipherSuite> {
     /// blinded password information
-    pub(crate) alpha: Grp,
+    pub(crate) alpha: CS::Group,
 }
 
-impl<Grp: Group> TryFrom<&[u8]> for RegistrationRequest<Grp> {
+impl<CS: CipherSuite> TryFrom<&[u8]> for RegistrationRequest<CS> {
     type Error = ProtocolError;
     fn try_from(first_message_bytes: &[u8]) -> Result<Self, Self::Error> {
-        let elem_len = Grp::ElemLen::to_usize();
+        let elem_len = <CS::Group as Group>::ElemLen::to_usize();
         let checked_slice = check_slice_size(first_message_bytes, elem_len, "first_message_bytes")?;
 
         // Check that the message is actually containing an element of the
         // correct subgroup
         let arr = GenericArray::from_slice(&checked_slice[checked_slice.len() - elem_len..]);
-        let alpha = Grp::from_element_slice(arr)?;
+        let alpha = CS::Group::from_element_slice(arr)?;
         Ok(Self { alpha })
     }
 }
 
-impl<Grp: Group> RegistrationRequest<Grp> {
+impl<CS: CipherSuite> RegistrationRequest<CS> {
     /// Byte representation for the registration request
     pub fn to_bytes(&self) -> Vec<u8> {
         self.alpha.to_arr().to_vec()
@@ -59,39 +57,36 @@ impl<Grp: Group> RegistrationRequest<Grp> {
 
     /// Deserialization from bytes
     pub fn deserialize(input: &[u8]) -> Result<Self, ProtocolError> {
-        let checked_slice =
-            check_slice_size(&input, Grp::ElemLen::to_usize(), "first_message_bytes")?;
+        let elem_len = <CS::Group as Group>::ElemLen::to_usize();
+        let checked_slice = check_slice_size(&input, elem_len, "first_message_bytes")?;
         // Check that the message is actually containing an element of the
         // correct subgroup
         let arr = GenericArray::from_slice(checked_slice);
-        let alpha = Grp::from_element_slice(arr)?;
+        let alpha = CS::Group::from_element_slice(arr)?;
         Ok(Self { alpha })
     }
 }
 
 /// The answer sent by the server to the user, upon reception of the
 /// registration attempt
-pub struct RegistrationResponse<Grp> {
+pub struct RegistrationResponse<CS: CipherSuite> {
     /// The server's oprf output
-    pub(crate) beta: Grp,
+    pub(crate) beta: CS::Group,
     /// Server's static public key
     pub(crate) server_s_pk: Vec<u8>,
 }
 
-impl<Grp> TryFrom<&[u8]> for RegistrationResponse<Grp>
-where
-    Grp: Group,
-{
+impl<CS: CipherSuite> TryFrom<&[u8]> for RegistrationResponse<CS> {
     type Error = ProtocolError;
 
     fn try_from(bytes: &[u8]) -> Result<Self, Self::Error> {
-        let elem_len = Grp::ElemLen::to_usize();
+        let elem_len = <CS::Group as Group>::ElemLen::to_usize();
         let checked_slice = check_slice_size_atleast(bytes, elem_len, "second_message_bytes")?;
 
         // Check that the message is actually containing an element of the
         // correct subgroup
         let arr = GenericArray::from_slice(&checked_slice[..elem_len]);
-        let beta = Grp::from_element_slice(arr)?;
+        let beta = CS::Group::from_element_slice(arr)?;
 
         // FIXME check public key bytes
         let server_s_pk = checked_slice[elem_len..].to_vec();
@@ -100,10 +95,7 @@ where
     }
 }
 
-impl<Grp> RegistrationResponse<Grp>
-where
-    Grp: Group,
-{
+impl<CS: CipherSuite> RegistrationResponse<CS> {
     /// Byte representation for the registration response message. This does not
     /// include the envelope credentials format
     pub fn to_bytes(&self) -> Vec<u8> {
@@ -120,15 +112,15 @@ where
 
     /// Deserialization from bytes
     pub fn deserialize(input: &[u8]) -> Result<Self, ProtocolError> {
-        let checked_slice =
-            check_slice_size_atleast(&input, Grp::ElemLen::to_usize(), "second_message_bytes")?;
+        let elem_len = <CS::Group as Group>::ElemLen::to_usize();
+        let checked_slice = check_slice_size_atleast(&input, elem_len, "second_message_bytes")?;
 
         // Check that the message is actually containing an element of the
         // correct subgroup
-        let arr = GenericArray::from_slice(&checked_slice[..Grp::ElemLen::to_usize()]);
-        let beta = Grp::from_element_slice(arr)?;
+        let arr = GenericArray::from_slice(&checked_slice[..elem_len]);
+        let beta = CS::Group::from_element_slice(arr)?;
 
-        let (server_s_pk, remainder) = tokenize(&checked_slice[Grp::ElemLen::to_usize()..], 2)?;
+        let (server_s_pk, remainder) = tokenize(&checked_slice[elem_len..], 2)?;
         if !remainder.is_empty() {
             return Err(PakeError::SerializationError.into());
         }
@@ -139,38 +131,36 @@ where
 
 /// The final message from the client, containing sealed cryptographic
 /// identifiers
-pub struct RegistrationUpload<D: Hash, G: Group> {
+pub struct RegistrationUpload<CS: CipherSuite> {
     /// The "envelope" generated by the user, containing sealed
     /// cryptographic identifiers
-    pub(crate) envelope: Envelope<D>,
+    pub(crate) envelope: Envelope<CS::Hash>,
     /// The user's public key
     pub(crate) client_s_pk: Key,
-    pub(crate) _g: PhantomData<G>,
 }
 
-impl<D: Hash, G: Group> TryFrom<&[u8]> for RegistrationUpload<D, G> {
+impl<CS: CipherSuite> TryFrom<&[u8]> for RegistrationUpload<CS> {
     type Error = ProtocolError;
 
     fn try_from(third_message_bytes: &[u8]) -> Result<Self, Self::Error> {
         let key_len = <Key as SizedBytes>::Len::to_usize();
-        let envelope_size = key_len + Envelope::<D>::additional_size();
+        let envelope_size = key_len + Envelope::<CS::Hash>::additional_size();
         let checked_bytes = check_slice_size(
             third_message_bytes,
             envelope_size + key_len,
             "third_message",
         )?;
         let unchecked_client_s_pk = Key::from_bytes(&checked_bytes[envelope_size..])?;
-        let client_s_pk = KeyPair::<G>::check_public_key(unchecked_client_s_pk)?;
+        let client_s_pk = KeyPair::<CS::Group>::check_public_key(unchecked_client_s_pk)?;
 
         Ok(Self {
-            envelope: Envelope::<D>::from_bytes(&checked_bytes[..envelope_size])?,
+            envelope: Envelope::<CS::Hash>::from_bytes(&checked_bytes[..envelope_size])?,
             client_s_pk,
-            _g: PhantomData,
         })
     }
 }
 
-impl<D: Hash, G: Group> RegistrationUpload<D, G> {
+impl<CS: CipherSuite> RegistrationUpload<CS> {
     /// Serialization into bytes
     pub fn serialize(&self) -> Vec<u8> {
         let mut message: Vec<u8> = Vec::new();
@@ -182,7 +172,7 @@ impl<D: Hash, G: Group> RegistrationUpload<D, G> {
     /// Deserialization from bytes
     pub fn deserialize(input: &[u8]) -> Result<Self, ProtocolError> {
         let (client_s_pk, remainder) = tokenize(&input, 2)?;
-        let (envelope, remainder) = Envelope::<D>::deserialize(&remainder)?;
+        let (envelope, remainder) = Envelope::<CS::Hash>::deserialize(&remainder)?;
 
         if !remainder.is_empty() {
             return Err(PakeError::SerializationError.into());
@@ -190,8 +180,7 @@ impl<D: Hash, G: Group> RegistrationUpload<D, G> {
 
         Ok(Self {
             envelope,
-            client_s_pk: KeyPair::<G>::check_public_key(Key::from_bytes(&client_s_pk)?)?,
-            _g: PhantomData,
+            client_s_pk: KeyPair::<CS::Group>::check_public_key(Key::from_bytes(&client_s_pk)?)?,
         })
     }
 }

@@ -96,7 +96,7 @@ impl Default for ClientRegistrationFinishParameters {
 /// Contains the fields that are returned by a client registration start
 pub struct ClientRegistrationStartResult<CS: CipherSuite> {
     /// The registration request message to be sent to the server
-    pub message: RegistrationRequest<CS::Group>,
+    pub message: RegistrationRequest<CS>,
     /// The client state that must be persisted in order to complete registration
     pub state: ClientRegistration<CS>,
 }
@@ -132,19 +132,18 @@ impl<CS: CipherSuite> ClientRegistration<CS> {
         let (token, alpha) = oprf::blind::<R, CS::Group, CS::Hash>(&password, blinding_factor_rng)?;
 
         Ok(ClientRegistrationStartResult {
-            message: RegistrationRequest::<CS::Group> { alpha },
+            message: RegistrationRequest::<CS> { alpha },
             state: Self { token },
         })
     }
 }
 
 /// Contains the fields that are returned by a client registration finish
-pub struct ClientRegistrationFinishResult<D: Hash, G: Group> {
+pub struct ClientRegistrationFinishResult<CS: CipherSuite> {
     /// The registration upload message to be sent to the server
-    pub message: RegistrationUpload<D, G>,
+    pub message: RegistrationUpload<CS>,
     /// The export key output by client registration
-    pub export_key: GenericArray<u8, <D as Digest>::OutputSize>,
-    _g: PhantomData<G>,
+    pub export_key: GenericArray<u8, <CS::Hash as Digest>::OutputSize>,
 }
 
 impl<CS: CipherSuite> ClientRegistration<CS> {
@@ -182,9 +181,9 @@ impl<CS: CipherSuite> ClientRegistration<CS> {
     pub fn finish<R: CryptoRng + RngCore>(
         self,
         rng: &mut R,
-        r2: RegistrationResponse<CS::Group>,
+        r2: RegistrationResponse<CS>,
         params: ClientRegistrationFinishParameters,
-    ) -> Result<ClientRegistrationFinishResult<CS::Hash, CS::Group>, ProtocolError> {
+    ) -> Result<ClientRegistrationFinishResult<CS>, ProtocolError> {
         let optional_ids = match params {
             ClientRegistrationFinishParameters::WithIdentifiers(id_u, id_s) => Some((id_u, id_s)),
             ClientRegistrationFinishParameters::Default => None,
@@ -206,10 +205,8 @@ impl<CS: CipherSuite> ClientRegistration<CS> {
             message: RegistrationUpload {
                 envelope,
                 client_s_pk: client_static_keypair.public().clone(),
-                _g: PhantomData,
             },
             export_key,
-            _g: PhantomData,
         })
     }
 }
@@ -245,7 +242,7 @@ impl<CS: CipherSuite> Drop for ClientLogin<CS> {
 /// Contains the fields that are returned by a server registration start
 pub struct ServerRegistrationStartResult<CS: CipherSuite> {
     /// The registration resposne message to send to the client
-    pub message: RegistrationResponse<CS::Group>,
+    pub message: RegistrationResponse<CS>,
     /// The state that the server must keep in order to complete registration
     pub state: ServerRegistration<CS>,
 }
@@ -336,7 +333,7 @@ impl<CS: CipherSuite> ServerRegistration<CS> {
     /// ```
     pub fn start<R: RngCore + CryptoRng>(
         rng: &mut R,
-        message: RegistrationRequest<CS::Group>,
+        message: RegistrationRequest<CS>,
         server_s_pk: &Key,
     ) -> Result<ServerRegistrationStartResult<CS>, ProtocolError> {
         // RFC: generate oprf_key (salt) and v_u = g^oprf_key
@@ -388,10 +385,7 @@ impl<CS: CipherSuite> ServerRegistration<CS> {
     /// let client_record = server_registration_start_result.state.finish(client_registration_finish_result.message)?;
     /// # Ok::<(), ProtocolError>(())
     /// ```
-    pub fn finish(
-        self,
-        message: RegistrationUpload<CS::Hash, CS::Group>,
-    ) -> Result<Self, ProtocolError> {
+    pub fn finish(self, message: RegistrationUpload<CS>) -> Result<Self, ProtocolError> {
         Ok(Self {
             envelope: Some(message.envelope),
             client_s_pk: Some(message.client_s_pk),
