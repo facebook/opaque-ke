@@ -28,7 +28,6 @@ use chacha20poly1305::aead::{Aead, NewAead};
 use chacha20poly1305::{ChaCha20Poly1305, Key, Nonce};
 use rustyline::error::ReadlineError;
 use rustyline::Editor;
-use std::convert::TryFrom;
 use std::process::exit;
 
 use opaque_ke::{
@@ -129,7 +128,7 @@ fn register_locker(
 
     Locker {
         contents: ciphertext,
-        password_file: password_file.to_bytes(),
+        password_file: password_file.serialize(),
     }
 }
 
@@ -150,7 +149,8 @@ fn open_locker(
 
     // Client sends credential_request_bytes to server
 
-    let password_file = ServerRegistration::<Default>::try_from(&locker.password_file[..]).unwrap();
+    let password_file =
+        ServerRegistration::<Default>::deserialize(&locker.password_file[..]).unwrap();
     let mut server_rng = OsRng;
     let server_login_start_result = ServerLogin::start(
         &mut server_rng,

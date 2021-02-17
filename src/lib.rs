@@ -169,7 +169,7 @@
 //! a [ServerRegistration] from the second step.
 //! The server runs [ServerRegistration::finish] to produce a finalized [ServerRegistration].
 //! At this point, the client can be considered as successfully registered, and the server can invoke
-//! [ServerRegistration::to_bytes] to store the password file for use during the login protocol.
+//! [ServerRegistration::serialize] to store the password file for use during the login protocol.
 //! ```
 //! # use opaque_ke::{
 //! #   errors::ProtocolError,
@@ -268,15 +268,14 @@
 //! # let server_kp = Default::generate_random_keypair(&mut server_rng);
 //! # let server_registration_start_result = ServerRegistration::<Default>::start(&mut server_rng, client_registration_start_result.message, server_kp.public())?;
 //! # let client_registration_finish_result = client_registration_start_result.state.finish(&mut client_rng, server_registration_start_result.message, ClientRegistrationFinishParameters::default())?;
-//! # let password_file_bytes = server_registration_start_result.state.finish(client_registration_finish_result.message)?.to_bytes();
+//! # let password_file_bytes = server_registration_start_result.state.finish(client_registration_finish_result.message)?.serialize();
 //! # let client_login_start_result = ClientLogin::<Default>::start(
 //! #   &mut client_rng,
 //! #   b"password",
 //! #   ClientLoginStartParameters::default(),
 //! # )?;
 //! use opaque_ke::{ServerLogin, ServerLoginStartParameters};
-//! use std::convert::TryFrom;
-//! let password_file = ServerRegistration::<Default>::try_from(&password_file_bytes[..])?;
+//! let password_file = ServerRegistration::<Default>::deserialize(&password_file_bytes[..])?;
 //! let mut server_rng = OsRng;
 //! let server_login_start_result = ServerLogin::start(
 //!     &mut server_rng,
@@ -317,15 +316,14 @@
 //! # let server_kp = Default::generate_random_keypair(&mut server_rng);
 //! # let server_registration_start_result = ServerRegistration::<Default>::start(&mut server_rng, client_registration_start_result.message, server_kp.public())?;
 //! # let client_registration_finish_result = client_registration_start_result.state.finish(&mut client_rng, server_registration_start_result.message, ClientRegistrationFinishParameters::default())?;
-//! # let password_file_bytes = server_registration_start_result.state.finish(client_registration_finish_result.message)?.to_bytes();
+//! # let password_file_bytes = server_registration_start_result.state.finish(client_registration_finish_result.message)?.serialize();
 //! # let client_login_start_result = ClientLogin::<Default>::start(
 //! #     &mut client_rng,
 //! #     b"password",
 //! #     ClientLoginStartParameters::default(),
 //! # )?;
-//! # use std::convert::TryFrom;
 //! # let password_file =
-//! #   ServerRegistration::<Default>::try_from(
+//! #   ServerRegistration::<Default>::deserialize(
 //! #     &password_file_bytes[..],
 //! #   )?;
 //! # let server_login_start_result =
@@ -364,15 +362,14 @@
 //! # let server_kp = Default::generate_random_keypair(&mut server_rng);
 //! # let server_registration_start_result = ServerRegistration::<Default>::start(&mut server_rng, client_registration_start_result.message, server_kp.public())?;
 //! # let client_registration_finish_result = client_registration_start_result.state.finish(&mut client_rng, server_registration_start_result.message, ClientRegistrationFinishParameters::default())?;
-//! # let password_file_bytes = server_registration_start_result.state.finish(client_registration_finish_result.message)?.to_bytes();
+//! # let password_file_bytes = server_registration_start_result.state.finish(client_registration_finish_result.message)?.serialize();
 //! # let client_login_start_result = ClientLogin::<Default>::start(
 //! #   &mut client_rng,
 //! #   b"password",
 //! #   ClientLoginStartParameters::default(),
 //! # )?;
-//! # use std::convert::TryFrom;
 //! # let password_file =
-//! #   ServerRegistration::<Default>::try_from(
+//! #   ServerRegistration::<Default>::deserialize(
 //! #     &password_file_bytes[..],
 //! #   )?;
 //! # let server_login_start_result =
@@ -444,15 +441,14 @@
 //! // During setup or registration, the server transmits its static public key to the client
 //! let server_s_pk = server_kp.public(); // obtained from the server
 //! # let client_registration_finish_result = client_registration_start_result.state.finish(&mut client_rng, server_registration_start_result.message, ClientRegistrationFinishParameters::default())?;
-//! # let password_file_bytes = server_registration_start_result.state.finish(client_registration_finish_result.message)?.to_bytes();
+//! # let password_file_bytes = server_registration_start_result.state.finish(client_registration_finish_result.message)?.serialize();
 //! # let client_login_start_result = ClientLogin::<Default>::start(
 //! #     &mut client_rng,
 //! #     b"password",
 //! #     ClientLoginStartParameters::default(),
 //! # )?;
-//! # use std::convert::TryFrom;
 //! # let password_file =
-//! #   ServerRegistration::<Default>::try_from(
+//! #   ServerRegistration::<Default>::deserialize(
 //! #     &password_file_bytes[..],
 //! #   )?;
 //! # let server_login_start_result =
@@ -522,15 +518,14 @@
 //!     server_registration_start_result.message,
 //!     ClientRegistrationFinishParameters::default()
 //! )?;
-//! # let password_file_bytes = server_registration_start_result.state.finish(client_registration_finish_result.message)?.to_bytes();
+//! # let password_file_bytes = server_registration_start_result.state.finish(client_registration_finish_result.message)?.serialize();
 //! # let client_login_start_result = ClientLogin::<Default>::start(
 //! #     &mut client_rng,
 //! #     b"password",
 //! #     ClientLoginStartParameters::default(),
 //! # )?;
-//! # use std::convert::TryFrom;
 //! # let password_file =
-//! #   ServerRegistration::<Default>::try_from(
+//! #   ServerRegistration::<Default>::deserialize(
 //! #     &password_file_bytes[..],
 //! #   )?;
 //! # let server_login_start_result =
@@ -617,15 +612,14 @@
 //! # let server_kp = Default::generate_random_keypair(&mut server_rng);
 //! # let server_registration_start_result = ServerRegistration::<Default>::start(&mut server_rng, client_registration_start_result.message, server_kp.public())?;
 //! # let client_registration_finish_result = client_registration_start_result.state.finish(&mut client_rng, server_registration_start_result.message, ClientRegistrationFinishParameters::WithIdentifiers(b"username".to_vec(), b"facebook.com".to_vec()))?;
-//! # let password_file_bytes = server_registration_start_result.state.finish(client_registration_finish_result.message)?.to_bytes();
+//! # let password_file_bytes = server_registration_start_result.state.finish(client_registration_finish_result.message)?.serialize();
 //! # let client_login_start_result = ClientLogin::<Default>::start(
 //! #   &mut client_rng,
 //! #   b"password",
 //! #   ClientLoginStartParameters::default(),
 //! # )?;
 //! # use opaque_ke::{ServerLogin, ServerLoginStartParameters};
-//! # use std::convert::TryFrom;
-//! # let password_file = ServerRegistration::<Default>::try_from(&password_file_bytes[..])?;
+//! # let password_file = ServerRegistration::<Default>::deserialize(&password_file_bytes[..])?;
 //! # let mut server_rng = OsRng;
 //! let server_login_start_result = ServerLogin::start(
 //!     &mut server_rng,
@@ -665,15 +659,14 @@
 //! # let server_kp = Default::generate_random_keypair(&mut server_rng);
 //! # let server_registration_start_result = ServerRegistration::<Default>::start(&mut server_rng, client_registration_start_result.message, server_kp.public())?;
 //! # let client_registration_finish_result = client_registration_start_result.state.finish(&mut client_rng, server_registration_start_result.message, ClientRegistrationFinishParameters::WithIdentifiers(b"username".to_vec(), b"facebook.com".to_vec()))?;
-//! # let password_file_bytes = server_registration_start_result.state.finish(client_registration_finish_result.message)?.to_bytes();
+//! # let password_file_bytes = server_registration_start_result.state.finish(client_registration_finish_result.message)?.serialize();
 //! # let client_login_start_result = ClientLogin::<Default>::start(
 //! #     &mut client_rng,
 //! #     b"password",
 //! #     ClientLoginStartParameters::default(),
 //! # )?;
-//! # use std::convert::TryFrom;
 //! # let password_file =
-//! #   ServerRegistration::<Default>::try_from(
+//! #   ServerRegistration::<Default>::deserialize(
 //! #     &password_file_bytes[..],
 //! #   )?;
 //! # let server_login_start_result =

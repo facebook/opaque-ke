@@ -30,26 +30,7 @@ pub struct RegistrationRequest<CS: CipherSuite> {
     pub(crate) alpha: CS::Group,
 }
 
-impl<CS: CipherSuite> TryFrom<&[u8]> for RegistrationRequest<CS> {
-    type Error = ProtocolError;
-    fn try_from(first_message_bytes: &[u8]) -> Result<Self, Self::Error> {
-        let elem_len = <CS::Group as Group>::ElemLen::to_usize();
-        let checked_slice = check_slice_size(first_message_bytes, elem_len, "first_message_bytes")?;
-
-        // Check that the message is actually containing an element of the
-        // correct subgroup
-        let arr = GenericArray::from_slice(&checked_slice[checked_slice.len() - elem_len..]);
-        let alpha = CS::Group::from_element_slice(arr)?;
-        Ok(Self { alpha })
-    }
-}
-
 impl<CS: CipherSuite> RegistrationRequest<CS> {
-    /// Byte representation for the registration request
-    pub fn to_bytes(&self) -> Vec<u8> {
-        self.alpha.to_arr().to_vec()
-    }
-
     /// Serialization into bytes
     pub fn serialize(&self) -> Vec<u8> {
         self.alpha.to_arr().to_vec()
@@ -76,32 +57,7 @@ pub struct RegistrationResponse<CS: CipherSuite> {
     pub(crate) server_s_pk: Vec<u8>,
 }
 
-impl<CS: CipherSuite> TryFrom<&[u8]> for RegistrationResponse<CS> {
-    type Error = ProtocolError;
-
-    fn try_from(bytes: &[u8]) -> Result<Self, Self::Error> {
-        let elem_len = <CS::Group as Group>::ElemLen::to_usize();
-        let checked_slice = check_slice_size_atleast(bytes, elem_len, "second_message_bytes")?;
-
-        // Check that the message is actually containing an element of the
-        // correct subgroup
-        let arr = GenericArray::from_slice(&checked_slice[..elem_len]);
-        let beta = CS::Group::from_element_slice(arr)?;
-
-        // FIXME check public key bytes
-        let server_s_pk = checked_slice[elem_len..].to_vec();
-
-        Ok(Self { beta, server_s_pk })
-    }
-}
-
 impl<CS: CipherSuite> RegistrationResponse<CS> {
-    /// Byte representation for the registration response message. This does not
-    /// include the envelope credentials format
-    pub fn to_bytes(&self) -> Vec<u8> {
-        [&self.beta.to_arr().to_vec()[..], &self.server_s_pk[..]].concat()
-    }
-
     /// Serialization into bytes
     pub fn serialize(&self) -> Vec<u8> {
         let mut registration_response: Vec<u8> = Vec::new();
@@ -139,27 +95,6 @@ pub struct RegistrationUpload<CS: CipherSuite> {
     pub(crate) client_s_pk: Key,
 }
 
-impl<CS: CipherSuite> TryFrom<&[u8]> for RegistrationUpload<CS> {
-    type Error = ProtocolError;
-
-    fn try_from(third_message_bytes: &[u8]) -> Result<Self, Self::Error> {
-        let key_len = <Key as SizedBytes>::Len::to_usize();
-        let envelope_size = key_len + Envelope::<CS::Hash>::additional_size();
-        let checked_bytes = check_slice_size(
-            third_message_bytes,
-            envelope_size + key_len,
-            "third_message",
-        )?;
-        let unchecked_client_s_pk = Key::from_bytes(&checked_bytes[envelope_size..])?;
-        let client_s_pk = KeyPair::<CS::Group>::check_public_key(unchecked_client_s_pk)?;
-
-        Ok(Self {
-            envelope: Envelope::<CS::Hash>::from_bytes(&checked_bytes[..envelope_size])?,
-            client_s_pk,
-        })
-    }
-}
-
 impl<CS: CipherSuite> RegistrationUpload<CS> {
     /// Serialization into bytes
     pub fn serialize(&self) -> Vec<u8> {
@@ -192,19 +127,7 @@ pub struct CredentialRequest<CS: CipherSuite> {
     pub(crate) ke1_message: <CS::KeyExchange as KeyExchange<CS::Hash, CS::Group>>::KE1Message,
 }
 
-impl<CS: CipherSuite> TryFrom<&[u8]> for CredentialRequest<CS> {
-    type Error = ProtocolError;
-    fn try_from(first_message_bytes: &[u8]) -> Result<Self, Self::Error> {
-        Self::deserialize(first_message_bytes)
-    }
-}
-
 impl<CS: CipherSuite> CredentialRequest<CS> {
-    /// byte representation for the login request
-    pub(crate) fn to_bytes(&self) -> Vec<u8> {
-        [&self.alpha.to_arr()[..], &self.ke1_message.to_bytes()].concat()
-    }
-
     /// Serialization into bytes
     pub fn serialize(&self) -> Vec<u8> {
         let mut credential_request: Vec<u8> = Vec::new();
@@ -270,16 +193,9 @@ impl<CS: CipherSuite> CredentialResponse<CS> {
 
     /// Deserialization from bytes
     pub fn deserialize(input: &[u8]) -> Result<Self, ProtocolError> {
-        Self::try_from(input)
-    }
-}
-
-impl<CS: CipherSuite> TryFrom<&[u8]> for CredentialResponse<CS> {
-    type Error = ProtocolError;
-    fn try_from(second_message_bytes: &[u8]) -> Result<Self, Self::Error> {
         let elem_len = <CS::Group as Group>::ElemLen::to_usize();
         let checked_slice =
-            check_slice_size_atleast(second_message_bytes, elem_len, "login_second_message_bytes")?;
+            check_slice_size_atleast(input, elem_len, "login_second_message_bytes")?;
 
         // Check that the message is actually containing an element of the
         // correct subgroup
@@ -321,16 +237,6 @@ pub struct CredentialFinalization<CS: CipherSuite> {
     pub(crate) ke3_message: <CS::KeyExchange as KeyExchange<CS::Hash, CS::Group>>::KE3Message,
 }
 
-impl<CS: CipherSuite> TryFrom<&[u8]> for CredentialFinalization<CS> {
-    type Error = ProtocolError;
-
-    fn try_from(bytes: &[u8]) -> Result<Self, Self::Error> {
-        let ke3_message =
-            <CS::KeyExchange as KeyExchange<CS::Hash, CS::Group>>::KE3Message::try_from(bytes)?;
-        Ok(Self { ke3_message })
-    }
-}
-
 impl<CS: CipherSuite> CredentialFinalization<CS> {
     /// Serialization into bytes
     pub fn serialize(&self) -> Vec<u8> {
@@ -339,11 +245,8 @@ impl<CS: CipherSuite> CredentialFinalization<CS> {
 
     /// Deserialization from bytes
     pub fn deserialize(input: &[u8]) -> Result<Self, ProtocolError> {
-        Self::try_from(input)
-    }
-
-    /// byte representation for the login finalization
-    pub fn to_bytes(&self) -> Vec<u8> {
-        self.ke3_message.to_bytes()
+        let ke3_message =
+            <CS::KeyExchange as KeyExchange<CS::Hash, CS::Group>>::KE3Message::try_from(input)?;
+        Ok(Self { ke3_message })
     }
 }

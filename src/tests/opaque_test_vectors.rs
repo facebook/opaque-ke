@@ -354,7 +354,7 @@ fn get_password_file_bytes(parameters: &TestVectorParameters) -> Result<Vec<u8>,
         .state
         .finish(RegistrationUpload::deserialize(&parameters.registration_upload[..]).unwrap())?;
 
-    Ok(password_file.to_bytes())
+    Ok(password_file.serialize())
 }
 
 #[test]
@@ -463,7 +463,7 @@ fn test_ke2() -> Result<(), ProtocolError> {
             CycleRng::new([parameters.server_private_keyshare, parameters.server_nonce].concat());
         let server_login_start_result = ServerLogin::<Ristretto255Sha512NoSlowHash>::start(
             &mut server_private_keyshare_and_nonce_rng,
-            ServerRegistration::try_from(&password_file_bytes[..]).unwrap(),
+            ServerRegistration::deserialize(&password_file_bytes[..]).unwrap(),
             &Key::try_from(&parameters.server_private_key[..]).unwrap(),
             CredentialRequest::<Ristretto255Sha512NoSlowHash>::deserialize(&parameters.KE1[..])
                 .unwrap(),
@@ -527,7 +527,7 @@ fn test_ke3() -> Result<(), ProtocolError> {
         );
         assert_eq!(
             hex::encode(&parameters.KE3),
-            hex::encode(client_login_finish_result.message.to_bytes())
+            hex::encode(client_login_finish_result.message.serialize())
         );
         assert_eq!(
             hex::encode(&parameters.export_key),
@@ -546,7 +546,7 @@ fn test_server_login_finish() -> Result<(), ProtocolError> {
             CycleRng::new([parameters.server_private_keyshare, parameters.server_nonce].concat());
         let server_login_start_result = ServerLogin::<Ristretto255Sha512NoSlowHash>::start(
             &mut server_private_keyshare_and_nonce_rng,
-            ServerRegistration::try_from(&password_file_bytes[..]).unwrap(),
+            ServerRegistration::deserialize(&password_file_bytes[..]).unwrap(),
             &Key::try_from(&parameters.server_private_key[..]).unwrap(),
             CredentialRequest::<Ristretto255Sha512NoSlowHash>::deserialize(&parameters.KE1[..])
                 .unwrap(),
@@ -563,7 +563,7 @@ fn test_server_login_finish() -> Result<(), ProtocolError> {
 
         let server_login_result = server_login_start_result
             .state
-            .finish(CredentialFinalization::try_from(&parameters.KE3[..])?)?;
+            .finish(CredentialFinalization::deserialize(&parameters.KE3[..])?)?;
 
         assert_eq!(
             hex::encode(parameters.session_key),
