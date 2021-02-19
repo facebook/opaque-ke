@@ -6,10 +6,12 @@
 use crate::{
     errors::{utils::check_slice_size_atleast, InternalPakeError, PakeError, ProtocolError},
     hash::Hash,
+    keypair::Key,
     serialization::{serialize, tokenize},
 };
 use digest::Digest;
 use generic_array::{typenum::Unsigned, GenericArray};
+use generic_bytes::SizedBytes;
 use hkdf::Hkdf;
 use hmac::{Hmac, Mac, NewMac};
 use rand::{CryptoRng, RngCore};
@@ -168,9 +170,8 @@ impl<D: Hash> Envelope<D> {
         server_s_pk: &[u8],
         optional_ids: Option<(Vec<u8>, Vec<u8>)>,
     ) -> Result<(Self, GenericArray<u8, <D as Digest>::OutputSize>), InternalPakeError> {
-        let plaintext = serialize(&client_s_sk, 2);
         let aad = construct_aad(server_s_pk, &optional_ids);
-        Self::seal_raw(rng, key, &plaintext, &aad, mode_from_ids(&optional_ids))
+        Self::seal_raw(rng, key, &client_s_sk, &aad, mode_from_ids(&optional_ids))
     }
 
     /// Uses a key to convert the plaintext into an envelope, authenticated by the aad field.
@@ -239,15 +240,13 @@ impl<D: Hash> Envelope<D> {
         let aad = construct_aad(server_s_pk, optional_ids);
         let opened = self.open_raw(key, &aad)?;
 
-        let (client_s_sk, remainder) = tokenize(&opened.plaintext, 2)
-            .map_err(|_| InternalPakeError::UnexpectedEnvelopeContentsError)?;
-        if !remainder.is_empty() {
-            // Should not have anything else in plaintext
+        if opened.plaintext.len() != <Key as SizedBytes>::Len::to_usize() {
+            // Plaintext should consist of a single key
             return Err(InternalPakeError::UnexpectedEnvelopeContentsError);
         }
 
         Ok(OpenedEnvelope {
-            client_s_sk,
+            client_s_sk: opened.plaintext,
             export_key: opened.export_key,
         })
     }
@@ -300,7 +299,7 @@ fn construct_aad(server_s_pk: &[u8], optional_ids: &Option<(Vec<u8>, Vec<u8>)>) 
         .iter()
         .flat_map(|(l, r)| [serialize(l, 2), serialize(r, 2)].concat())
         .collect();
-    [serialize(server_s_pk, 2), ids].concat()
+    [server_s_pk.to_vec(), ids].concat()
 }
 
 pub(crate) fn mode_from_ids(optional_ids: &Option<(Vec<u8>, Vec<u8>)>) -> InnerEnvelopeMode {
