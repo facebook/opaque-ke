@@ -30,7 +30,7 @@ use std::convert::TryFrom;
 const KEY_LEN: usize = 32;
 pub(crate) type NonceLen = U32;
 
-static STR_3DH: &[u8] = b"3DH keys";
+static STR_3DH: &[u8] = b"3DH";
 static STR_CLIENT_MAC: &[u8] = b"client mac";
 static STR_HANDSHAKE_SECRET: &[u8] = b"handshake secret";
 static STR_SERVER_MAC: &[u8] = b"server mac";
@@ -95,6 +95,22 @@ impl<D: Hash, G: Group> KeyExchange<D, G> for TripleDH {
             GenericArray::clone_from_slice(&server_nonce_bytes)
         };
 
+        let server_transcript = [
+            &l2_bytes[..],
+            &server_nonce[..],
+            &server_e_kp.public().to_arr(),
+        ]
+        .concat();
+
+        let derivation_transcript = [
+            STR_3DH,
+            &serialize(&id_u, 2),
+            &serialized_credential_request[..],
+            &serialize(&id_s, 2),
+            &server_transcript[..],
+        ]
+        .concat();
+
         let (session_key, km2, ke2, km3) = derive_3dh_keys::<D, G>(
             TripleDHComponents {
                 pk1: ke1_message.client_e_pk.clone(),
@@ -104,10 +120,7 @@ impl<D: Hash, G: Group> KeyExchange<D, G> for TripleDH {
                 pk3: client_s_pk,
                 sk3: server_e_kp.private().clone(),
             },
-            &ke1_message.client_nonce,
-            &server_nonce,
-            &id_u,
-            &id_s,
+            &derivation_transcript,
         )?;
 
         // Compute encryption of e_info
@@ -121,14 +134,8 @@ impl<D: Hash, G: Group> KeyExchange<D, G> for TripleDH {
             .map(|(&x1, &x2)| x1 ^ x2)
             .collect();
 
-        let transcript2: Vec<u8> = [
-            &serialized_credential_request[..],
-            &l2_bytes[..],
-            &server_nonce[..],
-            &server_e_kp.public().to_arr(),
-            &serialize(&ciphertext, 2),
-        ]
-        .concat();
+        let transcript2: Vec<u8> =
+            [&derivation_transcript[..], &serialize(&ciphertext, 2)].concat();
 
         let mut hasher = D::new();
         hasher.update(&transcript2);
@@ -170,6 +177,21 @@ impl<D: Hash, G: Group> KeyExchange<D, G> for TripleDH {
         id_u: Vec<u8>,
         id_s: Vec<u8>,
     ) -> Result<(Vec<u8>, Vec<u8>, Self::KE3Message), ProtocolError> {
+        let server_transcript = [
+            &l2_component[..],
+            &ke2_message.to_bytes_without_info_or_mac(),
+        ]
+        .concat();
+
+        let derivation_transcript = [
+            STR_3DH,
+            &serialize(&id_u, 2),
+            &serialized_credential_request,
+            &serialize(&id_s, 2),
+            &server_transcript[..],
+        ]
+        .concat();
+
         let (session_key, km2, ke2, km3) = derive_3dh_keys::<D, G>(
             TripleDHComponents {
                 pk1: ke2_message.server_e_pk.clone(),
@@ -179,16 +201,12 @@ impl<D: Hash, G: Group> KeyExchange<D, G> for TripleDH {
                 pk3: ke2_message.server_e_pk.clone(),
                 sk3: client_s_sk,
             },
-            &ke1_state.client_nonce,
-            &ke2_message.server_nonce,
-            &id_u,
-            &id_s,
+            &derivation_transcript,
         )?;
 
         let transcript: Vec<u8> = [
-            &serialized_credential_request,
-            &l2_component[..],
-            &ke2_message.to_bytes_without_mac(),
+            &derivation_transcript[..],
+            &serialize(&ke2_message.e_info[..], 2),
         ]
         .concat();
 
@@ -370,18 +388,18 @@ impl<HashLen: ArrayLength<u8>> TryFrom<&[u8]> for Ke2State<HashLen> {
 
 impl<HashLen: ArrayLength<u8>> ToBytes for Ke2Message<HashLen> {
     fn to_bytes(&self) -> Vec<u8> {
-        [&self.to_bytes_without_mac(), &self.mac[..]].concat()
+        [
+            &self.to_bytes_without_info_or_mac(),
+            &serialize(&self.e_info, 2),
+            &self.mac[..],
+        ]
+        .concat()
     }
 }
 
 impl<HashLen: ArrayLength<u8>> Ke2Message<HashLen> {
-    fn to_bytes_without_mac(&self) -> Vec<u8> {
-        [
-            &self.server_nonce[..],
-            &self.server_e_pk.to_arr(),
-            &serialize(&self.e_info, 2),
-        ]
-        .concat()
+    fn to_bytes_without_info_or_mac(&self) -> Vec<u8> {
+        [&self.server_nonce[..], &self.server_e_pk.to_arr()].concat()
     }
 }
 
@@ -457,10 +475,7 @@ impl<HashLen: ArrayLength<u8>> TryFrom<&[u8]> for Ke3Message<HashLen> {
 // with some auxiliary metadata, to produce the session key and two MAC keys
 fn derive_3dh_keys<D: Hash, G: Group>(
     dh: TripleDHComponents,
-    client_nonce: &GenericArray<u8, NonceLen>,
-    server_nonce: &GenericArray<u8, NonceLen>,
-    id_u: &[u8],
-    id_s: &[u8],
+    derivation_transcript: &[u8],
 ) -> Result<TripleDHDerivationResult<D>, ProtocolError> {
     let ikm: Vec<u8> = [
         &KeyPair::<G>::diffie_hellman(dh.pk1, dh.sk1)?[..],
@@ -469,18 +484,14 @@ fn derive_3dh_keys<D: Hash, G: Group>(
     ]
     .concat();
 
-    let info: Vec<u8> = [
-        STR_3DH,
-        &serialize(&client_nonce, 2),
-        &serialize(&server_nonce, 2),
-        &serialize(id_u, 2),
-        &serialize(id_s, 2),
-    ]
-    .concat();
-
     let extracted_ikm = Hkdf::<D>::new(None, &ikm);
-    let handshake_secret = derive_secrets::<D>(&extracted_ikm, &STR_HANDSHAKE_SECRET, &info)?;
-    let session_key = derive_secrets::<D>(&extracted_ikm, &STR_SESSION_KEY, &info)?;
+    let handshake_secret = derive_secrets::<D>(
+        &extracted_ikm,
+        &STR_HANDSHAKE_SECRET,
+        &derivation_transcript,
+    )?;
+    let session_key =
+        derive_secrets::<D>(&extracted_ikm, &STR_SESSION_KEY, &derivation_transcript)?;
 
     let km2 = hkdf_expand_label::<D>(
         &handshake_secret,

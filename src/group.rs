@@ -25,7 +25,7 @@ use zeroize::Zeroize;
 
 /// A prime-order subgroup of a base field (EC, prime-order field ...). This
 /// subgroup is noted additively — as in the draft RFC — in this trait.
-pub trait Group: Sized + for<'a> Mul<&'a <Self as Group>::Scalar, Output = Self> {
+pub trait Group: Copy + Sized + for<'a> Mul<&'a <Self as Group>::Scalar, Output = Self> {
     /// The type of base field scalars
     type Scalar: Zeroize + Clone;
     /// The byte length necessary to represent scalars

@@ -584,7 +584,6 @@ impl<CS: CipherSuite> ClientLogin<CS> {
             ClientLoginFinishParameters::WithIdentifiers(id_u, id_s) => Some((id_u, id_s)),
         };
 
-        let l2_beta_bytes = &l2.beta.to_arr()[..];
         let server_s_pk_bytes = l2.server_s_pk.to_arr().to_vec();
 
         let password_derived_key =
@@ -604,20 +603,16 @@ impl<CS: CipherSuite> ClientLogin<CS> {
                 KeyPair::<CS::Group>::public_from_private(&client_s_sk)
                     .to_arr()
                     .to_vec(),
-                server_s_pk_bytes.clone(),
+                server_s_pk_bytes,
             ),
             Some((id_u, id_s)) => (id_u, id_s),
         };
 
-        let l2_bytes: Vec<u8> = [
-            l2_beta_bytes,
-            &serialize(&server_s_pk_bytes, 2),
-            &l2.envelope.to_bytes(),
-        ]
-        .concat();
+        let credential_response_component =
+            CredentialResponse::<CS>::serialize_without_ke(&l2.beta, &l2.server_s_pk, &l2.envelope);
 
         let (confidential_info, session_key, ke3_message) = CS::KeyExchange::generate_ke3(
-            l2_bytes,
+            credential_response_component,
             l2.ke2_message,
             &self.ke1_state,
             &self.serialized_credential_request,
