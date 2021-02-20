@@ -15,7 +15,6 @@ use crate::{
     group::Group,
     key_exchange::traits::{KeyExchange, ToBytes},
     keypair::{Key, KeyPair, SizedBytesExt},
-    serialization::{serialize, tokenize},
 };
 use generic_array::{typenum::Unsigned, GenericArray};
 use generic_bytes::SizedBytes;
@@ -60,28 +59,25 @@ pub struct RegistrationResponse<CS: CipherSuite> {
 impl<CS: CipherSuite> RegistrationResponse<CS> {
     /// Serialization into bytes
     pub fn serialize(&self) -> Vec<u8> {
-        let mut registration_response: Vec<u8> = Vec::new();
-        registration_response.extend_from_slice(&self.beta.to_arr());
-        registration_response.extend_from_slice(&serialize(&self.server_s_pk, 2));
-        registration_response
+        [self.beta.to_arr().to_vec(), self.server_s_pk.clone()].concat()
     }
 
     /// Deserialization from bytes
     pub fn deserialize(input: &[u8]) -> Result<Self, ProtocolError> {
         let elem_len = <CS::Group as Group>::ElemLen::to_usize();
-        let checked_slice = check_slice_size_atleast(&input, elem_len, "second_message_bytes")?;
+        let key_len = <Key as SizedBytes>::Len::to_usize();
+        let checked_slice =
+            check_slice_size(&input, elem_len + key_len, "registration_response_bytes")?;
 
         // Check that the message is actually containing an element of the
         // correct subgroup
         let arr = GenericArray::from_slice(&checked_slice[..elem_len]);
         let beta = CS::Group::from_element_slice(arr)?;
 
-        let (server_s_pk, remainder) = tokenize(&checked_slice[elem_len..], 2)?;
-        if !remainder.is_empty() {
-            return Err(PakeError::SerializationError.into());
-        }
-
-        Ok(Self { server_s_pk, beta })
+        Ok(Self {
+            server_s_pk: checked_slice[elem_len..].to_vec(),
+            beta,
+        })
     }
 }
 
@@ -98,16 +94,20 @@ pub struct RegistrationUpload<CS: CipherSuite> {
 impl<CS: CipherSuite> RegistrationUpload<CS> {
     /// Serialization into bytes
     pub fn serialize(&self) -> Vec<u8> {
-        let mut message: Vec<u8> = Vec::new();
-        message.extend_from_slice(&serialize(&self.client_s_pk.to_arr(), 2));
-        message.extend_from_slice(&self.envelope.serialize());
-        message
+        [
+            self.client_s_pk.to_arr().to_vec(),
+            self.envelope.serialize(),
+        ]
+        .concat()
     }
 
     /// Deserialization from bytes
     pub fn deserialize(input: &[u8]) -> Result<Self, ProtocolError> {
-        let (client_s_pk, remainder) = tokenize(&input, 2)?;
-        let (envelope, remainder) = Envelope::<CS::Hash>::deserialize(&remainder)?;
+        let key_len = <Key as SizedBytes>::Len::to_usize();
+
+        let checked_slice = check_slice_size_atleast(&input, key_len, "registration_upload_bytes")?;
+
+        let (envelope, remainder) = Envelope::<CS::Hash>::deserialize(&checked_slice[key_len..])?;
 
         if !remainder.is_empty() {
             return Err(PakeError::SerializationError.into());
@@ -115,7 +115,9 @@ impl<CS: CipherSuite> RegistrationUpload<CS> {
 
         Ok(Self {
             envelope,
-            client_s_pk: KeyPair::<CS::Group>::check_public_key(Key::from_bytes(&client_s_pk)?)?,
+            client_s_pk: KeyPair::<CS::Group>::check_public_key(Key::from_bytes(
+                &checked_slice[..key_len],
+            )?)?,
         })
     }
 }
@@ -185,7 +187,7 @@ impl<CS: CipherSuite> CredentialResponse<CS> {
     ) -> Vec<u8> {
         [
             &beta.to_arr(),
-            &serialize(&server_s_pk.to_arr().to_vec(), 2)[..],
+            &server_s_pk.to_arr()[..],
             &envelope.to_bytes(),
         ]
         .concat()
@@ -194,8 +196,9 @@ impl<CS: CipherSuite> CredentialResponse<CS> {
     /// Deserialization from bytes
     pub fn deserialize(input: &[u8]) -> Result<Self, ProtocolError> {
         let elem_len = <CS::Group as Group>::ElemLen::to_usize();
+        let key_len = <Key as SizedBytes>::Len::to_usize();
         let checked_slice =
-            check_slice_size_atleast(input, elem_len, "login_second_message_bytes")?;
+            check_slice_size_atleast(input, elem_len + key_len, "login_second_message_bytes")?;
 
         // Check that the message is actually containing an element of the
         // correct subgroup
@@ -203,16 +206,11 @@ impl<CS: CipherSuite> CredentialResponse<CS> {
         let arr = GenericArray::from_slice(beta_bytes);
         let beta = CS::Group::from_element_slice(arr)?;
 
-        let (serialized_server_s_pk, remainder) = tokenize(&checked_slice[elem_len..], 2)?;
-        let sized_server_s_pk = check_slice_size(
-            &serialized_server_s_pk[..],
-            <Key as SizedBytes>::Len::to_usize(),
-            "server_s_pk in credential_response",
-        )?;
-        let unchecked_server_s_pk = Key::from_bytes(sized_server_s_pk)?;
+        let unchecked_server_s_pk = Key::from_bytes(&checked_slice[elem_len..elem_len + key_len])?;
         let server_s_pk = KeyPair::<CS::Group>::check_public_key(unchecked_server_s_pk)?;
 
-        let (envelope, remainder) = Envelope::<CS::Hash>::deserialize(&remainder)?;
+        let (envelope, remainder) =
+            Envelope::<CS::Hash>::deserialize(&checked_slice[elem_len + key_len..])?;
 
         let ke2_message_size = CS::KeyExchange::ke2_message_size();
         let checked_remainder =

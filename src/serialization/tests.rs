@@ -96,7 +96,7 @@ fn server_registration_roundtrip() {
 }
 
 #[test]
-fn register_first_message_roundtrip() {
+fn registration_request_roundtrip() {
     let pt = random_ristretto_point();
     let pt_bytes = pt.to_arr().to_vec();
 
@@ -109,18 +109,15 @@ fn register_first_message_roundtrip() {
 }
 
 #[test]
-fn register_second_message_roundtrip() {
+fn registration_response_roundtrip() {
     let pt = random_ristretto_point();
     let beta_bytes = pt.to_arr();
     let mut rng = OsRng;
     let skp = Default::generate_random_keypair(&mut rng);
     let pubkey_bytes = skp.public().to_arr();
 
-    let pubkey_length: usize = pubkey_bytes.len();
-
     let mut input = Vec::new();
     input.extend_from_slice(beta_bytes.as_slice());
-    input.extend_from_slice(&pubkey_length.to_be_bytes()[std::mem::size_of::<usize>() - 2..]);
     input.extend_from_slice(&pubkey_bytes.as_slice());
 
     let r2 = RegistrationResponse::<Default>::deserialize(input.as_slice()).unwrap();
@@ -129,7 +126,7 @@ fn register_second_message_roundtrip() {
 }
 
 #[test]
-fn register_third_message_roundtrip() {
+fn registration_upload_roundtrip() {
     let mut rng = OsRng;
     let skp = Default::generate_random_keypair(&mut rng);
     let pubkey_bytes = skp.public().to_arr();
@@ -150,10 +147,7 @@ fn register_third_message_roundtrip() {
     .unwrap();
     let envelope_bytes = envelope.serialize();
 
-    let pubkey_length: usize = pubkey_bytes.len();
-
     let mut input = Vec::new();
-    input.extend_from_slice(&pubkey_length.to_be_bytes()[std::mem::size_of::<usize>() - 2..]);
     input.extend_from_slice(&pubkey_bytes[..]);
     input.extend_from_slice(&envelope_bytes);
 
@@ -163,7 +157,7 @@ fn register_third_message_roundtrip() {
 }
 
 #[test]
-fn login_first_message_roundtrip() {
+fn credential_request_roundtrip() {
     let mut rng = OsRng;
     let alpha = random_ristretto_point();
     let alpha_bytes = alpha.to_arr().to_vec();
@@ -192,14 +186,13 @@ fn login_first_message_roundtrip() {
 }
 
 #[test]
-fn login_second_message_roundtrip() {
+fn credential_response_roundtrip() {
     let pt = random_ristretto_point();
     let pt_bytes = pt.to_arr().to_vec();
 
     let mut rng = OsRng;
     let skp = Default::generate_random_keypair(&mut rng);
     let pubkey_bytes = skp.public().to_arr();
-    let pubkey_length: usize = pubkey_bytes.len();
 
     let mut key = [0u8; 32];
     rng.fill_bytes(&mut key);
@@ -235,7 +228,6 @@ fn login_second_message_roundtrip() {
 
     let mut input = Vec::new();
     input.extend_from_slice(pt_bytes.as_slice());
-    input.extend_from_slice(&pubkey_length.to_be_bytes()[std::mem::size_of::<usize>() - 2..]);
     input.extend_from_slice(&pubkey_bytes.as_slice());
     input.extend_from_slice(&envelope.serialize());
     input.extend_from_slice(&ke2m[..]);
@@ -358,32 +350,32 @@ fn test_i2osp_os2ip(bytes in vec(any::<u8>(), 0..std::mem::size_of::<usize>())) 
 }
 
 #[test]
-fn test_nocrash_register_first_message(bytes in vec(any::<u8>(), 0..200)) {
+fn test_nocrash_registration_request(bytes in vec(any::<u8>(), 0..200)) {
     RegistrationRequest::<Default>::deserialize(&bytes[..]).map_or(true, |_| true);
 }
 
 #[test]
-fn test_nocrash_register_second_message(bytes in vec(any::<u8>(), 0..200)) {
+fn test_nocrash_registration_response(bytes in vec(any::<u8>(), 0..200)) {
     RegistrationResponse::<Default>::deserialize(&bytes[..]).map_or(true, |_| true);
 }
 
 #[test]
-fn test_nocrash_register_third_message(bytes in vec(any::<u8>(), 0..200)) {
+fn test_nocrash_registration_upload(bytes in vec(any::<u8>(), 0..200)) {
     RegistrationUpload::<Default>::deserialize(&bytes[..]).map_or(true, |_| true);
 }
 
 #[test]
-fn test_nocrash_login_first_message(bytes in vec(any::<u8>(), 0..500)) {
+fn test_nocrash_credential_request(bytes in vec(any::<u8>(), 0..500)) {
     CredentialRequest::<Default>::deserialize(&bytes[..]).map_or(true, |_| true);
 }
 
 #[test]
-fn test_nocrash_login_second_message(bytes in vec(any::<u8>(), 0..500)) {
+fn test_nocrash_credential_response(bytes in vec(any::<u8>(), 0..500)) {
     CredentialResponse::<Default>::deserialize(&bytes[..]).map_or(true, |_| true);
 }
 
 #[test]
-fn test_nocrash_login_third_message(bytes in vec(any::<u8>(), 0..500)) {
+fn test_nocrash_credential_finalization(bytes in vec(any::<u8>(), 0..500)) {
     CredentialFinalization::<Default>::deserialize(&bytes[..]).map_or(true, |_| true);
 }
 
