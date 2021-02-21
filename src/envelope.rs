@@ -7,7 +7,7 @@ use crate::{
     errors::{utils::check_slice_size_atleast, InternalPakeError, PakeError, ProtocolError},
     hash::Hash,
     keypair::Key,
-    serialization::{serialize, tokenize},
+    serialization::serialize,
 };
 use digest::Digest;
 use generic_array::{typenum::Unsigned, GenericArray};
@@ -49,12 +49,7 @@ pub(crate) struct InnerEnvelope {
 
 impl InnerEnvelope {
     pub(crate) fn serialize(&self) -> Vec<u8> {
-        [
-            &[self.mode as u8],
-            &self.nonce[..],
-            &serialize(&self.ciphertext, 2)[..],
-        ]
-        .concat()
+        [&[self.mode as u8], &self.nonce[..], &self.ciphertext[..]].concat()
     }
 
     pub(crate) fn deserialize(input: &[u8]) -> Result<(Self, Vec<u8>), ProtocolError> {
@@ -65,23 +60,22 @@ impl InnerEnvelope {
         }
         let mode = InnerEnvelopeMode::try_from(input[0])?;
 
+        let key_len = <Key as SizedBytes>::Len::to_usize();
+
         let bytes = &input[1..];
-        if bytes.len() < NONCE_LEN {
+        if bytes.len() < NONCE_LEN + key_len {
             return Err(ProtocolError::VerificationError(
                 PakeError::SerializationError,
             ));
         }
 
-        let nonce = &bytes[..NONCE_LEN];
-        let (ciphertext, remainder) = tokenize(&bytes[NONCE_LEN..], 2)?;
-
         Ok((
             Self {
                 mode,
-                nonce: nonce.to_vec(),
-                ciphertext,
+                nonce: bytes[..NONCE_LEN].to_vec(),
+                ciphertext: bytes[NONCE_LEN..NONCE_LEN + key_len].to_vec(),
             },
-            remainder,
+            bytes[NONCE_LEN + key_len..].to_vec(),
         ))
     }
 }

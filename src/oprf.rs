@@ -50,21 +50,23 @@ pub(crate) fn evaluate<G: Group>(point: G, oprf_key: &G::Scalar) -> G {
 
 /// Computes the third step for the multiplicative blinding version of DH-OPRF, in which
 /// the client unblinds the server's message.
-pub(crate) fn unblind<G: Group>(token: &Token<G>, point: G) -> Vec<u8> {
-    let unblinded = point * &G::scalar_invert(&token.blind);
-    unblinded.to_arr().to_vec()
+pub(crate) fn finalize<G: GroupWithMapToCurve, H: Hash>(
+    input: &[u8],
+    blind: &G::Scalar,
+    evaluated_element: G,
+) -> GenericArray<u8, <H as Digest>::OutputSize> {
+    let unblinded_element = evaluated_element * &G::scalar_invert(blind);
+    finalize_after_unblind::<G, H>(input, unblinded_element)
 }
 
-pub(crate) fn finalize<G: GroupWithMapToCurve, H: Hash>(
-    token_data: &[u8],
-    issued_token: &[u8],
-    info: &[u8],
+fn finalize_after_unblind<G: GroupWithMapToCurve, H: Hash>(
+    input: &[u8],
+    unblinded_element: G,
 ) -> GenericArray<u8, <H as Digest>::OutputSize> {
     let finalize_dst = [STR_VOPRF_FINALIZE, &G::get_context_string(MODE_BASE)].concat();
     let hash_input = [
-        serialize(token_data, 2),
-        serialize(issued_token, 2),
-        serialize(info, 2),
+        serialize(input, 2),
+        serialize(&unblinded_element.to_arr().to_vec(), 2),
         serialize(&finalize_dst, 2),
     ]
     .concat();
@@ -95,15 +97,11 @@ pub fn evaluate_shim<G: Group>(point: G, oprf_key: &G::Scalar) -> G {
 #[cfg(feature = "bench")]
 #[doc(hidden)]
 #[inline]
-pub fn unblind_and_finalize_shim<G: GroupWithMapToCurve, H: Hash>(
+pub fn finalize_shim<G: GroupWithMapToCurve, H: Hash>(
     token: &Token<G>,
     point: G,
 ) -> Result<GenericArray<u8, <H as Digest>::OutputSize>, InternalPakeError> {
-    Ok(finalize::<G, H>(
-        &token.data,
-        &unblind::<G>(token, point),
-        b"",
-    ))
+    Ok(finalize::<G, H>(&token.data, &token.blind, point))
 }
 
 ///////////
@@ -127,7 +125,7 @@ mod tests {
             RistrettoPoint::from_scalar_slice(GenericArray::from_slice(&oprf_key[..])).unwrap();
         let res = point * scalar;
 
-        finalize::<RistrettoPoint, sha2::Sha512>(&input, &res.to_arr().to_vec(), b"")
+        finalize_after_unblind::<RistrettoPoint, sha2::Sha512>(&input, res)
     }
 
     #[test]
@@ -141,8 +139,7 @@ mod tests {
         ];
         let oprf_key = RistrettoPoint::from_scalar_slice(&oprf_key_bytes)?;
         let beta = evaluate::<RistrettoPoint>(alpha, &oprf_key);
-        let res =
-            finalize::<RistrettoPoint, sha2::Sha512>(&token.data, &unblind(&token, beta), b"");
+        let res = finalize::<RistrettoPoint, sha2::Sha512>(&token.data, &token.blind, beta);
         let res2 = prf(&input[..], &oprf_key.as_bytes());
         assert_eq!(res, res2);
         Ok(())
@@ -154,12 +151,11 @@ mod tests {
         let mut input = vec![0u8; 64];
         rng.fill_bytes(&mut input);
         let (token, alpha) = blind::<_, RistrettoPoint, sha2::Sha512>(&input, &mut rng).unwrap();
-        let res =
-            finalize::<RistrettoPoint, sha2::Sha512>(&token.data, &unblind(&token, alpha), b"");
+        let res = finalize::<RistrettoPoint, sha2::Sha512>(&token.data, &token.blind, alpha);
 
         let dst = [STR_VOPRF, &RistrettoPoint::get_context_string(MODE_BASE)].concat();
         let point = RistrettoPoint::map_to_curve::<Sha512>(&input, &dst).unwrap();
-        let res2 = finalize::<RistrettoPoint, sha2::Sha512>(&input, &point.to_arr().to_vec(), b"");
+        let res2 = finalize_after_unblind::<RistrettoPoint, sha2::Sha512>(&input, point);
 
         assert_eq!(res, res2);
     }

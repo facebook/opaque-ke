@@ -27,8 +27,6 @@ use rand::{CryptoRng, RngCore};
 use std::{convert::TryFrom, marker::PhantomData};
 use zeroize::Zeroize;
 
-static STR_OPAQUE_VERSION: &[u8] = b"OPAQUE";
-
 // Registration
 // ============
 
@@ -852,10 +850,6 @@ fn get_password_derived_key<G: GroupWithMapToCurve, SH: SlowHash<D>, D: Hash>(
     token: &oprf::Token<G>,
     beta: G,
 ) -> Result<Vec<u8>, InternalPakeError> {
-    let oprf_output = oprf::finalize::<G, D>(
-        &token.data,
-        &oprf::unblind::<G>(token, beta),
-        STR_OPAQUE_VERSION,
-    );
+    let oprf_output = oprf::finalize::<G, D>(&token.data, &token.blind, beta);
     SH::hash(oprf_output)
 }

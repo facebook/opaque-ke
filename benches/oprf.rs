@@ -11,7 +11,7 @@ use curve25519_dalek::ristretto::RistrettoPoint;
 use generic_array::arr;
 use opaque_ke::{
     group::Group,
-    oprf::{blind_shim, evaluate_shim, unblind_and_finalize_shim},
+    oprf::{blind_shim, evaluate_shim, finalize_shim},
 };
 use rand::{prelude::ThreadRng, thread_rng};
 use sha2::Sha512;
@@ -57,9 +57,9 @@ fn oprf3(c: &mut Criterion) {
     let salt = RistrettoPoint::from_scalar_slice(&salt_bytes).unwrap();
     let beta = evaluate_shim::<RistrettoPoint>(alpha, &salt);
 
-    c.bench_function("unblind_and_finalize with Ristretto", move |b| {
+    c.bench_function("finalize with Ristretto", move |b| {
         b.iter(|| {
-            let _res = unblind_and_finalize_shim::<RistrettoPoint, Sha512>(&token, beta).unwrap();
+            let _res = finalize_shim::<RistrettoPoint, Sha512>(&token, beta).unwrap();
         })
     });
 }
