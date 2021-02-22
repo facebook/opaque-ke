@@ -31,12 +31,20 @@ impl<D: Hash> SlowHash<D> for NoOpHash {
 }
 
 #[cfg(feature = "slow-hash")]
+const DEFAULT_SCRYPT_LOG_N: u8 = 15u8;
+#[cfg(feature = "slow-hash")]
+const DEFAULT_SCRYPT_R: u32 = 8u32;
+#[cfg(feature = "slow-hash")]
+const DEFAULT_SCRYPT_P: u32 = 1u32;
+
+#[cfg(feature = "slow-hash")]
 impl<D: Hash> SlowHash<D> for scrypt::ScryptParams {
     fn hash(
         input: GenericArray<u8, <D as Digest>::OutputSize>,
     ) -> Result<Vec<u8>, InternalPakeError> {
         let params =
-            scrypt::ScryptParams::new(15, 8, 1).map_err(|_| InternalPakeError::SlowHashError)?;
+            scrypt::ScryptParams::new(DEFAULT_SCRYPT_LOG_N, DEFAULT_SCRYPT_R, DEFAULT_SCRYPT_P)
+                .map_err(|_| InternalPakeError::SlowHashError)?;
         let mut output = vec![0u8; <D as Digest>::OutputSize::to_usize()];
         scrypt::scrypt(&input, &[], &params, &mut output)
             .map_err(|_| InternalPakeError::SlowHashError)?;
