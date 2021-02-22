@@ -55,11 +55,7 @@ impl<D: Hash, G: Group> KeyExchange<D, G> for TripleDH {
         rng: &mut R,
     ) -> Result<(Self::KE1State, Self::KE1Message), ProtocolError> {
         let client_e_kp = KeyPair::<G>::generate_random(rng);
-        let client_nonce: GenericArray<u8, NonceLen> = {
-            let mut client_nonce_bytes = vec![0u8; NonceLen::to_usize()];
-            rng.fill_bytes(&mut client_nonce_bytes);
-            GenericArray::clone_from_slice(&client_nonce_bytes)
-        };
+        let client_nonce = generate_nonce::<R>(rng);
 
         let ke1_message = Ke1Message {
             client_nonce,
@@ -89,11 +85,7 @@ impl<D: Hash, G: Group> KeyExchange<D, G> for TripleDH {
         e_info: Vec<u8>,
     ) -> Result<(Vec<u8>, Self::KE2State, Self::KE2Message), ProtocolError> {
         let server_e_kp = KeyPair::<G>::generate_random(rng);
-        let server_nonce: GenericArray<u8, NonceLen> = {
-            let mut server_nonce_bytes = vec![0u8; NonceLen::to_usize()];
-            rng.fill_bytes(&mut server_nonce_bytes);
-            GenericArray::clone_from_slice(&server_nonce_bytes)
-        };
+        let server_nonce = generate_nonce::<R>(rng);
 
         let server_transcript = [
             &l2_bytes[..],
@@ -565,4 +557,11 @@ fn derive_secrets<D: Hash>(
         &hashed_transcript,
         <D as Digest>::OutputSize::to_usize(),
     )
+}
+
+// Generate a random nonce up to NonceLen::to_usize() bytes.
+fn generate_nonce<R: RngCore + CryptoRng>(rng: &mut R) -> GenericArray<u8, NonceLen> {
+    let mut nonce_bytes = vec![0u8; NonceLen::to_usize()];
+    rng.fill_bytes(&mut nonce_bytes);
+    GenericArray::clone_from_slice(&nonce_bytes)
 }
