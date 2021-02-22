@@ -74,14 +74,15 @@ fn server_registration_roundtrip() {
     let reg = ServerRegistration::<Default>::deserialize(&oprf_bytes[..]).unwrap();
     let reg_bytes = reg.serialize();
     assert_eq!(reg_bytes, oprf_bytes);
-    // If we do have envelope and client pk, the server registration contains
-    // the whole kit
+
+    let mut ciphertext = [0u8; 32];
+    rng.fill_bytes(&mut ciphertext);
 
     // Construct a mock envelope
     let mut mock_envelope_bytes = Vec::new();
     mock_envelope_bytes.extend_from_slice(&[1; 1]); // mode = 1
     mock_envelope_bytes.extend_from_slice(&vec![0; NonceLen::to_usize()]); // empty nonce
-    mock_envelope_bytes.extend_from_slice(&[0, 0]); // empty ciphertext
+    mock_envelope_bytes.extend_from_slice(&ciphertext); // ciphertext which is an encrypted private key
     mock_envelope_bytes.extend_from_slice(&[0; MAC_SIZE]); // length-MAC_SIZE hmac
 
     let mock_client_kp = Default::generate_random_keypair(&mut rng);
