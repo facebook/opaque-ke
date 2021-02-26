@@ -34,9 +34,9 @@ static STR_3DH: &[u8] = b"3DH";
 static STR_CLIENT_MAC: &[u8] = b"client mac";
 static STR_HANDSHAKE_SECRET: &[u8] = b"handshake secret";
 static STR_SERVER_MAC: &[u8] = b"server mac";
-static STR_SERVER_ENC: &[u8] = b"handshake enc";
+static STR_HANDSHAKE_ENC: &[u8] = b"handshake enc";
 static STR_ENCRYPTION_PAD: &[u8] = b"encryption pad";
-static STR_SESSION_KEY: &[u8] = b"session secret";
+static STR_SESSION_SECRET: &[u8] = b"session secret";
 static STR_OPAQUE: &[u8] = b"OPAQUE ";
 
 #[allow(clippy::upper_case_acronyms)]
@@ -87,21 +87,14 @@ impl<D: Hash, G: Group> KeyExchange<D, G> for TripleDH {
         let server_e_kp = KeyPair::<G>::generate_random(rng);
         let server_nonce = generate_nonce::<R>(rng);
 
-        let server_transcript = [
-            &l2_bytes[..],
-            &server_nonce[..],
-            &server_e_kp.public().to_arr(),
-        ]
-        .concat();
-
-        let derivation_transcript = [
-            STR_3DH,
-            &serialize(&id_u, 2),
-            &serialized_credential_request[..],
-            &serialize(&id_s, 2),
-            &server_transcript[..],
-        ]
-        .concat();
+        let mut transcript_hasher = D::new()
+            .chain(STR_3DH)
+            .chain(&serialize(&id_u, 2))
+            .chain(&serialized_credential_request[..])
+            .chain(&serialize(&id_s, 2))
+            .chain(&l2_bytes[..])
+            .chain(&server_nonce[..])
+            .chain(&server_e_kp.public().to_arr());
 
         let (session_key, km2, ke2, km3) = derive_3dh_keys::<D, G>(
             TripleDHComponents {
@@ -112,7 +105,7 @@ impl<D: Hash, G: Group> KeyExchange<D, G> for TripleDH {
                 pk3: client_s_pk,
                 sk3: server_e_kp.private().clone(),
             },
-            &derivation_transcript,
+            &transcript_hasher.clone().finalize(),
         )?;
 
         // Compute encryption of e_info
@@ -126,27 +119,20 @@ impl<D: Hash, G: Group> KeyExchange<D, G> for TripleDH {
             .map(|(&x1, &x2)| x1 ^ x2)
             .collect();
 
-        let transcript2: Vec<u8> =
-            [&derivation_transcript[..], &serialize(&ciphertext, 2)].concat();
-
-        let mut hasher = D::new();
-        hasher.update(&transcript2);
-        let hashed_transcript_without_mac = hasher.finalize_reset();
+        transcript_hasher.update(&serialize(&ciphertext, 2));
 
         let mut mac_hasher =
             Hmac::<D>::new_varkey(&km2).map_err(|_| InternalPakeError::HmacError)?;
-        mac_hasher.update(&hashed_transcript_without_mac);
+        mac_hasher.update(&transcript_hasher.clone().finalize());
         let mac = mac_hasher.finalize().into_bytes();
 
-        hasher.update(&transcript2);
-        hasher.update(&mac);
-        let hashed_transcript = hasher.finalize();
+        transcript_hasher.update(&mac);
 
         Ok((
             ke1_message.info,
             Ke2State {
                 km3,
-                hashed_transcript,
+                hashed_transcript: transcript_hasher.finalize(),
                 session_key,
             },
             Ke2Message {
@@ -169,20 +155,13 @@ impl<D: Hash, G: Group> KeyExchange<D, G> for TripleDH {
         id_u: Vec<u8>,
         id_s: Vec<u8>,
     ) -> Result<(Vec<u8>, Vec<u8>, Self::KE3Message), ProtocolError> {
-        let server_transcript = [
-            &l2_component[..],
-            &ke2_message.to_bytes_without_info_or_mac(),
-        ]
-        .concat();
-
-        let derivation_transcript = [
-            STR_3DH,
-            &serialize(&id_u, 2),
-            &serialized_credential_request,
-            &serialize(&id_s, 2),
-            &server_transcript[..],
-        ]
-        .concat();
+        let mut transcript_hasher = D::new()
+            .chain(STR_3DH)
+            .chain(&serialize(&id_u, 2))
+            .chain(&serialized_credential_request)
+            .chain(&serialize(&id_s, 2))
+            .chain(&l2_component[..])
+            .chain(&ke2_message.to_bytes_without_info_or_mac());
 
         let (session_key, km2, ke2, km3) = derive_3dh_keys::<D, G>(
             TripleDHComponents {
@@ -193,22 +172,14 @@ impl<D: Hash, G: Group> KeyExchange<D, G> for TripleDH {
                 pk3: ke2_message.server_e_pk.clone(),
                 sk3: client_s_sk,
             },
-            &derivation_transcript,
+            &transcript_hasher.clone().finalize(),
         )?;
 
-        let transcript: Vec<u8> = [
-            &derivation_transcript[..],
-            &serialize(&ke2_message.e_info[..], 2),
-        ]
-        .concat();
-
-        let mut hasher = D::new();
-        hasher.update(&transcript);
-        let hashed_transcript_without_mac = hasher.finalize_reset();
+        transcript_hasher.update(&serialize(&ke2_message.e_info[..], 2));
 
         let mut server_mac =
             Hmac::<D>::new_varkey(&km2).map_err(|_| InternalPakeError::HmacError)?;
-        server_mac.update(&hashed_transcript_without_mac);
+        server_mac.update(&transcript_hasher.clone().finalize());
 
         if ke2_message.mac != server_mac.finalize().into_bytes() {
             return Err(ProtocolError::VerificationError(
@@ -216,13 +187,11 @@ impl<D: Hash, G: Group> KeyExchange<D, G> for TripleDH {
             ));
         }
 
-        hasher.update(transcript);
-        hasher.update(ke2_message.mac.to_vec());
-        let hashed_transcript = hasher.finalize();
+        transcript_hasher.update(ke2_message.mac.to_vec());
 
         let mut client_mac =
             Hmac::<D>::new_varkey(&km3).map_err(|_| InternalPakeError::HmacError)?;
-        client_mac.update(&hashed_transcript);
+        client_mac.update(&transcript_hasher.finalize());
 
         // Compute decryption of e_info
         let h = Hkdf::<D>::from_prk(&ke2).map_err(|_| InternalPakeError::HkdfError)?;
@@ -467,7 +436,7 @@ impl<HashLen: ArrayLength<u8>> TryFrom<&[u8]> for Ke3Message<HashLen> {
 // with some auxiliary metadata, to produce the session key and two MAC keys
 fn derive_3dh_keys<D: Hash, G: Group>(
     dh: TripleDHComponents,
-    derivation_transcript: &[u8],
+    hashed_derivation_transcript: &[u8],
 ) -> Result<TripleDHDerivationResult<D>, ProtocolError> {
     let ikm: Vec<u8> = [
         &KeyPair::<G>::diffie_hellman(dh.pk1, dh.sk1)?[..],
@@ -480,10 +449,13 @@ fn derive_3dh_keys<D: Hash, G: Group>(
     let handshake_secret = derive_secrets::<D>(
         &extracted_ikm,
         &STR_HANDSHAKE_SECRET,
-        &derivation_transcript,
+        &hashed_derivation_transcript,
     )?;
-    let session_key =
-        derive_secrets::<D>(&extracted_ikm, &STR_SESSION_KEY, &derivation_transcript)?;
+    let session_key = derive_secrets::<D>(
+        &extracted_ikm,
+        &STR_SESSION_SECRET,
+        &hashed_derivation_transcript,
+    )?;
 
     let km2 = hkdf_expand_label::<D>(
         &handshake_secret,
@@ -493,7 +465,7 @@ fn derive_3dh_keys<D: Hash, G: Group>(
     )?;
     let ke2 = hkdf_expand_label::<D>(
         &handshake_secret,
-        &STR_SERVER_ENC,
+        &STR_HANDSHAKE_ENC,
         b"",
         <D as Digest>::OutputSize::to_usize(),
     )?;
@@ -548,13 +520,12 @@ fn hkdf_expand_label_extracted<D: Hash>(
 fn derive_secrets<D: Hash>(
     hkdf: &Hkdf<D>,
     label: &[u8],
-    transcript: &[u8],
+    hashed_derivation_transcript: &[u8],
 ) -> Result<Vec<u8>, ProtocolError> {
-    let hashed_transcript = D::digest(transcript);
     hkdf_expand_label_extracted::<D>(
         hkdf,
         label,
-        &hashed_transcript,
+        &hashed_derivation_transcript,
         <D as Digest>::OutputSize::to_usize(),
     )
 }

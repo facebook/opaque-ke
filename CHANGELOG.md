@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.4.0 (February 26, 2020)
+
+* Adherence to protocol format described in
+  https://tools.ietf.org/html/draft-irtf-cfrg-opaque-03
+* Renamed to_bytes() and try_from() to serialize() and deserialize() for
+  top-level structs
+* Conformed all message type parameters to be parameterized in the
+  Ciphersuite object
+
 ## 0.3.1 (February 11, 2020)
 
 * Re-exporting the rand library (and including it as a dependency instead of
