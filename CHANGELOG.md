@@ -1,10 +1,10 @@
 # Changelog
 
-## 0.5.0 (March 1, 2020)
+## 0.5.0 (March 1, 2021)
 
 * Removed dependency on generic-bytes-derive package
 
-## 0.4.0 (February 26, 2020)
+## 0.4.0 (February 26, 2021)
 
 * Adherence to protocol format described in
   https://tools.ietf.org/html/draft-irtf-cfrg-opaque-03
@@ -13,13 +13,13 @@
 * Conformed all message type parameters to be parameterized in the
   Ciphersuite object
 
-## 0.3.1 (February 11, 2020)
+## 0.3.1 (February 11, 2021)
 
 * Re-exporting the rand library (and including it as a dependency instead of
   just rand_core)
 * Exposing a convenience function for converting from byte array to Key type
 
-## 0.3.0 (February 8, 2020)
+## 0.3.0 (February 8, 2021)
 
 * General API and documentation improvements, including the support of custom
   identifiers, optional result parameters, and the use of the export key
