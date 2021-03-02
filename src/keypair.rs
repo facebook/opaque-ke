@@ -9,7 +9,6 @@ use crate::errors::InternalPakeError;
 use crate::group::Group;
 use generic_array::{typenum::U32, GenericArray};
 use generic_bytes::{SizedBytes, TryFromSizedBytesError};
-use generic_bytes_derive::TryFromForSizedBytes;
 #[cfg(test)]
 use proptest::prelude::*;
 #[cfg(test)]
@@ -120,8 +119,7 @@ impl<G: Group + Debug> KeyPair<G> {
 }
 
 /// A minimalist key type built around a \[u8; 32\]
-#[derive(Debug, PartialEq, Eq, Clone, TryFromForSizedBytes)]
-#[ErrorType = "::generic_bytes::TryFromSizedBytesError"]
+#[derive(Debug, PartialEq, Eq, Clone)]
 #[repr(transparent)]
 pub struct Key(Vec<u8>);
 

@@ -8,7 +8,7 @@ use crate::{
     errors::*,
     group::Group,
     key_exchange::tripledh::{NonceLen, TripleDH},
-    keypair::Key,
+    keypair::{Key, SizedBytesExt},
     opaque::*,
     slow_hash::NoOpHash,
     tests::mock_rng::CycleRng,
@@ -19,7 +19,6 @@ use generic_array::typenum::Unsigned;
 use generic_bytes::SizedBytes;
 use rand::{rngs::OsRng, RngCore};
 use serde_json::Value;
-use std::convert::TryFrom;
 
 // Tests
 // =====
@@ -453,7 +452,7 @@ fn test_registration_response() -> Result<(), ProtocolError> {
         ServerRegistration::<RistrettoSha5123dhNoSlowHash>::start(
             &mut oprf_key_rng,
             RegistrationRequest::deserialize(&parameters.registration_request[..])?,
-            &Key::try_from(&parameters.server_s_pk[..])?,
+            &Key::from_bytes(&parameters.server_s_pk[..])?,
         )?;
     assert_eq!(
         hex::encode(parameters.registration_response),
@@ -548,7 +547,7 @@ fn test_credential_response() -> Result<(), ProtocolError> {
     let server_login_start_result = ServerLogin::<RistrettoSha5123dhNoSlowHash>::start(
         &mut server_e_sk_and_nonce_rng,
         ServerRegistration::deserialize(&parameters.password_file[..])?,
-        &Key::try_from(&parameters.server_s_sk[..])?,
+        &Key::from_bytes(&parameters.server_s_sk[..])?,
         CredentialRequest::<RistrettoSha5123dhNoSlowHash>::deserialize(
             &parameters.credential_request[..],
         )?,
@@ -689,13 +688,10 @@ fn test_complete_flow(
             hex::encode(client_login_finish_result.export_key)
         );
     } else {
-        let res = matches!(
-            client_login_result,
-            Err(ProtocolError::VerificationError(
-                PakeError::InvalidLoginError
-            ))
-        );
-        assert!(res);
+        assert!(match client_login_result {
+            Err(ProtocolError::VerificationError(PakeError::InvalidLoginError)) => true,
+            _ => false,
+        });
     }
 
     Ok(())

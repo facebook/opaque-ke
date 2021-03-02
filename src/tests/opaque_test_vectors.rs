@@ -4,12 +4,17 @@
 // LICENSE file in the root directory of this source tree.
 
 use crate::{
-    ciphersuite::CipherSuite, errors::*, key_exchange::tripledh::TripleDH, keypair::Key, opaque::*,
-    slow_hash::NoOpHash, tests::mock_rng::CycleRng, *,
+    ciphersuite::CipherSuite,
+    errors::*,
+    key_exchange::tripledh::TripleDH,
+    keypair::{Key, SizedBytesExt},
+    opaque::*,
+    slow_hash::NoOpHash,
+    tests::mock_rng::CycleRng,
+    *,
 };
 use curve25519_dalek::ristretto::RistrettoPoint;
 use serde_json::Value;
-use std::convert::TryFrom;
 
 // Tests
 // =====
@@ -351,7 +356,7 @@ fn get_password_file_bytes(parameters: &TestVectorParameters) -> Result<Vec<u8>,
         ServerRegistration::<Ristretto255Sha512NoSlowHash>::start(
             &mut oprf_key_rng,
             RegistrationRequest::deserialize(&parameters.registration_request[..]).unwrap(),
-            &Key::try_from(&parameters.server_public_key[..]).unwrap(),
+            &Key::from_bytes(&parameters.server_public_key[..]).unwrap(),
         )?;
 
     let password_file = server_registration_start_result
@@ -386,7 +391,7 @@ fn test_registration_response() -> Result<(), ProtocolError> {
             ServerRegistration::<Ristretto255Sha512NoSlowHash>::start(
                 &mut oprf_key_rng,
                 RegistrationRequest::deserialize(&parameters.registration_request[..]).unwrap(),
-                &Key::try_from(&parameters.server_public_key[..]).unwrap(),
+                &Key::from_bytes(&parameters.server_public_key[..]).unwrap(),
             )?;
         assert_eq!(
             hex::encode(parameters.registration_response),
@@ -468,7 +473,7 @@ fn test_ke2() -> Result<(), ProtocolError> {
         let server_login_start_result = ServerLogin::<Ristretto255Sha512NoSlowHash>::start(
             &mut server_private_keyshare_and_nonce_rng,
             ServerRegistration::deserialize(&password_file_bytes[..]).unwrap(),
-            &Key::try_from(&parameters.server_private_key[..]).unwrap(),
+            &Key::from_bytes(&parameters.server_private_key[..]).unwrap(),
             CredentialRequest::<Ristretto255Sha512NoSlowHash>::deserialize(&parameters.KE1[..])
                 .unwrap(),
             if parameters.envelope_mode == EnvelopeMode::CustomIdentifier {
@@ -551,7 +556,7 @@ fn test_server_login_finish() -> Result<(), ProtocolError> {
         let server_login_start_result = ServerLogin::<Ristretto255Sha512NoSlowHash>::start(
             &mut server_private_keyshare_and_nonce_rng,
             ServerRegistration::deserialize(&password_file_bytes[..]).unwrap(),
-            &Key::try_from(&parameters.server_private_key[..]).unwrap(),
+            &Key::from_bytes(&parameters.server_private_key[..]).unwrap(),
             CredentialRequest::<Ristretto255Sha512NoSlowHash>::deserialize(&parameters.KE1[..])
                 .unwrap(),
             if parameters.envelope_mode == EnvelopeMode::CustomIdentifier {
