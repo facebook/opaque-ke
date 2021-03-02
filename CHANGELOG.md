@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.5.0 (March 1, 2020)
+
+* Removed dependency on generic-bytes-derive package
+
 ## 0.4.0 (February 26, 2020)
 
 * Adherence to protocol format described in

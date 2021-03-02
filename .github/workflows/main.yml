@@ -2,7 +2,6 @@ name: Rust CI
 on:
   push:
     branches:
-      - tls
       - master
   pull_request:
     types: [opened, repoened, synchronize]
@@ -16,16 +15,19 @@ jobs:
         backend_feature:
           - u64_backend
           - u32_backend
+        toolchain:
+          - nightly
+          - 1.41.0
     name: test
     steps:
       - name: Checkout sources
         uses: actions/checkout@v2
 
-      - name: Install nightly toolchain
+      - name: Install ${{ matrix.toolchain }} toolchain
         uses: actions-rs/toolchain@v1
         with:
           profile: minimal
-          toolchain: nightly
+          toolchain: ${{ matrix.toolchain }}
           override: true
           components: rustfmt, clippy
 
@@ -75,6 +77,10 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
+      matrix:
+        toolchain:
+          - nightly
+          - 1.41.0
     name: test simple_login command-line example
     steps:
       - name: install expect
@@ -85,7 +91,7 @@ jobs:
         uses: actions-rs/toolchain@v1
         with:
           profile: minimal
-          toolchain: nightly
+          toolchain: ${{ matrix.toolchain }}
           override: true
           components: rustfmt, clippy
       - name: Run expect (which then runs cargo run)
@@ -95,6 +101,10 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
+      matrix:
+        toolchain:
+          - nightly
+          - 1.41.0
     name: test digital_locker command-line example
     steps:
       - name: install expect
@@ -105,7 +115,7 @@ jobs:
         uses: actions-rs/toolchain@v1
         with:
           profile: minimal
-          toolchain: nightly
+          toolchain: ${{ matrix.toolchain }}
           override: true
           components: rustfmt, clippy
       - name: Run expect (which then runs cargo run)
@@ -118,7 +128,7 @@ jobs:
       - name: Checkout sources
         uses: actions/checkout@v2
 
-      - name: Install nightly toolchain
+      - name: Install stable toolchain
         uses: actions-rs/toolchain@v1
         with:
           profile: minimal
