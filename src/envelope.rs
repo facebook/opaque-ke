@@ -4,7 +4,7 @@
 // LICENSE file in the root directory of this source tree.
 
 use crate::{
-    errors::{utils::check_slice_size_atleast, InternalPakeError, PakeError, ProtocolError},
+    errors::{utils::check_slice_size, InternalPakeError, PakeError, ProtocolError},
     hash::Hash,
     keypair::PublicKey,
     serialization::serialize,
@@ -28,6 +28,7 @@ const NONCE_LEN: usize = 32;
 #[derive(Clone, Copy, PartialEq, Zeroize)]
 #[zeroize(drop)]
 pub(crate) enum InnerEnvelopeMode {
+    Unused = 0,
     Base = 1,
     CustomIdentifier = 2,
 }
@@ -131,44 +132,41 @@ impl<D: Hash> Envelope<D> {
         <D as Digest>::OutputSize::to_usize()
     }
 
+    pub(crate) fn len() -> usize {
+        1 + <PublicKey as SizedBytes>::Len::to_usize() + <D as Digest>::OutputSize::to_usize() + NONCE_LEN
+    }
+
     pub(crate) fn get_mode(&self) -> InnerEnvelopeMode {
         self.inner_envelope.mode
-    }
-
-    /// The format of the output is:
-    /// mode | nonce             | ciphertext       | hmac
-    /// u8   | nonce_size bytes  | variable length  | hmac_size bytes
-    pub(crate) fn from_bytes(bytes: &[u8]) -> Result<Self, InternalPakeError> {
-        let (result, remainder) = Self::deserialize(bytes)
-            .map_err(|_| InternalPakeError::InvalidEnvelopeStructureError)?;
-        if !remainder.is_empty() {
-            return Err(InternalPakeError::InvalidEnvelopeStructureError);
-        }
-        Ok(result)
-    }
-
-    pub(crate) fn to_bytes(&self) -> Vec<u8> {
-        self.serialize()
     }
 
     pub(crate) fn serialize(&self) -> Vec<u8> {
         [&self.inner_envelope.serialize(), &self.hmac[..]].concat()
     }
 
-    pub(crate) fn deserialize(input: &[u8]) -> Result<(Self, Vec<u8>), ProtocolError> {
-        let (inner_envelope, remainder) = InnerEnvelope::deserialize(input)?;
+    pub(crate) fn deserialize(input: &[u8]) -> Result<Self, ProtocolError> {
+        let (inner_envelope, remainder) = InnerEnvelope::deserialize(input)
+            .map_err(|_| ProtocolError::InvalidInnerEnvelopeError)?;
 
         let hmac_key_size = Self::hmac_key_size();
-        let hmac_and_remainder =
-            check_slice_size_atleast(&remainder, hmac_key_size, "hmac_key_size")?;
+        let hmac = check_slice_size(&remainder, hmac_key_size, "hmac_key_size")?;
 
-        Ok((
-            Self {
-                inner_envelope,
-                hmac: GenericArray::clone_from_slice(&hmac_and_remainder[..hmac_key_size]),
+        Ok(Self {
+            inner_envelope,
+            hmac: GenericArray::clone_from_slice(&hmac),
+        })
+    }
+
+    // Creates a dummy envelope object that serializes to the all-zeros byte string
+    pub(crate) fn dummy() -> Self {
+        Self {
+            inner_envelope: InnerEnvelope {
+                mode: InnerEnvelopeMode::Unused,
+                nonce: vec![0u8; NONCE_LEN],
+                ciphertext: vec![0u8; <PublicKey as SizedBytes>::Len::to_usize()],
             },
-            hmac_and_remainder[hmac_key_size..].to_vec(),
-        ))
+            hmac: GenericArray::clone_from_slice(&vec![0u8; <D as Digest>::OutputSize::to_usize()]),
+        }
     }
 
     pub(crate) fn seal<R: RngCore + CryptoRng>(
@@ -194,16 +192,16 @@ impl<D: Hash> Envelope<D> {
         let mut nonce = vec![0u8; NONCE_LEN];
         rng.fill_bytes(&mut nonce);
 
-        let h = Hkdf::<D>::new(Some(&nonce), key);
+        let h = Hkdf::<D>::new(None, key);
         let mut xor_key = vec![0u8; plaintext.len()];
         let mut hmac_key = vec![0u8; Self::hmac_key_size()];
         let mut export_key = vec![0u8; Self::export_key_size()];
 
-        h.expand(STR_PAD, &mut xor_key)
+        h.expand(&[&nonce, STR_PAD].concat(), &mut xor_key)
             .map_err(|_| InternalPakeError::HkdfError)?;
-        h.expand(STR_AUTH_KEY, &mut hmac_key)
+        h.expand(&[&nonce, STR_AUTH_KEY].concat(), &mut hmac_key)
             .map_err(|_| InternalPakeError::HkdfError)?;
-        h.expand(STR_EXPORT_KEY, &mut export_key)
+        h.expand(&[&nonce, STR_EXPORT_KEY].concat(), &mut export_key)
             .map_err(|_| InternalPakeError::HkdfError)?;
 
         let ciphertext: Vec<u8> = xor_key
@@ -266,17 +264,26 @@ impl<D: Hash> Envelope<D> {
         key: &[u8],
         aad: &[u8],
     ) -> Result<OpenedInnerEnvelope<D>, InternalPakeError> {
-        let h = Hkdf::<D>::new(Some(&self.inner_envelope.nonce), key);
+        let h = Hkdf::<D>::new(None, key);
         let mut xor_key = vec![0u8; self.inner_envelope.ciphertext.len()];
         let mut hmac_key = vec![0u8; Self::hmac_key_size()];
         let mut export_key = vec![0u8; Self::export_key_size()];
 
-        h.expand(STR_PAD, &mut xor_key)
-            .map_err(|_| InternalPakeError::HkdfError)?;
-        h.expand(STR_AUTH_KEY, &mut hmac_key)
-            .map_err(|_| InternalPakeError::HkdfError)?;
-        h.expand(STR_EXPORT_KEY, &mut export_key)
-            .map_err(|_| InternalPakeError::HkdfError)?;
+        h.expand(
+            &[&self.inner_envelope.nonce, STR_PAD].concat(),
+            &mut xor_key,
+        )
+        .map_err(|_| InternalPakeError::HkdfError)?;
+        h.expand(
+            &[&self.inner_envelope.nonce, STR_AUTH_KEY].concat(),
+            &mut hmac_key,
+        )
+        .map_err(|_| InternalPakeError::HkdfError)?;
+        h.expand(
+            &[&self.inner_envelope.nonce, STR_EXPORT_KEY].concat(),
+            &mut export_key,
+        )
+        .map_err(|_| InternalPakeError::HkdfError)?;
 
         let mut hmac =
             Hmac::<D>::new_varkey(&hmac_key).map_err(|_| InternalPakeError::HmacError)?;
@@ -354,7 +361,7 @@ mod tests {
         let mut msg = [0u8; 100];
         rng.fill_bytes(&mut msg);
 
-        let (envelope, export_key_1) = Envelope::<sha2::Sha256>::seal_raw(
+        let (envelope, export_key) = Envelope::<sha2::Sha256>::seal_raw(
             &mut rng,
             &key,
             &msg,
@@ -364,6 +371,6 @@ mod tests {
         .unwrap();
         let opened_envelope = envelope.open_raw(&key, b"aad").unwrap();
         assert_eq!(&msg.to_vec(), &opened_envelope.plaintext);
-        assert_eq!(&export_key_1.to_vec(), &opened_envelope.export_key.to_vec());
+        assert_eq!(&export_key.to_vec(), &opened_envelope.export_key.to_vec());
     }
 }
