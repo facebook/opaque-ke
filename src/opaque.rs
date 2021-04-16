@@ -8,7 +8,7 @@
 use crate::{
     ciphersuite::CipherSuite,
     envelope::{mode_from_ids, Envelope},
-    errors::{utils::check_slice_size_atleast, InternalPakeError, PakeError, ProtocolError},
+    errors::{utils::check_slice_size, InternalPakeError, PakeError, ProtocolError},
     group::Group,
     hash::Hash,
     key_exchange::traits::{KeyExchange, ToBytesWithPointers},
@@ -23,9 +23,65 @@ use crate::{
 use digest::Digest;
 use generic_array::{typenum::Unsigned, GenericArray};
 use generic_bytes::SizedBytes;
+use hkdf::Hkdf;
 use rand::{CryptoRng, RngCore};
 use std::{convert::TryFrom, marker::PhantomData};
 use zeroize::Zeroize;
+
+const STR_CREDENTIAL_RESPONSE_PAD: &[u8] = b"CredentialResponsePad";
+const STR_MASKING_KEY: &[u8] = b"MaskingKey";
+const STR_OPRF_KEY: &[u8] = b"OprfKey";
+
+// Server Setup
+// ============
+
+/// The state elements the server holds upon setup
+pub struct ServerSetup<CS: CipherSuite> {
+    oprf_seed: GenericArray<u8, <CS::Hash as Digest>::OutputSize>,
+    keypair: KeyPair<CS::Group>,
+}
+
+impl<CS: CipherSuite> ServerSetup<CS> {
+    /// Generate a new instance of server setup
+    pub fn new<R: CryptoRng + RngCore>(rng: &mut R) -> Self {
+        let mut seed = vec![0u8; <CS::Hash as Digest>::OutputSize::to_usize()];
+        rng.fill_bytes(&mut seed);
+
+        Self {
+            oprf_seed: GenericArray::clone_from_slice(&seed[..]),
+            keypair: KeyPair::<CS::Group>::generate_random(rng),
+        }
+    }
+
+    /// Serialization into bytes
+    pub fn serialize(&self) -> Vec<u8> {
+        [
+            self.oprf_seed.to_vec(),
+            self.keypair.private().to_arr().to_vec(),
+        ]
+        .concat()
+    }
+
+    /// Deserialization from bytes
+    pub fn deserialize(input: &[u8]) -> Result<Self, ProtocolError> {
+        let seed_len = <CS::Hash as Digest>::OutputSize::to_usize();
+        let checked_slice = check_slice_size(
+            input,
+            seed_len + <Key as SizedBytes>::Len::to_usize(),
+            "server_setup",
+        )?;
+
+        Ok(Self {
+            oprf_seed: GenericArray::clone_from_slice(&checked_slice[..seed_len]),
+            keypair: KeyPair::from_private_key_slice(&checked_slice[seed_len..])?,
+        })
+    }
+
+    /// Returns the keypair
+    pub fn keypair(&self) -> &KeyPair<CS::Group> {
+        &self.keypair
+    }
+}
 
 // Registration
 // ============
@@ -39,12 +95,11 @@ pub struct ClientRegistration<CS: CipherSuite> {
 impl<CS: CipherSuite> ClientRegistration<CS> {
     /// Serialization into bytes
     pub fn serialize(&self) -> Vec<u8> {
-        let output: Vec<u8> = [
+        [
             &CS::Group::scalar_as_bytes(&self.token.blind)[..],
             &self.token.data,
         ]
-        .concat();
-        output
+        .concat()
     }
 
     /// Deserialization from bytes
@@ -107,28 +162,6 @@ pub struct ClientRegistrationStartResult<CS: CipherSuite> {
 
 impl<CS: CipherSuite> ClientRegistration<CS> {
     /// Returns an initial "blinded" request to send to the server, as well as a ClientRegistration
-    ///
-    /// # Arguments
-    /// * `password` - A user password
-    ///
-    /// # Example
-    ///
-    /// ```
-    /// use opaque_ke::ClientRegistration;
-    /// # use opaque_ke::errors::ProtocolError;
-    /// use rand::{rngs::OsRng, RngCore};
-    /// use opaque_ke::ciphersuite::CipherSuite;
-    /// struct Default;
-    /// impl CipherSuite for Default {
-    ///     type Group = curve25519_dalek::ristretto::RistrettoPoint;
-    ///     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
-    ///     type Hash = sha2::Sha512;
-    ///     type SlowHash = opaque_ke::slow_hash::NoOpHash;
-    /// }
-    /// let mut client_rng = OsRng;
-    /// let client_registration_start_result = ClientRegistration::<Default>::start(&mut client_rng, b"hunter2")?;
-    /// # Ok::<(), ProtocolError>(())
-    /// ```
     pub fn start<R: RngCore + CryptoRng>(
         blinding_factor_rng: &mut R,
         password: &[u8],
@@ -156,35 +189,6 @@ pub struct ClientRegistrationFinishResult<CS: CipherSuite> {
 impl<CS: CipherSuite> ClientRegistration<CS> {
     /// "Unblinds" the server's answer and returns a final message containing
     /// cryptographic identifiers, to be sent to the server on setup finalization
-    ///
-    /// # Arguments
-    /// * `message` - the server's answer to the initial registration attempt
-    ///
-    /// # Example
-    ///
-    /// ```
-    /// use opaque_ke::{ClientRegistration, ClientRegistrationFinishParameters, ServerRegistration};
-    /// # use opaque_ke::errors::ProtocolError;
-    /// # use opaque_ke::keypair::KeyPair;
-    /// use rand::{rngs::OsRng, RngCore};
-    /// use opaque_ke::ciphersuite::CipherSuite;
-    /// struct Default;
-    /// impl CipherSuite for Default {
-    ///     type Group = curve25519_dalek::ristretto::RistrettoPoint;
-    ///     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
-    ///     type Hash = sha2::Sha512;
-    ///     type SlowHash = opaque_ke::slow_hash::NoOpHash;
-    /// }
-    /// let mut client_rng = OsRng;
-    /// let mut server_rng = OsRng;
-    /// let server_kp = Default::generate_random_keypair(&mut server_rng);
-    /// let client_registration_start_result = ClientRegistration::<Default>::start(&mut client_rng, b"hunter2")?;
-    /// let server_registration_start_result =
-    /// ServerRegistration::<Default>::start(&mut server_rng, client_registration_start_result.message, server_kp.public())?;
-    /// let mut client_rng = OsRng;
-    /// let client_registration_finish_result = client_registration_start_result.state.finish(&mut client_rng, server_registration_start_result.message, ClientRegistrationFinishParameters::default())?;
-    /// # Ok::<(), ProtocolError>(())
-    /// ```
     pub fn finish<R: CryptoRng + RngCore>(
         self,
         rng: &mut R,
@@ -195,10 +199,15 @@ impl<CS: CipherSuite> ClientRegistration<CS> {
             ClientRegistrationFinishParameters::WithIdentifiers(id_u, id_s) => Some((id_u, id_s)),
             ClientRegistrationFinishParameters::Default => None,
         };
-        let client_static_keypair = CS::generate_random_keypair(rng);
+        let client_static_keypair = KeyPair::<CS::Group>::generate_random(rng);
 
         let password_derived_key =
             get_password_derived_key::<CS::Group, CS::SlowHash, CS::Hash>(&self.token, r2.beta)?;
+
+        let h = Hkdf::<CS::Hash>::new(None, &password_derived_key);
+        let mut masking_key = vec![0u8; <CS::Hash as Digest>::OutputSize::to_usize()];
+        h.expand(STR_MASKING_KEY, &mut masking_key)
+            .map_err(|_| InternalPakeError::HkdfError)?;
 
         let (envelope, export_key) = Envelope::<CS::Hash>::seal(
             rng,
@@ -211,6 +220,7 @@ impl<CS: CipherSuite> ClientRegistration<CS> {
         Ok(ClientRegistrationFinishResult {
             message: RegistrationUpload {
                 envelope,
+                masking_key: GenericArray::clone_from_slice(&masking_key[..]),
                 client_s_pk: client_static_keypair.public().clone(),
             },
             export_key,
@@ -220,115 +230,47 @@ impl<CS: CipherSuite> ClientRegistration<CS> {
     }
 }
 
-/// Contains the fields that are returned by a server registration start
+/// Contains the fields that are returned by a server registration start.
+/// Note that there is no state output in this step
 pub struct ServerRegistrationStartResult<CS: CipherSuite> {
     /// The registration resposne message to send to the client
     pub message: RegistrationResponse<CS>,
-    /// The state that the server must keep in order to complete registration
-    pub state: ServerRegistration<CS>,
 }
 
 /// The state elements the server holds to record a registration
-pub struct ServerRegistration<CS: CipherSuite> {
-    envelope: Option<Envelope<CS::Hash>>,
-    client_s_pk: Option<Key>,
-    pub(crate) oprf_key: <CS::Group as Group>::Scalar,
-}
+pub struct ServerRegistration<CS: CipherSuite>(RegistrationUpload<CS>);
 
 impl<CS: CipherSuite> ServerRegistration<CS> {
     /// Serialization into bytes
     pub fn serialize(&self) -> Vec<u8> {
-        let mut output: Vec<u8> = CS::Group::scalar_as_bytes(&self.oprf_key).to_vec();
-        self.client_s_pk
-            .iter()
-            .for_each(|v| output.extend_from_slice(&v.to_arr()));
-        self.envelope
-            .iter()
-            .for_each(|v| output.extend_from_slice(&v.to_bytes()));
-        output
+        self.0.serialize()
     }
 
     /// Deserialization from bytes
     pub fn deserialize(input: &[u8]) -> Result<Self, ProtocolError> {
-        let scalar_len = <CS::Group as Group>::ScalarLen::to_usize();
-        if input.len() == scalar_len {
-            return Ok(Self {
-                oprf_key: CS::Group::from_scalar_slice(GenericArray::from_slice(input))?,
-                client_s_pk: None,
-                envelope: None,
-            });
-        }
-
-        // Need to do this check manually because envelope is variable-size
-        let key_len = <Key as SizedBytes>::Len::to_usize();
-
-        let checked_bytes =
-            check_slice_size_atleast(&input, scalar_len + key_len, "server_registration_bytes")?;
-
-        let oprf_key_bytes = GenericArray::from_slice(&checked_bytes[..scalar_len]);
-        let oprf_key = CS::Group::from_scalar_slice(oprf_key_bytes)?;
-        let unchecked_client_s_pk =
-            Key::from_bytes(&checked_bytes[scalar_len..scalar_len + key_len])?;
-        let client_s_pk = KeyPair::<CS::Group>::check_public_key(unchecked_client_s_pk)?;
-
-        let envelope = Envelope::<CS::Hash>::from_bytes(&checked_bytes[scalar_len + key_len..])?;
-
-        Ok(Self {
-            envelope: Some(envelope),
-            client_s_pk: Some(client_s_pk),
-            oprf_key,
-        })
+        Ok(Self(RegistrationUpload::deserialize(input)?))
     }
 
     #[cfg(test)]
     pub fn as_byte_ptrs(&self) -> Vec<(*const u8, usize)> {
         [
-            match &self.envelope {
-                Some(env) => env.as_byte_ptrs(),
-                None => vec![],
-            },
-            match &self.client_s_pk {
-                Some(pk) => vec![(pk.as_ptr(), pk.len())],
-                None => vec![],
-            },
+            self.0.envelope.as_byte_ptrs(),
+            vec![(self.0.client_s_pk.as_ptr(), self.0.client_s_pk.len())],
             /* cannot provide raw pointer to self.oprf_key until this is exposed in curve25519_dalek::scalar::Scalar */
         ].concat()
     }
 
     /// From the client's "blinded" password, returns a response to be
     /// sent back to the client, as well as a ServerRegistration
-    ///
-    /// # Arguments
-    /// * `message`   - the initial registration message
-    ///
-    /// # Example
-    ///
-    /// ```
-    /// use opaque_ke::*;
-    /// # use opaque_ke::errors::ProtocolError;
-    /// use rand::{rngs::OsRng, RngCore};
-    /// use opaque_ke::ciphersuite::CipherSuite;
-    /// struct Default;
-    /// impl CipherSuite for Default {
-    ///     type Group = curve25519_dalek::ristretto::RistrettoPoint;
-    ///     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
-    ///     type Hash = sha2::Sha512;
-    ///     type SlowHash = opaque_ke::slow_hash::NoOpHash;
-    /// }
-    /// let mut client_rng = OsRng;
-    /// let mut server_rng = OsRng;
-    /// let server_kp = Default::generate_random_keypair(&mut server_rng);
-    /// let client_registration_start_result = ClientRegistration::<Default>::start(&mut client_rng, b"hunter2")?;
-    /// let server_registration_start_result = ServerRegistration::<Default>::start(&mut server_rng, client_registration_start_result.message, server_kp.public())?;
-    /// # Ok::<(), ProtocolError>(())
-    /// ```
-    pub fn start<R: RngCore + CryptoRng>(
-        rng: &mut R,
+    pub fn start(
+        server_setup: &ServerSetup<CS>,
         message: RegistrationRequest<CS>,
-        server_s_pk: &Key,
+        credential_identifier: &[u8],
     ) -> Result<ServerRegistrationStartResult<CS>, ProtocolError> {
-        // RFC: generate oprf_key (salt) and v_u = g^oprf_key
-        let oprf_key = CS::Group::random_scalar(rng);
+        let oprf_key = oprf_key_from_seed::<CS::Group, CS::Hash>(
+            &server_setup.oprf_seed,
+            credential_identifier,
+        )?;
 
         // Compute beta = alpha^oprf_key
         let beta = oprf::evaluate::<CS::Group>(message.alpha, &oprf_key);
@@ -336,52 +278,20 @@ impl<CS: CipherSuite> ServerRegistration<CS> {
         Ok(ServerRegistrationStartResult {
             message: RegistrationResponse {
                 beta,
-                server_s_pk: server_s_pk.to_arr().to_vec(),
-            },
-            state: Self {
-                envelope: None,
-                client_s_pk: None,
-                oprf_key,
+                server_s_pk: server_setup.keypair.public().to_arr().to_vec(),
             },
         })
     }
 
     /// From the client's cryptographic identifiers, fully populates and
     /// returns a ServerRegistration
-    ///
-    /// # Arguments
-    /// * `message` - the final client message
-    ///
-    /// # Example
-    ///
-    /// ```
-    /// use opaque_ke::{*, keypair::KeyPair};
-    /// # use opaque_ke::errors::ProtocolError;
-    /// use rand::{rngs::OsRng, RngCore};
-    /// use opaque_ke::ciphersuite::CipherSuite;
-    /// struct Default;
-    /// impl CipherSuite for Default {
-    ///     type Group = curve25519_dalek::ristretto::RistrettoPoint;
-    ///     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
-    ///     type Hash = sha2::Sha512;
-    ///     type SlowHash = opaque_ke::slow_hash::NoOpHash;
-    /// }
-    /// let mut client_rng = OsRng;
-    /// let mut server_rng = OsRng;
-    /// let server_kp = Default::generate_random_keypair(&mut server_rng);
-    /// let client_registration_start_result = ClientRegistration::<Default>::start(&mut client_rng, b"hunter2")?;
-    /// let server_registration_start_result = ServerRegistration::<Default>::start(&mut server_rng, client_registration_start_result.message, server_kp.public())?;
-    /// let mut client_rng = OsRng;
-    /// let client_registration_finish_result = client_registration_start_result.state.finish(&mut client_rng, server_registration_start_result.message, ClientRegistrationFinishParameters::default())?;
-    /// let client_record = server_registration_start_result.state.finish(client_registration_finish_result.message)?;
-    /// # Ok::<(), ProtocolError>(())
-    /// ```
-    pub fn finish(self, message: RegistrationUpload<CS>) -> Result<Self, ProtocolError> {
-        Ok(Self {
-            envelope: Some(message.envelope),
-            client_s_pk: Some(message.client_s_pk),
-            oprf_key: self.oprf_key.clone(),
-        })
+    pub fn finish(message: RegistrationUpload<CS>) -> Self {
+        Self(message)
+    }
+
+    // Creates a dummy instance used for faking a [CredentialResponse]
+    pub(crate) fn dummy<R: RngCore + CryptoRng>(rng: &mut R) -> Self {
+        Self(RegistrationUpload::dummy(rng))
     }
 }
 
@@ -555,41 +465,9 @@ impl<CS: CipherSuite> ClientLogin<CS> {
 
     /// "Unblinds" the server's answer and returns the opened assets from
     /// the server
-    ///
-    /// # Arguments
-    /// * `message` - the server's answer to the initial login attempt
-    ///
-    /// # Example
-    ///
-    /// ```
-    /// use opaque_ke::{ClientLogin, ClientLoginStartParameters, ClientLoginFinishParameters, ServerLogin, ServerLoginStartParameters};
-    /// # use opaque_ke::{ClientRegistration, ClientRegistrationFinishParameters, ServerRegistration};
-    /// # use opaque_ke::errors::ProtocolError;
-    /// # use opaque_ke::keypair::KeyPair;
-    /// use rand::{rngs::OsRng, RngCore};
-    /// use opaque_ke::ciphersuite::CipherSuite;
-    /// struct Default;
-    /// impl CipherSuite for Default {
-    ///     type Group = curve25519_dalek::ristretto::RistrettoPoint;
-    ///     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
-    ///     type Hash = sha2::Sha512;
-    ///     type SlowHash = opaque_ke::slow_hash::NoOpHash;
-    /// }
-    /// let mut client_rng = OsRng;
-    /// # let mut server_rng = OsRng;
-    /// # let client_registration_start_result = ClientRegistration::<Default>::start(&mut client_rng, b"hunter2")?;
-    /// # let server_kp = Default::generate_random_keypair(&mut server_rng);
-    /// # let server_registration_start_result = ServerRegistration::<Default>::start(&mut server_rng, client_registration_start_result.message, server_kp.public())?;
-    /// # let client_registration_finish_result = client_registration_start_result.state.finish(&mut client_rng, server_registration_start_result.message, ClientRegistrationFinishParameters::default())?;
-    /// # let p_file = server_registration_start_result.state.finish(client_registration_finish_result.message)?;
-    /// let client_login_start_result = ClientLogin::<Default>::start(&mut client_rng, b"hunter2", ClientLoginStartParameters::default())?;
-    /// let server_login_start_result = ServerLogin::start(&mut server_rng, p_file, &server_kp.private(), client_login_start_result.message, ServerLoginStartParameters::default())?;
-    /// let client_login_finish_result = client_login_start_result.state.finish(server_login_start_result.message, ClientLoginFinishParameters::default())?;
-    /// # Ok::<(), ProtocolError>(())
-    /// ```
     pub fn finish(
         self,
-        l2: CredentialResponse<CS>,
+        credential_response: CredentialResponse<CS>,
         params: ClientLoginFinishParameters,
     ) -> Result<ClientLoginFinishResult<CS>, ProtocolError> {
         let optional_ids = match params {
@@ -597,12 +475,28 @@ impl<CS: CipherSuite> ClientLogin<CS> {
             ClientLoginFinishParameters::WithIdentifiers(id_u, id_s) => Some((id_u, id_s)),
         };
 
-        let server_s_pk_bytes = l2.server_s_pk.to_arr().to_vec();
+        let password_derived_key = get_password_derived_key::<CS::Group, CS::SlowHash, CS::Hash>(
+            &self.token,
+            credential_response.beta,
+        )?;
 
-        let password_derived_key =
-            get_password_derived_key::<CS::Group, CS::SlowHash, CS::Hash>(&self.token, l2.beta)?;
-        let opened_envelope = &l2
-            .envelope
+        let h = Hkdf::<CS::Hash>::new(None, &password_derived_key);
+        let mut masking_key = vec![0u8; <CS::Hash as Digest>::OutputSize::to_usize()];
+        h.expand(STR_MASKING_KEY, &mut masking_key)
+            .map_err(|_| InternalPakeError::HkdfError)?;
+
+        let (server_s_pk, envelope) = unmask_response::<CS::Hash>(
+            &masking_key,
+            &credential_response.masking_nonce,
+            &credential_response.masked_response,
+        )
+        .map_err(|e| match e {
+            ProtocolError::InvalidInnerEnvelopeError => PakeError::InvalidLoginError.into(),
+            err => err,
+        })?;
+        let server_s_pk_bytes = server_s_pk.to_arr().to_vec();
+
+        let opened_envelope = &envelope
             .open(&password_derived_key, &server_s_pk_bytes, &optional_ids)
             .map_err(|e| match e {
                 InternalPakeError::SealOpenHmacError => PakeError::InvalidLoginError,
@@ -621,15 +515,18 @@ impl<CS: CipherSuite> ClientLogin<CS> {
             Some((id_u, id_s)) => (id_u, id_s),
         };
 
-        let credential_response_component =
-            CredentialResponse::<CS>::serialize_without_ke(&l2.beta, &l2.server_s_pk, &l2.envelope);
+        let credential_response_component = CredentialResponse::<CS>::serialize_without_ke(
+            &credential_response.beta,
+            &credential_response.masking_nonce,
+            &credential_response.masked_response,
+        );
 
         let (confidential_info, session_key, ke3_message) = CS::KeyExchange::generate_ke3(
             credential_response_component,
-            l2.ke2_message,
+            credential_response.ke2_message,
             &self.ke1_state,
             &self.serialized_credential_request,
-            l2.server_s_pk.clone(),
+            server_s_pk.clone(),
             client_s_sk,
             id_u,
             id_s,
@@ -640,7 +537,7 @@ impl<CS: CipherSuite> ClientLogin<CS> {
             message: CredentialFinalization { ke3_message },
             session_key,
             export_key: opened_envelope.export_key.clone(),
-            server_s_pk: l2.server_s_pk,
+            server_s_pk,
             #[cfg(test)]
             state: self,
         })
@@ -707,50 +604,24 @@ impl<CS: CipherSuite> ServerLogin<CS> {
         })
     }
 
-    /// From the client's "blinded"" password, returns a challenge to be
+    /// From the client's "blinded" password, returns a challenge to be
     /// sent back to the client, as well as a ServerLogin
-    ///
-    /// # Arguments
-    /// * `message`   - the initial registration message
-    ///
-    /// # Example
-    ///
-    /// ```
-    /// use opaque_ke::{ClientLogin, ClientLoginStartParameters, ServerLogin, ServerLoginStartParameters};
-    /// # use opaque_ke::{ClientRegistration, ClientRegistrationFinishParameters, ServerRegistration};
-    /// # use opaque_ke::errors::ProtocolError;
-    /// # use opaque_ke::keypair::KeyPair;
-    /// use rand::{rngs::OsRng, RngCore};
-    /// use opaque_ke::ciphersuite::CipherSuite;
-    /// struct Default;
-    /// impl CipherSuite for Default {
-    ///     type Group = curve25519_dalek::ristretto::RistrettoPoint;
-    ///     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
-    ///     type Hash = sha2::Sha512;
-    ///     type SlowHash = opaque_ke::slow_hash::NoOpHash;
-    /// }
-    /// let mut client_rng = OsRng;
-    /// let mut server_rng = OsRng;
-    /// let server_kp = Default::generate_random_keypair(&mut server_rng);
-    /// # let client_registration_start_result = ClientRegistration::<Default>::start(&mut client_rng, b"hunter2")?;
-    /// # let server_registration_start_result = ServerRegistration::<Default>::start(&mut server_rng, client_registration_start_result.message, server_kp.public())?;
-    /// # let client_registration_finish_result = client_registration_start_result.state.finish(&mut client_rng, server_registration_start_result.message, ClientRegistrationFinishParameters::default())?;
-    /// # let p_file = server_registration_start_result.state.finish(client_registration_finish_result.message)?;
-    /// let client_login_start_result = ClientLogin::<Default>::start(&mut client_rng, b"hunter2", ClientLoginStartParameters::default())?;
-    /// let server_login_start_result = ServerLogin::start(&mut server_rng, p_file, &server_kp.private(), client_login_start_result.message, ServerLoginStartParameters::default())?;
-    /// # Ok::<(), ProtocolError>(())
-    /// ```
     pub fn start<R: RngCore + CryptoRng>(
         rng: &mut R,
-        password_file: ServerRegistration<CS>,
-        server_s_sk: &Key,
+        server_setup: &ServerSetup<CS>,
+        password_file: Option<ServerRegistration<CS>>,
         l1: CredentialRequest<CS>,
+        credential_identifier: &[u8],
         params: ServerLoginStartParameters,
     ) -> Result<ServerLoginStartResult<CS>, ProtocolError> {
-        let client_s_pk = password_file
-            .client_s_pk
-            .clone()
-            .ok_or(InternalPakeError::SealError)?;
+        // FIXME: handle optional password_file case, ensure that there is no timing attack by generating a random pubkey anyway
+
+        let record = match password_file {
+            Some(x) => x,
+            None => ServerRegistration::dummy(rng),
+        };
+
+        let client_s_pk = record.0.client_s_pk.clone();
 
         let (e_info, optional_ids) = match params {
             ServerLoginStartParameters::WithInfo(e_info) => (e_info, None),
@@ -762,30 +633,39 @@ impl<CS: CipherSuite> ServerLogin<CS> {
             }
         };
 
-        let envelope = password_file
-            .envelope
-            .clone()
-            .ok_or(InternalPakeError::SealError)?;
+        let envelope = record.0.envelope.clone();
         if envelope.get_mode() != mode_from_ids(&optional_ids) {
             return Err(InternalPakeError::IncompatibleEnvelopeModeError.into());
         }
 
+        let server_s_sk = server_setup.keypair.private();
+        let server_s_pk = KeyPair::<CS::Group>::public_from_private(&server_s_sk);
+
+        let mut masking_nonce = vec![0u8; 32];
+        rng.fill_bytes(&mut masking_nonce);
+
+        let masked_response = mask_response(
+            &record.0.masking_key,
+            &masking_nonce,
+            &server_s_pk,
+            &envelope,
+        )?;
+
         let (id_u, id_s) = match optional_ids {
-            None => (
-                client_s_pk.to_arr().to_vec(),
-                KeyPair::<CS::Group>::public_from_private(server_s_sk)
-                    .to_arr()
-                    .to_vec(),
-            ),
+            None => (client_s_pk.to_arr().to_vec(), server_s_pk.to_arr().to_vec()),
             Some((id_u, id_s)) => (id_u, id_s),
         };
 
         let l1_bytes = &l1.serialize();
-        let beta = oprf::evaluate(l1.alpha, &password_file.oprf_key);
-        let server_s_pk = KeyPair::<CS::Group>::public_from_private(&server_s_sk);
+
+        let oprf_key = oprf_key_from_seed::<CS::Group, CS::Hash>(
+            &server_setup.oprf_seed,
+            credential_identifier,
+        )?;
+        let beta = oprf::evaluate(l1.alpha, &oprf_key);
 
         let credential_response_component =
-            CredentialResponse::<CS>::serialize_without_ke(&beta, &server_s_pk, &envelope);
+            CredentialResponse::<CS>::serialize_without_ke(&beta, &masking_nonce, &masked_response);
 
         let (plain_info, ke2_state, ke2_message) = CS::KeyExchange::generate_ke2(
             rng,
@@ -801,8 +681,8 @@ impl<CS: CipherSuite> ServerLogin<CS> {
 
         let credential_response = CredentialResponse {
             beta,
-            server_s_pk,
-            envelope,
+            masking_nonce,
+            masked_response,
             ke2_message,
         };
 
@@ -818,39 +698,6 @@ impl<CS: CipherSuite> ServerLogin<CS> {
 
     /// From the client's second and final message, check the client's
     /// authentication and produce a message transport
-    ///
-    /// # Arguments
-    /// * `message` - the client's second login message
-    ///
-    /// # Example
-    ///
-    /// ```
-    /// use opaque_ke::{ClientLogin, ClientLoginFinishParameters, ClientLoginStartParameters, ServerLogin, ServerLoginStartParameters};
-    /// # use opaque_ke::{ClientRegistration, ClientRegistrationFinishParameters, ServerRegistration};
-    /// # use opaque_ke::errors::ProtocolError;
-    /// # use opaque_ke::keypair::KeyPair;
-    /// use rand::{rngs::OsRng, RngCore};
-    /// use opaque_ke::ciphersuite::CipherSuite;
-    /// struct Default;
-    /// impl CipherSuite for Default {
-    ///     type Group = curve25519_dalek::ristretto::RistrettoPoint;
-    ///     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
-    ///     type Hash = sha2::Sha512;
-    ///     type SlowHash = opaque_ke::slow_hash::NoOpHash;
-    /// }
-    /// let mut client_rng = OsRng;
-    /// let mut server_rng = OsRng;
-    /// let server_kp = Default::generate_random_keypair(&mut server_rng);
-    /// # let client_registration_start_result = ClientRegistration::<Default>::start(&mut client_rng, b"hunter2")?;
-    /// # let server_registration_start_result = ServerRegistration::<Default>::start(&mut server_rng, client_registration_start_result.message, server_kp.public())?;
-    /// # let client_registration_finish_result = client_registration_start_result.state.finish(&mut client_rng, server_registration_start_result.message, ClientRegistrationFinishParameters::default())?;
-    /// # let p_file = server_registration_start_result.state.finish(client_registration_finish_result.message)?;
-    /// let client_login_start_result = ClientLogin::<Default>::start(&mut client_rng, b"hunter2", ClientLoginStartParameters::default())?;
-    /// let server_login_start_result = ServerLogin::start(&mut server_rng, p_file, &server_kp.private(), client_login_start_result.message, ServerLoginStartParameters::default())?;
-    /// let client_login_finish_result = client_login_start_result.state.finish(server_login_start_result.message, ClientLoginFinishParameters::default())?;
-    /// let mut server_transport = server_login_start_result.state.finish(client_login_finish_result.message)?;
-    /// # Ok::<(), ProtocolError>(())
-    /// ```
     pub fn finish(
         self,
         message: CredentialFinalization<CS>,
@@ -899,9 +746,9 @@ impl<CS: CipherSuite> Drop for ClientRegistration<CS> {
 // This can't be derived because of the use of a phantom parameter
 impl<CS: CipherSuite> Zeroize for ServerRegistration<CS> {
     fn zeroize(&mut self) {
-        self.envelope.zeroize();
-        self.client_s_pk.zeroize();
-        self.oprf_key.zeroize();
+        self.0.envelope.zeroize();
+        self.0.masking_key.zeroize();
+        self.0.client_s_pk.zeroize();
     }
 }
 
@@ -948,4 +795,70 @@ fn get_password_derived_key<G: GroupWithMapToCurve, SH: SlowHash<D>, D: Hash>(
 ) -> Result<Vec<u8>, InternalPakeError> {
     let oprf_output = oprf::finalize::<G, D>(&token.data, &token.blind, beta);
     SH::hash(oprf_output)
+}
+
+fn oprf_key_from_seed<G: GroupWithMapToCurve, D: Hash>(
+    oprf_seed: &GenericArray<u8, D::OutputSize>,
+    credential_identifier: &[u8],
+) -> Result<G::Scalar, InternalPakeError> {
+    let mut oprf_key_bytes = vec![0u8; <Key as SizedBytes>::Len::to_usize()];
+    Hkdf::<D>::from_prk(oprf_seed)
+        .map_err(|_| InternalPakeError::HkdfError)?
+        .expand(
+            &[credential_identifier, &STR_OPRF_KEY].concat(),
+            &mut oprf_key_bytes,
+        )
+        .map_err(|_| InternalPakeError::HkdfError)?;
+    G::hash_to_scalar::<D>(&oprf_key_bytes[..])
+}
+
+fn mask_response<D: Hash>(
+    masking_key: &[u8],
+    masking_nonce: &[u8],
+    server_s_pk: &Key,
+    envelope: &Envelope<D>,
+) -> Result<Vec<u8>, ProtocolError> {
+    let mut xor_pad = vec![0u8; <Key as SizedBytes>::Len::to_usize() + Envelope::<D>::len()];
+    Hkdf::<D>::from_prk(&masking_key)
+        .map_err(|_| InternalPakeError::HkdfError)?
+        .expand(
+            &[masking_nonce, &STR_CREDENTIAL_RESPONSE_PAD].concat(),
+            &mut xor_pad,
+        )
+        .map_err(|_| InternalPakeError::HkdfError)?;
+
+    let plaintext = [&server_s_pk.to_arr()[..], &envelope.serialize()].concat();
+
+    Ok(xor_pad
+        .iter()
+        .zip(plaintext.iter())
+        .map(|(&x1, &x2)| x1 ^ x2)
+        .collect())
+}
+
+fn unmask_response<D: Hash>(
+    masking_key: &[u8],
+    masking_nonce: &[u8],
+    masked_response: &[u8],
+) -> Result<(Key, Envelope<D>), ProtocolError> {
+    let mut xor_pad = vec![0u8; <Key as SizedBytes>::Len::to_usize() + Envelope::<D>::len()];
+    Hkdf::<D>::from_prk(&masking_key)
+        .map_err(|_| InternalPakeError::HkdfError)?
+        .expand(
+            &[masking_nonce, &STR_CREDENTIAL_RESPONSE_PAD].concat(),
+            &mut xor_pad,
+        )
+        .map_err(|_| InternalPakeError::HkdfError)?;
+    let plaintext: Vec<u8> = xor_pad
+        .iter()
+        .zip(masked_response.iter())
+        .map(|(&x1, &x2)| x1 ^ x2)
+        .collect();
+    let key_len = <Key as SizedBytes>::Len::to_usize();
+    let unchecked_server_s_pk =
+        Key::from_arr(&GenericArray::clone_from_slice(&plaintext[..key_len]))?;
+    let envelope = Envelope::deserialize(&plaintext[key_len..])?;
+    // FIXME check server_s_pk
+
+    Ok((unchecked_server_s_pk, envelope))
 }

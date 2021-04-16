@@ -24,6 +24,9 @@ pub trait GroupWithMapToCurve: Group {
     /// transforms a password and domain separation tag (DST) into a curve point
     fn map_to_curve<H: Hash>(msg: &[u8], dst: &[u8]) -> Result<Self, InternalPakeError>;
 
+    /// Hashes a slice of pseudo-random bytes to a scalar
+    fn hash_to_scalar<H: Hash>(input: &[u8]) -> Result<Self::Scalar, InternalPakeError>;
+
     /// Generates the contextString parameter as defined in
     /// <https://www.ietf.org/archive/id/draft-irtf-cfrg-voprf-05.txt>
     fn get_context_string(mode: u8) -> Vec<u8> {
@@ -42,6 +45,15 @@ impl GroupWithMapToCurve for RistrettoPoint {
         Ok(<Self as Group>::hash_to_curve(
             &GenericArray::clone_from_slice(&uniform_bytes[..]),
         ))
+    }
+
+    fn hash_to_scalar<H: Hash>(input: &[u8]) -> Result<Self::Scalar, InternalPakeError> {
+        const LEN_IN_BYTES: usize = 64;
+        let uniform_bytes = expand_message_xmd::<H>(input, b"", LEN_IN_BYTES)?;
+        let mut bits = [0u8; LEN_IN_BYTES];
+        bits.copy_from_slice(&uniform_bytes[..]);
+
+        Ok(Self::Scalar::from_bytes_mod_order_wide(&bits))
     }
 }
 
