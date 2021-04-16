@@ -30,7 +30,7 @@ use opaque_ke::{
     ClientLoginStartParameters, ClientRegistration, ClientRegistrationFinishParameters,
     CredentialFinalization, CredentialRequest, CredentialResponse, RegistrationRequest,
     RegistrationResponse, RegistrationUpload, ServerLogin, ServerLoginStartParameters,
-    ServerRegistration,
+    ServerRegistration, ServerSetup,
 };
 
 // The ciphersuite trait allows to specify the underlying primitives
@@ -46,7 +46,8 @@ impl CipherSuite for Default {
 
 // Password-based registration between a client and server
 fn account_registration(
-    server_kp: &opaque_ke::keypair::KeyPair<curve25519_dalek::ristretto::RistrettoPoint>,
+    server_setup: &ServerSetup<Default>,
+    username: String,
     password: String,
 ) -> Vec<u8> {
     let mut client_rng = OsRng;
@@ -56,11 +57,10 @@ fn account_registration(
 
     // Client sends registration_request_bytes to server
 
-    let mut server_rng = OsRng;
     let server_registration_start_result = ServerRegistration::<Default>::start(
-        &mut server_rng,
+        &server_setup,
         RegistrationRequest::deserialize(&registration_request_bytes[..]).unwrap(),
-        server_kp.public(),
+        username.as_bytes(),
     )
     .unwrap();
     let registration_response_bytes = server_registration_start_result.message.serialize();
@@ -79,16 +79,16 @@ fn account_registration(
 
     // Client sends message_bytes to server
 
-    let password_file = server_registration_start_result
-        .state
-        .finish(RegistrationUpload::deserialize(&message_bytes[..]).unwrap())
-        .unwrap();
+    let password_file = ServerRegistration::finish(
+        RegistrationUpload::<Default>::deserialize(&message_bytes[..]).unwrap(),
+    );
     password_file.serialize()
 }
 
 // Password-based login between a client and server
 fn account_login(
-    server_kp: &opaque_ke::keypair::KeyPair<curve25519_dalek::ristretto::RistrettoPoint>,
+    server_setup: &ServerSetup<Default>,
+    username: String,
     password: String,
     password_file_bytes: &[u8],
 ) -> bool {
@@ -107,9 +107,10 @@ fn account_login(
     let mut server_rng = OsRng;
     let server_login_start_result = ServerLogin::start(
         &mut server_rng,
-        password_file,
-        &server_kp.private(),
+        &server_setup,
+        Some(password_file),
         CredentialRequest::deserialize(&credential_request_bytes[..]).unwrap(),
+        username.as_bytes(),
         ServerLoginStartParameters::default(),
     )
     .unwrap();
@@ -141,7 +142,7 @@ fn account_login(
 
 fn main() {
     let mut rng = OsRng;
-    let server_kp = Default::generate_random_keypair(&mut rng);
+    let server_setup = ServerSetup::<Default>::new(&mut rng);
 
     let mut rl = Editor::<()>::new();
     let mut registered_users = HashMap::<String, Vec<u8>>::new();
@@ -164,13 +165,16 @@ fn main() {
                 let (username, password) = get_two_strings("Username", "Password", &mut rl, None);
                 match line.as_ref() {
                     "1" => {
-                        registered_users
-                            .insert(username, account_registration(&server_kp, password));
+                        registered_users.insert(
+                            username.clone(),
+                            account_registration(&server_setup, username, password),
+                        );
                         continue;
                     }
                     "2" => match registered_users.get(&username) {
                         Some(password_file_bytes) => {
-                            if account_login(&server_kp, password, password_file_bytes) {
+                            if account_login(&server_setup, username, password, password_file_bytes)
+                            {
                                 println!("\nLogin success!");
                             } else {
                                 // Note that at this point, the client knows whether or not the login

@@ -6,12 +6,10 @@
 //! Defines the CipherSuite trait to specify the underlying primitives for OPAQUE
 
 use crate::{
-    hash::Hash, key_exchange::traits::KeyExchange, keypair::KeyPair,
-    map_to_curve::GroupWithMapToCurve, slow_hash::SlowHash,
+    hash::Hash, key_exchange::traits::KeyExchange, map_to_curve::GroupWithMapToCurve,
+    slow_hash::SlowHash,
 };
 use digest::Digest;
-
-use rand::{CryptoRng, RngCore};
 
 /// Configures the underlying primitives used in OPAQUE
 /// * `Group`: a finite cyclic group along with a point representation, along
@@ -33,9 +31,4 @@ pub trait CipherSuite {
     type Hash: Hash;
     /// A slow hashing function, typically used for password hashing
     type SlowHash: SlowHash<Self::Hash>;
-
-    /// Generating a random key pair given a cryptographic rng
-    fn generate_random_keypair<R: RngCore + CryptoRng>(rng: &mut R) -> KeyPair<Self::Group> {
-        KeyPair::<Self::Group>::generate_random(rng)
-    }
 }
