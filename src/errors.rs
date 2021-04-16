@@ -90,6 +90,8 @@ pub enum ProtocolError {
     ///
     /// Internal error during password verification: {0}
     VerificationError(PakeError),
+    /// This error occurs when the inner envelope is malformed
+    InvalidInnerEnvelopeError,
     /// This error occurs when the server answer cannot be handled
     /// Server response cannot be handled.
     ServerError,

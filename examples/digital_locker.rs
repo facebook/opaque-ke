@@ -36,7 +36,7 @@ use opaque_ke::{
     ClientLogin, ClientLoginFinishParameters, ClientLoginStartParameters, ClientRegistration,
     ClientRegistrationFinishParameters, CredentialFinalization, CredentialRequest,
     CredentialResponse, RegistrationRequest, RegistrationResponse, RegistrationUpload, ServerLogin,
-    ServerLoginStartParameters, ServerRegistration,
+    ServerLoginStartParameters, ServerRegistration, ServerSetup,
 };
 
 // The ciphersuite trait allows to specify the underlying primitives
@@ -81,7 +81,8 @@ fn decrypt(key: &[u8], ciphertext: &[u8]) -> Vec<u8> {
 
 // Password-based registration and encryption of client secret message between a client and server
 fn register_locker(
-    server_kp: &opaque_ke::keypair::KeyPair<curve25519_dalek::ristretto::RistrettoPoint>,
+    server_setup: &ServerSetup<Default>,
+    locker_id: usize,
     password: String,
     secret_message: String,
 ) -> Locker {
@@ -91,12 +92,10 @@ fn register_locker(
     let registration_request_bytes = client_registration_start_result.message.serialize();
 
     // Client sends registration_request_bytes to server
-
-    let mut server_rng = OsRng;
     let server_registration_start_result = ServerRegistration::<Default>::start(
-        &mut server_rng,
+        &server_setup,
         RegistrationRequest::deserialize(&registration_request_bytes[..]).unwrap(),
-        server_kp.public(),
+        &locker_id.to_be_bytes(),
     )
     .unwrap();
     let registration_response_bytes = server_registration_start_result.message.serialize();
@@ -121,10 +120,9 @@ fn register_locker(
 
     // Client sends message_bytes to server
 
-    let password_file = server_registration_start_result
-        .state
-        .finish(RegistrationUpload::deserialize(&message_bytes[..]).unwrap())
-        .unwrap();
+    let password_file = ServerRegistration::finish(
+        RegistrationUpload::<Default>::deserialize(&message_bytes[..]).unwrap(),
+    );
 
     Locker {
         contents: ciphertext,
@@ -134,7 +132,8 @@ fn register_locker(
 
 // Open the contents of a locker with a password between a client and server
 fn open_locker(
-    server_kp: &opaque_ke::keypair::KeyPair<curve25519_dalek::ristretto::RistrettoPoint>,
+    server_setup: &ServerSetup<Default>,
+    locker_id: usize,
     password: String,
     locker: &Locker,
 ) -> Result<String, String> {
@@ -154,9 +153,10 @@ fn open_locker(
     let mut server_rng = OsRng;
     let server_login_start_result = ServerLogin::start(
         &mut server_rng,
-        password_file,
-        &server_kp.private(),
+        &server_setup,
+        Some(password_file),
         CredentialRequest::deserialize(&credential_request_bytes[..]).unwrap(),
+        &locker_id.to_be_bytes(),
         ServerLoginStartParameters::default(),
     )
     .unwrap();
@@ -200,7 +200,7 @@ fn open_locker(
 
 fn main() {
     let mut rng = OsRng;
-    let server_kp = Default::generate_random_keypair(&mut rng);
+    let server_setup = ServerSetup::<Default>::new(&mut rng);
 
     let mut rl = Editor::<()>::new();
     let mut registered_lockers: Vec<Locker> = vec![];
@@ -225,8 +225,10 @@ fn main() {
                             &mut rl,
                             None,
                         );
+                        let locker_id = registered_lockers.len();
                         registered_lockers.push(register_locker(
-                            &server_kp,
+                            &server_setup,
+                            locker_id,
                             password,
                             secret_message,
                         ));
@@ -252,7 +254,12 @@ fn main() {
                             continue;
                         }
 
-                        match open_locker(&server_kp, password, &registered_lockers[locker_index]) {
+                        match open_locker(
+                            &server_setup,
+                            locker_index,
+                            password,
+                            &registered_lockers[locker_index],
+                        ) {
                             Ok(contents) => {
                                 println!("\n\nSuccess! Contents: {}\n\n", contents);
                             }
