@@ -29,6 +29,7 @@ scrypt = { version = "0.5.0", optional = true }
 subtle = { version = "2.3.0", default-features = false }
 thiserror = "1.0.22"
 zeroize = "1.1.1"
+hex = "0.4.2"
 
 [dev-dependencies]
 anyhow = "1.0.35"

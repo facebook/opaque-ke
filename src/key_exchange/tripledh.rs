@@ -108,6 +108,9 @@ impl<D: Hash, G: Group> KeyExchange<D, G> for TripleDH {
             &transcript_hasher.clone().finalize(),
         )?;
 
+        println!("generate_ke2 id_u: {}", hex::encode(&serialize(&id_u, 2)));
+        println!("generate_ke2 km2: {}", hex::encode(&km2));
+
         // Compute encryption of e_info
         let h = Hkdf::<D>::from_prk(&ke2).map_err(|_| InternalPakeError::HkdfError)?;
         let mut encryption_pad = vec![0u8; e_info.len()];
@@ -174,6 +177,9 @@ impl<D: Hash, G: Group> KeyExchange<D, G> for TripleDH {
             },
             &transcript_hasher.clone().finalize(),
         )?;
+
+        println!("generate_ke3 id_u: {}", hex::encode(&serialize(&id_u, 2)));
+        println!("generate_ke3 km2: {}", hex::encode(&km2));
 
         transcript_hasher.update(&serialize(&ke2_message.e_info[..], 2));
 
