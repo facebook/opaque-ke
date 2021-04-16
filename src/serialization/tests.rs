@@ -73,14 +73,11 @@ fn server_registration_roundtrip() {
     let mut masking_key = [0u8; HASH_SIZE];
     rng.fill_bytes(&mut masking_key);
 
-    let mut ciphertext = [0u8; 32];
-    rng.fill_bytes(&mut ciphertext);
-
     // Construct a mock envelope
     let mut mock_envelope_bytes = Vec::new();
     mock_envelope_bytes.extend_from_slice(&[1; 1]); // mode = 1
     mock_envelope_bytes.extend_from_slice(&vec![0; NonceLen::to_usize()]); // empty nonce
-    mock_envelope_bytes.extend_from_slice(&ciphertext); // ciphertext which is an encrypted private key
+    // mock_envelope_bytes.extend_from_slice(&ciphertext); // ciphertext which is an encrypted private key
     mock_envelope_bytes.extend_from_slice(&[0; MAC_SIZE]); // length-MAC_SIZE hmac
 
     let mock_client_kp = KeyPair::<<Default as CipherSuite>::Group>::generate_random(&mut rng);
@@ -132,21 +129,15 @@ fn registration_upload_roundtrip() {
 
     let mut key = [0u8; 32];
     rng.fill_bytes(&mut key);
+    let mut nonce = [0u8; 32];
+    rng.fill_bytes(&mut nonce);
 
     let mut masking_key = vec![0u8; <sha2::Sha512 as Digest>::OutputSize::to_usize()];
     rng.fill_bytes(&mut masking_key);
 
-    let mut msg = [0u8; 32];
-    rng.fill_bytes(&mut msg);
-
-    let (envelope, _) = Envelope::<sha2::Sha512>::seal_raw(
-        &mut rng,
-        &key,
-        &msg,
-        &pubkey_bytes,
-        InnerEnvelopeMode::Base,
-    )
-    .unwrap();
+    let (envelope, _) =
+        Envelope::<Default>::seal_raw(&key, &nonce, &[], &pubkey_bytes, InnerEnvelopeMode::Base)
+            .unwrap();
     let envelope_bytes = envelope.serialize();
 
     let mut input = Vec::new();
@@ -198,11 +189,8 @@ fn credential_response_roundtrip() {
     let mut masking_nonce = vec![0u8; 32];
     rng.fill_bytes(&mut masking_nonce);
 
-    let mut masked_response = vec![
-        0u8;
-        <Key as SizedBytes>::Len::to_usize()
-            + Envelope::<<Default as CipherSuite>::Hash>::len()
-    ];
+    let mut masked_response =
+        vec![0u8; <Key as SizedBytes>::Len::to_usize() + Envelope::<Default>::len()];
     rng.fill_bytes(&mut masked_response);
 
     let server_e_kp = KeyPair::<<Default as CipherSuite>::Group>::generate_random(&mut rng);

@@ -188,7 +188,6 @@ impl<CS: CipherSuite> ClientRegistration<CS> {
             ClientRegistrationFinishParameters::WithIdentifiers(id_u, id_s) => Some((id_u, id_s)),
             ClientRegistrationFinishParameters::Default => None,
         };
-        let client_static_keypair = KeyPair::<CS::Group>::generate_random(rng);
 
         let password_derived_key =
             get_password_derived_key::<CS::Group, CS::SlowHash, CS::Hash>(&self.token, r2.beta)?;
@@ -198,19 +197,21 @@ impl<CS: CipherSuite> ClientRegistration<CS> {
         h.expand(STR_MASKING_KEY, &mut masking_key)
             .map_err(|_| InternalPakeError::HkdfError)?;
 
-        let (envelope, export_key) = Envelope::<CS::Hash>::seal(
+        let (envelope, client_s_pk, export_key) = Envelope::<CS>::seal(
             rng,
             &password_derived_key,
-            &client_static_keypair.private().to_arr().to_vec(),
+            // FIXME: Option(keypair) &client_static_keypair.private().to_arr().to_vec(),
             &r2.server_s_pk,
             optional_ids,
         )?;
+
+        println!("registration_upload client_s_pk: {}", hex::encode(&client_s_pk.to_vec()));
 
         Ok(ClientRegistrationFinishResult {
             message: RegistrationUpload {
                 envelope,
                 masking_key: GenericArray::clone_from_slice(&masking_key[..]),
-                client_s_pk: client_static_keypair.public().clone(),
+                client_s_pk,
             },
             export_key,
         })
@@ -476,7 +477,7 @@ impl<CS: CipherSuite> ClientLogin<CS> {
         h.expand(STR_MASKING_KEY, &mut masking_key)
             .map_err(|_| InternalPakeError::HkdfError)?;
 
-        let (server_s_pk, envelope) = unmask_response::<CS::Hash>(
+        let (server_s_pk, envelope) = unmask_response::<CS>(
             &masking_key,
             &credential_response.masking_nonce,
             &credential_response.masked_response,
@@ -494,13 +495,9 @@ impl<CS: CipherSuite> ClientLogin<CS> {
                 err => PakeError::from(err),
             })?;
 
-        let client_s_sk = Key::from_bytes(&opened_envelope.client_s_sk)?;
-
         let (id_u, id_s) = match optional_ids {
             None => (
-                KeyPair::<CS::Group>::public_from_private(&client_s_sk)
-                    .to_arr()
-                    .to_vec(),
+                opened_envelope.client_static_keypair.public().to_arr().to_vec(),
                 server_s_pk_bytes,
             ),
             Some((id_u, id_s)) => (id_u, id_s),
@@ -512,13 +509,16 @@ impl<CS: CipherSuite> ClientLogin<CS> {
             &credential_response.masked_response,
         );
 
+        println!("generate_ke3 client_s_sk: {}", hex::encode(&opened_envelope.client_static_keypair.private().to_arr().to_vec()));
+        println!("generate_ke3 client_s_pk: {}", hex::encode(&id_u));
+
         let (confidential_info, session_key, ke3_message) = CS::KeyExchange::generate_ke3(
             credential_response_component,
             credential_response.ke2_message,
             &self.ke1_state,
             &self.serialized_credential_request,
             server_s_pk.clone(),
-            client_s_sk,
+            opened_envelope.client_static_keypair.private().clone(),
             id_u,
             id_s,
         )?;
@@ -606,6 +606,7 @@ impl<CS: CipherSuite> ServerLogin<CS> {
             None => ServerRegistration::dummy(rng),
         };
 
+
         let client_s_pk = record.0.client_s_pk;
 
         let (e_info, optional_ids) = match params {
@@ -619,9 +620,12 @@ impl<CS: CipherSuite> ServerLogin<CS> {
         };
 
         let envelope = record.0.envelope;
+
+        /** FIXME this needs to be addressed, disabling for now
         if envelope.get_mode() != mode_from_ids(&optional_ids) {
             return Err(InternalPakeError::IncompatibleEnvelopeModeError.into());
         }
+        */
 
         let server_s_sk = server_setup.keypair.private();
         let server_s_pk = KeyPair::<CS::Group>::public_from_private(&server_s_sk);
@@ -651,6 +655,8 @@ impl<CS: CipherSuite> ServerLogin<CS> {
 
         let credential_response_component =
             CredentialResponse::<CS>::serialize_without_ke(&beta, &masking_nonce, &masked_response);
+
+        println!("generate_ke2 client_s_pk: {}", hex::encode(&client_s_pk.to_arr().to_vec()));
 
         let (plain_info, ke2_state, ke2_message) = CS::KeyExchange::generate_ke2(
             rng,
@@ -724,17 +730,17 @@ fn oprf_key_from_seed<G: GroupWithMapToCurve, D: Hash>(
             &mut oprf_key_bytes,
         )
         .map_err(|_| InternalPakeError::HkdfError)?;
-    G::hash_to_scalar::<D>(&oprf_key_bytes[..])
+    G::hash_to_scalar::<D>(&oprf_key_bytes[..], b"")
 }
 
-fn mask_response<D: Hash>(
+fn mask_response<CS: CipherSuite>(
     masking_key: &[u8],
     masking_nonce: &[u8],
     server_s_pk: &Key,
-    envelope: &Envelope<D>,
+    envelope: &Envelope<CS>,
 ) -> Result<Vec<u8>, ProtocolError> {
-    let mut xor_pad = vec![0u8; <Key as SizedBytes>::Len::to_usize() + Envelope::<D>::len()];
-    Hkdf::<D>::from_prk(&masking_key)
+    let mut xor_pad = vec![0u8; <Key as SizedBytes>::Len::to_usize() + Envelope::<CS>::len()];
+    Hkdf::<CS::Hash>::from_prk(&masking_key)
         .map_err(|_| InternalPakeError::HkdfError)?
         .expand(
             &[masking_nonce, &STR_CREDENTIAL_RESPONSE_PAD].concat(),
@@ -751,13 +757,13 @@ fn mask_response<D: Hash>(
         .collect())
 }
 
-fn unmask_response<D: Hash>(
+fn unmask_response<CS: CipherSuite>(
     masking_key: &[u8],
     masking_nonce: &[u8],
     masked_response: &[u8],
-) -> Result<(Key, Envelope<D>), ProtocolError> {
-    let mut xor_pad = vec![0u8; <Key as SizedBytes>::Len::to_usize() + Envelope::<D>::len()];
-    Hkdf::<D>::from_prk(&masking_key)
+) -> Result<(Key, Envelope<CS>), ProtocolError> {
+    let mut xor_pad = vec![0u8; <Key as SizedBytes>::Len::to_usize() + Envelope::<CS>::len()];
+    Hkdf::<CS::Hash>::from_prk(&masking_key)
         .map_err(|_| InternalPakeError::HkdfError)?
         .expand(
             &[masking_nonce, &STR_CREDENTIAL_RESPONSE_PAD].concat(),
