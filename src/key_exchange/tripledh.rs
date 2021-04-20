@@ -89,9 +89,9 @@ impl<D: Hash, G: Group> KeyExchange<D, G> for TripleDH {
 
         let mut transcript_hasher = D::new()
             .chain(STR_3DH)
-            .chain(&serialize(&id_u, 2))
+            .chain(&id_u)
             .chain(&serialized_credential_request[..])
-            .chain(&serialize(&id_s, 2))
+            .chain(&id_s)
             .chain(&l2_bytes[..])
             .chain(&server_nonce[..])
             .chain(&server_e_kp.public().to_arr());
@@ -107,8 +107,6 @@ impl<D: Hash, G: Group> KeyExchange<D, G> for TripleDH {
             },
             &transcript_hasher.clone().finalize(),
         )?;
-
-        println!("generate_ke2 id_u: {}", hex::encode(&serialize(&id_u, 2)));
         println!("generate_ke2 km2: {}", hex::encode(&km2));
 
         // Compute encryption of e_info
@@ -160,9 +158,9 @@ impl<D: Hash, G: Group> KeyExchange<D, G> for TripleDH {
     ) -> Result<(Vec<u8>, Vec<u8>, Self::KE3Message), ProtocolError> {
         let mut transcript_hasher = D::new()
             .chain(STR_3DH)
-            .chain(&serialize(&id_u, 2))
+            .chain(&id_u)
             .chain(&serialized_credential_request)
-            .chain(&serialize(&id_s, 2))
+            .chain(&id_s)
             .chain(&l2_component[..])
             .chain(&ke2_message.to_bytes_without_info_or_mac());
 

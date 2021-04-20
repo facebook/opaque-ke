@@ -77,7 +77,7 @@ fn server_registration_roundtrip() {
     let mut mock_envelope_bytes = Vec::new();
     mock_envelope_bytes.extend_from_slice(&[1; 1]); // mode = 1
     mock_envelope_bytes.extend_from_slice(&vec![0; NonceLen::to_usize()]); // empty nonce
-    // mock_envelope_bytes.extend_from_slice(&ciphertext); // ciphertext which is an encrypted private key
+                                                                           // mock_envelope_bytes.extend_from_slice(&ciphertext); // ciphertext which is an encrypted private key
     mock_envelope_bytes.extend_from_slice(&[0; MAC_SIZE]); // length-MAC_SIZE hmac
 
     let mock_client_kp = KeyPair::<<Default as CipherSuite>::Group>::generate_random(&mut rng);
@@ -135,9 +135,14 @@ fn registration_upload_roundtrip() {
     let mut masking_key = vec![0u8; <sha2::Sha512 as Digest>::OutputSize::to_usize()];
     rng.fill_bytes(&mut masking_key);
 
-    let (envelope, _) =
-        Envelope::<Default>::seal_raw(&key, &nonce, &[], &pubkey_bytes, InnerEnvelopeMode::Base)
-            .unwrap();
+    let (envelope, _) = Envelope::<Default>::seal_raw(
+        &key,
+        &nonce,
+        &[],
+        &pubkey_bytes,
+        InnerEnvelopeMode::Internal,
+    )
+    .unwrap();
     let envelope_bytes = envelope.serialize();
 
     let mut input = Vec::new();

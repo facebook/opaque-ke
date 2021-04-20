@@ -339,7 +339,9 @@ fn generate_parameters<CS: CipherSuite>() -> TestVectorParameters {
         .finish(
             &mut finish_registration_rng,
             server_registration_start_result.message,
-            ClientRegistrationFinishParameters::WithIdentifiers(id_u.to_vec(), id_s.to_vec()),
+            ClientRegistrationFinishParameters::WithIdentifiers(
+                Identifiers::ClientAndServerIdentifiers(id_u.to_vec(), id_s.to_vec()),
+            ),
         )
         .unwrap();
     let registration_upload_bytes = client_registration_finish_result
@@ -381,8 +383,7 @@ fn generate_parameters<CS: CipherSuite>() -> TestVectorParameters {
         credential_identifier,
         ServerLoginStartParameters::WithInfoAndIdentifiers(
             einfo2.to_vec(),
-            id_u.to_vec(),
-            id_s.to_vec(),
+            Identifiers::ClientAndServerIdentifiers(id_u.to_vec(), id_s.to_vec()),
         ),
     )
     .unwrap();
@@ -393,7 +394,10 @@ fn generate_parameters<CS: CipherSuite>() -> TestVectorParameters {
         .state
         .finish(
             server_login_start_result.message,
-            ClientLoginFinishParameters::WithIdentifiers(id_u.to_vec(), id_s.to_vec()),
+            ClientLoginFinishParameters::WithIdentifiers(Identifiers::ClientAndServerIdentifiers(
+                id_u.to_vec(),
+                id_s.to_vec(),
+            )),
         )
         .unwrap();
     let credential_finalization_bytes = client_login_finish_result.message.serialize();
@@ -491,7 +495,9 @@ fn test_registration_upload() -> Result<(), ProtocolError> {
     .finish(
         &mut finish_registration_rng,
         RegistrationResponse::deserialize(&parameters.registration_response[..])?,
-        ClientRegistrationFinishParameters::WithIdentifiers(parameters.id_u, parameters.id_s),
+        ClientRegistrationFinishParameters::WithIdentifiers(
+            Identifiers::ClientAndServerIdentifiers(parameters.id_u, parameters.id_s),
+        ),
     )?;
 
     assert_eq!(
@@ -578,8 +584,7 @@ fn test_credential_response() -> Result<(), ProtocolError> {
         &parameters.credential_identifier,
         ServerLoginStartParameters::WithInfoAndIdentifiers(
             parameters.einfo2.to_vec(),
-            parameters.id_u,
-            parameters.id_s,
+            Identifiers::ClientAndServerIdentifiers(parameters.id_u, parameters.id_s),
         ),
     )?;
     assert_eq!(
@@ -608,7 +613,10 @@ fn test_credential_finalization() -> Result<(), ProtocolError> {
         CredentialResponse::<RistrettoSha5123dhNoSlowHash>::deserialize(
             &parameters.credential_response[..],
         )?,
-        ClientLoginFinishParameters::WithIdentifiers(parameters.id_u, parameters.id_s),
+        ClientLoginFinishParameters::WithIdentifiers(Identifiers::ClientAndServerIdentifiers(
+            parameters.id_u,
+            parameters.id_s,
+        )),
     )?;
 
     assert_eq!(

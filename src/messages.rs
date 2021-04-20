@@ -110,11 +110,8 @@ impl<CS: CipherSuite> RegistrationUpload<CS> {
     pub fn deserialize(input: &[u8]) -> Result<Self, ProtocolError> {
         let key_len = <Key as SizedBytes>::Len::to_usize();
         let hash_len = <CS::Hash as Digest>::OutputSize::to_usize();
-        let checked_slice = check_slice_size(
-            &input,
-            key_len + hash_len + Envelope::<CS>::len(),
-            "registration_upload_bytes",
-        )?;
+        let checked_slice =
+            check_slice_size_atleast(&input, key_len + hash_len, "registration_upload_bytes")?;
         let envelope = Envelope::<CS>::deserialize(&checked_slice[key_len + hash_len..])?;
         Ok(Self {
             envelope,
