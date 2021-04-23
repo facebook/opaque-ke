@@ -121,6 +121,8 @@ impl<G: Group + Debug> KeyPair<G> {
 
 /// A minimalist key type built around a \[u8; 32\]
 #[derive(Debug, PartialEq, Eq, Clone, Zeroize)]
+// Ensure Key material is zeroed after use.
+#[zeroize(drop)]
 #[repr(transparent)]
 pub struct Key(Vec<u8>);
 
