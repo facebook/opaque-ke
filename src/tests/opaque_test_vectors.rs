@@ -4,10 +4,12 @@
 // LICENSE file in the root directory of this source tree.
 
 use crate::{
-    ciphersuite::CipherSuite, errors::*, key_exchange::tripledh::TripleDH, opaque::*,
+    ciphersuite::CipherSuite, errors::*, key_exchange::tripledh::TripleDH, keypair::Key, opaque::*,
     slow_hash::NoOpHash, tests::mock_rng::CycleRng, *,
 };
 use curve25519_dalek::ristretto::RistrettoPoint;
+use generic_array::typenum::Unsigned;
+use generic_bytes::SizedBytes;
 use serde_json::Value;
 
 // Tests
@@ -29,17 +31,19 @@ pub enum EnvelopeMode {
 
 #[allow(non_snake_case)]
 pub struct TestVectorParameters {
+    pub fake: bool,
+    pub fake_sk: Vec<u8>,
+    pub context: Vec<u8>,
     pub envelope_mode: EnvelopeMode,
-    pub client_public_key: Vec<u8>,
-    pub client_private_key: Vec<u8>,
+    pub client_private_key: Option<Vec<u8>>,
     pub client_keyshare: Vec<u8>,
     pub client_private_keyshare: Vec<u8>,
     pub server_public_key: Vec<u8>,
     pub server_private_key: Vec<u8>,
     pub server_keyshare: Vec<u8>,
     pub server_private_keyshare: Vec<u8>,
-    pub client_identity: Vec<u8>,
-    pub server_identity: Vec<u8>,
+    pub client_identity: Option<Vec<u8>>,
+    pub server_identity: Option<Vec<u8>>,
     pub credential_identifier: Vec<u8>,
     pub password: Vec<u8>,
     pub blind_registration: Vec<u8>,
@@ -65,224 +69,258 @@ pub struct TestVectorParameters {
 // of https://datatracker.ietf.org/doc/draft-irtf-cfrg-opaque/
 static TEST_VECTORS: &[&str] = &[
     r#"
+## OPAQUE-3DH Test Vector 1
+
+### Configuration
+
+~~~
 OPRF: 0001
 Hash: SHA512
 MHF: Identity
 KDF: HKDF-SHA512
 MAC: HMAC-SHA512
-Name: 3DH
 EnvelopeMode: 01
 Group: ristretto255
-oprf_seed: 7bc32c4249689ebdf218d04a2cbfb8d06850d4f1d1acb2b0413b9b3e40
-b45b3f9f4647df5bbf6dd32e7d41f7dbc2ddf053f047cbf26a684f2b341ad7459373f
-1
+Context: 4f50415155452d504f43
+Nh: 64
+Npk: 32
+Nsk: 32
+Nm: 64
+Nx: 64
+Nok: 32
+~~~
+
+### Input Values
+
+~~~
+oprf_seed: 5c4f99877d253be5817b4b03f37b6da680b0d5671d1ec5351fa61c5d82
+eab28b9de4c4e170f27e433ba377c71c49aa62ad26391ee1cac17011d8a7e9406657c
+8
 credential_identifier: 31323334
 password: 436f7272656374486f72736542617474657279537461706c65
-envelope_nonce: 69f191aeb1af61c1feea7688a7c433a645d0f81c3168b4558b3f1
-d83d08b7a25
-masking_nonce: 154b361eb3a95bcb64700b8c26898a1e2f78eeb6232b2361b84721
-778ca93686
-client_private_key: 533c2e6d91c934f919ac218973be55ba0d7b234160a0d4cf3
-bddafbda99e2e0c
-client_public_key: a07d9609083613e2d7521b8f77f1cd7a07d89ea03aa0045080
-775edc37949341
-server_private_key: 3af5aec325791592eee4a8860522f8444c8e71ac33af5186a
-9706137886dce08
-server_public_key: 4c6dff3083c068b8ca6fec4dbaabc16b5fdac5d98832f25a5b
-78624cbd10b371
-client_info: 68656c6c6f20626f62
-server_info: 6772656574696e677320616c696365
-server_nonce: a71b6f2ff4c8baae05637f574deec70050dffda1f68d10e8648c838
-b696e1918
-client_nonce: acd3d4ffff4667b6a6b2d82b95bb8a171caacaa063e102a3a10077a
-a6c7ac211
-server_keyshare: ca372e52516d51c19763ad5eb1a5b60dafb68c264dcf6bcc692f
-667a71c5a617
-client_keyshare: 4c415eebd7a9bb5f921cbcfc5863e48c9e79fd2ecc1788e2b616
-bea0853f627a
-server_private_keyshare: 080d0a4d352de92672ab709b1ae1888cb48dfabc2d6c
-a5b914b335512fe70508
-client_private_keyshare: 7e5bcbf82a46109ee0d24e9bcab41fc830a6ce8b82fc
-1e9213a043b743b95800
-blind_registration: 8bcb0b70dac18de24eef12e737d6b28724d3e37774e0b092f
-9f70b255defaf04
-blind_login: f3a0829898a89239dce29ccc98ec8b449a34b255ba1e6f944829d18e
-0d589b0f
-oprf_key: f993af4bc97f6e752da6d97eb0a489a68ec1dc2f3327e3f480880f26a2b
-73b0a
-auth_key: 8ec5878a7d305c1252f11e4c1a5b8219919a4b5b71c85ab3130d0b8cbd9
-e5302669a3b1b4275b5ffb67b33db3955eac60b37bea96d3dfad169be702720a00b3b
-prk: 2e400d7a64d6abbe9d36a83f9b5a89bbc1cef2fef1094292c4b76b6a3c1d987e
-de2228b6d36ae174bc304302af542b6ccb1e7f2fb6bd302b30536112cc11110e
-pseudorandom_pad: b21d130015d7f6d33bbf27f8e1ea3d9a7c7c05f94a6f197bc85
-1313f4a4f2d2f
-envelope: 0169f191aeb1af61c1feea7688a7c433a645d0f81c3168b4558b3f1d83d
-08b7a25e1213d6d841ec22a2213067192546820710726b82acfcdb4f38c9e82e3d103
-234e3f37b5afd99144411550b9dc3f4f0c920d923cdfb952f5a9050a6c97440230262
-4bc5da9563a768f73b195f992741e399cfa9d95eb48b220998b59360b01a3
-handshake_secret: 7b416efcce7df41f7b9698c68a6b278286b89d378f5b3fac7f4
-d96a0d45f5457e2c4ca2f3bf693325a8710d223a988aedcab7a4deb4892ddb7d13dec
-1989d298
-handshake_encrypt_key: 122f419c0457e01dda8382e65e92b614015b37cba09666
-92c6363f28fad97d00d2a0e6ab112e39a81a11aae074696e2e10b433918c5ffca6114
-43a7bea8ad353
-server_mac_key: 9aeaacea81de96d2115bc9f86c1bedfe04357afc69a16c4e3c0bc
-eb07409d5a9e4f76df2844f5f493feb55c9384af39bb9bd3e928cb796b2c8f1dc03a9
-ecf93d
-client_mac_key: ee1ccd9c1d66bd6137aec52e323de67c914a35980fc384adeb15e
-d10dfea0c389ffaebd889ee36ec4e03253f814e07d93b13e1d8c9a9fe683ea39c6b9d
-58e53f
-registration_request: 24bbcabb15452642f709cb8567eff38f4cda6044aca3356
-87a62b8453d849c18
-registration_response: fe8865a1916ad735de5e131930f14922582e3205665cbf
-2e9e2f3fbcfb776e2b4c6dff3083c068b8ca6fec4dbaabc16b5fdac5d98832f25a5b7
-8624cbd10b371
-registration_upload: a07d9609083613e2d7521b8f77f1cd7a07d89ea03aa00450
-80775edc379493418183c015b1b27290fc3cf14c963da55f59ed34f70ef871bcc9888
-9d53039e5c589b3474f1e3439bfefaf55100334a578ca3d5ec8437d7b06ba02689536
-e8b6ae0169f191aeb1af61c1feea7688a7c433a645d0f81c3168b4558b3f1d83d08b7
-a25e1213d6d841ec22a2213067192546820710726b82acfcdb4f38c9e82e3d103234e
-3f37b5afd99144411550b9dc3f4f0c920d923cdfb952f5a9050a6c974402302624bc5
-da9563a768f73b195f992741e399cfa9d95eb48b220998b59360b01a3
-KE1: 0e8eeeb2ca0dbf5f690cfe0b76783d7667245f399b874a989f168fdd3e572663
-acd3d4ffff4667b6a6b2d82b95bb8a171caacaa063e102a3a10077aa6c7ac21100096
-8656c6c6f20626f624c415eebd7a9bb5f921cbcfc5863e48c9e79fd2ecc1788e2b616
-bea0853f627a
-KE2: 085ab15bca16570dfea48efee2e12d1b13b95c1530a5e9352acb6fc10485353f
-154b361eb3a95bcb64700b8c26898a1e2f78eeb6232b2361b84721778ca9368696b92
-2224f1082627dcb1912944d5df179fe27633a6deff35649bd8192f6c2012241823265
-51d7b485a071b2af1fb86dea63a8e9d3b40cd43bf42e97bb9d1763508478412c1a495
-1add4c82e622e2a14b612376364d7fd3a3cdfc1bb36bb789afe1567cbf1c10a006eb8
-85ef412395e6d4a1823197254fb5d1a1345228712fd27ed49355735d30dbf548fea57
-48cfdc3b58e8062d0060e43e12c6a4b3788682c62a71b6f2ff4c8baae05637f574dee
-c70050dffda1f68d10e8648c838b696e1918ca372e52516d51c19763ad5eb1a5b60da
-fb68c264dcf6bcc692f667a71c5a617000f723180269119d5c2c2348cabb9ed372e24
-70210d9de3ff1970b449d7bac51d0a3b10d58d3f8c58d5698230d6dc102794f658538
-7b6b412a9ce973109ebeb62ea444c46180448a3a0af89055786d7ce
-KE3: 737427092049117f0a75e42515b81572c9e971687509bf7919950fe078bc6cfd
-0cd8e7f32232f6eb296a000c2df29f6b65a4a858229766526380d687eda004d4
-export_key: b3816d8a69b2a3f4d15113ae5b474353e99fbad6be7e331376688cc94
-6e19e063a604ee3532981e756fe60f0a3822b5881729752e2309ee21072b215e82bd4
-25
-session_key: 3cf3ce41bd59b6e299aab4f26575f8bb8d4d8b12d2406c0d7a3eed92
-11387c363949199665317c5500aef2fb8aa081aa7d74191b92b928382d57b03f13140
-9cf
+envelope_nonce: 71b8f14b7a1059cdadc414c409064a22cf9e970b0ffc6f1fc6fdd
+539c4676775
+masking_nonce: 54f9341ca183700f6b6acf28dbfe4a86afad788805de49f2d680ab
+86ff39ed7f
+server_private_key: 16eb9dc74a3df2033cd738bf2cfb7a3670c569d7749f284b2
+b241cb237e7d10f
+server_public_key: 18d5035fd0a9c1d6412226df037125901a43f4dff660c0549d
+402f672bcc0933
+server_nonce: f9c5ec75a8cd571370add249e99cb8a8c43f6ef05610ac6e354642b
+f4fedbf69
+client_nonce: 804133133e7ee6836c8515752e24bb44d323fef4ead34cde967798f
+2e9784f69
+server_keyshare: 6e77d4749eb304c4d74be9457c597546bc22aed699225499910f
+c913b3e90712
+client_keyshare: f67926bd036c5dc4971816b9376e9f64737f361ef8269c18f69f
+1ab555e96d4a
+server_private_keyshare: f8e3e31543dd6fc86833296726773d51158291ab9afd
+666bb55dce83474c1101
+client_private_keyshare: 4230d62ea740b13e178185fc517cf2c313e6908c4cd9
+fb42154870ff3490c608
+blind_registration: c62937d17dc9aa213c9038f84fe8c5bf3d953356db01c4d48
+acb7cae48e6a504
+blind_login: b5f458822ea11c900ad776e38e29d7be361f75b4d79b55ad74923299
+bf8d6503
+oprf_key: 23d431bab39aea4d2737ac391a50076300210730971788e3a6a8c29ad3c
+5930e
+~~~
+
+### Intermediate Values
+
+~~~
+client_public_key: f692d6b738b4e240d5f59d534371363b47817c00c7058d4a33
+439911e66c3c27
+auth_key: 27972f9b1cf2ce524d50a7afa40a2ee6957904e2bef29976bdbda452a84
+fcf01023f3ddd8182e64ea5287f99765dd39b83fa89fe189db227212a144134684783
+randomized_pwd: 750ef06299c2fb102242fd84e59613616338f83e69c09c1dc3f91
+c57ac0642876ccbe785e94aa094262efdc6aed08b3faff7c1bddfa14c434c5a908ad6
+c5f9d5
+envelope: 71b8f14b7a1059cdadc414c409064a22cf9e970b0ffc6f1fc6fdd539c46
+76775455739db882585a7c8b3e9ae7955da7135900d85ab832aa83a34b3ce481efc9e
+43d4c2276220c8bcb9d27b5a827a5a2d655700321f3b32d21f578c21316195d8
+handshake_secret: 02fb23a668b7138b029c95d21f1e0eec9e10377be933bdbf3e5
+33ea39073d3ce9d1ef16b55a8a8464f3bf6a991cc645d14c1fa3d9d6cfe36c6c0dcc2
+691d7109
+server_mac_key: e75ce46beeebd26f22540d7988de9809a69cf34fec6c050750708
+e91232297fdbb51e875cd37167d5ce661ebccf0004dbbf96311daf64ddec7faae04c4
+8bbd89
+client_mac_key: 4bce132daa031fff2a6e5ac29287c4641e3b9dc2560394b8c73f3
+b748f1e51e577b932a960b236981217b33bee220b0bce2696638cfb7791f427ade292
+d60f55
+~~~
+
+### Output Values
+
+~~~
+registration_request: 80576bce33c6ce89f9e1a06d8595cd9d09d9aef46b20dad
+d57a845dc50e7c074
+registration_response: 1a80fdb4f4eb1985587b5b95661d2cff1ef2493cdcdd88
+b5699f39048f0d6c2618d5035fd0a9c1d6412226df037125901a43f4dff660c0549d4
+02f672bcc0933
+registration_upload: f692d6b738b4e240d5f59d534371363b47817c00c7058d4a
+33439911e66c3c2795014d8fc0c710bd763c981c5b9329c95e149c6717af91bad2cec
+daf87f2c3c9c11914cb6d44aaee5679e3e61e1b65241fda74902cca908a065495c0b2
+8b799e71b8f14b7a1059cdadc414c409064a22cf9e970b0ffc6f1fc6fdd539c467677
+5455739db882585a7c8b3e9ae7955da7135900d85ab832aa83a34b3ce481efc9e43d4
+c2276220c8bcb9d27b5a827a5a2d655700321f3b32d21f578c21316195d8
+KE1: 60d71c9f5d2a14568807b869e2c251a8e5f7ad8951cd8386c7e32c0634b26b16
+804133133e7ee6836c8515752e24bb44d323fef4ead34cde967798f2e9784f69f6792
+6bd036c5dc4971816b9376e9f64737f361ef8269c18f69f1ab555e96d4a
+KE2: 78a428204f552d3532bad040c961324edb22c738d98f1dd770d65caba0bd8966
+54f9341ca183700f6b6acf28dbfe4a86afad788805de49f2d680ab86ff39ed7fbcbbb
+84a18810b8eb1dc898d9af686f5901a21d0768720b325279fde4931ee52f0d4a0d0d9
+cd1cd7c424d4622b1588ba554cd9241352a59ef52bbe85e0f865021404b115ba954f5
+540cf2d811a6566a93876cac1239b1f75f39b070250af5a84a819e08b13e9e437a80f
+c25cc130f8475dde43efe6d900c664e9bac300298bb0f9c5ec75a8cd571370add249e
+99cb8a8c43f6ef05610ac6e354642bf4fedbf696e77d4749eb304c4d74be9457c5975
+46bc22aed699225499910fc913b3e907120485942e3e077f71c1dd2d87053b39f0d31
+bfe5d5f90df0e85ad9ce771e4f4d1ab697a10a02002cd73916051b887da9554465d58
+68811fd8b22b8f457ed5a4b0
+KE3: b4f8aece9fb4f6b7b5ffe1c98747a91f4ec7bf5481fe5719ba4baad668e3fd4e
+8aba4fa227bd4c688ed9e17f6c6d28ab5e5617a883207d80979dc4797ca89304
+export_key: 045f61f4baa0a945c2e85dfb7a85fe4df8a49e6c31344920e863c286b
+c8a17fe25fc16c84836335b4b5ecc9743c5d3a221101ab004aa99ce65026b6953ad6c
+c0
+session_key: 91187690e5ea0da3110a1dd7d5ffd7c4c3111950c587d9fcf3b9f34b
+f73b86dbeafed42a05024fa875a32415c6143d20c39cd732eb0e31db5e60ea3fb2551
+cf7
+~~~
 "#,
     r#"
+## OPAQUE-3DH Test Vector 2
+
+### Configuration
+
+~~~
 OPRF: 0001
 Hash: SHA512
 MHF: Identity
 KDF: HKDF-SHA512
 MAC: HMAC-SHA512
-Name: 3DH
-EnvelopeMode: 02
+EnvelopeMode: 01
 Group: ristretto255
-client_identity: 36840cc4f3fd4f57bad888ff6e75a120a6ae132b128df738fbc3
-16e5bd57356a
-server_identity: 3e2651ff8442883bb83ec1b46a76f99a556ab182fd4828da3fe9
-65b145a0dc7f
-oprf_seed: 258b268d6ec9a468c30e7f009e5d631a31dede64596c8dde12e377d319
-3efe2c90e609e135c4bf7d2c7326306ba1f45c510ca9d2dfe4816c680fadfef82bfbe
-c
+Context: 4f50415155452d504f43
+Nh: 64
+Npk: 32
+Nsk: 32
+Nm: 64
+Nx: 64
+Nok: 32
+~~~
+
+### Input Values
+
+~~~
+client_identity: 616c696365
+server_identity: 626f62
+oprf_seed: db5c1c16e264b8933d5da56439e7cfed23ab7287b474fe3cdcd58df089
+a365a426ea849258d9f4bc13573601f2e727c90ecc19d448cf3145a662e0065f157ba
+5
 credential_identifier: 31323334
 password: 436f7272656374486f72736542617474657279537461706c65
-envelope_nonce: e8cd944521ab8459398b39ef6c8b2bc12473281ec34a3220db1c7
-88fad2a001b
-masking_nonce: 24907c8e1151cae5dfb583a99ec1d74d93166e6ee5089137e7a924
-a11d60137b
-client_private_key: ed811b4cca7c0e51a886c4343d83c4e5228b87399f1dbf033
-ee131fe4ad75c05
-client_public_key: 36840cc4f3fd4f57bad888ff6e75a120a6ae132b128df738fb
-c316e5bd57356a
-server_private_key: 0db27eb7aef2af92c3b297c662a87631531aade91c0558d87
-224d922a8573f08
-server_public_key: 3e2651ff8442883bb83ec1b46a76f99a556ab182fd4828da3f
-e965b145a0dc7f
-client_info: 68656c6c6f20626f62
-server_info: 6772656574696e677320616c696365
-server_nonce: ee9675eb495049b7d24c33691d9b150406e646d1f6f2911bf5c665b
-cb71e3649
-client_nonce: 10603d5ae57cdd698410d49769c00bc248ebba0f5709ba9d6179ab4
-42d8a883c
-server_keyshare: 264af8bc6a2c78acb503cd838ae3e5e3715df02d19dd4ddfbca9
-e4f46b0a0e2d
-client_keyshare: 223228d3df70ac6e0b179a48609517304386692952f49cff086e
-0bea06f5363f
-server_private_keyshare: 94b049e1b0d73ab5b8d914b08dff3e52e62ea8898d35
-b2862d28ff4c2bb1a607
-client_private_keyshare: 362f233a8a73971925abc79daa9fcc06f6d3acf12df8
-2de919be4937fe716a03
-blind_registration: 9b53af4cbdb352b0a2016e5e5f6c0bee4a642526ef9910289
-315b71feff26f0f
-blind_login: 275e46a6aea42c40b78bd2f1281617519f3f790c8d0f42eacce68456
-380b8405
-oprf_key: 09da9c8c1ff925937a04c07b613a8bcdf1335db32e11db0a4ee45bfc297
-2380f
-auth_key: 20e401aeb76dac20c8f5054685d2531aa3ebe53569b5a50d9d34d19b93b
-e7488d7e7b6f0ae0f5c36a876464ac0b69aa2199438d7ac1be69059dea6394dcbe067
-prk: 91a4c98e88faa5f30fd0bdc2fb2f0cc808d6808822d079e251bef46a399e4a25
-6bd3c6207bd01b22bdd713ca3c2c3e1945bfddbbce193e5073c9f47b29928279
-pseudorandom_pad: c08e7bb57b5b4e6c866119a8d29c51f4f97378e938342f596ff
-56075bb06dcf0
-envelope: 02e8cd944521ab8459398b39ef6c8b2bc12473281ec34a3220db1c788fa
-d2a001b2d0f60f9b127403d2ee7dd9cef1f9511dbf8ffd0a729905a5114518bf1d180
-f5023e24c1dba1c8940220cf5475fb7d73419a4896096b37403ccdec1da295365cad4
-a423674850602e44a524ca3ecf7a3364ab106350e29cfae3937489b30601c
-handshake_secret: 54a0b775fda0a405c3e2b585ffd427f8002ff6ed14fb13dbb2f
-c2597984e14b40830c131a6c72035fd40a0c0ac7a24ace5682d73ac1e3a2dff0d36b3
-75cd3146
-handshake_encrypt_key: 2ecbf7901784137571505028bcd2c119c77038ed024d87
-20810c50e076fbf01be82326df2d3c52a5fa2da623603c65caa078002abb9c9d0d5f7
-07c5fcade01bf
-server_mac_key: fc7bafe7c51426b18bee3fa7cd895c145ba36481946f4fa7b4355
-3746331ec201891eb3b3cf28590569e3f7d0863da5542ff728c31282bba2ebcc642be
-533fa2
-client_mac_key: da7cb58102085bb05de9e175a004e862c653aac24a529f416b33e
-3308cf9a9cd9d15e655c02f44d24f8e8e257a27e4db82049ba1eaa456a4f0ba73cfc4
-ef1ef4
-registration_request: 1e026d981ad38a4c03e5785f151fc42cf932ec153a1134a
-3e6f7f3cb9b2c632d
-registration_response: d4d75537ab05e41746c6ed5de6d985e8d08e47a433f04e
-9b97f0be760dc870093e2651ff8442883bb83ec1b46a76f99a556ab182fd4828da3fe
-965b145a0dc7f
-registration_upload: 36840cc4f3fd4f57bad888ff6e75a120a6ae132b128df738
-fbc316e5bd57356a1008b12b8ab4c890f937b961554635298ea2696433c7a285c7df2
-46da4bef777cc3b4b1004222263792be00050b20385c6f22abd40dc61bcfa823e3c83
-4f4fa702e8cd944521ab8459398b39ef6c8b2bc12473281ec34a3220db1c788fad2a0
-01b2d0f60f9b127403d2ee7dd9cef1f9511dbf8ffd0a729905a5114518bf1d180f502
-3e24c1dba1c8940220cf5475fb7d73419a4896096b37403ccdec1da295365cad4a423
-674850602e44a524ca3ecf7a3364ab106350e29cfae3937489b30601c
-KE1: be5993d16412c8452d6b320ea8025a8f0b405a0d62dce14bee5dda17c3ef2645
-10603d5ae57cdd698410d49769c00bc248ebba0f5709ba9d6179ab442d8a883c00096
-8656c6c6f20626f62223228d3df70ac6e0b179a48609517304386692952f49cff086e
-0bea06f5363f
-KE2: a2668282db653a9ed70e46556a78381bba08a8163a71463afc499289a2bf9632
-24907c8e1151cae5dfb583a99ec1d74d93166e6ee5089137e7a924a11d60137b6e10b
-ed0e73a37ea9617af60b3d295d6bd0761c2acdaae6a88614bd10f2ce5cd5dcec97b3e
-bdd1508e8aebdb48f86bec27dc21aaf6e0aaf67cd44b62a28b4377b4dee4634922bfb
-7b30550fafd287d00c3a2776f4c31f5a568b2d564cc9281b9cb2fea2ec45feba2d7f0
-0fe1f595647a515b8f7178139f668720de10c8e5d41169a79f7809d120ebe8b156855
-4ebc9cf4b85454bdfca44cb1d4552871e0ffb1373ee9675eb495049b7d24c33691d9b
-150406e646d1f6f2911bf5c665bcb71e3649264af8bc6a2c78acb503cd838ae3e5e37
-15df02d19dd4ddfbca9e4f46b0a0e2d000f5e02b66c4e83b9933b4ff5dc10a8e5e064
-3cbf26f738bca0d25b0db9740dcbabbeb23e54c59deec56dab96bc96daa727aa0b730
-bf81e15d82641f49bc5d4c998c2bd0416f27de631f445c93e43522f
-KE3: 01be33d72a3d430b0bf3d5e3ef3450652c23354e818460b315a644635882899f
-4f6746efabb3da6a5a8a645bbeba96d32d133e8d6e0ec13e96af61c74fe814f5
-export_key: 3d4d4d6c586ef538d08756f5a1a04cc190aee59e8dea997d0aaff89a8
-da58ac712fb5002666d8fb09b18a4f46a54a858592dc3c0b683a37a06d5a29728349b
-91
-session_key: eaa0057dde12425c05b185fc490579987638a9a2d56dece67db5acc3
-b526241174635a7ffff2c2ad6359a82eff279cc23c8f6768dcbffc801420fbfd6f147
-ae2
+envelope_nonce: d0c7b0f0047682bd87a87e0c3553b9bcdce7e1ae3348570df20bf
+2747829b2d2
+masking_nonce: 30635396b708ddb7fc10fb73c4e3a9258cd9c3f6f761b2c227853b
+5def228c85
+server_private_key: eeb2fcc794f98501b16139771720a0713a2750b9e528adfd3
+662ad56a7e19b04
+server_public_key: 8aa90cb321a38759fc253c444f317782962ca18d33101eab2c
+8cda04405a181f
+server_nonce: 3fa57f7ef652185f89114109f5a61cc8c9216fdd7398246bb7a0c20
+e2fbca2d8
+client_nonce: a6bcd29b5aecc3507fc1f8f7631af3d2f5105155222e48099e5e608
+5d8c1187a
+server_keyshare: ae070cdffe5bb4b1c373e71be8e7d8f356ee5de37881533f1039
+7bcd84d35445
+client_keyshare: 642e7eecf19b804a62817486663d6c6c239396f709b663a4350c
+da67d025687a
+server_private_keyshare: 0974010a8528b813f5b33ae0d791df88516c8839c152
+b030697637878b2d8b0a
+client_private_keyshare: 03b52f066898929f4aca48014b2b97365205ce691ee3
+444b0a7cecec3c7efb01
+blind_registration: a66ffb41ccf1194a8d7dda900f8b6b0652e4c7fac4610066f
+e0489a804d3bb05
+blind_login: e6f161ac189e6873a19a54efca4baa0719e801e336d929d35ca28b5b
+4f60560e
+oprf_key: 1e0550d2dbb9ce5dd9bdbb5f808afbb724c573dc03306dcfc7217796465
+ce607
+~~~
+
+### Intermediate Values
+
+~~~
+client_public_key: ba6cb41f1870e9db7e858440a664e6559d01fdbfb638bbf7e1
+c9004f20d5db71
+auth_key: 5142ae6f6bd80686039656fd7a03cdd7e39cc6e869aa637220d4b5fb64f
+afee2f284a1581fff95ad3a5261b413c5e5b91115f78a3c35486fa56023c300d1726b
+randomized_pwd: cea240b632b9c1d704034920cc3dc3c664ed8cd82cf5c0339af76
+4d6350d2ee9ba1f675ce8df7b6cf8692d1efb158bafa3c2695ac03a2d92346c19810c
+1a698b
+envelope: d0c7b0f0047682bd87a87e0c3553b9bcdce7e1ae3348570df20bf274782
+9b2d26e18240c0cbad3b4cdbd7d9d86512f87e43fac39e3785a17504aaa8508f81e3c
+1517b150259be478720935e175b1e34bbe625d0828a62ca9983f9a27aed27f5e
+handshake_secret: 7925c12d7bf3050e62fe5c8caaece3c85737754c5df79bc59a6
+0fa87929ab1f4a4730f903b87be8b7d89ded8ec97aaec97bc8e7d53a555fd4ad74c4f
+33b9bc83
+server_mac_key: 27d6036335c5654132fb08cc81d95b3067ef7fe795f017531231a
+e3fa03cd3ab72f1f5e81473318f9c01f990263d885dfce4b6ac8630fdc8ee8abc6a36
+7c2339
+client_mac_key: ebb3693bac6310075a89922c7a40599d14d03d9104b7a331106e8
+a578a32a4944751f9d3c230a6690a5747137388a86159cf587969d13dadc0a3830218
+dfbca5
+~~~
+
+### Output Values
+
+~~~
+registration_request: f841cbb85844967568c7405f3831a58c4f5f37ccddb0baa
+4972ea912c960ae66
+registration_response: 0256257cc6e2b04444edc076b9ad44d8b31593e050bea8
+06485707a818f8a93f8aa90cb321a38759fc253c444f317782962ca18d33101eab2c8
+cda04405a181f
+registration_upload: ba6cb41f1870e9db7e858440a664e6559d01fdbfb638bbf7
+e1c9004f20d5db71146e42585d25fa19913876edce4b5ee99b638eb37b1d8a8a76607
+efaa12299e828641ba4fbf1c46fc2c3776e0a0c9791f88a15b9ddfb5495d63ce92d8f
+58823bd0c7b0f0047682bd87a87e0c3553b9bcdce7e1ae3348570df20bf2747829b2d
+26e18240c0cbad3b4cdbd7d9d86512f87e43fac39e3785a17504aaa8508f81e3c1517
+b150259be478720935e175b1e34bbe625d0828a62ca9983f9a27aed27f5e
+KE1: 14cc586d982b6db9846c78e0b3c543591e95fbf2fc877fa0e5eff89897dd3050
+a6bcd29b5aecc3507fc1f8f7631af3d2f5105155222e48099e5e6085d8c1187a642e7
+eecf19b804a62817486663d6c6c239396f709b663a4350cda67d025687a
+KE2: 8ab71c17547f376ae787741c367142790087090cdde6327dabb2581197bffa59
+30635396b708ddb7fc10fb73c4e3a9258cd9c3f6f761b2c227853b5def228c85dd973
+a1ac59244f674da4a1c057961886661bd29e0c1346f0fcf75bf1c78d4781815c2f9f6
+f2f9fe0e370b256f6e82fb2e14c7ffc374d42caf26abf13dca169a6faafd5cff8baa9
+717090bc1fc5e1ba56acb93492d1a8b789f33ff29b6004c4be9a755ff590d7d00d6e8
+893e7e54e639aebf69d18f2182a9bb0f2e1c27c81ba73fa57f7ef652185f89114109f
+5a61cc8c9216fdd7398246bb7a0c20e2fbca2d8ae070cdffe5bb4b1c373e71be8e7d8
+f356ee5de37881533f10397bcd84d35445401c619d464ab3a134c71da4d9874f2f736
+189b8bbb659c28f8db25a58b9f089272132e3091efa87d6b07d10321ba464047be011
+3e91514aba299fd1553bcebb
+KE3: c4a0d5b8148f3ac0f8611b38de38bda085d4eb00d561397ae59676f36dc705be
+1c939e7bfdd7301103af5eb164bdfb70298aab889bd2ac797e419a82bfb442e6
+export_key: 6b50ae4dba956930c0465b4a26c3cee58e05afcab623c1c254ae34acc
+38babf954530a53475672ff46a1cf7fd53ef9e808f85b08793d021bb5c6d2a1bb9204
+f6
+session_key: c9bc2b7e2237f6fbeccd92dc6ec6d51faeb886492f8d23f21743a967
+597025215df02a4afb75349acbafeef9dfd4f19e6d38da8bea4912f7b691b70849b0d
+78e
+~~~
 "#,
 ];
 
 macro_rules! parse {
     ( $v:ident, $s:expr ) => {
+        parse_default!($v, $s, vec![])
+    };
+}
+
+macro_rules! parse_default {
+    ( $v:ident, $s:expr, $d:expr ) => {
         match decode(&$v, $s) {
             Some(x) => x,
-            None => vec![],
+            None => $d,
         }
     };
 }
@@ -312,6 +350,10 @@ fn rfc_to_json(input: &str) -> String {
             json.push(format!("    \"{}\": \"{}", key, val));
         } else {
             let s = line.trim().to_string();
+            if s.contains("~") || s.contains("#") {
+                // Ignore comment lines
+                continue;
+            }
             if s.len() > 0 {
                 json.push(s);
             }
@@ -329,21 +371,30 @@ fn decode(values: &Value, key: &str) -> Option<Vec<u8>> {
 
 fn populate_test_vectors(values: &Value) -> TestVectorParameters {
     TestVectorParameters {
+        fake: match values["Fake"].as_str() {
+            Some("True") => true,
+            _ => false,
+        },
+        fake_sk: parse_default!(
+            values,
+            "fake_sk",
+            vec![0u8; <Key as SizedBytes>::Len::to_usize()]
+        ),
+        context: parse!(values, "Context"),
         envelope_mode: match values["EnvelopeMode"].as_str() {
             Some("01") => EnvelopeMode::Base,
             Some("02") => EnvelopeMode::CustomIdentifier,
             _ => panic!("Could not match envelope mode"),
         },
-        client_public_key: parse!(values, "client_public_key"),
-        client_private_key: parse!(values, "client_private_key"),
+        client_private_key: decode(values, "client_private_key"),
         client_keyshare: parse!(values, "client_keyshare"),
         client_private_keyshare: parse!(values, "client_private_keyshare"),
         server_public_key: parse!(values, "server_public_key"),
         server_private_key: parse!(values, "server_private_key"),
         server_keyshare: parse!(values, "server_keyshare"),
         server_private_keyshare: parse!(values, "server_private_keyshare"),
-        client_identity: parse!(values, "client_identity"),
-        server_identity: parse!(values, "server_identity"),
+        client_identity: decode(values, "client_identity"),
+        server_identity: decode(values, "server_identity"),
         credential_identifier: parse!(values, "credential_identifier"),
         password: parse!(values, "password"),
         blind_registration: parse!(values, "blind_registration"),
@@ -374,6 +425,18 @@ fn get_password_file_bytes(parameters: &TestVectorParameters) -> Result<Vec<u8>,
     Ok(password_file.serialize())
 }
 
+fn parse_identifiers(
+    client_identity: Option<Vec<u8>>,
+    server_identity: Option<Vec<u8>>,
+) -> Option<Identifiers> {
+    match (client_identity, server_identity) {
+        (None, None) => None,
+        (Some(x), None) => Some(Identifiers::ClientIdentifier(x)),
+        (None, Some(y)) => Some(Identifiers::ServerIdentifier(y)),
+        (Some(x), Some(y)) => Some(Identifiers::ClientAndServerIdentifiers(x, y)),
+    }
+}
+
 #[test]
 fn test_registration_request() -> Result<(), ProtocolError> {
     for parameters in rfc_to_params!(TEST_VECTORS) {
@@ -398,6 +461,7 @@ fn test_registration_response() -> Result<(), ProtocolError> {
             &[
                 &parameters.oprf_seed[..],
                 &parameters.server_private_key[..],
+                &parameters.fake_sk[..],
             ]
             .concat(),
         )?;
@@ -425,19 +489,13 @@ fn test_registration_upload() -> Result<(), ProtocolError> {
                 &parameters.password,
             )?;
 
-        let sk_u_and_nonce: Vec<u8> =
-            [parameters.client_private_key, parameters.envelope_nonce].concat();
-        let mut finish_registration_rng = CycleRng::new(sk_u_and_nonce);
+        let mut finish_registration_rng = CycleRng::new(parameters.envelope_nonce);
         let result = client_registration_start_result.state.finish(
             &mut finish_registration_rng,
             RegistrationResponse::deserialize(&parameters.registration_response[..]).unwrap(),
-            if parameters.envelope_mode == EnvelopeMode::CustomIdentifier {
-                ClientRegistrationFinishParameters::WithIdentifiers(
-                    parameters.client_identity,
-                    parameters.server_identity,
-                )
-            } else {
-                ClientRegistrationFinishParameters::default()
+            match parse_identifiers(parameters.client_identity, parameters.server_identity) {
+                None => ClientRegistrationFinishParameters::Default,
+                Some(ids) => ClientRegistrationFinishParameters::WithIdentifiers(ids),
             },
         )?;
 
@@ -467,7 +525,6 @@ fn test_ke1() -> Result<(), ProtocolError> {
         let client_login_start_result = ClientLogin::<Ristretto255Sha512NoSlowHash>::start(
             &mut client_login_start_rng,
             &parameters.password,
-            ClientLoginStartParameters::WithInfo(parameters.client_info),
         )?;
         assert_eq!(
             hex::encode(&parameters.KE1),
@@ -484,10 +541,17 @@ fn test_ke2() -> Result<(), ProtocolError> {
             &[
                 &parameters.oprf_seed[..],
                 &parameters.server_private_key[..],
+                &parameters.fake_sk[..],
             ]
             .concat(),
         )?;
-        let password_file_bytes = get_password_file_bytes(&parameters)?;
+
+        let optional_record = match parameters.fake {
+            true => None,
+            false => Some(ServerRegistration::deserialize(
+                &get_password_file_bytes(&parameters)?[..],
+            )?),
+        };
 
         let mut server_private_keyshare_and_nonce_rng = CycleRng::new(
             [
@@ -500,24 +564,18 @@ fn test_ke2() -> Result<(), ProtocolError> {
         let server_login_start_result = ServerLogin::<Ristretto255Sha512NoSlowHash>::start(
             &mut server_private_keyshare_and_nonce_rng,
             &server_setup,
-            Some(ServerRegistration::deserialize(&password_file_bytes[..]).unwrap()),
+            optional_record,
             CredentialRequest::<Ristretto255Sha512NoSlowHash>::deserialize(&parameters.KE1[..])
                 .unwrap(),
             &parameters.credential_identifier,
-            if parameters.envelope_mode == EnvelopeMode::CustomIdentifier {
-                ServerLoginStartParameters::WithInfoAndIdentifiers(
-                    parameters.server_info.to_vec(),
-                    parameters.client_identity,
-                    parameters.server_identity,
-                )
-            } else {
-                ServerLoginStartParameters::WithInfo(parameters.server_info.to_vec())
+            match parse_identifiers(parameters.client_identity, parameters.server_identity) {
+                None => ServerLoginStartParameters::WithContext(parameters.context.to_vec()),
+                Some(ids) => ServerLoginStartParameters::WithContextAndIdentifiers(
+                    parameters.context.to_vec(),
+                    ids,
+                ),
             },
         )?;
-        assert_eq!(
-            hex::encode(&parameters.client_info),
-            hex::encode(server_login_start_result.plain_info),
-        );
         assert_eq!(
             hex::encode(&parameters.KE2),
             hex::encode(server_login_start_result.message.serialize())
@@ -539,25 +597,18 @@ fn test_ke3() -> Result<(), ProtocolError> {
         let client_login_start_result = ClientLogin::<Ristretto255Sha512NoSlowHash>::start(
             &mut client_login_start_rng,
             &parameters.password,
-            ClientLoginStartParameters::WithInfo(parameters.client_info),
         )?;
 
         let client_login_finish_result = client_login_start_result.state.finish(
             CredentialResponse::<Ristretto255Sha512NoSlowHash>::deserialize(&parameters.KE2[..])?,
-            if parameters.envelope_mode == EnvelopeMode::CustomIdentifier {
-                ClientLoginFinishParameters::WithIdentifiers(
-                    parameters.client_identity,
-                    parameters.server_identity,
-                )
-            } else {
-                ClientLoginFinishParameters::default()
+            match parse_identifiers(parameters.client_identity, parameters.server_identity) {
+                None => ClientLoginFinishParameters::WithContext(parameters.context),
+                Some(ids) => {
+                    ClientLoginFinishParameters::WithContextAndIdentifiers(parameters.context, ids)
+                }
             },
         )?;
 
-        assert_eq!(
-            hex::encode(&parameters.server_info),
-            hex::encode(&client_login_finish_result.confidential_info)
-        );
         assert_eq!(
             hex::encode(&parameters.session_key),
             hex::encode(&client_login_finish_result.session_key)
@@ -581,10 +632,17 @@ fn test_server_login_finish() -> Result<(), ProtocolError> {
             &[
                 &parameters.oprf_seed[..],
                 &parameters.server_private_key[..],
+                &parameters.fake_sk[..],
             ]
             .concat(),
         )?;
-        let password_file_bytes = get_password_file_bytes(&parameters)?;
+
+        let optional_record = match parameters.fake {
+            true => None,
+            false => Some(ServerRegistration::deserialize(
+                &get_password_file_bytes(&parameters)?[..],
+            )?),
+        };
 
         let mut server_private_keyshare_and_nonce_rng = CycleRng::new(
             [
@@ -597,18 +655,16 @@ fn test_server_login_finish() -> Result<(), ProtocolError> {
         let server_login_start_result = ServerLogin::<Ristretto255Sha512NoSlowHash>::start(
             &mut server_private_keyshare_and_nonce_rng,
             &server_setup,
-            Some(ServerRegistration::deserialize(&password_file_bytes[..]).unwrap()),
+            optional_record,
             CredentialRequest::<Ristretto255Sha512NoSlowHash>::deserialize(&parameters.KE1[..])
                 .unwrap(),
             &parameters.credential_identifier,
-            if parameters.envelope_mode == EnvelopeMode::CustomIdentifier {
-                ServerLoginStartParameters::WithInfoAndIdentifiers(
-                    parameters.server_info.to_vec(),
-                    parameters.client_identity,
-                    parameters.server_identity,
-                )
-            } else {
-                ServerLoginStartParameters::WithInfo(parameters.server_info.to_vec())
+            match parse_identifiers(parameters.client_identity, parameters.server_identity) {
+                None => ServerLoginStartParameters::WithContext(parameters.context.to_vec()),
+                Some(ids) => ServerLoginStartParameters::WithContextAndIdentifiers(
+                    parameters.context.to_vec(),
+                    ids,
+                ),
             },
         )?;
 

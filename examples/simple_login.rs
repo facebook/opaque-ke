@@ -27,10 +27,9 @@ use std::process::exit;
 
 use opaque_ke::{
     ciphersuite::CipherSuite, rand::rngs::OsRng, ClientLogin, ClientLoginFinishParameters,
-    ClientLoginStartParameters, ClientRegistration, ClientRegistrationFinishParameters,
-    CredentialFinalization, CredentialRequest, CredentialResponse, RegistrationRequest,
-    RegistrationResponse, RegistrationUpload, ServerLogin, ServerLoginStartParameters,
-    ServerRegistration, ServerSetup,
+    ClientRegistration, ClientRegistrationFinishParameters, CredentialFinalization,
+    CredentialRequest, CredentialResponse, RegistrationRequest, RegistrationResponse,
+    RegistrationUpload, ServerLogin, ServerLoginStartParameters, ServerRegistration, ServerSetup,
 };
 
 // The ciphersuite trait allows to specify the underlying primitives
@@ -93,12 +92,8 @@ fn account_login(
     password_file_bytes: &[u8],
 ) -> bool {
     let mut client_rng = OsRng;
-    let client_login_start_result = ClientLogin::<Default>::start(
-        &mut client_rng,
-        password.as_bytes(),
-        ClientLoginStartParameters::default(),
-    )
-    .unwrap();
+    let client_login_start_result =
+        ClientLogin::<Default>::start(&mut client_rng, password.as_bytes()).unwrap();
     let credential_request_bytes = client_login_start_result.message.serialize();
 
     // Client sends credential_request_bytes to server

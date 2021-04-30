@@ -34,7 +34,6 @@ impl CipherSuite for Default {
     type SlowHash = crate::slow_hash::NoOpHash;
 }
 
-const MAX_INFO_LENGTH: usize = 10;
 const HASH_SIZE: usize = 64; // Because of SHA512
 const MAC_SIZE: usize = 64; // Because of SHA512
 
@@ -73,14 +72,10 @@ fn server_registration_roundtrip() {
     let mut masking_key = [0u8; HASH_SIZE];
     rng.fill_bytes(&mut masking_key);
 
-    let mut ciphertext = [0u8; 32];
-    rng.fill_bytes(&mut ciphertext);
-
     // Construct a mock envelope
     let mut mock_envelope_bytes = Vec::new();
-    mock_envelope_bytes.extend_from_slice(&[1; 1]); // mode = 1
     mock_envelope_bytes.extend_from_slice(&vec![0; NonceLen::to_usize()]); // empty nonce
-    mock_envelope_bytes.extend_from_slice(&ciphertext); // ciphertext which is an encrypted private key
+                                                                           // mock_envelope_bytes.extend_from_slice(&ciphertext); // ciphertext which is an encrypted private key
     mock_envelope_bytes.extend_from_slice(&[0; MAC_SIZE]); // length-MAC_SIZE hmac
 
     let mock_client_kp = KeyPair::<<Default as CipherSuite>::Group>::generate_random(&mut rng);
@@ -132,19 +127,18 @@ fn registration_upload_roundtrip() {
 
     let mut key = [0u8; 32];
     rng.fill_bytes(&mut key);
+    let mut nonce = [0u8; 32];
+    rng.fill_bytes(&mut nonce);
 
     let mut masking_key = vec![0u8; <sha2::Sha512 as Digest>::OutputSize::to_usize()];
     rng.fill_bytes(&mut masking_key);
 
-    let mut msg = [0u8; 32];
-    rng.fill_bytes(&mut msg);
-
-    let (envelope, _) = Envelope::<sha2::Sha512>::seal_raw(
-        &mut rng,
+    let (envelope, _) = Envelope::<Default>::seal_raw(
         &key,
-        &msg,
+        &nonce,
+        &[],
         &pubkey_bytes,
-        InnerEnvelopeMode::Base,
+        InnerEnvelopeMode::Internal,
     )
     .unwrap();
     let envelope_bytes = envelope.serialize();
@@ -169,15 +163,7 @@ fn credential_request_roundtrip() {
     let mut client_nonce = vec![0u8; NonceLen::to_usize()];
     rng.fill_bytes(&mut client_nonce);
 
-    let mut info = [0u8; MAX_INFO_LENGTH];
-    rng.fill_bytes(&mut info);
-
-    let ke1m: Vec<u8> = [
-        &client_nonce[..],
-        &serialize(&info.to_vec(), 2),
-        &client_e_kp.public(),
-    ]
-    .concat();
+    let ke1m: Vec<u8> = [&client_nonce[..], &client_e_kp.public()].concat();
 
     let mut input = Vec::new();
     input.extend_from_slice(&alpha_bytes);
@@ -198,11 +184,8 @@ fn credential_response_roundtrip() {
     let mut masking_nonce = vec![0u8; 32];
     rng.fill_bytes(&mut masking_nonce);
 
-    let mut masked_response = vec![
-        0u8;
-        <Key as SizedBytes>::Len::to_usize()
-            + Envelope::<<Default as CipherSuite>::Hash>::len()
-    ];
+    let mut masked_response =
+        vec![0u8; <Key as SizedBytes>::Len::to_usize() + Envelope::<Default>::len()];
     rng.fill_bytes(&mut masked_response);
 
     let server_e_kp = KeyPair::<<Default as CipherSuite>::Group>::generate_random(&mut rng);
@@ -211,16 +194,7 @@ fn credential_response_roundtrip() {
     let mut server_nonce = vec![0u8; NonceLen::to_usize()];
     rng.fill_bytes(&mut server_nonce);
 
-    let mut e_info = [0u8; MAX_INFO_LENGTH];
-    rng.fill_bytes(&mut e_info);
-
-    let ke2m: Vec<u8> = [
-        &server_nonce[..],
-        &server_e_kp.public(),
-        &serialize(&e_info.to_vec(), 2),
-        &mac[..],
-    ]
-    .concat();
+    let ke2m: Vec<u8> = [&server_nonce[..], &server_e_kp.public(), &mac[..]].concat();
 
     let mut input = Vec::new();
     input.extend_from_slice(pt_bytes.as_slice());
@@ -280,15 +254,7 @@ fn ke1_message_roundtrip() {
     let mut client_nonce = vec![0u8; NonceLen::to_usize()];
     rng.fill_bytes(&mut client_nonce);
 
-    let mut info = [0u8; MAX_INFO_LENGTH];
-    rng.fill_bytes(&mut info);
-
-    let ke1m: Vec<u8> = [
-        &client_nonce[..],
-        &serialize(&info.to_vec(), 2),
-        &client_e_kp.public(),
-    ]
-    .concat();
+    let ke1m: Vec<u8> = [&client_nonce[..], &client_e_kp.public()].concat();
     let reg =
         <TripleDH as KeyExchange<sha2::Sha512, RistrettoPoint>>::KE1Message::try_from(&ke1m[..])
             .unwrap();
@@ -305,16 +271,8 @@ fn ke2_message_roundtrip() {
     rng.fill_bytes(&mut mac);
     let mut server_nonce = vec![0u8; NonceLen::to_usize()];
     rng.fill_bytes(&mut server_nonce);
-    let mut e_info = [0u8; MAX_INFO_LENGTH];
-    rng.fill_bytes(&mut e_info);
 
-    let ke2m: Vec<u8> = [
-        &server_nonce[..],
-        &server_e_kp.public(),
-        &serialize(&e_info.to_vec(), 2),
-        &mac[..],
-    ]
-    .concat();
+    let ke2m: Vec<u8> = [&server_nonce[..], &server_e_kp.public(), &mac[..]].concat();
 
     let reg =
         <TripleDH as KeyExchange<sha2::Sha512, RistrettoPoint>>::KE2Message::try_from(&ke2m[..])
