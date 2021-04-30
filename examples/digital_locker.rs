@@ -33,7 +33,7 @@ use std::process::exit;
 use opaque_ke::{
     ciphersuite::CipherSuite,
     rand::{rngs::OsRng, RngCore},
-    ClientLogin, ClientLoginFinishParameters, ClientLoginStartParameters, ClientRegistration,
+    ClientLogin, ClientLoginFinishParameters, ClientRegistration,
     ClientRegistrationFinishParameters, CredentialFinalization, CredentialRequest,
     CredentialResponse, RegistrationRequest, RegistrationResponse, RegistrationUpload, ServerLogin,
     ServerLoginStartParameters, ServerRegistration, ServerSetup,
@@ -138,12 +138,8 @@ fn open_locker(
     locker: &Locker,
 ) -> Result<String, String> {
     let mut client_rng = OsRng;
-    let client_login_start_result = ClientLogin::<Default>::start(
-        &mut client_rng,
-        password.as_bytes(),
-        ClientLoginStartParameters::default(),
-    )
-    .unwrap();
+    let client_login_start_result =
+        ClientLogin::<Default>::start(&mut client_rng, password.as_bytes()).unwrap();
     let credential_request_bytes = client_login_start_result.message.serialize();
 
     // Client sends credential_request_bytes to server
