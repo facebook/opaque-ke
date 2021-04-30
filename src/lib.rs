@@ -19,7 +19,7 @@
 //!
 //! We will use the following choices in this example:
 //! ```
-//! use opaque_ke::ciphersuite::CipherSuite;
+//! use opaque_ke::CipherSuite;
 //! struct Default;
 //! impl CipherSuite for Default {
 //!     type Group = curve25519_dalek::ristretto::RistrettoPoint;
@@ -39,7 +39,7 @@
 //! To set up the protocol, the server begins by creating a `ServerSetup` object:
 //! ```
 //! # use opaque_ke::errors::ProtocolError;
-//! # use opaque_ke::ciphersuite::CipherSuite;
+//! # use opaque_ke::CipherSuite;
 //! # use opaque_ke::ServerSetup;
 //! # struct Default;
 //! # impl CipherSuite for Default {
@@ -72,7 +72,7 @@
 //! #   ServerRegistration,
 //! #   slow_hash::NoOpHash,
 //! # };
-//! # use opaque_ke::ciphersuite::CipherSuite;
+//! # use opaque_ke::CipherSuite;
 //! # struct Default;
 //! # impl CipherSuite for Default {
 //! #     type Group = curve25519_dalek::ristretto::RistrettoPoint;
@@ -102,7 +102,7 @@
 //! #   ServerSetup,
 //! #   slow_hash::NoOpHash,
 //! # };
-//! # use opaque_ke::ciphersuite::CipherSuite;
+//! # use opaque_ke::CipherSuite;
 //! # struct Default;
 //! # impl CipherSuite for Default {
 //! #     type Group = curve25519_dalek::ristretto::RistrettoPoint;
@@ -139,7 +139,7 @@
 //! #   ClientRegistration, ClientRegistrationFinishParameters, ServerRegistration, ServerSetup,
 //! #   slow_hash::NoOpHash,
 //! # };
-//! # use opaque_ke::ciphersuite::CipherSuite;
+//! # use opaque_ke::CipherSuite;
 //! # struct Default;
 //! # impl CipherSuite for Default {
 //! #     type Group = curve25519_dalek::ristretto::RistrettoPoint;
@@ -177,7 +177,7 @@
 //! #   ClientRegistration, ClientRegistrationFinishParameters, ServerRegistration, ServerSetup,
 //! #   slow_hash::NoOpHash,
 //! # };
-//! # use opaque_ke::ciphersuite::CipherSuite;
+//! # use opaque_ke::CipherSuite;
 //! # struct Default;
 //! # impl CipherSuite for Default {
 //! #     type Group = curve25519_dalek::ristretto::RistrettoPoint;
@@ -204,7 +204,8 @@
 //! ## Login
 //! The login protocol between a client and server also consists of four steps along with three messages:
 //! [CredentialRequest], [CredentialResponse], [CredentialFinalization]. The server is expected to have access to the password file
-//! corresponding to an output of the registration phase. The login protocol will execute successfully only if the same password
+//! corresponding to an output of the registration phase (see [Dummy Server Login](#dummy-server-login) for handling the scenario where
+//! no password file is available). The login protocol will execute successfully only if the same password
 //! was used in the registration phase that produced the password file that the server is testing against.
 //!
 //! ### Client Login Start
@@ -218,7 +219,7 @@
 //! #   ClientRegistration, ServerRegistration, ServerLogin, CredentialFinalization,
 //! #   slow_hash::NoOpHash,
 //! # };
-//! # use opaque_ke::ciphersuite::CipherSuite;
+//! # use opaque_ke::CipherSuite;
 //! # struct Default;
 //! # impl CipherSuite for Default {
 //! #     type Group = curve25519_dalek::ristretto::RistrettoPoint;
@@ -227,12 +228,11 @@
 //! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
 //! # }
 //! # use rand::{rngs::OsRng, RngCore};
-//! use opaque_ke::{ClientLogin, ClientLoginStartParameters};
+//! use opaque_ke::ClientLogin;
 //! let mut client_rng = OsRng;
 //! let client_login_start_result = ClientLogin::<Default>::start(
 //!   &mut client_rng,
 //!   b"password",
-//!   ClientLoginStartParameters::default(),
 //! )?;
 //! # Ok::<(), ProtocolError>(())
 //! ```
@@ -249,10 +249,10 @@
 //! ```
 //! # use opaque_ke::{
 //! #   errors::ProtocolError,
-//! #   ClientRegistration, ClientRegistrationFinishParameters, ServerRegistration, ClientLogin, ClientLoginStartParameters, CredentialFinalization, ServerSetup,
+//! #   ClientRegistration, ClientRegistrationFinishParameters, ServerRegistration, ClientLogin, CredentialFinalization, ServerSetup,
 //! #   slow_hash::NoOpHash,
 //! # };
-//! # use opaque_ke::ciphersuite::CipherSuite;
+//! # use opaque_ke::CipherSuite;
 //! # struct Default;
 //! # impl CipherSuite for Default {
 //! #     type Group = curve25519_dalek::ristretto::RistrettoPoint;
@@ -274,7 +274,6 @@
 //! # let client_login_start_result = ClientLogin::<Default>::start(
 //! #   &mut client_rng,
 //! #   b"password",
-//! #   ClientLoginStartParameters::default(),
 //! # )?;
 //! use opaque_ke::{ServerLogin, ServerLoginStartParameters};
 //! let password_file = ServerRegistration::<Default>::deserialize(&password_file_bytes[..])?;
@@ -303,10 +302,10 @@
 //! ```
 //! # use opaque_ke::{
 //! #   errors::ProtocolError,
-//! #   ClientRegistration, ClientRegistrationFinishParameters, ServerRegistration, ClientLogin, ClientLoginStartParameters, ClientLoginFinishParameters, ServerLogin, ServerLoginStartParameters, CredentialFinalization, ServerSetup,
+//! #   ClientRegistration, ClientRegistrationFinishParameters, ServerRegistration, ClientLogin, ClientLoginFinishParameters, ServerLogin, ServerLoginStartParameters, CredentialFinalization, ServerSetup,
 //! #   slow_hash::NoOpHash,
 //! # };
-//! # use opaque_ke::ciphersuite::CipherSuite;
+//! # use opaque_ke::CipherSuite;
 //! # struct Default;
 //! # impl CipherSuite for Default {
 //! #     type Group = curve25519_dalek::ristretto::RistrettoPoint;
@@ -328,7 +327,6 @@
 //! # let client_login_start_result = ClientLogin::<Default>::start(
 //! #     &mut client_rng,
 //! #     b"password",
-//! #     ClientLoginStartParameters::default(),
 //! # )?;
 //! # let password_file =
 //! #   ServerRegistration::<Default>::deserialize(
@@ -349,10 +347,10 @@
 //! ```
 //! # use opaque_ke::{
 //! #   errors::ProtocolError,
-//! #   ClientRegistration, ClientRegistrationFinishParameters, ServerRegistration, ClientLogin, ClientLoginStartParameters, ClientLoginFinishParameters, ServerLogin, ServerLoginStartParameters, CredentialFinalization, ServerSetup,
+//! #   ClientRegistration, ClientRegistrationFinishParameters, ServerRegistration, ClientLogin, ClientLoginFinishParameters, ServerLogin, ServerLoginStartParameters, CredentialFinalization, ServerSetup,
 //! #   slow_hash::NoOpHash,
 //! # };
-//! # use opaque_ke::ciphersuite::CipherSuite;
+//! # use opaque_ke::CipherSuite;
 //! # struct Default;
 //! # impl CipherSuite for Default {
 //! #     type Group = curve25519_dalek::ristretto::RistrettoPoint;
@@ -374,7 +372,6 @@
 //! # let client_login_start_result = ClientLogin::<Default>::start(
 //! #   &mut client_rng,
 //! #   b"password",
-//! #   ClientLoginStartParameters::default(),
 //! # )?;
 //! # let password_file =
 //! #   ServerRegistration::<Default>::deserialize(
@@ -424,10 +421,10 @@
 //! ```
 //! # use opaque_ke::{
 //! #   errors::ProtocolError,
-//! #   ClientRegistration, ClientRegistrationFinishParameters, ServerRegistration, ClientLogin, ClientLoginStartParameters, ClientLoginFinishParameters, ServerLogin, ServerLoginStartParameters, CredentialFinalization, ServerSetup,
+//! #   ClientRegistration, ClientRegistrationFinishParameters, ServerRegistration, ClientLogin, ClientLoginFinishParameters, ServerLogin, ServerLoginStartParameters, CredentialFinalization, ServerSetup,
 //! #   slow_hash::NoOpHash,
 //! # };
-//! # use opaque_ke::ciphersuite::CipherSuite;
+//! # use opaque_ke::CipherSuite;
 //! # struct Default;
 //! # impl CipherSuite for Default {
 //! #     type Group = curve25519_dalek::ristretto::RistrettoPoint;
@@ -453,7 +450,6 @@
 //! # let client_login_start_result = ClientLogin::<Default>::start(
 //! #     &mut client_rng,
 //! #     b"password",
-//! #     ClientLoginStartParameters::default(),
 //! # )?;
 //! # let password_file =
 //! #   ServerRegistration::<Default>::deserialize(
@@ -500,10 +496,10 @@
 //! ```
 //! # use opaque_ke::{
 //! #   errors::ProtocolError,
-//! #   ClientRegistration, ClientRegistrationFinishParameters, ServerRegistration, ClientLogin, ClientLoginStartParameters, ClientLoginFinishParameters, ServerLogin, ServerLoginStartParameters, CredentialFinalization, ServerSetup,
+//! #   ClientRegistration, ClientRegistrationFinishParameters, ServerRegistration, ClientLogin, ClientLoginFinishParameters, ServerLogin, ServerLoginStartParameters, CredentialFinalization, ServerSetup,
 //! #   slow_hash::NoOpHash,
 //! # };
-//! # use opaque_ke::ciphersuite::CipherSuite;
+//! # use opaque_ke::CipherSuite;
 //! # struct Default;
 //! # impl CipherSuite for Default {
 //! #     type Group = curve25519_dalek::ristretto::RistrettoPoint;
@@ -530,7 +526,6 @@
 //! # let client_login_start_result = ClientLogin::<Default>::start(
 //! #     &mut client_rng,
 //! #     b"password",
-//! #     ClientLoginStartParameters::default(),
 //! # )?;
 //! # let password_file =
 //! #   ServerRegistration::<Default>::deserialize(
@@ -566,10 +561,10 @@
 //! ```
 //! # use opaque_ke::{
 //! #   errors::ProtocolError,
-//! #   ClientRegistration, ClientRegistrationFinishParameters, ServerRegistration, ServerSetup,
+//! #   ClientRegistration, ClientRegistrationFinishParameters, Identifiers, ServerRegistration, ServerSetup,
 //! #   slow_hash::NoOpHash,
 //! # };
-//! # use opaque_ke::ciphersuite::CipherSuite;
+//! # use opaque_ke::CipherSuite;
 //! # struct Default;
 //! # impl CipherSuite for Default {
 //! #     type Group = curve25519_dalek::ristretto::RistrettoPoint;
@@ -590,8 +585,10 @@
 //!     &mut client_rng,
 //!     server_registration_start_result.message,
 //!     ClientRegistrationFinishParameters::WithIdentifiers(
-//!         b"Alice_the_Cryptographer".to_vec(),
-//!         b"Facebook".to_vec(),
+//!         Identifiers::ClientAndServerIdentifiers(
+//!             b"Alice_the_Cryptographer".to_vec(),
+//!             b"Facebook".to_vec(),
+//!         ),
 //!     ),
 //! )?;
 //! # Ok::<(), ProtocolError>(())
@@ -601,10 +598,10 @@
 //! ```
 //! # use opaque_ke::{
 //! #   errors::ProtocolError,
-//! #   ClientRegistration, ClientRegistrationFinishParameters, ServerRegistration, ClientLogin, ClientLoginStartParameters, CredentialFinalization, ServerSetup,
+//! #   ClientRegistration, ClientRegistrationFinishParameters, ServerRegistration, ClientLogin, CredentialFinalization, Identifiers, ServerSetup,
 //! #   slow_hash::NoOpHash,
 //! # };
-//! # use opaque_ke::ciphersuite::CipherSuite;
+//! # use opaque_ke::CipherSuite;
 //! # struct Default;
 //! # impl CipherSuite for Default {
 //! #     type Group = curve25519_dalek::ristretto::RistrettoPoint;
@@ -621,12 +618,11 @@
 //! # let mut server_rng = OsRng;
 //! # let server_setup = ServerSetup::<Default>::new(&mut server_rng);
 //! # let server_registration_start_result = ServerRegistration::<Default>::start(&server_setup, client_registration_start_result.message, b"alice@example.com")?;
-//! # let client_registration_finish_result = client_registration_start_result.state.finish(&mut client_rng, server_registration_start_result.message, ClientRegistrationFinishParameters::WithIdentifiers(b"Alice_the_Cryptographer".to_vec(), b"Facebook".to_vec()))?;
+//! # let client_registration_finish_result = client_registration_start_result.state.finish(&mut client_rng, server_registration_start_result.message, ClientRegistrationFinishParameters::WithIdentifiers(Identifiers::ClientAndServerIdentifiers(b"Alice_the_Cryptographer".to_vec(), b"Facebook".to_vec())))?;
 //! # let password_file_bytes = ServerRegistration::<Default>::finish(client_registration_finish_result.message).serialize();
 //! # let client_login_start_result = ClientLogin::<Default>::start(
 //! #   &mut client_rng,
 //! #   b"password",
-//! #   ClientLoginStartParameters::default(),
 //! # )?;
 //! # use opaque_ke::{ServerLogin, ServerLoginStartParameters};
 //! # let password_file = ServerRegistration::<Default>::deserialize(&password_file_bytes[..])?;
@@ -638,8 +634,10 @@
 //!     client_login_start_result.message,
 //!     b"alice@example.com",
 //!     ServerLoginStartParameters::WithIdentifiers(
-//!         b"Alice_the_Cryptographer".to_vec(),
-//!         b"Facebook".to_vec(),
+//!         Identifiers::ClientAndServerIdentifiers(
+//!             b"Alice_the_Cryptographer".to_vec(),
+//!             b"Facebook".to_vec(),
+//!         ),
 //!     ),
 //! )?;
 //! # Ok::<(), ProtocolError>(())
@@ -649,10 +647,10 @@
 //! ```
 //! # use opaque_ke::{
 //! #   errors::ProtocolError,
-//! #   ClientRegistration, ClientRegistrationFinishParameters, ServerRegistration, ClientLogin, ClientLoginStartParameters, ClientLoginFinishParameters, ServerLogin, ServerLoginStartParameters, CredentialFinalization, ServerSetup,
+//! #   ClientRegistration, ClientRegistrationFinishParameters, ServerRegistration, ClientLogin, ClientLoginFinishParameters, Identifiers, ServerLogin, ServerLoginStartParameters, CredentialFinalization, ServerSetup,
 //! #   slow_hash::NoOpHash,
 //! # };
-//! # use opaque_ke::ciphersuite::CipherSuite;
+//! # use opaque_ke::CipherSuite;
 //! # struct Default;
 //! # impl CipherSuite for Default {
 //! #     type Group = curve25519_dalek::ristretto::RistrettoPoint;
@@ -669,45 +667,54 @@
 //! # let mut server_rng = OsRng;
 //! # let server_setup = ServerSetup::<Default>::new(&mut server_rng);
 //! # let server_registration_start_result = ServerRegistration::<Default>::start(&server_setup, client_registration_start_result.message, b"alice@example.com")?;
-//! # let client_registration_finish_result = client_registration_start_result.state.finish(&mut client_rng, server_registration_start_result.message, ClientRegistrationFinishParameters::WithIdentifiers(b"Alice_the_Cryptographer".to_vec(), b"Facebook".to_vec()))?;
+//! # let client_registration_finish_result = client_registration_start_result.state.finish(&mut client_rng, server_registration_start_result.message, ClientRegistrationFinishParameters::WithIdentifiers(Identifiers::ClientAndServerIdentifiers(b"Alice_the_Cryptographer".to_vec(), b"Facebook".to_vec())))?;
 //! # let password_file_bytes = ServerRegistration::<Default>::finish(client_registration_finish_result.message).serialize();
 //! # let client_login_start_result = ClientLogin::<Default>::start(
 //! #     &mut client_rng,
 //! #     b"password",
-//! #     ClientLoginStartParameters::default(),
 //! # )?;
 //! # let password_file =
 //! #   ServerRegistration::<Default>::deserialize(
 //! #     &password_file_bytes[..],
 //! #   )?;
 //! # let server_login_start_result =
-//! #     ServerLogin::start(&mut server_rng, &server_setup, Some(password_file), client_login_start_result.message, b"alice@example.com", ServerLoginStartParameters::WithIdentifiers(b"Alice_the_Cryptographer".to_vec(), b"Facebook".to_vec()))?;
+//! #     ServerLogin::start(&mut server_rng, &server_setup, Some(password_file), client_login_start_result.message, b"alice@example.com", ServerLoginStartParameters::WithIdentifiers(Identifiers::ClientAndServerIdentifiers(b"Alice_the_Cryptographer".to_vec(), b"Facebook".to_vec())))?;
 //! let client_login_finish_result = client_login_start_result.state.finish(
 //!     server_login_start_result.message,
 //!     ClientLoginFinishParameters::WithIdentifiers(
-//!         b"Alice_the_Cryptographer".to_vec(),
-//!         b"Facebook".to_vec(),
+//!         Identifiers::ClientAndServerIdentifiers(
+//!             b"Alice_the_Cryptographer".to_vec(),
+//!             b"Facebook".to_vec(),
+//!         ),
 //!     ),
 //! )?;
+//!
 //! # Ok::<(), ProtocolError>(())
 //! ```
 //! Failing to supply the same pair of custom identifiers in any of the three steps above will result in an error in attempting to complete
 //! the protocol!
 //!
-//! ## Key Exchange Additional Data
+//! Note that if only one of the client and server identifiers are present, then [Identifiers::ClientIdentifier] and [Identifiers::ServerIdentifier] can be
+//! used to specify them individually.
 //!
-//! A key exchange protocol typically supports the passing of data between the two parties before the exchange is complete, so as to bind the integrity
-//! and/or confidentiality of application-specific data to the security of the key exchange. During the login phase, the client and server can pass
-//! additional data alongside the first two messages of the protocol, with confidential data being supported for the second message.
+//! ## Key Exchange Context
 //!
-//! The following three messages support passing of additional data:
-//! - The first login message, where the client can populate [ClientLoginStartParameters::WithInfo] with plaintext additional data, and
-//! the server can retrieve using the `plain_info` field of [ServerLoginStartResult].
-//! - The second login message, where the server can populate [ServerLoginStartParameters::WithInfo] with confidential additional data,
-//! and the client can retrieve using the `confidential_info` field of [ClientLoginFinishResult].
+//! A key exchange protocol typically allows for the specifying of shared "context" information between the two parties before the exchange is complete,
+//! so as to bind the integrity of application-specific data or configuration parameters to the security of the key exchange.
+//! During the login phase, the client and server can specify this context using:
+//! - The second login message, where the server can populate [ServerLoginStartParameters::WithContext], and
+//! - The third login message, where the client can populate [ClientLoginFinishParameters::WithContext].
 //!
-//! For the second login message, the `WithInfoAndIdentifiers` variant can be used to specify these fields in addition to
-//! [custom identifiers](#custom-identifiers), with the ordering of the fields as `WithInfoAndIdentifiers(confidential_info, username, server_name)`.
+//! For both of these messages, the `WithContextAndIdentifiers` variant can be used to specify these fields in addition to
+//! [custom identifiers](#custom-identifiers), with the ordering of the fields as
+//! `WithContextAndIdentifiers(context, Identifiers::ClientAndServerIdentifiers(username, server_name))`.
+//!
+//! ## Dummy Server Login
+//!
+//! For applications in which the server does not wish to reveal to the client whether an existing password file has been
+//! registered, the server can return a "dummy" credential response message to the client for an unregistered client,
+//! which is indistinguishable from the normal credential response message that the server would return for a registered client.
+//! The dummy message is created by passing a `None` to the password_file parameter for [ServerLogin::start].
 //!
 //! # Features
 //!
@@ -773,6 +780,8 @@ mod tests;
 
 pub use rand;
 
+pub use ciphersuite::CipherSuite;
+
 pub use crate::messages::{
     CredentialFinalization, CredentialRequest, CredentialResponse, RegistrationRequest,
     RegistrationResponse, RegistrationUpload,
@@ -781,11 +790,10 @@ pub use crate::opaque::{
     ClientLogin, ClientRegistration, ServerLogin, ServerRegistration, ServerSetup,
 };
 pub use crate::opaque::{
-    ClientLoginFinishParameters, ClientLoginStartParameters, ClientRegistrationFinishParameters,
-    ServerLoginStartParameters,
+    ClientLoginFinishParameters, ClientRegistrationFinishParameters, ServerLoginStartParameters,
 };
 pub use crate::opaque::{
     ClientLoginFinishResult, ClientLoginStartResult, ClientRegistrationFinishResult,
-    ClientRegistrationStartResult, ServerLoginFinishResult, ServerLoginStartResult,
+    ClientRegistrationStartResult, Identifiers, ServerLoginFinishResult, ServerLoginStartResult,
     ServerRegistrationStartResult,
 };
