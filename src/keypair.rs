@@ -17,6 +17,7 @@ use rand::{CryptoRng, RngCore};
 use std::fmt::Debug;
 use std::marker::PhantomData;
 use std::ops::Deref;
+use zeroize::Zeroize;
 
 /// Convenience extension trait of SizedBytes
 pub trait SizedBytesExt: SizedBytes {
@@ -30,7 +31,7 @@ pub trait SizedBytesExt: SizedBytes {
 impl<T> SizedBytesExt for T where T: SizedBytes {}
 
 /// A Keypair trait with public-private verification
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Zeroize)]
 pub struct KeyPair<G> {
     pk: Key,
     sk: Key,
@@ -119,7 +120,9 @@ impl<G: Group + Debug> KeyPair<G> {
 }
 
 /// A minimalist key type built around a \[u8; 32\]
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone, Zeroize)]
+// Ensure Key material is zeroed after use.
+#[zeroize(drop)]
 #[repr(transparent)]
 pub struct Key(Vec<u8>);
 

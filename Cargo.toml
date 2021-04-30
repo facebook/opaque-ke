@@ -28,7 +28,7 @@ rand = "0.8"
 scrypt = { version = "0.5.0", optional = true }
 subtle = { version = "2.3.0", default-features = false }
 thiserror = "1.0.22"
-zeroize = "1.1.1"
+zeroize = { version = "1.1.1", features = ["zeroize_derive"] }
 hex = "0.4.2"
 
 [dev-dependencies]
