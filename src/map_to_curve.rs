@@ -25,7 +25,8 @@ pub trait GroupWithMapToCurve: Group {
     fn map_to_curve<H: Hash>(msg: &[u8], dst: &[u8]) -> Result<Self, InternalPakeError>;
 
     /// Hashes a slice of pseudo-random bytes to a scalar
-    fn hash_to_scalar<H: Hash>(input: &[u8]) -> Result<Self::Scalar, InternalPakeError>;
+    fn hash_to_scalar<H: Hash>(input: &[u8], dst: &[u8])
+        -> Result<Self::Scalar, InternalPakeError>;
 
     /// Generates the contextString parameter as defined in
     /// <https://www.ietf.org/archive/id/draft-irtf-cfrg-voprf-05.txt>
@@ -47,9 +48,12 @@ impl GroupWithMapToCurve for RistrettoPoint {
         ))
     }
 
-    fn hash_to_scalar<H: Hash>(input: &[u8]) -> Result<Self::Scalar, InternalPakeError> {
+    fn hash_to_scalar<H: Hash>(
+        input: &[u8],
+        dst: &[u8],
+    ) -> Result<Self::Scalar, InternalPakeError> {
         const LEN_IN_BYTES: usize = 64;
-        let uniform_bytes = expand_message_xmd::<H>(input, b"", LEN_IN_BYTES)?;
+        let uniform_bytes = expand_message_xmd::<H>(input, dst, LEN_IN_BYTES)?;
         let mut bits = [0u8; LEN_IN_BYTES];
         bits.copy_from_slice(&uniform_bytes[..]);
 

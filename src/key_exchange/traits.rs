@@ -22,7 +22,6 @@ pub trait KeyExchange<D: Hash, G: Group> {
     type KE3Message: for<'r> TryFrom<&'r [u8], Error = PakeError> + ToBytes;
 
     fn generate_ke1<R: RngCore + CryptoRng>(
-        info: Vec<u8>,
         rng: &mut R,
     ) -> Result<(Self::KE1State, Self::KE1Message), ProtocolError>;
 
@@ -36,8 +35,8 @@ pub trait KeyExchange<D: Hash, G: Group> {
         server_s_sk: Key,
         id_u: Vec<u8>,
         id_s: Vec<u8>,
-        e_info: Vec<u8>,
-    ) -> Result<(Vec<u8>, Self::KE2State, Self::KE2Message), ProtocolError>;
+        context: Vec<u8>,
+    ) -> Result<(Self::KE2State, Self::KE2Message), ProtocolError>;
 
     #[allow(clippy::too_many_arguments, clippy::type_complexity)]
     fn generate_ke3(
@@ -49,7 +48,8 @@ pub trait KeyExchange<D: Hash, G: Group> {
         client_s_sk: Key,
         id_u: Vec<u8>,
         id_s: Vec<u8>,
-    ) -> Result<(Vec<u8>, Vec<u8>, Self::KE3Message), ProtocolError>;
+        context: Vec<u8>,
+    ) -> Result<(Vec<u8>, Self::KE3Message), ProtocolError>;
 
     #[allow(clippy::type_complexity)]
     fn finish_ke(

@@ -227,12 +227,11 @@
 //! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
 //! # }
 //! # use rand::{rngs::OsRng, RngCore};
-//! use opaque_ke::{ClientLogin, ClientLoginStartParameters};
+//! use opaque_ke::ClientLogin;
 //! let mut client_rng = OsRng;
 //! let client_login_start_result = ClientLogin::<Default>::start(
 //!   &mut client_rng,
 //!   b"password",
-//!   ClientLoginStartParameters::default(),
 //! )?;
 //! # Ok::<(), ProtocolError>(())
 //! ```
@@ -249,7 +248,7 @@
 //! ```
 //! # use opaque_ke::{
 //! #   errors::ProtocolError,
-//! #   ClientRegistration, ClientRegistrationFinishParameters, ServerRegistration, ClientLogin, ClientLoginStartParameters, CredentialFinalization, ServerSetup,
+//! #   ClientRegistration, ClientRegistrationFinishParameters, ServerRegistration, ClientLogin, CredentialFinalization, ServerSetup,
 //! #   slow_hash::NoOpHash,
 //! # };
 //! # use opaque_ke::ciphersuite::CipherSuite;
@@ -274,7 +273,6 @@
 //! # let client_login_start_result = ClientLogin::<Default>::start(
 //! #   &mut client_rng,
 //! #   b"password",
-//! #   ClientLoginStartParameters::default(),
 //! # )?;
 //! use opaque_ke::{ServerLogin, ServerLoginStartParameters};
 //! let password_file = ServerRegistration::<Default>::deserialize(&password_file_bytes[..])?;
@@ -303,7 +301,7 @@
 //! ```
 //! # use opaque_ke::{
 //! #   errors::ProtocolError,
-//! #   ClientRegistration, ClientRegistrationFinishParameters, ServerRegistration, ClientLogin, ClientLoginStartParameters, ClientLoginFinishParameters, ServerLogin, ServerLoginStartParameters, CredentialFinalization, ServerSetup,
+//! #   ClientRegistration, ClientRegistrationFinishParameters, ServerRegistration, ClientLogin, ClientLoginFinishParameters, ServerLogin, ServerLoginStartParameters, CredentialFinalization, ServerSetup,
 //! #   slow_hash::NoOpHash,
 //! # };
 //! # use opaque_ke::ciphersuite::CipherSuite;
@@ -328,7 +326,6 @@
 //! # let client_login_start_result = ClientLogin::<Default>::start(
 //! #     &mut client_rng,
 //! #     b"password",
-//! #     ClientLoginStartParameters::default(),
 //! # )?;
 //! # let password_file =
 //! #   ServerRegistration::<Default>::deserialize(
@@ -349,7 +346,7 @@
 //! ```
 //! # use opaque_ke::{
 //! #   errors::ProtocolError,
-//! #   ClientRegistration, ClientRegistrationFinishParameters, ServerRegistration, ClientLogin, ClientLoginStartParameters, ClientLoginFinishParameters, ServerLogin, ServerLoginStartParameters, CredentialFinalization, ServerSetup,
+//! #   ClientRegistration, ClientRegistrationFinishParameters, ServerRegistration, ClientLogin, ClientLoginFinishParameters, ServerLogin, ServerLoginStartParameters, CredentialFinalization, ServerSetup,
 //! #   slow_hash::NoOpHash,
 //! # };
 //! # use opaque_ke::ciphersuite::CipherSuite;
@@ -374,7 +371,6 @@
 //! # let client_login_start_result = ClientLogin::<Default>::start(
 //! #   &mut client_rng,
 //! #   b"password",
-//! #   ClientLoginStartParameters::default(),
 //! # )?;
 //! # let password_file =
 //! #   ServerRegistration::<Default>::deserialize(
@@ -424,7 +420,7 @@
 //! ```
 //! # use opaque_ke::{
 //! #   errors::ProtocolError,
-//! #   ClientRegistration, ClientRegistrationFinishParameters, ServerRegistration, ClientLogin, ClientLoginStartParameters, ClientLoginFinishParameters, ServerLogin, ServerLoginStartParameters, CredentialFinalization, ServerSetup,
+//! #   ClientRegistration, ClientRegistrationFinishParameters, ServerRegistration, ClientLogin, ClientLoginFinishParameters, ServerLogin, ServerLoginStartParameters, CredentialFinalization, ServerSetup,
 //! #   slow_hash::NoOpHash,
 //! # };
 //! # use opaque_ke::ciphersuite::CipherSuite;
@@ -453,7 +449,6 @@
 //! # let client_login_start_result = ClientLogin::<Default>::start(
 //! #     &mut client_rng,
 //! #     b"password",
-//! #     ClientLoginStartParameters::default(),
 //! # )?;
 //! # let password_file =
 //! #   ServerRegistration::<Default>::deserialize(
@@ -500,7 +495,7 @@
 //! ```
 //! # use opaque_ke::{
 //! #   errors::ProtocolError,
-//! #   ClientRegistration, ClientRegistrationFinishParameters, ServerRegistration, ClientLogin, ClientLoginStartParameters, ClientLoginFinishParameters, ServerLogin, ServerLoginStartParameters, CredentialFinalization, ServerSetup,
+//! #   ClientRegistration, ClientRegistrationFinishParameters, ServerRegistration, ClientLogin, ClientLoginFinishParameters, ServerLogin, ServerLoginStartParameters, CredentialFinalization, ServerSetup,
 //! #   slow_hash::NoOpHash,
 //! # };
 //! # use opaque_ke::ciphersuite::CipherSuite;
@@ -530,7 +525,6 @@
 //! # let client_login_start_result = ClientLogin::<Default>::start(
 //! #     &mut client_rng,
 //! #     b"password",
-//! #     ClientLoginStartParameters::default(),
 //! # )?;
 //! # let password_file =
 //! #   ServerRegistration::<Default>::deserialize(
@@ -560,13 +554,15 @@
 //! The server may also have an identifier corresponding to an entity (e.g. Facebook).
 //! By default, neither of these public identifiers need to be supplied to the OPAQUE protocol.
 //!
+//! # FIXME: add comments around only client / only server identifiers too
+//!
 //! But, for applications that wish to cryptographically bind these identities to
 //! the registered password file as well as the session key output by the login phase, these custom identifiers can be specified through
 //! [ClientRegistrationFinishParameters::WithIdentifiers] in [Client Registration Finish](#client-registration-finish):
 //! ```
 //! # use opaque_ke::{
 //! #   errors::ProtocolError,
-//! #   ClientRegistration, ClientRegistrationFinishParameters, ServerRegistration, ServerSetup,
+//! #   ClientRegistration, ClientRegistrationFinishParameters, Identifiers, ServerRegistration, ServerSetup,
 //! #   slow_hash::NoOpHash,
 //! # };
 //! # use opaque_ke::ciphersuite::CipherSuite;
@@ -590,8 +586,10 @@
 //!     &mut client_rng,
 //!     server_registration_start_result.message,
 //!     ClientRegistrationFinishParameters::WithIdentifiers(
-//!         b"Alice_the_Cryptographer".to_vec(),
-//!         b"Facebook".to_vec(),
+//!         Identifiers::ClientAndServerIdentifiers(
+//!             b"Alice_the_Cryptographer".to_vec(),
+//!             b"Facebook".to_vec(),
+//!         ),
 //!     ),
 //! )?;
 //! # Ok::<(), ProtocolError>(())
@@ -601,7 +599,7 @@
 //! ```
 //! # use opaque_ke::{
 //! #   errors::ProtocolError,
-//! #   ClientRegistration, ClientRegistrationFinishParameters, ServerRegistration, ClientLogin, ClientLoginStartParameters, CredentialFinalization, ServerSetup,
+//! #   ClientRegistration, ClientRegistrationFinishParameters, ServerRegistration, ClientLogin, CredentialFinalization, Identifiers, ServerSetup,
 //! #   slow_hash::NoOpHash,
 //! # };
 //! # use opaque_ke::ciphersuite::CipherSuite;
@@ -621,12 +619,11 @@
 //! # let mut server_rng = OsRng;
 //! # let server_setup = ServerSetup::<Default>::new(&mut server_rng);
 //! # let server_registration_start_result = ServerRegistration::<Default>::start(&server_setup, client_registration_start_result.message, b"alice@example.com")?;
-//! # let client_registration_finish_result = client_registration_start_result.state.finish(&mut client_rng, server_registration_start_result.message, ClientRegistrationFinishParameters::WithIdentifiers(b"Alice_the_Cryptographer".to_vec(), b"Facebook".to_vec()))?;
+//! # let client_registration_finish_result = client_registration_start_result.state.finish(&mut client_rng, server_registration_start_result.message, ClientRegistrationFinishParameters::WithIdentifiers(Identifiers::ClientAndServerIdentifiers(b"Alice_the_Cryptographer".to_vec(), b"Facebook".to_vec())))?;
 //! # let password_file_bytes = ServerRegistration::<Default>::finish(client_registration_finish_result.message).serialize();
 //! # let client_login_start_result = ClientLogin::<Default>::start(
 //! #   &mut client_rng,
 //! #   b"password",
-//! #   ClientLoginStartParameters::default(),
 //! # )?;
 //! # use opaque_ke::{ServerLogin, ServerLoginStartParameters};
 //! # let password_file = ServerRegistration::<Default>::deserialize(&password_file_bytes[..])?;
@@ -638,8 +635,10 @@
 //!     client_login_start_result.message,
 //!     b"alice@example.com",
 //!     ServerLoginStartParameters::WithIdentifiers(
-//!         b"Alice_the_Cryptographer".to_vec(),
-//!         b"Facebook".to_vec(),
+//!         Identifiers::ClientAndServerIdentifiers(
+//!             b"Alice_the_Cryptographer".to_vec(),
+//!             b"Facebook".to_vec(),
+//!         ),
 //!     ),
 //! )?;
 //! # Ok::<(), ProtocolError>(())
@@ -649,7 +648,7 @@
 //! ```
 //! # use opaque_ke::{
 //! #   errors::ProtocolError,
-//! #   ClientRegistration, ClientRegistrationFinishParameters, ServerRegistration, ClientLogin, ClientLoginStartParameters, ClientLoginFinishParameters, ServerLogin, ServerLoginStartParameters, CredentialFinalization, ServerSetup,
+//! #   ClientRegistration, ClientRegistrationFinishParameters, ServerRegistration, ClientLogin, ClientLoginFinishParameters, Identifiers, ServerLogin, ServerLoginStartParameters, CredentialFinalization, ServerSetup,
 //! #   slow_hash::NoOpHash,
 //! # };
 //! # use opaque_ke::ciphersuite::CipherSuite;
@@ -669,24 +668,25 @@
 //! # let mut server_rng = OsRng;
 //! # let server_setup = ServerSetup::<Default>::new(&mut server_rng);
 //! # let server_registration_start_result = ServerRegistration::<Default>::start(&server_setup, client_registration_start_result.message, b"alice@example.com")?;
-//! # let client_registration_finish_result = client_registration_start_result.state.finish(&mut client_rng, server_registration_start_result.message, ClientRegistrationFinishParameters::WithIdentifiers(b"Alice_the_Cryptographer".to_vec(), b"Facebook".to_vec()))?;
+//! # let client_registration_finish_result = client_registration_start_result.state.finish(&mut client_rng, server_registration_start_result.message, ClientRegistrationFinishParameters::WithIdentifiers(Identifiers::ClientAndServerIdentifiers(b"Alice_the_Cryptographer".to_vec(), b"Facebook".to_vec())))?;
 //! # let password_file_bytes = ServerRegistration::<Default>::finish(client_registration_finish_result.message).serialize();
 //! # let client_login_start_result = ClientLogin::<Default>::start(
 //! #     &mut client_rng,
 //! #     b"password",
-//! #     ClientLoginStartParameters::default(),
 //! # )?;
 //! # let password_file =
 //! #   ServerRegistration::<Default>::deserialize(
 //! #     &password_file_bytes[..],
 //! #   )?;
 //! # let server_login_start_result =
-//! #     ServerLogin::start(&mut server_rng, &server_setup, Some(password_file), client_login_start_result.message, b"alice@example.com", ServerLoginStartParameters::WithIdentifiers(b"Alice_the_Cryptographer".to_vec(), b"Facebook".to_vec()))?;
+//! #     ServerLogin::start(&mut server_rng, &server_setup, Some(password_file), client_login_start_result.message, b"alice@example.com", ServerLoginStartParameters::WithIdentifiers(Identifiers::ClientAndServerIdentifiers(b"Alice_the_Cryptographer".to_vec(), b"Facebook".to_vec())))?;
 //! let client_login_finish_result = client_login_start_result.state.finish(
 //!     server_login_start_result.message,
 //!     ClientLoginFinishParameters::WithIdentifiers(
-//!         b"Alice_the_Cryptographer".to_vec(),
-//!         b"Facebook".to_vec(),
+//!         Identifiers::ClientAndServerIdentifiers(
+//!             b"Alice_the_Cryptographer".to_vec(),
+//!             b"Facebook".to_vec(),
+//!         ),
 //!     ),
 //! )?;
 //! # Ok::<(), ProtocolError>(())
@@ -695,6 +695,7 @@
 //! the protocol!
 //!
 //! ## Key Exchange Additional Data
+//! # FIXME: update this with context info
 //!
 //! A key exchange protocol typically supports the passing of data between the two parties before the exchange is complete, so as to bind the integrity
 //! and/or confidentiality of application-specific data to the security of the key exchange. During the login phase, the client and server can pass
@@ -763,11 +764,10 @@ pub use crate::opaque::{
     ClientLogin, ClientRegistration, ServerLogin, ServerRegistration, ServerSetup,
 };
 pub use crate::opaque::{
-    ClientLoginFinishParameters, ClientLoginStartParameters, ClientRegistrationFinishParameters,
-    ServerLoginStartParameters,
+    ClientLoginFinishParameters, ClientRegistrationFinishParameters, ServerLoginStartParameters,
 };
 pub use crate::opaque::{
     ClientLoginFinishResult, ClientLoginStartResult, ClientRegistrationFinishResult,
-    ClientRegistrationStartResult, ServerLoginFinishResult, ServerLoginStartResult,
+    ClientRegistrationStartResult, Identifiers, ServerLoginFinishResult, ServerLoginStartResult,
     ServerRegistrationStartResult,
 };
