@@ -14,7 +14,7 @@ OPAQUE is a PKI-free aPAKE that is secure against pre-computation attacks and ca
 Documentation
 -------------
 
-The API can be found [here](https://docs.rs/opaque-ke/) along with an example for usage.
+The API can be found [here](https://docs.rs/opaque-ke/) along with an example for usage. More examples can be found in the [examples](./examples) directory.
 
 Installation
 ------------
@@ -31,6 +31,7 @@ Resources
 - [OPAQUE academic publication](https://eprint.iacr.org/2018/163.pdf), including formal definitions and a proof of security
 - [draft-irtf-cfrg-opaque-03](https://www.ietf.org/archive/id/draft-irtf-cfrg-opaque-03.html), containing a detailed (byte-level) specification for OPAQUE
 - ["Let's talk about PAKE"](https://blog.cryptographyengineering.com/2018/10/19/lets-talk-about-pake/), an introductory blog post written by Matthew Green that covers OPAQUE
+- [opaque-wasm](https://github.com/marucjmar/opaque-wasm), a WebAssembly package for this library
 
 Contributors
 ------------
