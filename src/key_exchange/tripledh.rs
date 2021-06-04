@@ -11,7 +11,7 @@ use crate::{
     },
     group::Group,
     hash::Hash,
-    key_exchange::traits::{KeyExchange, ToBytes},
+    key_exchange::traits::{KeyExchange, ToBytes, ToBytesWithPointers},
     keypair::{Key, KeyPair, SizedBytesExt},
     serialization::{serialize, tokenize},
 };
@@ -24,6 +24,7 @@ use generic_bytes::SizedBytes;
 use hkdf::Hkdf;
 use hmac::{Hmac, Mac, NewMac};
 use rand::{CryptoRng, RngCore};
+use zeroize::Zeroize;
 
 use std::convert::TryFrom;
 
@@ -237,7 +238,8 @@ impl<D: Hash, G: Group> KeyExchange<D, G> for TripleDH {
 }
 
 /// The client state produced after the first key exchange message
-#[derive(PartialEq, Eq)]
+#[derive(PartialEq, Eq, Zeroize)]
+#[zeroize(drop)]
 pub struct Ke1State {
     client_e_sk: Key,
     client_nonce: GenericArray<u8, NonceLen>,
@@ -267,10 +269,21 @@ impl TryFrom<&[u8]> for Ke1State {
     }
 }
 
-impl ToBytes for Ke1State {
+impl ToBytesWithPointers for Ke1State {
     fn to_bytes(&self) -> Vec<u8> {
         let output: Vec<u8> = [&self.client_e_sk.to_arr(), &self.client_nonce[..]].concat();
         output
+    }
+
+    #[cfg(test)]
+    fn as_byte_ptrs(&self) -> Vec<(*const u8, usize)> {
+        vec![
+            (
+                self.client_e_sk.as_ptr(),
+                <Key as SizedBytes>::Len::to_usize(),
+            ),
+            (self.client_nonce.as_ptr(), NonceLen::to_usize()),
+        ]
     }
 }
 
@@ -311,15 +324,22 @@ pub struct Ke2State<HashLen: ArrayLength<u8>> {
     session_key: GenericArray<u8, HashLen>,
 }
 
-/// The second key exchange message
-pub struct Ke2Message<HashLen: ArrayLength<u8>> {
-    server_nonce: GenericArray<u8, NonceLen>,
-    server_e_pk: Key,
-    e_info: Vec<u8>,
-    mac: GenericArray<u8, HashLen>,
+// This can't be derived because of the use of a phantom parameter
+impl<HashLen: ArrayLength<u8>> Zeroize for Ke2State<HashLen> {
+    fn zeroize(&mut self) {
+        self.km3.zeroize();
+        self.hashed_transcript.zeroize();
+        self.session_key.zeroize();
+    }
 }
 
-impl<HashLen: ArrayLength<u8>> ToBytes for Ke2State<HashLen> {
+impl<HashLen: ArrayLength<u8>> Drop for Ke2State<HashLen> {
+    fn drop(&mut self) {
+        self.zeroize();
+    }
+}
+
+impl<HashLen: ArrayLength<u8>> ToBytesWithPointers for Ke2State<HashLen> {
     fn to_bytes(&self) -> Vec<u8> {
         [
             &self.km3[..],
@@ -328,6 +348,23 @@ impl<HashLen: ArrayLength<u8>> ToBytes for Ke2State<HashLen> {
         ]
         .concat()
     }
+
+    #[cfg(test)]
+    fn as_byte_ptrs(&self) -> Vec<(*const u8, usize)> {
+        vec![
+            (self.km3.as_ptr(), HashLen::to_usize()),
+            (self.hashed_transcript.as_ptr(), HashLen::to_usize()),
+            (self.session_key.as_ptr(), HashLen::to_usize()),
+        ]
+    }
+}
+
+/// The second key exchange message
+pub struct Ke2Message<HashLen: ArrayLength<u8>> {
+    server_nonce: GenericArray<u8, NonceLen>,
+    server_e_pk: Key,
+    e_info: Vec<u8>,
+    mac: GenericArray<u8, HashLen>,
 }
 
 impl<HashLen: ArrayLength<u8>> TryFrom<&[u8]> for Ke2State<HashLen> {
