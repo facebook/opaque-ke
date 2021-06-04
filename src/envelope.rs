@@ -16,6 +16,7 @@ use hkdf::Hkdf;
 use hmac::{Hmac, Mac, NewMac};
 use rand::{CryptoRng, RngCore};
 use std::convert::TryFrom;
+use zeroize::Zeroize;
 
 // Constant string used as salt for HKDF computation
 const STR_PAD: &[u8] = b"Pad";
@@ -24,7 +25,8 @@ const STR_EXPORT_KEY: &[u8] = b"ExportKey";
 
 const NONCE_LEN: usize = 32;
 
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Clone, Copy, PartialEq, Zeroize)]
+#[zeroize(drop)]
 pub(crate) enum InnerEnvelopeMode {
     Base = 1,
     CustomIdentifier = 2,
@@ -41,6 +43,8 @@ impl TryFrom<u8> for InnerEnvelopeMode {
     }
 }
 
+#[derive(Clone, Zeroize)]
+#[zeroize(drop)]
 pub(crate) struct InnerEnvelope {
     mode: InnerEnvelopeMode,
     nonce: Vec<u8>,
@@ -78,6 +82,15 @@ impl InnerEnvelope {
             bytes[NONCE_LEN + key_len..].to_vec(),
         ))
     }
+
+    #[cfg(test)]
+    pub fn as_byte_ptrs(&self) -> Vec<(*const u8, usize)> {
+        vec![
+            /* Cannot easily get raw pointer of enum value, otherwise would do self.mode.as_ptr() */
+            (self.nonce.as_ptr(), self.nonce.len()),
+            (self.ciphertext.as_ptr(), self.ciphertext.len()),
+        ]
+    }
 }
 
 /// This struct is an instantiation of the envelope as described in
@@ -90,6 +103,7 @@ impl InnerEnvelope {
 /// The specification update has simplified this assumption by taking
 /// an XOR-based approach without compromising on security, and to avoid
 /// the confusion around the implementation of an RKR-secure encryption.
+#[derive(Clone)]
 pub(crate) struct Envelope<D: Hash> {
     inner_envelope: InnerEnvelope,
     hmac: GenericArray<u8, <D as Digest>::OutputSize>,
@@ -283,6 +297,29 @@ impl<D: Hash> Envelope<D> {
                 &export_key,
             ),
         })
+    }
+
+    #[cfg(test)]
+    pub fn as_byte_ptrs(&self) -> Vec<(*const u8, usize)> {
+        [
+            self.inner_envelope.as_byte_ptrs(),
+            vec![(self.hmac.as_ptr(), self.hmac.len())],
+        ]
+        .concat()
+    }
+}
+
+// This can't be derived because of the use of a phantom parameter
+impl<D: Hash> Zeroize for Envelope<D> {
+    fn zeroize(&mut self) {
+        self.inner_envelope.zeroize();
+        self.hmac.zeroize();
+    }
+}
+
+impl<D: Hash> Drop for Envelope<D> {
+    fn drop(&mut self) {
+        self.zeroize();
     }
 }
 

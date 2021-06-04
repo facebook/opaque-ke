@@ -12,10 +12,11 @@ use crate::{
 use rand::{CryptoRng, RngCore};
 
 use std::convert::TryFrom;
+use zeroize::Zeroize;
 
 pub trait KeyExchange<D: Hash, G: Group> {
-    type KE1State: for<'r> TryFrom<&'r [u8], Error = PakeError> + ToBytes;
-    type KE2State: for<'r> TryFrom<&'r [u8], Error = PakeError> + ToBytes;
+    type KE1State: for<'r> TryFrom<&'r [u8], Error = PakeError> + ToBytesWithPointers + Zeroize;
+    type KE2State: for<'r> TryFrom<&'r [u8], Error = PakeError> + ToBytesWithPointers + Zeroize;
     type KE1Message: for<'r> TryFrom<&'r [u8], Error = PakeError> + ToBytes;
     type KE2Message: for<'r> TryFrom<&'r [u8], Error = PakeError> + ToBytes;
     type KE3Message: for<'r> TryFrom<&'r [u8], Error = PakeError> + ToBytes;
@@ -61,4 +62,12 @@ pub trait KeyExchange<D: Hash, G: Group> {
 
 pub trait ToBytes {
     fn to_bytes(&self) -> Vec<u8>;
+}
+
+pub trait ToBytesWithPointers {
+    fn to_bytes(&self) -> Vec<u8>;
+
+    // Only used for tests to grab raw pointers to data
+    #[cfg(test)]
+    fn as_byte_ptrs(&self) -> Vec<(*const u8, usize)>;
 }

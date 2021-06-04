@@ -576,7 +576,7 @@ fn test_server_login_finish() -> Result<(), ProtocolError> {
 
         assert_eq!(
             hex::encode(parameters.session_key),
-            hex::encode(server_login_result.session_key)
+            hex::encode(&server_login_result.session_key)
         );
     }
     Ok(())

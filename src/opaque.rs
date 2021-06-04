@@ -11,7 +11,7 @@ use crate::{
     errors::{utils::check_slice_size_atleast, InternalPakeError, PakeError, ProtocolError},
     group::Group,
     hash::Hash,
-    key_exchange::traits::{KeyExchange, ToBytes},
+    key_exchange::traits::{KeyExchange, ToBytesWithPointers},
     keypair::{Key, KeyPair, SizedBytesExt},
     map_to_curve::GroupWithMapToCurve,
     oprf,
@@ -72,6 +72,14 @@ impl<CS: CipherSuite> ClientRegistration<CS> {
                 blind: blinding_factor,
             },
         })
+    }
+
+    #[cfg(test)]
+    pub fn as_byte_ptrs(&self) -> Vec<(*const u8, usize)> {
+        vec![
+            (self.token.data.as_ptr(), self.token.data.len()),
+            /* cannot provide raw pointer to self.token.blind until this is exposed in curve25519_dalek::scalar::Scalar */
+        ]
     }
 }
 
@@ -140,6 +148,9 @@ pub struct ClientRegistrationFinishResult<CS: CipherSuite> {
     pub message: RegistrationUpload<CS>,
     /// The export key output by client registration
     pub export_key: GenericArray<u8, <CS::Hash as Digest>::OutputSize>,
+    /// Instance of the ClientRegistration, only used in tests for checking zeroize
+    #[cfg(test)]
+    pub state: ClientRegistration<CS>,
 }
 
 impl<CS: CipherSuite> ClientRegistration<CS> {
@@ -203,35 +214,9 @@ impl<CS: CipherSuite> ClientRegistration<CS> {
                 client_s_pk: client_static_keypair.public().clone(),
             },
             export_key,
+            #[cfg(test)]
+            state: self,
         })
-    }
-}
-
-// This can't be derived because of the use of a phantom parameter
-impl<CS: CipherSuite> Zeroize for ClientRegistration<CS> {
-    fn zeroize(&mut self) {
-        self.token.data.zeroize();
-        self.token.blind.zeroize();
-    }
-}
-
-impl<CS: CipherSuite> Drop for ClientRegistration<CS> {
-    fn drop(&mut self) {
-        self.zeroize();
-    }
-}
-
-// This can't be derived because of the use of a phantom parameter
-impl<CS: CipherSuite> Zeroize for ClientLogin<CS> {
-    fn zeroize(&mut self) {
-        self.token.data.zeroize();
-        self.token.blind.zeroize();
-    }
-}
-
-impl<CS: CipherSuite> Drop for ClientLogin<CS> {
-    fn drop(&mut self) {
-        self.zeroize();
     }
 }
 
@@ -293,6 +278,21 @@ impl<CS: CipherSuite> ServerRegistration<CS> {
             client_s_pk: Some(client_s_pk),
             oprf_key,
         })
+    }
+
+    #[cfg(test)]
+    pub fn as_byte_ptrs(&self) -> Vec<(*const u8, usize)> {
+        [
+            match &self.envelope {
+                Some(env) => env.as_byte_ptrs(),
+                None => vec![],
+            },
+            match &self.client_s_pk {
+                Some(pk) => vec![(pk.as_ptr(), pk.len())],
+                None => vec![],
+            },
+            /* cannot provide raw pointer to self.oprf_key until this is exposed in curve25519_dalek::scalar::Scalar */
+        ].concat()
     }
 
     /// From the client's "blinded" password, returns a response to be
@@ -380,7 +380,7 @@ impl<CS: CipherSuite> ServerRegistration<CS> {
         Ok(Self {
             envelope: Some(message.envelope),
             client_s_pk: Some(message.client_s_pk),
-            oprf_key: self.oprf_key,
+            oprf_key: self.oprf_key.clone(),
         })
     }
 }
@@ -440,6 +440,18 @@ impl<CS: CipherSuite> ClientLogin<CS> {
             serialized_credential_request,
         })
     }
+
+    #[cfg(test)]
+    pub fn as_byte_ptrs(&self) -> Vec<(*const u8, usize)> {
+        [
+            vec![
+                (self.token.data.as_ptr(), self.token.data.len()),
+                /* cannot provide raw pointer to self.token.blind until this is exposed in curve25519_dalek::scalar::Scalar */
+            ],
+            self.ke1_state.as_byte_ptrs(),
+            vec![ (self.serialized_credential_request.as_ptr(), self.serialized_credential_request.len()) ],
+        ].concat()
+    }
 }
 
 /// Optional parameters for client login start
@@ -488,6 +500,9 @@ pub struct ClientLoginFinishResult<CS: CipherSuite> {
     pub server_s_pk: Key,
     /// The confidential info sent by the client
     pub confidential_info: Vec<u8>,
+    /// Instance of the ClientLogin, only used in tests for checking zeroize
+    #[cfg(test)]
+    pub state: ClientLogin<CS>,
 }
 
 impl<CS: CipherSuite> ClientLogin<CS> {
@@ -626,6 +641,8 @@ impl<CS: CipherSuite> ClientLogin<CS> {
             session_key,
             export_key: opened_envelope.export_key.clone(),
             server_s_pk: l2.server_s_pk,
+            #[cfg(test)]
+            state: self,
         })
     }
 }
@@ -665,9 +682,13 @@ pub struct ServerLoginStartResult<CS: CipherSuite> {
 }
 
 /// Contains the fields that are returned by a server login finish
-pub struct ServerLoginFinishResult {
+pub struct ServerLoginFinishResult<CS: CipherSuite> {
     /// The session key between client and server
     pub session_key: Vec<u8>,
+    _cs: PhantomData<CS>,
+    /// Instance of the ClientRegistration, only used in tests for checking zeroize
+    #[cfg(test)]
+    pub state: ServerLogin<CS>,
 }
 
 impl<CS: CipherSuite> ServerLogin<CS> {
@@ -728,6 +749,7 @@ impl<CS: CipherSuite> ServerLogin<CS> {
     ) -> Result<ServerLoginStartResult<CS>, ProtocolError> {
         let client_s_pk = password_file
             .client_s_pk
+            .clone()
             .ok_or(InternalPakeError::SealError)?;
 
         let (e_info, optional_ids) = match params {
@@ -740,7 +762,10 @@ impl<CS: CipherSuite> ServerLogin<CS> {
             }
         };
 
-        let envelope = password_file.envelope.ok_or(InternalPakeError::SealError)?;
+        let envelope = password_file
+            .envelope
+            .clone()
+            .ok_or(InternalPakeError::SealError)?;
         if envelope.get_mode() != mode_from_ids(&optional_ids) {
             return Err(InternalPakeError::IncompatibleEnvelopeModeError.into());
         }
@@ -827,9 +852,9 @@ impl<CS: CipherSuite> ServerLogin<CS> {
     /// # Ok::<(), ProtocolError>(())
     /// ```
     pub fn finish(
-        &self,
+        self,
         message: CredentialFinalization<CS>,
-    ) -> Result<ServerLoginFinishResult, ProtocolError> {
+    ) -> Result<ServerLoginFinishResult<CS>, ProtocolError> {
         let session_key = <CS::KeyExchange as KeyExchange<CS::Hash, CS::Group>>::finish_ke(
             message.ke3_message,
             &self.ke2_state,
@@ -841,11 +866,82 @@ impl<CS: CipherSuite> ServerLogin<CS> {
             err => err,
         })?;
 
-        Ok(ServerLoginFinishResult { session_key })
+        Ok(ServerLoginFinishResult {
+            session_key,
+            _cs: PhantomData,
+            #[cfg(test)]
+            state: self,
+        })
+    }
+
+    #[cfg(test)]
+    pub fn as_byte_ptrs(&self) -> Vec<(*const u8, usize)> {
+        self.ke2_state.as_byte_ptrs()
+    }
+}
+
+// Zeroize on drop implementations
+
+// This can't be derived because of the use of a phantom parameter
+impl<CS: CipherSuite> Zeroize for ClientRegistration<CS> {
+    fn zeroize(&mut self) {
+        self.token.data.zeroize();
+        self.token.blind.zeroize();
+    }
+}
+
+impl<CS: CipherSuite> Drop for ClientRegistration<CS> {
+    fn drop(&mut self) {
+        self.zeroize();
+    }
+}
+
+// This can't be derived because of the use of a phantom parameter
+impl<CS: CipherSuite> Zeroize for ServerRegistration<CS> {
+    fn zeroize(&mut self) {
+        self.envelope.zeroize();
+        self.client_s_pk.zeroize();
+        self.oprf_key.zeroize();
+    }
+}
+
+impl<CS: CipherSuite> Drop for ServerRegistration<CS> {
+    fn drop(&mut self) {
+        self.zeroize();
+    }
+}
+
+// This can't be derived because of the use of a phantom parameter
+impl<CS: CipherSuite> Zeroize for ClientLogin<CS> {
+    fn zeroize(&mut self) {
+        self.token.data.zeroize();
+        self.token.blind.zeroize();
+        self.ke1_state.zeroize();
+        self.serialized_credential_request.zeroize();
+    }
+}
+
+impl<CS: CipherSuite> Drop for ClientLogin<CS> {
+    fn drop(&mut self) {
+        self.zeroize();
+    }
+}
+
+// This can't be derived because of the use of a phantom parameter
+impl<CS: CipherSuite> Zeroize for ServerLogin<CS> {
+    fn zeroize(&mut self) {
+        self.ke2_state.zeroize();
+    }
+}
+
+impl<CS: CipherSuite> Drop for ServerLogin<CS> {
+    fn drop(&mut self) {
+        self.zeroize();
     }
 }
 
 // Helper functions
+
 fn get_password_derived_key<G: GroupWithMapToCurve, SH: SlowHash<D>, D: Hash>(
     token: &oprf::Token<G>,
     beta: G,
