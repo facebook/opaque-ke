@@ -3,6 +3,8 @@
 // This source code is licensed under the MIT license found in the
 // LICENSE file in the root directory of this source tree.
 
+#![allow(unsafe_code)]
+
 use crate::{
     ciphersuite::CipherSuite,
     errors::*,
@@ -19,6 +21,8 @@ use generic_array::typenum::Unsigned;
 use generic_bytes::SizedBytes;
 use rand::{rngs::OsRng, RngCore};
 use serde_json::Value;
+use std::slice::from_raw_parts;
+use zeroize::Zeroize;
 
 // Tests
 // =====
@@ -64,6 +68,8 @@ pub struct TestVectorParameters {
     pub export_key: Vec<u8>,
     pub session_key: Vec<u8>,
 }
+
+static STR_PASSWORD: &str = "password";
 
 static TEST_VECTOR: &str = r#"
 {
@@ -416,7 +422,7 @@ fn generate_parameters<CS: CipherSuite>() -> TestVectorParameters {
         server_registration_state,
         client_login_state,
         server_login_state,
-        session_key: client_login_finish_result.session_key,
+        session_key: client_login_finish_result.session_key.clone(),
         export_key: client_registration_finish_result.export_key.to_vec(),
     }
 }
@@ -623,7 +629,7 @@ fn test_server_login_finish() -> Result<(), ProtocolError> {
 
     assert_eq!(
         hex::encode(parameters.session_key),
-        hex::encode(server_login_result.session_key)
+        hex::encode(&server_login_result.session_key)
     );
 
     Ok(())
@@ -680,8 +686,8 @@ fn test_complete_flow(
             .finish(client_login_finish_result.message)?;
 
         assert_eq!(
-            hex::encode(server_login_finish_result.session_key),
-            hex::encode(client_login_finish_result.session_key)
+            hex::encode(&server_login_finish_result.session_key),
+            hex::encode(&client_login_finish_result.session_key)
         );
         assert_eq!(
             hex::encode(client_registration_finish_result.export_key),
@@ -705,4 +711,306 @@ fn test_complete_flow_success() -> Result<(), ProtocolError> {
 #[test]
 fn test_complete_flow_fail() -> Result<(), ProtocolError> {
     test_complete_flow(b"good password", b"bad password")
+}
+
+// Zeroize tests
+
+#[test]
+fn test_zeroize_client_registration_start() -> Result<(), ProtocolError> {
+    let mut client_rng = OsRng;
+    let client_registration_start_result =
+        ClientRegistration::<RistrettoSha5123dhNoSlowHash>::start(
+            &mut client_rng,
+            STR_PASSWORD.as_bytes(),
+        )?;
+
+    let mut state = client_registration_start_result.state;
+    let ptrs = state.as_byte_ptrs();
+    state.zeroize();
+
+    for (ptr, len) in ptrs {
+        let bytes = unsafe { from_raw_parts(ptr, len) };
+        assert!(bytes.iter().all(|&x| x == 0));
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_zeroize_server_registration_start() -> Result<(), ProtocolError> {
+    let mut client_rng = OsRng;
+    let mut server_rng = OsRng;
+    let server_kp = RistrettoSha5123dhNoSlowHash::generate_random_keypair(&mut server_rng);
+    let client_registration_start_result =
+        ClientRegistration::<RistrettoSha5123dhNoSlowHash>::start(
+            &mut client_rng,
+            STR_PASSWORD.as_bytes(),
+        )?;
+    let server_registration_start_result =
+        ServerRegistration::<RistrettoSha5123dhNoSlowHash>::start(
+            &mut server_rng,
+            client_registration_start_result.message,
+            server_kp.public(),
+        )?;
+
+    let mut state = server_registration_start_result.state;
+    let ptrs = state.as_byte_ptrs();
+    state.zeroize();
+
+    for (ptr, len) in ptrs {
+        let bytes = unsafe { from_raw_parts(ptr, len) };
+        assert!(bytes.iter().all(|&x| x == 0));
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_zeroize_client_registration_finish() -> Result<(), ProtocolError> {
+    let mut client_rng = OsRng;
+    let mut server_rng = OsRng;
+    let server_kp = RistrettoSha5123dhNoSlowHash::generate_random_keypair(&mut server_rng);
+    let client_registration_start_result =
+        ClientRegistration::<RistrettoSha5123dhNoSlowHash>::start(
+            &mut client_rng,
+            STR_PASSWORD.as_bytes(),
+        )?;
+    let server_registration_start_result =
+        ServerRegistration::<RistrettoSha5123dhNoSlowHash>::start(
+            &mut server_rng,
+            client_registration_start_result.message,
+            server_kp.public(),
+        )?;
+    let client_registration_finish_result = client_registration_start_result.state.finish(
+        &mut client_rng,
+        server_registration_start_result.message,
+        ClientRegistrationFinishParameters::default(),
+    )?;
+
+    let mut state = client_registration_finish_result.state;
+    let ptrs = state.as_byte_ptrs();
+    state.zeroize();
+
+    for (ptr, len) in ptrs {
+        let bytes = unsafe { from_raw_parts(ptr, len) };
+        assert!(bytes.iter().all(|&x| x == 0));
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_zeroize_server_registration_finish() -> Result<(), ProtocolError> {
+    let mut client_rng = OsRng;
+    let mut server_rng = OsRng;
+    let server_kp = RistrettoSha5123dhNoSlowHash::generate_random_keypair(&mut server_rng);
+    let client_registration_start_result =
+        ClientRegistration::<RistrettoSha5123dhNoSlowHash>::start(
+            &mut client_rng,
+            STR_PASSWORD.as_bytes(),
+        )?;
+    let server_registration_start_result =
+        ServerRegistration::<RistrettoSha5123dhNoSlowHash>::start(
+            &mut server_rng,
+            client_registration_start_result.message,
+            server_kp.public(),
+        )?;
+    let client_registration_finish_result = client_registration_start_result.state.finish(
+        &mut client_rng,
+        server_registration_start_result.message,
+        ClientRegistrationFinishParameters::default(),
+    )?;
+    let p_file = server_registration_start_result
+        .state
+        .finish(client_registration_finish_result.message)?;
+
+    let mut state = p_file;
+    let ptrs = state.as_byte_ptrs();
+    state.zeroize();
+
+    for (ptr, len) in ptrs {
+        let bytes = unsafe { from_raw_parts(ptr, len) };
+        assert!(bytes.iter().all(|&x| x == 0));
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_zeroize_client_login_start() -> Result<(), ProtocolError> {
+    let mut client_rng = OsRng;
+    let client_login_start_result = ClientLogin::<RistrettoSha5123dhNoSlowHash>::start(
+        &mut client_rng,
+        STR_PASSWORD.as_bytes(),
+        ClientLoginStartParameters::default(),
+    )?;
+
+    let mut state = client_login_start_result.state;
+    let ptrs = state.as_byte_ptrs();
+    state.zeroize();
+
+    for (ptr, len) in ptrs {
+        let bytes = unsafe { from_raw_parts(ptr, len) };
+        assert!(bytes.iter().all(|&x| x == 0));
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_zeroize_server_login_start() -> Result<(), ProtocolError> {
+    let mut client_rng = OsRng;
+    let mut server_rng = OsRng;
+    let server_kp = RistrettoSha5123dhNoSlowHash::generate_random_keypair(&mut server_rng);
+    let client_registration_start_result =
+        ClientRegistration::<RistrettoSha5123dhNoSlowHash>::start(
+            &mut client_rng,
+            STR_PASSWORD.as_bytes(),
+        )?;
+    let server_registration_start_result =
+        ServerRegistration::<RistrettoSha5123dhNoSlowHash>::start(
+            &mut server_rng,
+            client_registration_start_result.message,
+            server_kp.public(),
+        )?;
+    let client_registration_finish_result = client_registration_start_result.state.finish(
+        &mut client_rng,
+        server_registration_start_result.message,
+        ClientRegistrationFinishParameters::default(),
+    )?;
+    let p_file = server_registration_start_result
+        .state
+        .finish(client_registration_finish_result.message)?;
+    let client_login_start_result = ClientLogin::<RistrettoSha5123dhNoSlowHash>::start(
+        &mut client_rng,
+        STR_PASSWORD.as_bytes(),
+        ClientLoginStartParameters::default(),
+    )?;
+    let server_login_start_result = ServerLogin::<RistrettoSha5123dhNoSlowHash>::start(
+        &mut server_rng,
+        p_file,
+        &server_kp.private(),
+        client_login_start_result.message,
+        ServerLoginStartParameters::default(),
+    )?;
+
+    let mut state = server_login_start_result.state;
+    let ptrs = state.as_byte_ptrs();
+    state.zeroize();
+
+    for (ptr, len) in ptrs {
+        let bytes = unsafe { from_raw_parts(ptr, len) };
+        assert!(bytes.iter().all(|&x| x == 0));
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_zeroize_client_login_finish() -> Result<(), ProtocolError> {
+    let mut client_rng = OsRng;
+    let mut server_rng = OsRng;
+    let server_kp = RistrettoSha5123dhNoSlowHash::generate_random_keypair(&mut server_rng);
+    let client_registration_start_result =
+        ClientRegistration::<RistrettoSha5123dhNoSlowHash>::start(
+            &mut client_rng,
+            STR_PASSWORD.as_bytes(),
+        )?;
+    let server_registration_start_result =
+        ServerRegistration::<RistrettoSha5123dhNoSlowHash>::start(
+            &mut server_rng,
+            client_registration_start_result.message,
+            server_kp.public(),
+        )?;
+    let client_registration_finish_result = client_registration_start_result.state.finish(
+        &mut client_rng,
+        server_registration_start_result.message,
+        ClientRegistrationFinishParameters::default(),
+    )?;
+    let p_file = server_registration_start_result
+        .state
+        .finish(client_registration_finish_result.message)?;
+    let client_login_start_result = ClientLogin::<RistrettoSha5123dhNoSlowHash>::start(
+        &mut client_rng,
+        STR_PASSWORD.as_bytes(),
+        ClientLoginStartParameters::default(),
+    )?;
+    let server_login_start_result = ServerLogin::<RistrettoSha5123dhNoSlowHash>::start(
+        &mut server_rng,
+        p_file,
+        &server_kp.private(),
+        client_login_start_result.message,
+        ServerLoginStartParameters::default(),
+    )?;
+    let client_login_finish_result = client_login_start_result.state.finish(
+        server_login_start_result.message,
+        ClientLoginFinishParameters::default(),
+    )?;
+
+    let mut state = client_login_finish_result.state;
+    let ptrs = state.as_byte_ptrs();
+    state.zeroize();
+
+    for (ptr, len) in ptrs {
+        let bytes = unsafe { from_raw_parts(ptr, len) };
+        assert!(bytes.iter().all(|&x| x == 0));
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_zeroize_server_login_finish() -> Result<(), ProtocolError> {
+    let mut client_rng = OsRng;
+    let mut server_rng = OsRng;
+    let server_kp = RistrettoSha5123dhNoSlowHash::generate_random_keypair(&mut server_rng);
+    let client_registration_start_result =
+        ClientRegistration::<RistrettoSha5123dhNoSlowHash>::start(
+            &mut client_rng,
+            STR_PASSWORD.as_bytes(),
+        )?;
+    let server_registration_start_result =
+        ServerRegistration::<RistrettoSha5123dhNoSlowHash>::start(
+            &mut server_rng,
+            client_registration_start_result.message,
+            server_kp.public(),
+        )?;
+    let client_registration_finish_result = client_registration_start_result.state.finish(
+        &mut client_rng,
+        server_registration_start_result.message,
+        ClientRegistrationFinishParameters::default(),
+    )?;
+    let p_file = server_registration_start_result
+        .state
+        .finish(client_registration_finish_result.message)?;
+    let client_login_start_result = ClientLogin::<RistrettoSha5123dhNoSlowHash>::start(
+        &mut client_rng,
+        STR_PASSWORD.as_bytes(),
+        ClientLoginStartParameters::default(),
+    )?;
+    let server_login_start_result = ServerLogin::<RistrettoSha5123dhNoSlowHash>::start(
+        &mut server_rng,
+        p_file,
+        &server_kp.private(),
+        client_login_start_result.message,
+        ServerLoginStartParameters::default(),
+    )?;
+    let client_login_finish_result = client_login_start_result.state.finish(
+        server_login_start_result.message,
+        ClientLoginFinishParameters::default(),
+    )?;
+    let server_login_finish_result = server_login_start_result
+        .state
+        .finish(client_login_finish_result.message)?;
+
+    let mut state = server_login_finish_result.state;
+    let ptrs = state.as_byte_ptrs();
+    state.zeroize();
+
+    for (ptr, len) in ptrs {
+        let bytes = unsafe { from_raw_parts(ptr, len) };
+        assert!(bytes.iter().all(|&x| x == 0));
+    }
+
+    Ok(())
 }

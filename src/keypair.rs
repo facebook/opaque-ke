@@ -5,8 +5,12 @@
 
 //! Contains the keypair types that must be supplied for the OPAQUE API
 
+#![allow(unsafe_code)]
+
 use crate::errors::InternalPakeError;
 use crate::group::Group;
+#[cfg(test)]
+use generic_array::typenum::Unsigned;
 use generic_array::{typenum::U32, GenericArray};
 use generic_bytes::{SizedBytes, TryFromSizedBytesError};
 #[cfg(test)]
@@ -31,11 +35,25 @@ pub trait SizedBytesExt: SizedBytes {
 impl<T> SizedBytesExt for T where T: SizedBytes {}
 
 /// A Keypair trait with public-private verification
-#[derive(Clone, Debug, PartialEq, Eq, Zeroize)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct KeyPair<G> {
     pk: Key,
     sk: Key,
     _g: PhantomData<G>,
+}
+
+// This can't be derived because of the use of a phantom parameter
+impl<G> Zeroize for KeyPair<G> {
+    fn zeroize(&mut self) {
+        self.pk.zeroize();
+        self.sk.zeroize();
+    }
+}
+
+impl<G> Drop for KeyPair<G> {
+    fn drop(&mut self) {
+        self.zeroize();
+    }
 }
 
 impl<G: Group> KeyPair<G> {
@@ -100,6 +118,14 @@ impl<G: Group> KeyPair<G> {
         let pk = Self::public_from_private(&sk);
         Self::new(pk, sk)
     }
+
+    #[cfg(test)]
+    pub fn as_byte_ptrs(&self) -> Vec<(*const u8, usize)> {
+        vec![
+            (self.pk.as_ptr(), <Key as SizedBytes>::Len::to_usize()),
+            (self.sk.as_ptr(), <Key as SizedBytes>::Len::to_usize()),
+        ]
+    }
 }
 
 #[cfg(test)]
@@ -149,7 +175,41 @@ impl SizedBytes for Key {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::errors::*;
     use curve25519_dalek::ristretto::RistrettoPoint;
+    use generic_array::typenum::Unsigned;
+    use rand::rngs::OsRng;
+    use std::slice::from_raw_parts;
+
+    #[test]
+    fn test_zeroize_key() -> Result<(), ProtocolError> {
+        let key_len = <Key as SizedBytes>::Len::to_usize();
+        let mut key = Key(vec![1u8; key_len]);
+        let ptr = key.as_ptr();
+
+        key.zeroize();
+
+        let bytes = unsafe { from_raw_parts(ptr, key_len) };
+        assert!(bytes.iter().all(|&x| x == 0));
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_zeroize_keypair() -> Result<(), ProtocolError> {
+        let mut rng = OsRng;
+        let mut keypair = KeyPair::<RistrettoPoint>::generate_random(&mut rng);
+        let ptrs = keypair.as_byte_ptrs();
+
+        keypair.zeroize();
+
+        for (ptr, len) in ptrs {
+            let bytes = unsafe { from_raw_parts(ptr, len) };
+            assert!(bytes.iter().all(|&x| x == 0));
+        }
+
+        Ok(())
+    }
 
     proptest! {
         #[test]
