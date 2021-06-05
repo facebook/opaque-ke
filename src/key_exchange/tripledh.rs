@@ -182,7 +182,7 @@ impl<D: Hash, G: Group> KeyExchange<D, G> for TripleDH {
             Hmac::<D>::new_varkey(&km2).map_err(|_| InternalPakeError::HmacError)?;
         server_mac.update(&transcript_hasher.clone().finalize());
 
-        if ke2_message.mac != server_mac.finalize().into_bytes() {
+        if server_mac.verify(&ke2_message.mac).is_err() {
             return Err(ProtocolError::VerificationError(
                 PakeError::KeyExchangeMacValidationError,
             ));
@@ -223,7 +223,7 @@ impl<D: Hash, G: Group> KeyExchange<D, G> for TripleDH {
             Hmac::<D>::new_varkey(&ke2_state.km3).map_err(|_| InternalPakeError::HmacError)?;
         client_mac.update(&ke2_state.hashed_transcript);
 
-        if ke3_message.mac != client_mac.finalize().into_bytes() {
+        if client_mac.verify(&ke3_message.mac).is_err() {
             return Err(ProtocolError::VerificationError(
                 PakeError::KeyExchangeMacValidationError,
             ));
