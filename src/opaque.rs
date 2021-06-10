@@ -11,6 +11,7 @@ use crate::{
     errors::{utils::check_slice_size_atleast, InternalPakeError, PakeError, ProtocolError},
     group::Group,
     hash::Hash,
+    impl_serialize_and_deserialize_for,
     key_exchange::traits::{KeyExchange, ToBytesWithPointers},
     keypair::{Key, KeyPair, SizedBytesExt},
     map_to_curve::GroupWithMapToCurve,
@@ -82,6 +83,8 @@ impl<CS: CipherSuite> ClientRegistration<CS> {
         ]
     }
 }
+
+impl_serialize_and_deserialize_for!(ClientRegistration);
 
 /// Optional parameters for client registration finish
 pub enum ClientRegistrationFinishParameters {
@@ -385,6 +388,8 @@ impl<CS: CipherSuite> ServerRegistration<CS> {
     }
 }
 
+impl_serialize_and_deserialize_for!(ServerRegistration);
+
 // Login
 // =====
 
@@ -453,6 +458,8 @@ impl<CS: CipherSuite> ClientLogin<CS> {
         ].concat()
     }
 }
+
+impl_serialize_and_deserialize_for!(ClientLogin);
 
 /// Optional parameters for client login start
 pub enum ClientLoginStartParameters {
@@ -879,6 +886,8 @@ impl<CS: CipherSuite> ServerLogin<CS> {
         self.ke2_state.as_byte_ptrs()
     }
 }
+
+impl_serialize_and_deserialize_for!(ServerLogin);
 
 // Zeroize on drop implementations
 

@@ -450,6 +450,42 @@ fn test_registration_request() -> Result<(), ProtocolError> {
     Ok(())
 }
 
+#[cfg(feature = "serialize")]
+#[test]
+fn test_serialization() -> Result<(), ProtocolError> {
+    let parameters = populate_test_vectors(&serde_json::from_str(TEST_VECTOR).unwrap());
+    let mut rng = CycleRng::new(parameters.blinding_factor.to_vec());
+    let client_registration_start_result =
+        ClientRegistration::<RistrettoSha5123dhNoSlowHash>::start(&mut rng, &parameters.password)?;
+    {
+        // Test the json serialization (human-readable, base64).
+        let registration_request_json =
+            serde_json::to_string(&client_registration_start_result.message).unwrap();
+        assert_eq!(
+            registration_request_json,
+            r#""FLqG5TAYzlUH0r+y2YrT9g4wLYJr/zQQpexmnI4e8X0=""#
+        );
+        let registration_request: RegistrationRequest<RistrettoSha5123dhNoSlowHash> =
+            serde_json::from_str(&registration_request_json).unwrap();
+        assert_eq!(
+            hex::encode(client_registration_start_result.message.serialize()),
+            hex::encode(registration_request.serialize()),
+        );
+    }
+    {
+        // Test the bincode serialization (binary).
+        let registration_request_bin =
+            bincode::serialize(&client_registration_start_result.message).unwrap();
+        assert_eq!(registration_request_bin.len(), 40);
+        let registration_request: RegistrationRequest<RistrettoSha5123dhNoSlowHash> =
+            bincode::deserialize(&registration_request_bin).unwrap();
+        assert_eq!(
+            hex::encode(client_registration_start_result.message.serialize()),
+            hex::encode(registration_request.serialize()),
+        );
+    }
+    Ok(())
+}
 #[test]
 fn test_registration_response() -> Result<(), ProtocolError> {
     let parameters = populate_test_vectors(&serde_json::from_str(TEST_VECTOR).unwrap());
