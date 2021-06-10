@@ -13,6 +13,7 @@ use crate::{
         PakeError, ProtocolError,
     },
     group::Group,
+    impl_serialize_and_deserialize_for,
     key_exchange::traits::{KeyExchange, ToBytes},
     keypair::{Key, KeyPair, SizedBytesExt},
 };
@@ -47,6 +48,8 @@ impl<CS: CipherSuite> RegistrationRequest<CS> {
     }
 }
 
+impl_serialize_and_deserialize_for!(RegistrationRequest);
+
 /// The answer sent by the server to the user, upon reception of the
 /// registration attempt
 pub struct RegistrationResponse<CS: CipherSuite> {
@@ -80,6 +83,8 @@ impl<CS: CipherSuite> RegistrationResponse<CS> {
         })
     }
 }
+
+impl_serialize_and_deserialize_for!(RegistrationResponse);
 
 /// The final message from the client, containing sealed cryptographic
 /// identifiers
@@ -122,6 +127,8 @@ impl<CS: CipherSuite> RegistrationUpload<CS> {
     }
 }
 
+impl_serialize_and_deserialize_for!(RegistrationUpload);
+
 /// The message sent by the user to the server, to initiate registration
 pub struct CredentialRequest<CS: CipherSuite> {
     /// blinded password information
@@ -158,6 +165,8 @@ impl<CS: CipherSuite> CredentialRequest<CS> {
         Ok(Self { alpha, ke1_message })
     }
 }
+
+impl_serialize_and_deserialize_for!(CredentialRequest);
 
 /// The answer sent by the server to the user, upon reception of the
 /// login attempt
@@ -229,6 +238,8 @@ impl<CS: CipherSuite> CredentialResponse<CS> {
     }
 }
 
+impl_serialize_and_deserialize_for!(CredentialResponse);
+
 /// The answer sent by the client to the server, upon reception of the
 /// sealed envelope
 pub struct CredentialFinalization<CS: CipherSuite> {
@@ -248,3 +259,5 @@ impl<CS: CipherSuite> CredentialFinalization<CS> {
         Ok(Self { ke3_message })
     }
 }
+
+impl_serialize_and_deserialize_for!(CredentialFinalization);

@@ -10,13 +10,15 @@ edition = "2018"
 readme = "README.md"
 
 [features]
-default = ["u64_backend"]
+default = ["u64_backend", "serialize"]
 slow-hash = ["scrypt"]
 bench = []
 u64_backend = ["curve25519-dalek/u64_backend"]
 u32_backend = ["curve25519-dalek/u32_backend"]
+serialize = ["serde", "base64"]
 
 [dependencies]
+base64 = { version = "0.13", optional = true }
 curve25519-dalek = { version = "3.0.0", default-features = false, features = ["std"] }
 digest = "0.9.0"
 displaydoc = "0.1.7"
@@ -26,6 +28,7 @@ hkdf = "0.10.0"
 hmac = "0.10.1"
 rand = "0.8"
 scrypt = { version = "0.5.0", optional = true }
+serde = { version = "1", optional = true }
 subtle = { version = "2.3.0", default-features = false }
 thiserror = "1.0.22"
 zeroize = { version = "1.1.1", features = ["zeroize_derive"] }
@@ -33,6 +36,7 @@ zeroize = { version = "1.1.1", features = ["zeroize_derive"] }
 [dev-dependencies]
 anyhow = "1.0.35"
 base64 = "0.13.0"
+bincode = "1"
 chacha20poly1305 = "0.7.1"
 criterion = "0.3.3"
 hex = "0.4.2"

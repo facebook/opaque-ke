@@ -53,5 +53,74 @@ pub(crate) fn tokenize(input: &[u8], size_bytes: usize) -> Result<(Vec<u8>, Vec<
     ))
 }
 
+/// Inner macro used for deriving `serde`'s `Serialize` and `Deserialize` traits.
+#[cfg(feature = "serialize")]
+#[macro_export]
+macro_rules! impl_serialize_and_deserialize_for {
+    ($t:ident) => {
+        #[cfg(feature = "serialize")]
+        impl<CS: CipherSuite> serde::Serialize for $t<CS> {
+            fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+            where
+                S: serde::Serializer,
+            {
+                if serializer.is_human_readable() {
+                    serializer.serialize_str(&base64::encode(&self.serialize()))
+                } else {
+                    serializer.serialize_bytes(&self.serialize())
+                }
+            }
+        }
+
+        #[cfg(feature = "serialize")]
+        impl<'de, CS: CipherSuite> serde::Deserialize<'de> for $t<CS> {
+            fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+            where
+                D: serde::Deserializer<'de>,
+            {
+                if deserializer.is_human_readable() {
+                    let s = <&str>::deserialize(deserializer)?;
+                    $t::<CS>::deserialize(&base64::decode(s).map_err(serde::de::Error::custom)?)
+                        .map_err(serde::de::Error::custom)
+                } else {
+                    struct ByteVisitor<CS: CipherSuite> {
+                        marker: std::marker::PhantomData<CS>,
+                    }
+                    impl<'de, CS: CipherSuite> serde::de::Visitor<'de> for ByteVisitor<CS> {
+                        type Value = $t<CS>;
+                        fn expecting(
+                            &self,
+                            formatter: &mut std::fmt::Formatter,
+                        ) -> std::fmt::Result {
+                            formatter.write_str(std::concat!(
+                                "the byte representation of a ",
+                                std::stringify!($t)
+                            ))
+                        }
+
+                        fn visit_bytes<E>(self, value: &[u8]) -> Result<Self::Value, E>
+                        where
+                            E: serde::de::Error,
+                        {
+                            $t::<CS>::deserialize(value).map_err(|_| {
+                                serde::de::Error::invalid_value(
+                                    serde::de::Unexpected::Bytes(value),
+                                    &std::concat!(
+                                        "invalid byte sequence for ",
+                                        std::stringify!($t)
+                                    ),
+                                )
+                            })
+                        }
+                    }
+                    deserializer.deserialize_bytes(ByteVisitor::<CS> {
+                        marker: std::marker::PhantomData,
+                    })
+                }
+            }
+        }
+    };
+}
+
 #[cfg(test)]
 mod tests;
