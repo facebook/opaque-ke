@@ -11,7 +11,6 @@ use crate::{
     errors::{utils::check_slice_size_atleast, InternalPakeError, PakeError, ProtocolError},
     group::Group,
     hash::Hash,
-    impl_serialize_and_deserialize_for,
     key_exchange::traits::{KeyExchange, ToBytesWithPointers},
     keypair::{Key, KeyPair, SizedBytesExt},
     map_to_curve::GroupWithMapToCurve,
