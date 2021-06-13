@@ -136,7 +136,7 @@ impl<CS: CipherSuite> ClientRegistration<CS> {
         blinding_factor_rng: &mut R,
         password: &[u8],
     ) -> Result<ClientRegistrationStartResult<CS>, ProtocolError> {
-        let (token, alpha) = oprf::blind::<R, CS::Group, CS::Hash>(&password, blinding_factor_rng)?;
+        let (token, alpha) = oprf::blind::<R, CS::Group, CS::Hash>(password, blinding_factor_rng)?;
 
         Ok(ClientRegistrationStartResult {
             message: RegistrationRequest::<CS> { alpha },
@@ -266,7 +266,7 @@ impl<CS: CipherSuite> ServerRegistration<CS> {
         let key_len = <Key as SizedBytes>::Len::to_usize();
 
         let checked_bytes =
-            check_slice_size_atleast(&input, scalar_len + key_len, "server_registration_bytes")?;
+            check_slice_size_atleast(input, scalar_len + key_len, "server_registration_bytes")?;
 
         let oprf_key_bytes = GenericArray::from_slice(&checked_bytes[..scalar_len]);
         let oprf_key = CS::Group::from_scalar_slice(oprf_key_bytes)?;
@@ -543,7 +543,7 @@ impl<CS: CipherSuite> ClientLogin<CS> {
     ) -> Result<ClientLoginStartResult<CS>, ProtocolError> {
         let ClientLoginStartParameters::WithInfo(info) = params;
 
-        let (token, alpha) = oprf::blind::<R, CS::Group, CS::Hash>(&password, rng)?;
+        let (token, alpha) = oprf::blind::<R, CS::Group, CS::Hash>(password, rng)?;
 
         let (ke1_state, ke1_message) = CS::KeyExchange::generate_ke1(info, rng)?;
 
@@ -789,7 +789,7 @@ impl<CS: CipherSuite> ServerLogin<CS> {
 
         let l1_bytes = &l1.serialize();
         let beta = oprf::evaluate(l1.alpha, &password_file.oprf_key);
-        let server_s_pk = KeyPair::<CS::Group>::public_from_private(&server_s_sk);
+        let server_s_pk = KeyPair::<CS::Group>::public_from_private(server_s_sk);
 
         let credential_response_component =
             CredentialResponse::<CS>::serialize_without_ke(&beta, &server_s_pk, &envelope);

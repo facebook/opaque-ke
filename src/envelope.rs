@@ -179,7 +179,7 @@ impl<D: Hash> Envelope<D> {
         optional_ids: Option<(Vec<u8>, Vec<u8>)>,
     ) -> Result<(Self, GenericArray<u8, <D as Digest>::OutputSize>), InternalPakeError> {
         let aad = construct_aad(server_s_pk, &optional_ids);
-        Self::seal_raw(rng, key, &client_s_sk, &aad, mode_from_ids(&optional_ids))
+        Self::seal_raw(rng, key, client_s_sk, &aad, mode_from_ids(&optional_ids))
     }
 
     /// Uses a key to convert the plaintext into an envelope, authenticated by the aad field.
@@ -194,7 +194,7 @@ impl<D: Hash> Envelope<D> {
         let mut nonce = vec![0u8; NONCE_LEN];
         rng.fill_bytes(&mut nonce);
 
-        let h = Hkdf::<D>::new(Some(&nonce), &key);
+        let h = Hkdf::<D>::new(Some(&nonce), key);
         let mut xor_key = vec![0u8; plaintext.len()];
         let mut hmac_key = vec![0u8; Self::hmac_key_size()];
         let mut export_key = vec![0u8; Self::export_key_size()];
@@ -221,7 +221,7 @@ impl<D: Hash> Envelope<D> {
         let mut hmac =
             Hmac::<D>::new_varkey(&hmac_key).map_err(|_| InternalPakeError::HmacError)?;
         hmac.update(&inner_envelope.serialize());
-        hmac.update(&aad);
+        hmac.update(aad);
 
         let hmac_bytes = hmac.finalize().into_bytes();
 
@@ -266,7 +266,7 @@ impl<D: Hash> Envelope<D> {
         key: &[u8],
         aad: &[u8],
     ) -> Result<OpenedInnerEnvelope<D>, InternalPakeError> {
-        let h = Hkdf::<D>::new(Some(&self.inner_envelope.nonce), &key);
+        let h = Hkdf::<D>::new(Some(&self.inner_envelope.nonce), key);
         let mut xor_key = vec![0u8; self.inner_envelope.ciphertext.len()];
         let mut hmac_key = vec![0u8; Self::hmac_key_size()];
         let mut export_key = vec![0u8; Self::export_key_size()];

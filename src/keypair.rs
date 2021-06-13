@@ -81,7 +81,7 @@ impl<G: Group> KeyPair<G> {
     pub(crate) fn generate_random<R: RngCore + CryptoRng>(rng: &mut R) -> Self {
         let sk = G::random_scalar(rng);
         let sk_bytes = G::scalar_as_bytes(&sk);
-        let pk = G::base_point().mult_by_slice(&sk_bytes);
+        let pk = G::base_point().mult_by_slice(sk_bytes);
         Self {
             pk: Key(pk.to_arr().to_vec()),
             sk: Key(sk_bytes.to_vec()),
@@ -93,7 +93,7 @@ impl<G: Group> KeyPair<G> {
     /// &public_from_private(self.private()) == self.public()
     pub(crate) fn public_from_private(bytes: &Key) -> Key {
         let bytes_data = GenericArray::<u8, G::ScalarLen>::from_slice(&bytes.0[..]);
-        Key(G::base_point().mult_by_slice(&bytes_data).to_arr().to_vec())
+        Key(G::base_point().mult_by_slice(bytes_data).to_arr().to_vec())
     }
 
     /// Check whether a public key is valid. This is meant to be applied on
@@ -107,14 +107,14 @@ impl<G: Group> KeyPair<G> {
     /// Computes the diffie hellman function on a public key and private key
     pub(crate) fn diffie_hellman(pk: Key, sk: Key) -> Result<Vec<u8>, InternalPakeError> {
         let pk_data = GenericArray::<u8, G::ElemLen>::from_slice(&pk.0[..]);
-        let point = G::from_element_slice(&pk_data)?;
+        let point = G::from_element_slice(pk_data)?;
         let secret_data = GenericArray::<u8, G::ScalarLen>::from_slice(&sk.0[..]);
-        Ok(G::mult_by_slice(&point, &secret_data).to_arr().to_vec())
+        Ok(G::mult_by_slice(&point, secret_data).to_arr().to_vec())
     }
 
     /// Obtains a KeyPair from a slice representing the private key
     pub fn from_private_key_slice(input: &[u8]) -> Result<Self, InternalPakeError> {
-        let sk = Key::from_arr(GenericArray::from_slice(&input))?;
+        let sk = Key::from_arr(GenericArray::from_slice(input))?;
         let pk = Self::public_from_private(&sk);
         Self::new(pk, sk)
     }
