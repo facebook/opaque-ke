@@ -39,7 +39,7 @@ impl<CS: CipherSuite> RegistrationRequest<CS> {
     /// Deserialization from bytes
     pub fn deserialize(input: &[u8]) -> Result<Self, ProtocolError> {
         let elem_len = <CS::Group as Group>::ElemLen::to_usize();
-        let checked_slice = check_slice_size(&input, elem_len, "first_message_bytes")?;
+        let checked_slice = check_slice_size(input, elem_len, "first_message_bytes")?;
         // Check that the message is actually containing an element of the
         // correct subgroup
         let arr = GenericArray::from_slice(checked_slice);
@@ -70,7 +70,7 @@ impl<CS: CipherSuite> RegistrationResponse<CS> {
         let elem_len = <CS::Group as Group>::ElemLen::to_usize();
         let key_len = <Key as SizedBytes>::Len::to_usize();
         let checked_slice =
-            check_slice_size(&input, elem_len + key_len, "registration_response_bytes")?;
+            check_slice_size(input, elem_len + key_len, "registration_response_bytes")?;
 
         // Check that the message is actually containing an element of the
         // correct subgroup
@@ -110,7 +110,7 @@ impl<CS: CipherSuite> RegistrationUpload<CS> {
     pub fn deserialize(input: &[u8]) -> Result<Self, ProtocolError> {
         let key_len = <Key as SizedBytes>::Len::to_usize();
 
-        let checked_slice = check_slice_size_atleast(&input, key_len, "registration_upload_bytes")?;
+        let checked_slice = check_slice_size_atleast(input, key_len, "registration_upload_bytes")?;
 
         let (envelope, remainder) = Envelope::<CS::Hash>::deserialize(&checked_slice[key_len..])?;
 
@@ -149,8 +149,7 @@ impl<CS: CipherSuite> CredentialRequest<CS> {
     pub fn deserialize(input: &[u8]) -> Result<Self, ProtocolError> {
         let elem_len = <CS::Group as Group>::ElemLen::to_usize();
 
-        let checked_slice =
-            check_slice_size_atleast(&input, elem_len, "login_first_message_bytes")?;
+        let checked_slice = check_slice_size_atleast(input, elem_len, "login_first_message_bytes")?;
 
         // Check that the message is actually containing an element of the
         // correct subgroup
@@ -226,7 +225,7 @@ impl<CS: CipherSuite> CredentialResponse<CS> {
             check_slice_size_atleast(&remainder, ke2_message_size, "login_second_message_bytes")?;
         let ke2_message =
             <CS::KeyExchange as KeyExchange<CS::Hash, CS::Group>>::KE2Message::try_from(
-                &checked_remainder,
+                checked_remainder,
             )?;
 
         Ok(Self {

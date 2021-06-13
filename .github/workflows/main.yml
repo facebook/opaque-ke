@@ -72,6 +72,20 @@ jobs:
       - uses: hecrj/setup-rust-action@v1
       - run: cargo test --verbose --features slow-hash --no-default-features --features ${{ matrix.backend_feature }}
 
+  serde-test:
+    name: Test on ${{ matrix.target }} with serde support
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        backend_feature:
+          - u64_backend
+          - u32_backend
+    steps:
+      - uses: actions/checkout@v2
+      - uses: hecrj/setup-rust-action@v1
+      - run: cargo test --verbose --features serialize --no-default-features --features ${{ matrix.backend_feature }}
+
 
   simple-login-test:
     runs-on: ubuntu-latest

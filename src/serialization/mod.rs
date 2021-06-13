@@ -54,7 +54,6 @@ pub(crate) fn tokenize(input: &[u8], size_bytes: usize) -> Result<(Vec<u8>, Vec<
 }
 
 /// Inner macro used for deriving `serde`'s `Serialize` and `Deserialize` traits.
-#[cfg(feature = "serialize")]
 #[macro_export]
 macro_rules! impl_serialize_and_deserialize_for {
     ($t:ident) => {
