@@ -33,7 +33,7 @@
 //!
 //! Note that our choice of slow hashing function in this example, `NoOpHash`, is selected only to ensure
 //! that the tests execute quickly. A real application should use an actual slow hashing function, such as `scrypt`,
-//! which can be enabled through the `slow-hash` feature.
+//! which can be enabled through the `slow-hash` feature. See more details in the [features](#features) section.
 //!
 //! ## Setup
 //! To set up the protocol, the server begins by generating a static keypair:
@@ -698,6 +698,23 @@
 //! For the second login message, the `WithInfoAndIdentifiers` variant can be used to specify these fields in addition to
 //! [custom identifiers](#custom-identifiers), with the ordering of the fields as `WithInfoAndIdentifiers(confidential_info, username, server_name)`.
 //!
+//! # Features
+//!
+//! - The `slow-hash` feature, when enabled, introduces a dependency on `scrypt` and implements the `SlowHash` trait for `scrypt`
+//! with a set of default parameters. In general, secure instantiations should choose to invoke a memory-hard password
+//! hashing function when the client's password is expected to have low entropy, instead of relying on [slow_hash::NoOpHash]
+//! as done in the above example. The more computationally intensive the `SlowHash` function is, the more resistant the server's
+//! password file records will be against offline dictionary and precomputation attacks; see
+//! [the OPAQUE paper](https://eprint.iacr.org/2018/163.pdf) for more details.
+//!
+//! - The `serialize` feature, enabled by default, provides convenience functions for serializing and deserializing with
+//! [serde](https://serde.rs/).
+//!
+//! - The `u32_backend` and `u64_backend` features are re-exported from
+//! [curve25519-dalek](https://doc.dalek.rs/curve25519_dalek/index.html#backends-and-features) and allow for selecting
+//! the corresponding backend for the curve arithmetic used. The `u64_backend` feature is included as the default.
+//!
+//! - The `bench` feature is used only for running performance benchmarks for this implementation.
 //!
 
 #![cfg_attr(not(feature = "bench"), deny(missing_docs))]
@@ -711,6 +728,9 @@ compile_error!(
 
 // Error types
 pub mod errors;
+
+#[macro_use]
+mod serialization;
 
 // High-level API
 mod opaque;
@@ -734,8 +754,6 @@ pub mod oprf;
 mod oprf;
 
 pub mod slow_hash;
-
-mod serialization;
 
 #[cfg(test)]
 mod tests;

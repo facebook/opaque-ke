@@ -13,7 +13,6 @@ use crate::{
         PakeError, ProtocolError,
     },
     group::Group,
-    impl_serialize_and_deserialize_for,
     key_exchange::traits::{KeyExchange, ToBytes},
     keypair::{Key, KeyPair, SizedBytesExt},
 };
