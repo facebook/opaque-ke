@@ -36,6 +36,15 @@ pub struct ClientRegistration<CS: CipherSuite> {
     pub(crate) token: oprf::Token<CS::Group>,
 }
 
+// Cannot be derived because it would require for CS to be Clone.
+impl<CS: CipherSuite> Clone for ClientRegistration<CS> {
+    fn clone(&self) -> Self {
+        Self {
+            token: self.token.clone(),
+        }
+    }
+}
+
 impl<CS: CipherSuite> ClientRegistration<CS> {
     /// Serialization into bytes
     pub fn serialize(&self) -> Vec<u8> {
@@ -86,6 +95,7 @@ impl<CS: CipherSuite> ClientRegistration<CS> {
 impl_serialize_and_deserialize_for!(ClientRegistration);
 
 /// Optional parameters for client registration finish
+#[derive(Clone)]
 pub enum ClientRegistrationFinishParameters {
     /// Specifying the identifiers idU and idS (corresponding to custom identifier mode)
     WithIdentifiers(Vec<u8>, Vec<u8>),
@@ -105,6 +115,16 @@ pub struct ClientRegistrationStartResult<CS: CipherSuite> {
     pub message: RegistrationRequest<CS>,
     /// The client state that must be persisted in order to complete registration
     pub state: ClientRegistration<CS>,
+}
+
+// Cannot be derived because it would require for CS to be Clone.
+impl<CS: CipherSuite> Clone for ClientRegistrationStartResult<CS> {
+    fn clone(&self) -> Self {
+        Self {
+            message: self.message.clone(),
+            state: self.state.clone(),
+        }
+    }
 }
 
 impl<CS: CipherSuite> ClientRegistration<CS> {
@@ -153,6 +173,18 @@ pub struct ClientRegistrationFinishResult<CS: CipherSuite> {
     /// Instance of the ClientRegistration, only used in tests for checking zeroize
     #[cfg(test)]
     pub state: ClientRegistration<CS>,
+}
+
+// Cannot be derived because it would require for CS to be Clone.
+impl<CS: CipherSuite> Clone for ClientRegistrationFinishResult<CS> {
+    fn clone(&self) -> Self {
+        Self {
+            message: self.message.clone(),
+            export_key: self.export_key.clone(),
+            #[cfg(test)]
+            state: self.state.clone(),
+        }
+    }
 }
 
 impl<CS: CipherSuite> ClientRegistration<CS> {
@@ -230,11 +262,32 @@ pub struct ServerRegistrationStartResult<CS: CipherSuite> {
     pub state: ServerRegistration<CS>,
 }
 
+// Cannot be derived because it would require for CS to be Clone.
+impl<CS: CipherSuite> Clone for ServerRegistrationStartResult<CS> {
+    fn clone(&self) -> Self {
+        Self {
+            message: self.message.clone(),
+            state: self.state.clone(),
+        }
+    }
+}
+
 /// The state elements the server holds to record a registration
 pub struct ServerRegistration<CS: CipherSuite> {
     envelope: Option<Envelope<CS::Hash>>,
     client_s_pk: Option<Key>,
     pub(crate) oprf_key: <CS::Group as Group>::Scalar,
+}
+
+// Cannot be derived because it would require for CS to be Clone.
+impl<CS: CipherSuite> Clone for ServerRegistration<CS> {
+    fn clone(&self) -> Self {
+        Self {
+            envelope: self.envelope.clone(),
+            client_s_pk: self.client_s_pk.clone(),
+            oprf_key: self.oprf_key.clone(),
+        }
+    }
 }
 
 impl<CS: CipherSuite> ServerRegistration<CS> {
@@ -400,6 +453,17 @@ pub struct ClientLogin<CS: CipherSuite> {
     serialized_credential_request: Vec<u8>,
 }
 
+// Cannot be derived because it would require for CS to be Clone.
+impl<CS: CipherSuite> Clone for ClientLogin<CS> {
+    fn clone(&self) -> Self {
+        Self {
+            token: self.token.clone(),
+            ke1_state: self.ke1_state.clone(),
+            serialized_credential_request: self.serialized_credential_request.clone(),
+        }
+    }
+}
+
 impl<CS: CipherSuite> ClientLogin<CS> {
     /// Serialization into bytes
     pub fn serialize(&self) -> Vec<u8> {
@@ -462,6 +526,7 @@ impl<CS: CipherSuite> ClientLogin<CS> {
 impl_serialize_and_deserialize_for!(ClientLogin);
 
 /// Optional parameters for client login start
+#[derive(Clone)]
 pub enum ClientLoginStartParameters {
     /// Specifying a plaintext info field that will be sent to the server
     WithInfo(Vec<u8>),
@@ -481,7 +546,18 @@ pub struct ClientLoginStartResult<CS: CipherSuite> {
     pub state: ClientLogin<CS>,
 }
 
+// Cannot be derived because it would require for CS to be Clone.
+impl<CS: CipherSuite> Clone for ClientLoginStartResult<CS> {
+    fn clone(&self) -> Self {
+        Self {
+            message: self.message.clone(),
+            state: self.state.clone(),
+        }
+    }
+}
+
 /// Optional parameters for client login finish
+#[derive(Clone)]
 pub enum ClientLoginFinishParameters {
     /// Specifying a user identifier and server identifier that will be matched against the client
     WithIdentifiers(Vec<u8>, Vec<u8>),
@@ -510,6 +586,21 @@ pub struct ClientLoginFinishResult<CS: CipherSuite> {
     /// Instance of the ClientLogin, only used in tests for checking zeroize
     #[cfg(test)]
     pub state: ClientLogin<CS>,
+}
+
+// Cannot be derived because it would require for CS to be Clone.
+impl<CS: CipherSuite> Clone for ClientLoginFinishResult<CS> {
+    fn clone(&self) -> Self {
+        Self {
+            message: self.message.clone(),
+            session_key: self.session_key.clone(),
+            export_key: self.export_key.clone(),
+            server_s_pk: self.server_s_pk.clone(),
+            confidential_info: self.confidential_info.clone(),
+            #[cfg(test)]
+            state: self.state.clone(),
+        }
+    }
 }
 
 impl<CS: CipherSuite> ClientLogin<CS> {
@@ -660,7 +751,18 @@ pub struct ServerLogin<CS: CipherSuite> {
     _cs: PhantomData<CS>,
 }
 
+// Cannot be derived because it would require for CS to be Clone.
+impl<CS: CipherSuite> Clone for ServerLogin<CS> {
+    fn clone(&self) -> Self {
+        Self {
+            ke2_state: self.ke2_state.clone(),
+            _cs: PhantomData,
+        }
+    }
+}
+
 /// Optional parameters for server login start
+#[derive(Clone)]
 pub enum ServerLoginStartParameters {
     /// Specifying a confidential info field that will be sent to the client
     WithInfo(Vec<u8>),
@@ -688,6 +790,17 @@ pub struct ServerLoginStartResult<CS: CipherSuite> {
     pub plain_info: Vec<u8>,
 }
 
+// Cannot be derived because it would require for CS to be Clone.
+impl<CS: CipherSuite> Clone for ServerLoginStartResult<CS> {
+    fn clone(&self) -> Self {
+        Self {
+            message: self.message.clone(),
+            state: self.state.clone(),
+            plain_info: self.plain_info.clone(),
+        }
+    }
+}
+
 /// Contains the fields that are returned by a server login finish
 pub struct ServerLoginFinishResult<CS: CipherSuite> {
     /// The session key between client and server
@@ -696,6 +809,18 @@ pub struct ServerLoginFinishResult<CS: CipherSuite> {
     /// Instance of the ClientRegistration, only used in tests for checking zeroize
     #[cfg(test)]
     pub state: ServerLogin<CS>,
+}
+
+// Cannot be derived because it would require for CS to be Clone.
+impl<CS: CipherSuite> Clone for ServerLoginFinishResult<CS> {
+    fn clone(&self) -> Self {
+        Self {
+            session_key: self.session_key.clone(),
+            _cs: PhantomData,
+            #[cfg(test)]
+            state: self.state.clone(),
+        }
+    }
 }
 
 impl<CS: CipherSuite> ServerLogin<CS> {

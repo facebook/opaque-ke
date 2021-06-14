@@ -12,6 +12,7 @@ use generic_array::GenericArray;
 use rand::{CryptoRng, RngCore};
 
 /// Used to store the OPRF input and blinding factor
+#[derive(Clone)]
 pub struct Token<Grp: Group> {
     pub(crate) data: Vec<u8>,
     pub(crate) blind: Grp::Scalar,
