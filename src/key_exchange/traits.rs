@@ -14,11 +14,11 @@ use rand::{CryptoRng, RngCore};
 use zeroize::Zeroize;
 
 pub trait KeyExchange<D: Hash, G: Group> {
-    type KE1State: FromBytes + ToBytesWithPointers + Zeroize;
-    type KE2State: FromBytes + ToBytesWithPointers + Zeroize;
-    type KE1Message: FromBytes + ToBytes;
-    type KE2Message: FromBytes + ToBytes;
-    type KE3Message: FromBytes + ToBytes;
+    type KE1State: FromBytes + ToBytesWithPointers + Zeroize + Clone;
+    type KE2State: FromBytes + ToBytesWithPointers + Zeroize + Clone;
+    type KE1Message: FromBytes + ToBytes + Clone;
+    type KE2Message: FromBytes + ToBytes + Clone;
+    type KE3Message: FromBytes + ToBytes + Clone;
 
     fn generate_ke1<R: RngCore + CryptoRng>(
         info: Vec<u8>,

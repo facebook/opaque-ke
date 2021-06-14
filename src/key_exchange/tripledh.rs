@@ -237,7 +237,7 @@ impl<D: Hash, G: Group> KeyExchange<D, G> for TripleDH {
 }
 
 /// The client state produced after the first key exchange message
-#[derive(PartialEq, Eq, Zeroize)]
+#[derive(PartialEq, Eq, Zeroize, Clone)]
 #[zeroize(drop)]
 pub struct Ke1State {
     client_e_sk: Key,
@@ -245,7 +245,7 @@ pub struct Ke1State {
 }
 
 /// The first key exchange message
-#[derive(PartialEq, Eq)]
+#[derive(PartialEq, Eq, Clone)]
 pub struct Ke1Message {
     pub(crate) client_nonce: GenericArray<u8, NonceLen>,
     pub(crate) info: Vec<u8>,
@@ -317,6 +317,7 @@ impl FromBytes for Ke1Message {
     }
 }
 /// The server state produced after the second key exchange message
+#[derive(Clone)]
 pub struct Ke2State<HashLen: ArrayLength<u8>> {
     km3: GenericArray<u8, HashLen>,
     hashed_transcript: GenericArray<u8, HashLen>,
@@ -359,6 +360,7 @@ impl<HashLen: ArrayLength<u8>> ToBytesWithPointers for Ke2State<HashLen> {
 }
 
 /// The second key exchange message
+#[derive(Clone)]
 pub struct Ke2Message<HashLen: ArrayLength<u8>> {
     server_nonce: GenericArray<u8, NonceLen>,
     server_e_pk: Key,
@@ -446,6 +448,7 @@ type TripleDHDerivationResult<D> = (
 );
 
 /// The third key exchange message
+#[derive(Clone)]
 pub struct Ke3Message<HashLen: ArrayLength<u8>> {
     mac: GenericArray<u8, HashLen>,
 }

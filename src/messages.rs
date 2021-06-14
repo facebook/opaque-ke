@@ -28,6 +28,13 @@ pub struct RegistrationRequest<CS: CipherSuite> {
     pub(crate) alpha: CS::Group,
 }
 
+// Cannot be derived because it would require for CS to be Clone.
+impl<CS: CipherSuite> Clone for RegistrationRequest<CS> {
+    fn clone(&self) -> Self {
+        Self { alpha: self.alpha }
+    }
+}
+
 impl<CS: CipherSuite> RegistrationRequest<CS> {
     /// Serialization into bytes
     pub fn serialize(&self) -> Vec<u8> {
@@ -55,6 +62,16 @@ pub struct RegistrationResponse<CS: CipherSuite> {
     pub(crate) beta: CS::Group,
     /// Server's static public key
     pub(crate) server_s_pk: Vec<u8>,
+}
+
+// Cannot be derived because it would require for CS to be Clone.
+impl<CS: CipherSuite> Clone for RegistrationResponse<CS> {
+    fn clone(&self) -> Self {
+        Self {
+            beta: self.beta,
+            server_s_pk: self.server_s_pk.clone(),
+        }
+    }
 }
 
 impl<CS: CipherSuite> RegistrationResponse<CS> {
@@ -92,6 +109,16 @@ pub struct RegistrationUpload<CS: CipherSuite> {
     pub(crate) envelope: Envelope<CS::Hash>,
     /// The user's public key
     pub(crate) client_s_pk: Key,
+}
+
+// Cannot be derived because it would require for CS to be Clone.
+impl<CS: CipherSuite> Clone for RegistrationUpload<CS> {
+    fn clone(&self) -> Self {
+        Self {
+            envelope: self.envelope.clone(),
+            client_s_pk: self.client_s_pk.clone(),
+        }
+    }
 }
 
 impl<CS: CipherSuite> RegistrationUpload<CS> {
@@ -134,6 +161,16 @@ pub struct CredentialRequest<CS: CipherSuite> {
     pub(crate) ke1_message: <CS::KeyExchange as KeyExchange<CS::Hash, CS::Group>>::KE1Message,
 }
 
+// Cannot be derived because it would require for CS to be Clone.
+impl<CS: CipherSuite> Clone for CredentialRequest<CS> {
+    fn clone(&self) -> Self {
+        Self {
+            alpha: self.alpha,
+            ke1_message: self.ke1_message.clone(),
+        }
+    }
+}
+
 impl<CS: CipherSuite> CredentialRequest<CS> {
     /// Serialization into bytes
     pub fn serialize(&self) -> Vec<u8> {
@@ -171,6 +208,18 @@ pub struct CredentialResponse<CS: CipherSuite> {
     /// the user's sealed information,
     pub(crate) envelope: Envelope<CS::Hash>,
     pub(crate) ke2_message: <CS::KeyExchange as KeyExchange<CS::Hash, CS::Group>>::KE2Message,
+}
+
+// Cannot be derived because it would require for CS to be Clone.
+impl<CS: CipherSuite> Clone for CredentialResponse<CS> {
+    fn clone(&self) -> Self {
+        Self {
+            beta: self.beta,
+            server_s_pk: self.server_s_pk.clone(),
+            envelope: self.envelope.clone(),
+            ke2_message: self.ke2_message.clone(),
+        }
+    }
 }
 
 impl<CS: CipherSuite> CredentialResponse<CS> {
@@ -238,6 +287,15 @@ impl_serialize_and_deserialize_for!(CredentialResponse);
 /// sealed envelope
 pub struct CredentialFinalization<CS: CipherSuite> {
     pub(crate) ke3_message: <CS::KeyExchange as KeyExchange<CS::Hash, CS::Group>>::KE3Message,
+}
+
+// Cannot be derived because it would require for CS to be Clone.
+impl<CS: CipherSuite> Clone for CredentialFinalization<CS> {
+    fn clone(&self) -> Self {
+        Self {
+            ke3_message: self.ke3_message.clone(),
+        }
+    }
 }
 
 impl<CS: CipherSuite> CredentialFinalization<CS> {
