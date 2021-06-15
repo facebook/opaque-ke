@@ -10,7 +10,7 @@ use crate::{
     errors::*,
     group::Group,
     key_exchange::tripledh::{NonceLen, TripleDH},
-    keypair::{Key, SizedBytesExt},
+    keypair::{PrivateKey, PublicKey, SizedBytesExt},
     opaque::*,
     slow_hash::NoOpHash,
     tests::mock_rng::CycleRng,
@@ -494,7 +494,7 @@ fn test_registration_response() -> Result<(), ProtocolError> {
         ServerRegistration::<RistrettoSha5123dhNoSlowHash>::start(
             &mut oprf_key_rng,
             RegistrationRequest::deserialize(&parameters.registration_request[..])?,
-            &Key::from_bytes(&parameters.server_s_pk[..])?,
+            &PublicKey::from_bytes(&parameters.server_s_pk[..])?,
         )?;
     assert_eq!(
         hex::encode(parameters.registration_response),
@@ -589,7 +589,7 @@ fn test_credential_response() -> Result<(), ProtocolError> {
     let server_login_start_result = ServerLogin::<RistrettoSha5123dhNoSlowHash>::start(
         &mut server_e_sk_and_nonce_rng,
         ServerRegistration::deserialize(&parameters.password_file[..])?,
-        &Key::from_bytes(&parameters.server_s_sk[..])?,
+        &PrivateKey::from_bytes(&parameters.server_s_sk[..])?,
         CredentialRequest::<RistrettoSha5123dhNoSlowHash>::deserialize(
             &parameters.credential_request[..],
         )?,

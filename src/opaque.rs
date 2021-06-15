@@ -12,7 +12,7 @@ use crate::{
     group::Group,
     hash::Hash,
     key_exchange::traits::{FromBytes, KeyExchange, ToBytesWithPointers},
-    keypair::{Key, KeyPair, SizedBytesExt},
+    keypair::{KeyPair, PrivateKey, PublicKey, SizedBytesExt},
     map_to_curve::GroupWithMapToCurve,
     oprf,
     serialization::{serialize, tokenize},
@@ -275,7 +275,7 @@ impl<CS: CipherSuite> Clone for ServerRegistrationStartResult<CS> {
 /// The state elements the server holds to record a registration
 pub struct ServerRegistration<CS: CipherSuite> {
     envelope: Option<Envelope<CS::Hash>>,
-    client_s_pk: Option<Key>,
+    client_s_pk: Option<PublicKey>,
     pub(crate) oprf_key: <CS::Group as Group>::Scalar,
 }
 
@@ -315,7 +315,7 @@ impl<CS: CipherSuite> ServerRegistration<CS> {
         }
 
         // Need to do this check manually because envelope is variable-size
-        let key_len = <Key as SizedBytes>::Len::to_usize();
+        let key_len = <PublicKey as SizedBytes>::Len::to_usize();
 
         let checked_bytes =
             check_slice_size_atleast(input, scalar_len + key_len, "server_registration_bytes")?;
@@ -323,7 +323,7 @@ impl<CS: CipherSuite> ServerRegistration<CS> {
         let oprf_key_bytes = GenericArray::from_slice(&checked_bytes[..scalar_len]);
         let oprf_key = CS::Group::from_scalar_slice(oprf_key_bytes)?;
         let unchecked_client_s_pk =
-            Key::from_bytes(&checked_bytes[scalar_len..scalar_len + key_len])?;
+            PublicKey::from_bytes(&checked_bytes[scalar_len..scalar_len + key_len])?;
         let client_s_pk = KeyPair::<CS::Group>::check_public_key(unchecked_client_s_pk)?;
 
         let envelope = Envelope::<CS::Hash>::from_bytes(&checked_bytes[scalar_len + key_len..])?;
@@ -380,7 +380,7 @@ impl<CS: CipherSuite> ServerRegistration<CS> {
     pub fn start<R: RngCore + CryptoRng>(
         rng: &mut R,
         message: RegistrationRequest<CS>,
-        server_s_pk: &Key,
+        server_s_pk: &PublicKey,
     ) -> Result<ServerRegistrationStartResult<CS>, ProtocolError> {
         // RFC: generate oprf_key (salt) and v_u = g^oprf_key
         let oprf_key = CS::Group::random_scalar(rng);
@@ -391,7 +391,7 @@ impl<CS: CipherSuite> ServerRegistration<CS> {
         Ok(ServerRegistrationStartResult {
             message: RegistrationResponse {
                 beta,
-                server_s_pk: server_s_pk.to_arr().to_vec(),
+                server_s_pk: server_s_pk.clone(),
             },
             state: Self {
                 envelope: None,
@@ -580,7 +580,7 @@ pub struct ClientLoginFinishResult<CS: CipherSuite> {
     /// The client-side export key
     pub export_key: GenericArray<u8, <CS::Hash as Digest>::OutputSize>,
     /// The server's static public key
-    pub server_s_pk: Key,
+    pub server_s_pk: PublicKey,
     /// The confidential info sent by the client
     pub confidential_info: Vec<u8>,
     /// Instance of the ClientLogin, only used in tests for checking zeroize
@@ -707,7 +707,7 @@ impl<CS: CipherSuite> ClientLogin<CS> {
                 err => PakeError::from(err),
             })?;
 
-        let client_s_sk = Key::from_bytes(&opened_envelope.client_s_sk)?;
+        let client_s_sk = PrivateKey::from_bytes(&opened_envelope.client_s_sk)?;
 
         let (id_u, id_s) = match optional_ids {
             None => (
@@ -875,7 +875,7 @@ impl<CS: CipherSuite> ServerLogin<CS> {
     pub fn start<R: RngCore + CryptoRng>(
         rng: &mut R,
         password_file: ServerRegistration<CS>,
-        server_s_sk: &Key,
+        server_s_sk: &PrivateKey,
         l1: CredentialRequest<CS>,
         params: ServerLoginStartParameters,
     ) -> Result<ServerLoginStartResult<CS>, ProtocolError> {

@@ -14,7 +14,7 @@ use crate::{
     },
     group::Group,
     key_exchange::traits::{FromBytes, KeyExchange, ToBytes},
-    keypair::{Key, KeyPair, SizedBytesExt},
+    keypair::{KeyPair, PublicKey, SizedBytesExt},
 };
 use generic_array::{typenum::Unsigned, GenericArray};
 use generic_bytes::SizedBytes;
@@ -61,7 +61,7 @@ pub struct RegistrationResponse<CS: CipherSuite> {
     /// The server's oprf output
     pub(crate) beta: CS::Group,
     /// Server's static public key
-    pub(crate) server_s_pk: Vec<u8>,
+    pub(crate) server_s_pk: PublicKey,
 }
 
 // Cannot be derived because it would require for CS to be Clone.
@@ -77,13 +77,13 @@ impl<CS: CipherSuite> Clone for RegistrationResponse<CS> {
 impl<CS: CipherSuite> RegistrationResponse<CS> {
     /// Serialization into bytes
     pub fn serialize(&self) -> Vec<u8> {
-        [self.beta.to_arr().to_vec(), self.server_s_pk.clone()].concat()
+        [self.beta.to_arr().to_vec(), self.server_s_pk.to_vec()].concat()
     }
 
     /// Deserialization from bytes
     pub fn deserialize(input: &[u8]) -> Result<Self, ProtocolError> {
         let elem_len = <CS::Group as Group>::ElemLen::to_usize();
-        let key_len = <Key as SizedBytes>::Len::to_usize();
+        let key_len = <PublicKey as SizedBytes>::Len::to_usize();
         let checked_slice =
             check_slice_size(input, elem_len + key_len, "registration_response_bytes")?;
 
@@ -91,9 +91,9 @@ impl<CS: CipherSuite> RegistrationResponse<CS> {
         // correct subgroup
         let arr = GenericArray::from_slice(&checked_slice[..elem_len]);
         let beta = CS::Group::from_element_slice(arr)?;
-        let server_s_pk =
-            KeyPair::<CS::Group>::check_public_key(Key::from_bytes(&checked_slice[elem_len..])?)?
-                .to_vec();
+        let server_s_pk = KeyPair::<CS::Group>::check_public_key(PublicKey::from_bytes(
+            &checked_slice[elem_len..],
+        )?)?;
 
         Ok(Self { server_s_pk, beta })
     }
@@ -108,7 +108,7 @@ pub struct RegistrationUpload<CS: CipherSuite> {
     /// cryptographic identifiers
     pub(crate) envelope: Envelope<CS::Hash>,
     /// The user's public key
-    pub(crate) client_s_pk: Key,
+    pub(crate) client_s_pk: PublicKey,
 }
 
 // Cannot be derived because it would require for CS to be Clone.
@@ -133,7 +133,7 @@ impl<CS: CipherSuite> RegistrationUpload<CS> {
 
     /// Deserialization from bytes
     pub fn deserialize(input: &[u8]) -> Result<Self, ProtocolError> {
-        let key_len = <Key as SizedBytes>::Len::to_usize();
+        let key_len = <PublicKey as SizedBytes>::Len::to_usize();
 
         let checked_slice = check_slice_size_atleast(input, key_len, "registration_upload_bytes")?;
 
@@ -145,7 +145,7 @@ impl<CS: CipherSuite> RegistrationUpload<CS> {
 
         Ok(Self {
             envelope,
-            client_s_pk: KeyPair::<CS::Group>::check_public_key(Key::from_bytes(
+            client_s_pk: KeyPair::<CS::Group>::check_public_key(PublicKey::from_bytes(
                 &checked_slice[..key_len],
             )?)?,
         })
@@ -204,7 +204,7 @@ impl_serialize_and_deserialize_for!(CredentialRequest);
 pub struct CredentialResponse<CS: CipherSuite> {
     /// the server's oprf output
     pub(crate) beta: CS::Group,
-    pub(crate) server_s_pk: Key,
+    pub(crate) server_s_pk: PublicKey,
     /// the user's sealed information,
     pub(crate) envelope: Envelope<CS::Hash>,
     pub(crate) ke2_message: <CS::KeyExchange as KeyExchange<CS::Hash, CS::Group>>::KE2Message,
@@ -234,7 +234,7 @@ impl<CS: CipherSuite> CredentialResponse<CS> {
 
     pub(crate) fn serialize_without_ke(
         beta: &CS::Group,
-        server_s_pk: &Key,
+        server_s_pk: &PublicKey,
         envelope: &Envelope<CS::Hash>,
     ) -> Vec<u8> {
         [
@@ -248,7 +248,7 @@ impl<CS: CipherSuite> CredentialResponse<CS> {
     /// Deserialization from bytes
     pub fn deserialize(input: &[u8]) -> Result<Self, ProtocolError> {
         let elem_len = <CS::Group as Group>::ElemLen::to_usize();
-        let key_len = <Key as SizedBytes>::Len::to_usize();
+        let key_len = <PublicKey as SizedBytes>::Len::to_usize();
         let checked_slice =
             check_slice_size_atleast(input, elem_len + key_len, "login_second_message_bytes")?;
 
@@ -258,7 +258,8 @@ impl<CS: CipherSuite> CredentialResponse<CS> {
         let arr = GenericArray::from_slice(beta_bytes);
         let beta = CS::Group::from_element_slice(arr)?;
 
-        let unchecked_server_s_pk = Key::from_bytes(&checked_slice[elem_len..elem_len + key_len])?;
+        let unchecked_server_s_pk =
+            PublicKey::from_bytes(&checked_slice[elem_len..elem_len + key_len])?;
         let server_s_pk = KeyPair::<CS::Group>::check_public_key(unchecked_server_s_pk)?;
 
         let (envelope, remainder) =

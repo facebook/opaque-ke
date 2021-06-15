@@ -13,7 +13,7 @@ use crate::{
     group::Group,
     hash::Hash,
     key_exchange::traits::{FromBytes, KeyExchange, ToBytes, ToBytesWithPointers},
-    keypair::{Key, KeyPair, SizedBytesExt},
+    keypair::{KeyPair, PrivateKey, PublicKey, SizedBytesExt},
     serialization::{serialize, tokenize},
 };
 use digest::{Digest, FixedOutput};
@@ -78,8 +78,8 @@ impl<D: Hash, G: Group> KeyExchange<D, G> for TripleDH {
         serialized_credential_request: Vec<u8>,
         l2_bytes: Vec<u8>,
         ke1_message: Self::KE1Message,
-        client_s_pk: Key,
-        server_s_sk: Key,
+        client_s_pk: PublicKey,
+        server_s_sk: PrivateKey,
         id_u: Vec<u8>,
         id_s: Vec<u8>,
         e_info: Vec<u8>,
@@ -150,8 +150,8 @@ impl<D: Hash, G: Group> KeyExchange<D, G> for TripleDH {
         ke2_message: Self::KE2Message,
         ke1_state: &Self::KE1State,
         serialized_credential_request: &[u8],
-        server_s_pk: Key,
-        client_s_sk: Key,
+        server_s_pk: PublicKey,
+        client_s_sk: PrivateKey,
         id_u: Vec<u8>,
         id_s: Vec<u8>,
     ) -> Result<(Vec<u8>, Vec<u8>, Self::KE3Message), ProtocolError> {
@@ -240,7 +240,7 @@ impl<D: Hash, G: Group> KeyExchange<D, G> for TripleDH {
 #[derive(PartialEq, Eq, Zeroize, Clone)]
 #[zeroize(drop)]
 pub struct Ke1State {
-    client_e_sk: Key,
+    client_e_sk: PrivateKey,
     client_nonce: GenericArray<u8, NonceLen>,
 }
 
@@ -249,7 +249,7 @@ pub struct Ke1State {
 pub struct Ke1Message {
     pub(crate) client_nonce: GenericArray<u8, NonceLen>,
     pub(crate) info: Vec<u8>,
-    pub(crate) client_e_pk: Key,
+    pub(crate) client_e_pk: PublicKey,
 }
 
 impl FromBytes for Ke1State {
@@ -258,7 +258,7 @@ impl FromBytes for Ke1State {
         let checked_bytes = check_slice_size_atleast(bytes, KEY_LEN + nonce_len, "ke1_state")?;
 
         Ok(Self {
-            client_e_sk: Key::from_bytes(&checked_bytes[..KEY_LEN])?,
+            client_e_sk: PrivateKey::from_bytes(&checked_bytes[..KEY_LEN])?,
             client_nonce: GenericArray::clone_from_slice(
                 &checked_bytes[KEY_LEN..KEY_LEN + nonce_len],
             ),
@@ -277,7 +277,7 @@ impl ToBytesWithPointers for Ke1State {
         vec![
             (
                 self.client_e_sk.as_ptr(),
-                <Key as SizedBytes>::Len::to_usize(),
+                <PrivateKey as SizedBytes>::Len::to_usize(),
             ),
             (self.client_nonce.as_ptr(), NonceLen::to_usize()),
         ]
@@ -307,7 +307,7 @@ impl FromBytes for Ke1Message {
         let unchecked_client_e_pk =
             check_slice_size(&remainder, KEY_LEN, "ke1_message client_e_pk")?;
         let client_e_pk =
-            KeyPair::<CS::Group>::check_public_key(Key::from_bytes(unchecked_client_e_pk)?)?;
+            KeyPair::<CS::Group>::check_public_key(PublicKey::from_bytes(unchecked_client_e_pk)?)?;
 
         Ok(Self {
             client_nonce: GenericArray::clone_from_slice(&checked_nonce[..nonce_len]),
@@ -363,7 +363,7 @@ impl<HashLen: ArrayLength<u8>> ToBytesWithPointers for Ke2State<HashLen> {
 #[derive(Clone)]
 pub struct Ke2Message<HashLen: ArrayLength<u8>> {
     server_nonce: GenericArray<u8, NonceLen>,
-    server_e_pk: Key,
+    server_e_pk: PublicKey,
     e_info: Vec<u8>,
     mac: GenericArray<u8, HashLen>,
 }
@@ -414,7 +414,7 @@ impl<HashLen: ArrayLength<u8>> FromBytes for Ke2Message<HashLen> {
         let checked_mac = check_slice_size(&remainder, HashLen::to_usize(), "ke1_message mac")?;
 
         // Check the public key bytes
-        let server_e_pk = KeyPair::<CS::Group>::check_public_key(Key::from_bytes(
+        let server_e_pk = KeyPair::<CS::Group>::check_public_key(PublicKey::from_bytes(
             &unchecked_server_e_pk[..KEY_LEN],
         )?)?;
 
@@ -430,12 +430,12 @@ impl<HashLen: ArrayLength<u8>> FromBytes for Ke2Message<HashLen> {
 #[allow(clippy::upper_case_acronyms)]
 // The triple of public and private components used in the 3DH computation
 struct TripleDHComponents {
-    pk1: Key,
-    sk1: Key,
-    pk2: Key,
-    sk2: Key,
-    pk3: Key,
-    sk3: Key,
+    pk1: PublicKey,
+    sk1: PrivateKey,
+    pk2: PublicKey,
+    sk2: PrivateKey,
+    pk3: PublicKey,
+    sk3: PrivateKey,
 }
 
 #[allow(clippy::upper_case_acronyms)]
