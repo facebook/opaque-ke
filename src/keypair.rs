@@ -37,8 +37,8 @@ impl<T> SizedBytesExt for T where T: SizedBytes {}
 /// A Keypair trait with public-private verification
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct KeyPair<G> {
-    pk: Key,
-    sk: Key,
+    pk: PublicKey,
+    sk: PrivateKey,
     _g: PhantomData<G>,
 }
 
@@ -58,18 +58,18 @@ impl<G> Drop for KeyPair<G> {
 
 impl<G: Group> KeyPair<G> {
     /// The public key component
-    pub fn public(&self) -> &Key {
+    pub fn public(&self) -> &PublicKey {
         &self.pk
     }
 
     /// The private key component
-    pub fn private(&self) -> &Key {
+    pub fn private(&self) -> &PrivateKey {
         &self.sk
     }
 
     /// A constructor that receives public and private key independently as
     /// bytes
-    pub fn new(public: Key, private: Key) -> Result<Self, InternalPakeError> {
+    pub fn new(public: PublicKey, private: PrivateKey) -> Result<Self, InternalPakeError> {
         Ok(Self {
             pk: public,
             sk: private,
@@ -83,29 +83,35 @@ impl<G: Group> KeyPair<G> {
         let sk_bytes = G::scalar_as_bytes(&sk);
         let pk = G::base_point().mult_by_slice(sk_bytes);
         Self {
-            pk: Key(pk.to_arr().to_vec()),
-            sk: Key(sk_bytes.to_vec()),
+            pk: PublicKey(Key(pk.to_arr().to_vec())),
+            sk: PrivateKey(Key(sk_bytes.to_vec())),
             _g: PhantomData,
         }
     }
 
     /// Obtaining a public key from secret bytes. At all times, we should have
     /// &public_from_private(self.private()) == self.public()
-    pub(crate) fn public_from_private(bytes: &Key) -> Key {
+    pub(crate) fn public_from_private(bytes: &PrivateKey) -> PublicKey {
         let bytes_data = GenericArray::<u8, G::ScalarLen>::from_slice(&bytes.0[..]);
-        Key(G::base_point().mult_by_slice(bytes_data).to_arr().to_vec())
+        PublicKey(Key(G::base_point()
+            .mult_by_slice(bytes_data)
+            .to_arr()
+            .to_vec()))
     }
 
     /// Check whether a public key is valid. This is meant to be applied on
     /// material provided through the network which fits the key
     /// representation (i.e. can be mapped to a curve point), but presents
     /// some risk - e.g. small subgroup check
-    pub(crate) fn check_public_key(key: Key) -> Result<Key, InternalPakeError> {
+    pub(crate) fn check_public_key(key: PublicKey) -> Result<PublicKey, InternalPakeError> {
         G::from_element_slice(GenericArray::from_slice(&key.0)).map(|_| key)
     }
 
     /// Computes the diffie hellman function on a public key and private key
-    pub(crate) fn diffie_hellman(pk: Key, sk: Key) -> Result<Vec<u8>, InternalPakeError> {
+    pub(crate) fn diffie_hellman(
+        pk: PublicKey,
+        sk: PrivateKey,
+    ) -> Result<Vec<u8>, InternalPakeError> {
         let pk_data = GenericArray::<u8, G::ElemLen>::from_slice(&pk.0[..]);
         let point = G::from_element_slice(pk_data)?;
         let secret_data = GenericArray::<u8, G::ScalarLen>::from_slice(&sk.0[..]);
@@ -114,7 +120,7 @@ impl<G: Group> KeyPair<G> {
 
     /// Obtains a KeyPair from a slice representing the private key
     pub fn from_private_key_slice(input: &[u8]) -> Result<Self, InternalPakeError> {
-        let sk = Key::from_arr(GenericArray::from_slice(input))?;
+        let sk = PrivateKey(Key::from_arr(GenericArray::from_slice(input))?);
         let pk = Self::public_from_private(&sk);
         Self::new(pk, sk)
     }
@@ -122,8 +128,8 @@ impl<G: Group> KeyPair<G> {
     #[cfg(test)]
     pub fn as_byte_ptrs(&self) -> Vec<(*const u8, usize)> {
         vec![
-            (self.pk.as_ptr(), <Key as SizedBytes>::Len::to_usize()),
-            (self.sk.as_ptr(), <Key as SizedBytes>::Len::to_usize()),
+            (self.pk.as_ptr(), KeyLen::to_usize()),
+            (self.sk.as_ptr(), KeyLen::to_usize()),
         ]
     }
 }
@@ -145,6 +151,8 @@ impl<G: Group + Debug> KeyPair<G> {
     }
 }
 
+type KeyLen = U32;
+
 /// A minimalist key type built around a \[u8; 32\]
 #[derive(Debug, PartialEq, Eq, Clone, Zeroize)]
 // Ensure Key material is zeroed after use.
@@ -160,15 +168,68 @@ impl Deref for Key {
     }
 }
 
-impl SizedBytes for Key {
-    type Len = U32;
-
-    fn to_arr(&self) -> GenericArray<u8, Self::Len> {
+// Don't make it implement SizedBytes so that it's not constructible outside of this module.
+impl Key {
+    fn to_arr(&self) -> GenericArray<u8, KeyLen> {
         GenericArray::clone_from_slice(&self.0[..])
     }
 
-    fn from_arr(key_bytes: &GenericArray<u8, Self::Len>) -> Result<Self, TryFromSizedBytesError> {
+    fn from_arr(key_bytes: &GenericArray<u8, KeyLen>) -> Result<Self, TryFromSizedBytesError> {
         Ok(Key(key_bytes.to_vec()))
+    }
+}
+
+/// Wrapper around a Key to enforce that it's a private one.
+#[derive(Debug, PartialEq, Eq, Clone, Zeroize)]
+// Ensure Key material is zeroed after use.
+#[zeroize(drop)]
+#[repr(transparent)]
+pub struct PrivateKey(Key);
+
+impl Deref for PrivateKey {
+    type Target = Key;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl SizedBytes for PrivateKey {
+    type Len = KeyLen;
+
+    fn to_arr(&self) -> GenericArray<u8, Self::Len> {
+        self.0.to_arr()
+    }
+
+    fn from_arr(key_bytes: &GenericArray<u8, Self::Len>) -> Result<Self, TryFromSizedBytesError> {
+        Ok(PrivateKey(Key::from_arr(key_bytes)?))
+    }
+}
+
+/// Wrapper around a Key to enforce that it's a public one.
+#[derive(Debug, PartialEq, Eq, Clone, Zeroize)]
+// Ensure Key material is zeroed after use.
+#[zeroize(drop)]
+#[repr(transparent)]
+pub struct PublicKey(Key);
+
+impl Deref for PublicKey {
+    type Target = Key;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl SizedBytes for PublicKey {
+    type Len = KeyLen;
+
+    fn to_arr(&self) -> GenericArray<u8, Self::Len> {
+        self.0.to_arr()
+    }
+
+    fn from_arr(key_bytes: &GenericArray<u8, Self::Len>) -> Result<Self, TryFromSizedBytesError> {
+        Ok(PublicKey(Key::from_arr(key_bytes)?))
     }
 }
 
@@ -183,7 +244,7 @@ mod tests {
 
     #[test]
     fn test_zeroize_key() -> Result<(), ProtocolError> {
-        let key_len = <Key as SizedBytes>::Len::to_usize();
+        let key_len = KeyLen::to_usize();
         let mut key = Key(vec![1u8; key_len]);
         let ptr = key.as_ptr();
 

@@ -8,7 +8,7 @@ use crate::{
     errors::{PakeError, ProtocolError},
     group::Group,
     hash::Hash,
-    keypair::Key,
+    keypair::{PrivateKey, PublicKey},
 };
 use rand::{CryptoRng, RngCore};
 use zeroize::Zeroize;
@@ -31,8 +31,8 @@ pub trait KeyExchange<D: Hash, G: Group> {
         l1_bytes: Vec<u8>,
         l2_bytes: Vec<u8>,
         ke1_message: Self::KE1Message,
-        client_s_pk: Key,
-        server_s_sk: Key,
+        client_s_pk: PublicKey,
+        server_s_sk: PrivateKey,
         id_u: Vec<u8>,
         id_s: Vec<u8>,
         e_info: Vec<u8>,
@@ -44,8 +44,8 @@ pub trait KeyExchange<D: Hash, G: Group> {
         ke2_message: Self::KE2Message,
         ke1_state: &Self::KE1State,
         serialized_credential_request: &[u8],
-        server_s_pk: Key,
-        client_s_sk: Key,
+        server_s_pk: PublicKey,
+        client_s_sk: PrivateKey,
         id_u: Vec<u8>,
         id_s: Vec<u8>,
     ) -> Result<(Vec<u8>, Vec<u8>, Self::KE3Message), ProtocolError>;

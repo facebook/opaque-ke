@@ -6,7 +6,7 @@
 use crate::{
     errors::{utils::check_slice_size_atleast, InternalPakeError, PakeError, ProtocolError},
     hash::Hash,
-    keypair::Key,
+    keypair::PublicKey,
     serialization::serialize,
 };
 use digest::Digest;
@@ -64,7 +64,7 @@ impl InnerEnvelope {
         }
         let mode = InnerEnvelopeMode::try_from(input[0])?;
 
-        let key_len = <Key as SizedBytes>::Len::to_usize();
+        let key_len = <PublicKey as SizedBytes>::Len::to_usize();
 
         let bytes = &input[1..];
         if bytes.len() < NONCE_LEN + key_len {
@@ -248,7 +248,7 @@ impl<D: Hash> Envelope<D> {
         let aad = construct_aad(server_s_pk, optional_ids);
         let opened = self.open_raw(key, &aad)?;
 
-        if opened.plaintext.len() != <Key as SizedBytes>::Len::to_usize() {
+        if opened.plaintext.len() != <PublicKey as SizedBytes>::Len::to_usize() {
             // Plaintext should consist of a single key
             return Err(InternalPakeError::UnexpectedEnvelopeContentsError);
         }
