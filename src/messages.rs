@@ -13,12 +13,11 @@ use crate::{
         PakeError, ProtocolError,
     },
     group::Group,
-    key_exchange::traits::{KeyExchange, ToBytes},
+    key_exchange::traits::{FromBytes, KeyExchange, ToBytes},
     keypair::{Key, KeyPair, SizedBytesExt},
 };
 use generic_array::{typenum::Unsigned, GenericArray};
 use generic_bytes::SizedBytes;
-use std::convert::TryFrom;
 
 // Messages
 // =========
@@ -75,11 +74,11 @@ impl<CS: CipherSuite> RegistrationResponse<CS> {
         // correct subgroup
         let arr = GenericArray::from_slice(&checked_slice[..elem_len]);
         let beta = CS::Group::from_element_slice(arr)?;
+        let server_s_pk =
+            KeyPair::<CS::Group>::check_public_key(Key::from_bytes(&checked_slice[elem_len..])?)?
+                .to_vec();
 
-        Ok(Self {
-            server_s_pk: checked_slice[elem_len..].to_vec(),
-            beta,
-        })
+        Ok(Self { server_s_pk, beta })
     }
 }
 
@@ -138,10 +137,7 @@ pub struct CredentialRequest<CS: CipherSuite> {
 impl<CS: CipherSuite> CredentialRequest<CS> {
     /// Serialization into bytes
     pub fn serialize(&self) -> Vec<u8> {
-        let mut credential_request: Vec<u8> = Vec::new();
-        credential_request.extend_from_slice(&self.alpha.to_arr());
-        credential_request.extend_from_slice(&self.ke1_message.to_bytes());
-        credential_request
+        [self.alpha.to_arr().to_vec(), self.ke1_message.to_bytes()].concat()
     }
 
     /// Deserialization from bytes
@@ -156,7 +152,7 @@ impl<CS: CipherSuite> CredentialRequest<CS> {
         let alpha = CS::Group::from_element_slice(arr)?;
 
         let ke1_message =
-            <CS::KeyExchange as KeyExchange<CS::Hash, CS::Group>>::KE1Message::try_from(
+            <CS::KeyExchange as KeyExchange<CS::Hash, CS::Group>>::KE1Message::from_bytes::<CS>(
                 &checked_slice[elem_len..],
             )?;
 
@@ -223,7 +219,7 @@ impl<CS: CipherSuite> CredentialResponse<CS> {
         let checked_remainder =
             check_slice_size_atleast(&remainder, ke2_message_size, "login_second_message_bytes")?;
         let ke2_message =
-            <CS::KeyExchange as KeyExchange<CS::Hash, CS::Group>>::KE2Message::try_from(
+            <CS::KeyExchange as KeyExchange<CS::Hash, CS::Group>>::KE2Message::from_bytes::<CS>(
                 checked_remainder,
             )?;
 
@@ -253,7 +249,9 @@ impl<CS: CipherSuite> CredentialFinalization<CS> {
     /// Deserialization from bytes
     pub fn deserialize(input: &[u8]) -> Result<Self, ProtocolError> {
         let ke3_message =
-            <CS::KeyExchange as KeyExchange<CS::Hash, CS::Group>>::KE3Message::try_from(input)?;
+            <CS::KeyExchange as KeyExchange<CS::Hash, CS::Group>>::KE3Message::from_bytes::<CS>(
+                input,
+            )?;
         Ok(Self { ke3_message })
     }
 }

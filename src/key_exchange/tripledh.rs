@@ -5,13 +5,14 @@
 
 //! An implementation of the Triple Diffie-Hellman key exchange protocol
 use crate::{
+    ciphersuite::CipherSuite,
     errors::{
         utils::{check_slice_size, check_slice_size_atleast},
         InternalPakeError, PakeError, ProtocolError,
     },
     group::Group,
     hash::Hash,
-    key_exchange::traits::{KeyExchange, ToBytes, ToBytesWithPointers},
+    key_exchange::traits::{FromBytes, KeyExchange, ToBytes, ToBytesWithPointers},
     keypair::{Key, KeyPair, SizedBytesExt},
     serialization::{serialize, tokenize},
 };
@@ -25,8 +26,6 @@ use hkdf::Hkdf;
 use hmac::{Hmac, Mac, NewMac};
 use rand::{CryptoRng, RngCore};
 use zeroize::Zeroize;
-
-use std::convert::TryFrom;
 
 const KEY_LEN: usize = 32;
 pub(crate) type NonceLen = U32;
@@ -253,10 +252,8 @@ pub struct Ke1Message {
     pub(crate) client_e_pk: Key,
 }
 
-impl TryFrom<&[u8]> for Ke1State {
-    type Error = PakeError;
-
-    fn try_from(bytes: &[u8]) -> Result<Self, Self::Error> {
+impl FromBytes for Ke1State {
+    fn from_bytes<CS: CipherSuite>(bytes: &[u8]) -> Result<Self, PakeError> {
         let nonce_len = NonceLen::to_usize();
         let checked_bytes = check_slice_size_atleast(bytes, KEY_LEN + nonce_len, "ke1_state")?;
 
@@ -298,22 +295,24 @@ impl ToBytes for Ke1Message {
     }
 }
 
-impl TryFrom<&[u8]> for Ke1Message {
-    type Error = PakeError;
-
-    fn try_from(ke1_message_bytes: &[u8]) -> Result<Self, Self::Error> {
+impl FromBytes for Ke1Message {
+    fn from_bytes<CS: CipherSuite>(ke1_message_bytes: &[u8]) -> Result<Self, PakeError> {
         let nonce_len = NonceLen::to_usize();
         let checked_nonce =
             check_slice_size_atleast(ke1_message_bytes, nonce_len, "ke1_message nonce")?;
 
         let (info, remainder) = tokenize(&checked_nonce[nonce_len..], 2)?;
 
-        let checked_client_e_pk = check_slice_size(&remainder, KEY_LEN, "ke1_message client_e_pk")?;
+        // Check the public key bytes
+        let unchecked_client_e_pk =
+            check_slice_size(&remainder, KEY_LEN, "ke1_message client_e_pk")?;
+        let client_e_pk =
+            KeyPair::<CS::Group>::check_public_key(Key::from_bytes(unchecked_client_e_pk)?)?;
 
         Ok(Self {
             client_nonce: GenericArray::clone_from_slice(&checked_nonce[..nonce_len]),
             info,
-            client_e_pk: Key::from_bytes(checked_client_e_pk)?,
+            client_e_pk,
         })
     }
 }
@@ -367,10 +366,8 @@ pub struct Ke2Message<HashLen: ArrayLength<u8>> {
     mac: GenericArray<u8, HashLen>,
 }
 
-impl<HashLen: ArrayLength<u8>> TryFrom<&[u8]> for Ke2State<HashLen> {
-    type Error = PakeError;
-
-    fn try_from(input: &[u8]) -> Result<Self, Self::Error> {
+impl<HashLen: ArrayLength<u8>> FromBytes for Ke2State<HashLen> {
+    fn from_bytes<CS: CipherSuite>(input: &[u8]) -> Result<Self, PakeError> {
         let hash_len = HashLen::to_usize();
         let checked_bytes = check_slice_size(input, 3 * hash_len, "ke2_state")?;
 
@@ -401,23 +398,27 @@ impl<HashLen: ArrayLength<u8>> Ke2Message<HashLen> {
     }
 }
 
-impl<HashLen: ArrayLength<u8>> TryFrom<&[u8]> for Ke2Message<HashLen> {
-    type Error = PakeError;
-
-    fn try_from(input: &[u8]) -> Result<Self, Self::Error> {
+impl<HashLen: ArrayLength<u8>> FromBytes for Ke2Message<HashLen> {
+    fn from_bytes<CS: CipherSuite>(input: &[u8]) -> Result<Self, PakeError> {
         let nonce_len = NonceLen::to_usize();
         let checked_nonce = check_slice_size_atleast(input, nonce_len, "ke2_message nonce")?;
-        let checked_server_e_pk = check_slice_size_atleast(
+
+        let unchecked_server_e_pk = check_slice_size_atleast(
             &checked_nonce[nonce_len..],
             KEY_LEN,
             "ke2_message server_e_pk",
         )?;
-        let (e_info, remainder) = tokenize(&checked_server_e_pk[KEY_LEN..], 2)?;
+        let (e_info, remainder) = tokenize(&unchecked_server_e_pk[KEY_LEN..], 2)?;
         let checked_mac = check_slice_size(&remainder, HashLen::to_usize(), "ke1_message mac")?;
+
+        // Check the public key bytes
+        let server_e_pk = KeyPair::<CS::Group>::check_public_key(Key::from_bytes(
+            &unchecked_server_e_pk[..KEY_LEN],
+        )?)?;
 
         Ok(Self {
             server_nonce: GenericArray::clone_from_slice(&checked_nonce[..nonce_len]),
-            server_e_pk: Key::from_bytes(&checked_server_e_pk[..KEY_LEN])?,
+            server_e_pk,
             e_info,
             mac: GenericArray::clone_from_slice(checked_mac),
         })
@@ -455,10 +456,8 @@ impl<HashLen: ArrayLength<u8>> ToBytes for Ke3Message<HashLen> {
     }
 }
 
-impl<HashLen: ArrayLength<u8>> TryFrom<&[u8]> for Ke3Message<HashLen> {
-    type Error = PakeError;
-
-    fn try_from(bytes: &[u8]) -> Result<Self, Self::Error> {
+impl<HashLen: ArrayLength<u8>> FromBytes for Ke3Message<HashLen> {
+    fn from_bytes<CS: CipherSuite>(bytes: &[u8]) -> Result<Self, PakeError> {
         let checked_bytes = check_slice_size(bytes, HashLen::to_usize(), "ke3_message")?;
 
         Ok(Self {
