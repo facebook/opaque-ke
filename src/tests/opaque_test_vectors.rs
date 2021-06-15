@@ -285,20 +285,20 @@ fn rfc_to_json(input: &str) -> String {
     let mut json = vec![];
     for line in input.lines() {
         // If line contains colon, then
-        if line.contains(":") {
-            if json.len() > 0 {
+        if line.contains(':') {
+            if !json.is_empty() {
                 // Adding closing quote for previous line, comma, and newline
                 json.push("\",\n".to_string());
             }
 
-            let mut iter = line.split(":");
+            let mut iter = line.split(':');
             let key = iter.next().unwrap().split_whitespace().next().unwrap();
             let val = iter.next().unwrap().split_whitespace().next().unwrap();
 
             json.push(format!("    \"{}\": \"{}", key, val));
         } else {
             let s = line.trim().to_string();
-            if s.len() > 0 {
+            if !s.is_empty() {
                 json.push(s);
             }
         }
