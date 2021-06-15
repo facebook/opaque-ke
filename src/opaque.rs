@@ -11,7 +11,7 @@ use crate::{
     errors::{utils::check_slice_size_atleast, InternalPakeError, PakeError, ProtocolError},
     group::Group,
     hash::Hash,
-    key_exchange::traits::{KeyExchange, ToBytesWithPointers},
+    key_exchange::traits::{FromBytes, KeyExchange, ToBytesWithPointers},
     keypair::{Key, KeyPair, SizedBytesExt},
     map_to_curve::GroupWithMapToCurve,
     oprf,
@@ -24,7 +24,7 @@ use digest::Digest;
 use generic_array::{typenum::Unsigned, GenericArray};
 use generic_bytes::SizedBytes;
 use rand::{CryptoRng, RngCore};
-use std::{convert::TryFrom, marker::PhantomData};
+use std::marker::PhantomData;
 use zeroize::Zeroize;
 
 // Registration
@@ -432,9 +432,10 @@ impl<CS: CipherSuite> ClientLogin<CS> {
         let (serialized_credential_request, remainder) = tokenize(&checked_slice[scalar_len..], 2)?;
         let (ke1_state_bytes, password) = tokenize(&remainder, 2)?;
 
-        let ke1_state = <CS::KeyExchange as KeyExchange<CS::Hash, CS::Group>>::KE1State::try_from(
-            &ke1_state_bytes[..],
-        )?;
+        let ke1_state =
+            <CS::KeyExchange as KeyExchange<CS::Hash, CS::Group>>::KE1State::from_bytes::<CS>(
+                &ke1_state_bytes[..],
+            )?;
         Ok(Self {
             token: oprf::Token {
                 data: password,
@@ -707,9 +708,9 @@ impl<CS: CipherSuite> ServerLogin<CS> {
     pub fn deserialize(bytes: &[u8]) -> Result<Self, ProtocolError> {
         Ok(Self {
             _cs: PhantomData,
-            ke2_state: <CS::KeyExchange as KeyExchange<CS::Hash, CS::Group>>::KE2State::try_from(
-                bytes,
-            )?,
+            ke2_state: <CS::KeyExchange as KeyExchange<CS::Hash, CS::Group>>::KE2State::from_bytes::<
+                CS,
+            >(bytes)?,
         })
     }
 

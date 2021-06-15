@@ -8,7 +8,7 @@ use crate::{
     envelope::{Envelope, InnerEnvelopeMode},
     group::Group,
     key_exchange::{
-        traits::{KeyExchange, ToBytes},
+        traits::{FromBytes, KeyExchange, ToBytes},
         tripledh::{NonceLen, TripleDH},
     },
     opaque::*,
@@ -23,7 +23,6 @@ use proptest::{collection::vec, prelude::*};
 use rand::{rngs::OsRng, RngCore};
 
 use sha2::Digest;
-use std::convert::TryFrom;
 
 struct Default;
 impl CipherSuite for Default {
@@ -294,9 +293,10 @@ fn ke1_message_roundtrip() {
         &client_e_kp.public(),
     ]
     .concat();
-    let reg =
-        <TripleDH as KeyExchange<sha2::Sha512, RistrettoPoint>>::KE1Message::try_from(&ke1m[..])
-            .unwrap();
+    let reg = <TripleDH as KeyExchange<sha2::Sha512, RistrettoPoint>>::KE1Message::from_bytes::<
+        Default,
+    >(&ke1m[..])
+    .unwrap();
     let reg_bytes = reg.to_bytes();
     assert_eq!(reg_bytes, ke1m);
 }
@@ -321,9 +321,10 @@ fn ke2_message_roundtrip() {
     ]
     .concat();
 
-    let reg =
-        <TripleDH as KeyExchange<sha2::Sha512, RistrettoPoint>>::KE2Message::try_from(&ke2m[..])
-            .unwrap();
+    let reg = <TripleDH as KeyExchange<sha2::Sha512, RistrettoPoint>>::KE2Message::from_bytes::<
+        Default,
+    >(&ke2m[..])
+    .unwrap();
     let reg_bytes = reg.to_bytes();
     assert_eq!(reg_bytes, ke2m);
 }
@@ -336,9 +337,10 @@ fn ke3_message_roundtrip() {
 
     let ke3m: Vec<u8> = [&mac[..]].concat();
 
-    let reg =
-        <TripleDH as KeyExchange<sha2::Sha512, RistrettoPoint>>::KE3Message::try_from(&ke3m[..])
-            .unwrap();
+    let reg = <TripleDH as KeyExchange<sha2::Sha512, RistrettoPoint>>::KE3Message::from_bytes::<
+        Default,
+    >(&ke3m[..])
+    .unwrap();
     let reg_bytes = reg.to_bytes();
     assert_eq!(reg_bytes, ke3m);
 }

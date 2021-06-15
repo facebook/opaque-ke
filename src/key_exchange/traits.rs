@@ -4,22 +4,21 @@
 // LICENSE file in the root directory of this source tree.
 
 use crate::{
+    ciphersuite::CipherSuite,
     errors::{PakeError, ProtocolError},
     group::Group,
     hash::Hash,
     keypair::Key,
 };
 use rand::{CryptoRng, RngCore};
-
-use std::convert::TryFrom;
 use zeroize::Zeroize;
 
 pub trait KeyExchange<D: Hash, G: Group> {
-    type KE1State: for<'r> TryFrom<&'r [u8], Error = PakeError> + ToBytesWithPointers + Zeroize;
-    type KE2State: for<'r> TryFrom<&'r [u8], Error = PakeError> + ToBytesWithPointers + Zeroize;
-    type KE1Message: for<'r> TryFrom<&'r [u8], Error = PakeError> + ToBytes;
-    type KE2Message: for<'r> TryFrom<&'r [u8], Error = PakeError> + ToBytes;
-    type KE3Message: for<'r> TryFrom<&'r [u8], Error = PakeError> + ToBytes;
+    type KE1State: FromBytes + ToBytesWithPointers + Zeroize;
+    type KE2State: FromBytes + ToBytesWithPointers + Zeroize;
+    type KE1Message: FromBytes + ToBytes;
+    type KE2Message: FromBytes + ToBytes;
+    type KE3Message: FromBytes + ToBytes;
 
     fn generate_ke1<R: RngCore + CryptoRng>(
         info: Vec<u8>,
@@ -58,6 +57,10 @@ pub trait KeyExchange<D: Hash, G: Group> {
     ) -> Result<Vec<u8>, ProtocolError>;
 
     fn ke2_message_size() -> usize;
+}
+
+pub trait FromBytes: Sized {
+    fn from_bytes<CS: CipherSuite>(input: &[u8]) -> Result<Self, PakeError>;
 }
 
 pub trait ToBytes {
