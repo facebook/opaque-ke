@@ -79,7 +79,7 @@ impl<G: Group> KeyPair<G> {
 
     /// Generating a random key pair given a cryptographic rng
     pub(crate) fn generate_random<R: RngCore + CryptoRng>(rng: &mut R) -> Self {
-        let sk = G::random_scalar(rng);
+        let sk = G::random_nonzero_scalar(rng);
         let sk_bytes = G::scalar_as_bytes(&sk);
         let pk = G::base_point().mult_by_slice(sk_bytes);
         Self {
@@ -174,6 +174,7 @@ impl Key {
         GenericArray::clone_from_slice(&self.0[..])
     }
 
+    #[allow(clippy::unnecessary_wraps)]
     fn from_arr(key_bytes: &GenericArray<u8, KeyLen>) -> Result<Self, TryFromSizedBytesError> {
         Ok(Key(key_bytes.to_vec()))
     }
