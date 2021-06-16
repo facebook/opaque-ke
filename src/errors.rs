@@ -73,6 +73,8 @@ pub enum PakeError {
     InvalidLoginError,
     /// Error with serializing / deserializing protocol messages
     SerializationError,
+    /// Identity group element was encountered during deserialization, which is invalid
+    IdentityGroupElementError,
 }
 
 // This is meant to express future(ly) non-trivial ways of converting the

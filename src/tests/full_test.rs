@@ -16,7 +16,7 @@ use crate::{
     tests::mock_rng::CycleRng,
     *,
 };
-use curve25519_dalek::ristretto::RistrettoPoint;
+use curve25519_dalek::{ristretto::RistrettoPoint, traits::Identity};
 use generic_array::typenum::Unsigned;
 use generic_bytes::SizedBytes;
 use rand::{rngs::OsRng, RngCore};
@@ -285,7 +285,7 @@ fn generate_parameters<CS: CipherSuite>() -> TestVectorParameters {
     let mut server_nonce = vec![0u8; NonceLen::to_usize()];
     rng.fill_bytes(&mut server_nonce);
 
-    let blinding_factor = CS::Group::random_scalar(&mut rng);
+    let blinding_factor = CS::Group::random_nonzero_scalar(&mut rng);
     let blinding_factor_bytes = CS::Group::scalar_as_bytes(&blinding_factor).clone();
 
     let info1 = b"info1";
@@ -1027,6 +1027,26 @@ fn test_zeroize_server_login_finish() -> Result<(), ProtocolError> {
         let bytes = unsafe { from_raw_parts(ptr, len) };
         assert!(bytes.iter().all(|&x| x == 0));
     }
+
+    Ok(())
+}
+
+#[test]
+fn test_scalar_always_nonzero() -> Result<(), ProtocolError> {
+    // Start out with a bunch of zeros to force resampling of scalar
+    let mut client_registration_rng = CycleRng::new([vec![0u8; 128], vec![1u8; 128]].concat());
+    let client_registration_start_result =
+        ClientRegistration::<RistrettoSha5123dhNoSlowHash>::start(
+            &mut client_registration_rng,
+            STR_PASSWORD.as_bytes(),
+        )?;
+
+    assert_ne!(
+        RistrettoPoint::identity(),
+        client_registration_start_result
+            .message
+            .get_alpha_for_testing()
+    );
 
     Ok(())
 }

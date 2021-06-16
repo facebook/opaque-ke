@@ -30,6 +30,21 @@ pub struct RegistrationRequest<CS: CipherSuite> {
 }
 
 impl<CS: CipherSuite> RegistrationRequest<CS> {
+    /// Only used for testing purposes
+    #[cfg(test)]
+    pub fn get_alpha_for_testing(&self) -> CS::Group {
+        self.alpha
+    }
+}
+
+// Cannot be derived because it would require for CS to be Clone.
+impl<CS: CipherSuite> Clone for RegistrationRequest<CS> {
+    fn clone(&self) -> Self {
+        Self { alpha: self.alpha }
+    }
+}
+
+impl<CS: CipherSuite> RegistrationRequest<CS> {
     /// Serialization into bytes
     pub fn serialize(&self) -> Vec<u8> {
         self.alpha.to_arr().to_vec()
@@ -43,6 +58,11 @@ impl<CS: CipherSuite> RegistrationRequest<CS> {
         // correct subgroup
         let arr = GenericArray::from_slice(checked_slice);
         let alpha = CS::Group::from_element_slice(arr)?;
+
+        // Throw an error if the identity group element is encountered
+        if alpha.is_identity() {
+            return Err(PakeError::IdentityGroupElementError.into());
+        }
         Ok(Self { alpha })
     }
 }
@@ -74,8 +94,17 @@ impl<CS: CipherSuite> RegistrationResponse<CS> {
         let arr = GenericArray::from_slice(&checked_slice[..elem_len]);
         let beta = CS::Group::from_element_slice(arr)?;
 
+        // Throw an error if the identity group element is encountered
+        if beta.is_identity() {
+            return Err(PakeError::IdentityGroupElementError.into());
+        }
+
+        // Ensure that public key is valid
+        let server_s_pk =
+            KeyPair::<CS::Group>::check_public_key(Key::from_bytes(&checked_slice[elem_len..])?)?;
+
         Ok(Self {
-            server_s_pk: checked_slice[elem_len..].to_vec(),
+            server_s_pk: server_s_pk.to_arr().to_vec(),
             beta,
         })
     }
@@ -150,6 +179,11 @@ impl<CS: CipherSuite> CredentialRequest<CS> {
         let arr = GenericArray::from_slice(&checked_slice[..elem_len]);
         let alpha = CS::Group::from_element_slice(arr)?;
 
+        // Throw an error if the identity group element is encountered
+        if alpha.is_identity() {
+            return Err(PakeError::IdentityGroupElementError.into());
+        }
+
         let ke1_message =
             <CS::KeyExchange as KeyExchange<CS::Hash, CS::Group>>::KE1Message::try_from(
                 &checked_slice[elem_len..],
@@ -205,6 +239,11 @@ impl<CS: CipherSuite> CredentialResponse<CS> {
         let beta_bytes = &checked_slice[..elem_len];
         let arr = GenericArray::from_slice(beta_bytes);
         let beta = CS::Group::from_element_slice(arr)?;
+
+        // Throw an error if the identity group element is encountered
+        if beta.is_identity() {
+            return Err(PakeError::IdentityGroupElementError.into());
+        }
 
         let unchecked_server_s_pk = Key::from_bytes(&checked_slice[elem_len..elem_len + key_len])?;
         let server_s_pk = KeyPair::<CS::Group>::check_public_key(unchecked_server_s_pk)?;

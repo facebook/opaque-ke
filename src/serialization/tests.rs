@@ -6,6 +6,7 @@
 use crate::{
     ciphersuite::CipherSuite,
     envelope::{Envelope, InnerEnvelopeMode},
+    errors::*,
     group::Group,
     key_exchange::{
         traits::{KeyExchange, ToBytes},
@@ -16,7 +17,7 @@ use crate::{
     *,
 };
 
-use curve25519_dalek::ristretto::RistrettoPoint;
+use curve25519_dalek::{ristretto::RistrettoPoint, traits::Identity};
 use generic_array::typenum::Unsigned;
 use generic_bytes::SizedBytes;
 use proptest::{collection::vec, prelude::*};
@@ -54,7 +55,7 @@ fn random_ristretto_point() -> RistrettoPoint {
 fn client_registration_roundtrip() {
     let pw = b"hunter2";
     let mut rng = OsRng;
-    let sc = <RistrettoPoint as Group>::random_scalar(&mut rng);
+    let sc = <RistrettoPoint as Group>::random_nonzero_scalar(&mut rng);
 
     // serialization order: scalar, password
     let bytes: Vec<u8> = [&sc.as_bytes()[..], &pw[..]].concat();
@@ -68,7 +69,7 @@ fn server_registration_roundtrip() {
     // If we don't have envelope and client_pk, the server registration just
     // contains the prf key
     let mut rng = OsRng;
-    let oprf_key = <RistrettoPoint as Group>::random_scalar(&mut rng);
+    let oprf_key = <RistrettoPoint as Group>::random_nonzero_scalar(&mut rng);
     let mut oprf_bytes: Vec<u8> = vec![];
     oprf_bytes.extend_from_slice(oprf_key.as_bytes());
     let reg = ServerRegistration::<Default>::deserialize(&oprf_bytes[..]).unwrap();
@@ -107,6 +108,17 @@ fn registration_request_roundtrip() {
     let r1 = RegistrationRequest::<Default>::deserialize(input.as_slice()).unwrap();
     let r1_bytes = r1.serialize();
     assert_eq!(input, r1_bytes);
+
+    // Assert that identity group element is rejected
+    let identity = RistrettoPoint::identity();
+    let identity_bytes = identity.to_arr().to_vec();
+
+    assert!(
+        match RegistrationRequest::<Default>::deserialize(identity_bytes.as_slice()) {
+            Err(ProtocolError::VerificationError(PakeError::IdentityGroupElementError)) => true,
+            _ => false,
+        }
+    );
 }
 
 #[test]
@@ -124,6 +136,17 @@ fn registration_response_roundtrip() {
     let r2 = RegistrationResponse::<Default>::deserialize(input.as_slice()).unwrap();
     let r2_bytes = r2.serialize();
     assert_eq!(input, r2_bytes);
+
+    // Assert that identity group element is rejected
+    let identity = RistrettoPoint::identity();
+    let identity_bytes = identity.to_arr().to_vec();
+
+    assert!(match RegistrationResponse::<Default>::deserialize(
+        &[identity_bytes, pubkey_bytes.to_vec()].concat()
+    ) {
+        Err(ProtocolError::VerificationError(PakeError::IdentityGroupElementError)) => true,
+        _ => false,
+    });
 }
 
 #[test]
@@ -184,6 +207,17 @@ fn credential_request_roundtrip() {
     let l1 = CredentialRequest::<Default>::deserialize(input.as_slice()).unwrap();
     let l1_bytes = l1.serialize().unwrap();
     assert_eq!(input, l1_bytes);
+
+    // Assert that identity group element is rejected
+    let identity = RistrettoPoint::identity();
+    let identity_bytes = identity.to_arr().to_vec();
+
+    assert!(match CredentialRequest::<Default>::deserialize(
+        &[identity_bytes, ke1m.to_vec()].concat()
+    ) {
+        Err(ProtocolError::VerificationError(PakeError::IdentityGroupElementError)) => true,
+        _ => false,
+    });
 }
 
 #[test]
@@ -227,15 +261,34 @@ fn credential_response_roundtrip() {
     ]
     .concat();
 
+    let serialized_envelope = envelope.serialize();
+
     let mut input = Vec::new();
     input.extend_from_slice(pt_bytes.as_slice());
     input.extend_from_slice(&pubkey_bytes.as_slice());
-    input.extend_from_slice(&envelope.serialize());
+    input.extend_from_slice(&serialized_envelope);
     input.extend_from_slice(&ke2m[..]);
 
     let l2 = CredentialResponse::<Default>::deserialize(&input).unwrap();
     let l2_bytes = l2.serialize().unwrap();
     assert_eq!(input, l2_bytes);
+
+    // Assert that identity group element is rejected
+    let identity = RistrettoPoint::identity();
+    let identity_bytes = identity.to_arr().to_vec();
+
+    assert!(match CredentialResponse::<Default>::deserialize(
+        &[
+            identity_bytes,
+            pubkey_bytes.to_vec(),
+            serialized_envelope,
+            ke2m.to_vec()
+        ]
+        .concat()
+    ) {
+        Err(ProtocolError::VerificationError(PakeError::IdentityGroupElementError)) => true,
+        _ => false,
+    });
 }
 
 #[test]
@@ -255,7 +308,7 @@ fn login_third_message_roundtrip() {
 fn client_login_roundtrip() {
     let pw = b"hunter2";
     let mut rng = OsRng;
-    let sc = <RistrettoPoint as Group>::random_scalar(&mut rng);
+    let sc = <RistrettoPoint as Group>::random_nonzero_scalar(&mut rng);
 
     let client_e_kp = Default::generate_random_keypair(&mut rng);
     let mut client_nonce = vec![0u8; NonceLen::to_usize()];
