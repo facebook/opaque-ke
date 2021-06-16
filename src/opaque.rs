@@ -383,7 +383,7 @@ impl<CS: CipherSuite> ServerRegistration<CS> {
         server_s_pk: &PublicKey,
     ) -> Result<ServerRegistrationStartResult<CS>, ProtocolError> {
         // RFC: generate oprf_key (salt) and v_u = g^oprf_key
-        let oprf_key = CS::Group::random_scalar(rng);
+        let oprf_key = CS::Group::random_nonzero_scalar(rng);
 
         // Compute beta = alpha^oprf_key
         let beta = oprf::evaluate::<CS::Group>(message.alpha, &oprf_key);

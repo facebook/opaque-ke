@@ -12,6 +12,7 @@ use curve25519_dalek::{
     constants::RISTRETTO_BASEPOINT_POINT,
     ristretto::{CompressedRistretto, RistrettoPoint},
     scalar::Scalar,
+    traits::Identity,
 };
 use generic_array::{
     typenum::{U32, U64},
@@ -35,7 +36,7 @@ pub trait Group: Copy + Sized + for<'a> Mul<&'a <Self as Group>::Scalar, Output 
         scalar_bits: &GenericArray<u8, Self::ScalarLen>,
     ) -> Result<Self::Scalar, InternalPakeError>;
     /// picks a scalar at random
-    fn random_scalar<R: RngCore + CryptoRng>(rng: &mut R) -> Self::Scalar;
+    fn random_nonzero_scalar<R: RngCore + CryptoRng>(rng: &mut R) -> Self::Scalar;
     /// Serializes a scalar to bytes
     fn scalar_as_bytes(scalar: &Self::Scalar) -> &GenericArray<u8, Self::ScalarLen>;
     /// The multiplicative inverse of this scalar
@@ -64,6 +65,9 @@ pub trait Group: Copy + Sized + for<'a> Mul<&'a <Self as Group>::Scalar, Output 
 
     /// Multiply the point by a scalar, represented as a slice
     fn mult_by_slice(&self, scalar: &GenericArray<u8, Self::ScalarLen>) -> Self;
+
+    /// Returns if the group element is equal to the identity (1)
+    fn is_identity(&self) -> bool;
 }
 
 /// The implementation of such a subgroup for Ristretto
@@ -77,20 +81,28 @@ impl Group for RistrettoPoint {
         bits.copy_from_slice(scalar_bits);
         Ok(Scalar::from_bytes_mod_order(bits))
     }
-    fn random_scalar<R: RngCore + CryptoRng>(rng: &mut R) -> Self::Scalar {
-        #[cfg(not(test))]
-        {
-            let mut scalar_bytes = [0u8; 64];
-            rng.fill_bytes(&mut scalar_bytes);
-            Scalar::from_bytes_mod_order_wide(&scalar_bytes)
-        }
+    fn random_nonzero_scalar<R: RngCore + CryptoRng>(rng: &mut R) -> Self::Scalar {
+        loop {
+            let scalar = {
+                #[cfg(not(test))]
+                {
+                    let mut scalar_bytes = [0u8; 64];
+                    rng.fill_bytes(&mut scalar_bytes);
+                    Scalar::from_bytes_mod_order_wide(&scalar_bytes)
+                }
 
-        // Tests need an exact conversion from bytes to scalar, sampling only 32 bytes from rng
-        #[cfg(test)]
-        {
-            let mut scalar_bytes = [0u8; 32];
-            rng.fill_bytes(&mut scalar_bytes);
-            Scalar::from_bytes_mod_order(scalar_bytes)
+                // Tests need an exact conversion from bytes to scalar, sampling only 32 bytes from rng
+                #[cfg(test)]
+                {
+                    let mut scalar_bytes = [0u8; 32];
+                    rng.fill_bytes(&mut scalar_bytes);
+                    Scalar::from_bytes_mod_order(scalar_bytes)
+                }
+            };
+
+            if scalar != Scalar::zero() {
+                break scalar;
+            }
         }
     }
     fn scalar_as_bytes(scalar: &Self::Scalar) -> &GenericArray<u8, Self::ScalarLen> {
@@ -133,5 +145,10 @@ impl Group for RistrettoPoint {
     fn mult_by_slice(&self, scalar: &GenericArray<u8, Self::ScalarLen>) -> Self {
         let arr: [u8; 32] = scalar.as_slice().try_into().expect("Wrong length");
         self * Scalar::from_bits(arr)
+    }
+
+    /// Returns if the group element is equal to the identity (1)
+    fn is_identity(&self) -> bool {
+        self == &Self::identity()
     }
 }
