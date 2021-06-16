@@ -29,7 +29,8 @@ pub(crate) fn blind<R: RngCore + CryptoRng, G: GroupWithMapToCurve, H: Hash>(
     input: &[u8],
     blinding_factor_rng: &mut R,
 ) -> Result<(Token<G>, G), ProtocolError> {
-    let blind = G::random_scalar(blinding_factor_rng);
+    // Choose a random scalar that must be non-zero
+    let blind = G::random_nonzero_scalar(blinding_factor_rng);
     let dst = [STR_VOPRF, &G::get_context_string(MODE_BASE)?].concat();
     let mapped_point = G::map_to_curve::<H>(input, &dst)?;
     let blind_token = mapped_point * &blind;
