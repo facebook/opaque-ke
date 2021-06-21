@@ -11,13 +11,14 @@ readme = "README.md"
 
 [features]
 default = ["u64_backend", "serialize"]
-slow-hash = ["scrypt"]
+argon = ["argon2"]
 bench = []
 u64_backend = ["curve25519-dalek/u64_backend"]
 u32_backend = ["curve25519-dalek/u32_backend"]
 serialize = ["serde", "base64"]
 
 [dependencies]
+argon2 = { version = "0.2", optional = true }
 base64 = { version = "0.13", optional = true }
 curve25519-dalek = { version = "3.0.0", default-features = false, features = ["std"] }
 digest = "0.9.0"
