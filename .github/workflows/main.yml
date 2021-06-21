@@ -70,7 +70,7 @@ jobs:
     steps:
       - uses: actions/checkout@v2
       - uses: hecrj/setup-rust-action@v1
-      - run: cargo test --verbose --features scrypt,argon --no-default-features --features ${{ matrix.backend_feature }}
+      - run: cargo test --verbose --features slow-hash --no-default-features --features ${{ matrix.backend_feature }}
 
   serde-test:
     name: Test on ${{ matrix.target }} with serde support
