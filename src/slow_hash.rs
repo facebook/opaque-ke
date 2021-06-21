@@ -12,7 +12,7 @@ use generic_array::typenum::Unsigned;
 use generic_array::GenericArray;
 
 /// Used for the slow hashing function in OPAQUE
-pub trait SlowHash<D: Hash>: Default {
+pub trait SlowHash<D: Hash> {
     /// Computes the slow hashing function
     fn hash(
         &self,

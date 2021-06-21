@@ -275,7 +275,10 @@ fn stringify_test_vectors(p: &TestVectorParameters) -> String {
     s
 }
 
-fn generate_parameters<CS: CipherSuite>() -> TestVectorParameters {
+fn generate_parameters<CS: CipherSuite>() -> TestVectorParameters
+where
+    CS::SlowHash: Default,
+{
     let mut rng = OsRng;
 
     // Inputs
