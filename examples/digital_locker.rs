@@ -26,6 +26,7 @@
 
 use chacha20poly1305::aead::{Aead, NewAead};
 use chacha20poly1305::{ChaCha20Poly1305, Key, Nonce};
+use opaque_ke::slow_hash::NoOpHash;
 use rustyline::error::ReadlineError;
 use rustyline::Editor;
 use std::process::exit;
@@ -47,7 +48,7 @@ impl CipherSuite for Default {
     type Group = curve25519_dalek::ristretto::RistrettoPoint;
     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
     type Hash = sha2::Sha512;
-    type SlowHash = opaque_ke::slow_hash::NoOpHash;
+    type SlowHash = NoOpHash;
 }
 
 struct Locker {
@@ -107,6 +108,7 @@ fn register_locker(
         .finish(
             &mut client_rng,
             RegistrationResponse::deserialize(&registration_response_bytes[..]).unwrap(),
+            &NoOpHash,
             ClientRegistrationFinishParameters::default(),
         )
         .unwrap();
@@ -162,6 +164,7 @@ fn open_locker(
 
     let result = client_login_start_result.state.finish(
         CredentialResponse::deserialize(&credential_response_bytes[..]).unwrap(),
+        &NoOpHash,
         ClientLoginFinishParameters::default(),
     );
 

@@ -561,6 +561,7 @@ fn test_registration_upload() -> Result<(), ProtocolError> {
         let result = client_registration_start_result.state.finish(
             &mut finish_registration_rng,
             RegistrationResponse::deserialize(&parameters.registration_response[..]).unwrap(),
+            &NoOpHash,
             match parse_identifiers(parameters.client_identity, parameters.server_identity) {
                 None => ClientRegistrationFinishParameters::Default,
                 Some(ids) => ClientRegistrationFinishParameters::WithIdentifiers(ids),
@@ -666,6 +667,7 @@ fn test_ke3() -> Result<(), ProtocolError> {
 
         let client_login_finish_result = client_login_start_result.state.finish(
             CredentialResponse::<Ristretto255Sha512NoSlowHash>::deserialize(&parameters.KE2[..])?,
+            &NoOpHash,
             match parse_identifiers(parameters.client_identity, parameters.server_identity) {
                 None => ClientLoginFinishParameters::WithContext(parameters.context),
                 Some(ids) => {

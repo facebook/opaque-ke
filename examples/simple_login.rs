@@ -20,6 +20,7 @@
 //! messages over "the wire" to the server. These bytes are serialized
 //! and explicitly annotated in the below functions.
 
+use opaque_ke::slow_hash::NoOpHash;
 use rustyline::error::ReadlineError;
 use rustyline::Editor;
 use std::collections::HashMap;
@@ -71,6 +72,7 @@ fn account_registration(
         .finish(
             &mut client_rng,
             RegistrationResponse::deserialize(&registration_response_bytes[..]).unwrap(),
+            &NoOpHash,
             ClientRegistrationFinishParameters::default(),
         )
         .unwrap();
@@ -115,6 +117,7 @@ fn account_login(
 
     let result = client_login_start_result.state.finish(
         CredentialResponse::deserialize(&credential_response_bytes[..]).unwrap(),
+        &NoOpHash,
         ClientLoginFinishParameters::default(),
     );
 

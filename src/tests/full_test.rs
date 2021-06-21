@@ -346,6 +346,7 @@ fn generate_parameters<CS: CipherSuite>() -> TestVectorParameters {
         .finish(
             &mut finish_registration_rng,
             server_registration_start_result.message,
+            &CS::SlowHash::default(),
             ClientRegistrationFinishParameters::WithIdentifiers(
                 Identifiers::ClientAndServerIdentifiers(id_u.to_vec(), id_s.to_vec()),
             ),
@@ -397,6 +398,7 @@ fn generate_parameters<CS: CipherSuite>() -> TestVectorParameters {
         .state
         .finish(
             server_login_start_result.message,
+            &CS::SlowHash::default(),
             ClientLoginFinishParameters::WithContextAndIdentifiers(
                 context.to_vec(),
                 Identifiers::ClientAndServerIdentifiers(id_u.to_vec(), id_s.to_vec()),
@@ -539,6 +541,7 @@ fn test_registration_upload() -> Result<(), ProtocolError> {
     .finish(
         &mut finish_registration_rng,
         RegistrationResponse::deserialize(&parameters.registration_response[..])?,
+        &NoOpHash,
         ClientRegistrationFinishParameters::WithIdentifiers(
             Identifiers::ClientAndServerIdentifiers(parameters.id_u, parameters.id_s),
         ),
@@ -657,6 +660,7 @@ fn test_credential_finalization() -> Result<(), ProtocolError> {
         CredentialResponse::<RistrettoSha5123dhNoSlowHash>::deserialize(
             &parameters.credential_response[..],
         )?,
+        &NoOpHash,
         ClientLoginFinishParameters::WithContextAndIdentifiers(
             parameters.context,
             Identifiers::ClientAndServerIdentifiers(parameters.id_u, parameters.id_s),
@@ -724,6 +728,7 @@ fn test_complete_flow(
     let client_registration_finish_result = client_registration_start_result.state.finish(
         &mut client_rng,
         server_registration_start_result.message,
+        &NoOpHash,
         ClientRegistrationFinishParameters::default(),
     )?;
     let p_file = ServerRegistration::finish(client_registration_finish_result.message);
@@ -740,6 +745,7 @@ fn test_complete_flow(
 
     let client_login_result = client_login_start_result.state.finish(
         server_login_start_result.message,
+        &NoOpHash,
         ClientLoginFinishParameters::default(),
     );
 
@@ -819,6 +825,7 @@ fn test_zeroize_client_registration_finish() -> Result<(), ProtocolError> {
     let client_registration_finish_result = client_registration_start_result.state.finish(
         &mut client_rng,
         server_registration_start_result.message,
+        &NoOpHash,
         ClientRegistrationFinishParameters::default(),
     )?;
 
@@ -853,6 +860,7 @@ fn test_zeroize_server_registration_finish() -> Result<(), ProtocolError> {
     let client_registration_finish_result = client_registration_start_result.state.finish(
         &mut client_rng,
         server_registration_start_result.message,
+        &NoOpHash,
         ClientRegistrationFinishParameters::default(),
     )?;
     let p_file = ServerRegistration::finish(client_registration_finish_result.message);
@@ -908,6 +916,7 @@ fn test_zeroize_server_login_start() -> Result<(), ProtocolError> {
     let client_registration_finish_result = client_registration_start_result.state.finish(
         &mut client_rng,
         server_registration_start_result.message,
+        &NoOpHash,
         ClientRegistrationFinishParameters::default(),
     )?;
     let p_file = ServerRegistration::finish(client_registration_finish_result.message);
@@ -955,6 +964,7 @@ fn test_zeroize_client_login_finish() -> Result<(), ProtocolError> {
     let client_registration_finish_result = client_registration_start_result.state.finish(
         &mut client_rng,
         server_registration_start_result.message,
+        &NoOpHash,
         ClientRegistrationFinishParameters::default(),
     )?;
     let p_file = ServerRegistration::finish(client_registration_finish_result.message);
@@ -972,6 +982,7 @@ fn test_zeroize_client_login_finish() -> Result<(), ProtocolError> {
     )?;
     let client_login_finish_result = client_login_start_result.state.finish(
         server_login_start_result.message,
+        &NoOpHash,
         ClientLoginFinishParameters::default(),
     )?;
 
@@ -1006,6 +1017,7 @@ fn test_zeroize_server_login_finish() -> Result<(), ProtocolError> {
     let client_registration_finish_result = client_registration_start_result.state.finish(
         &mut client_rng,
         server_registration_start_result.message,
+        &NoOpHash,
         ClientRegistrationFinishParameters::default(),
     )?;
     let p_file = ServerRegistration::finish(client_registration_finish_result.message);
@@ -1023,6 +1035,7 @@ fn test_zeroize_server_login_finish() -> Result<(), ProtocolError> {
     )?;
     let client_login_finish_result = client_login_start_result.state.finish(
         server_login_start_result.message,
+        &NoOpHash,
         ClientLoginFinishParameters::default(),
     )?;
     let server_login_finish_result = server_login_start_result

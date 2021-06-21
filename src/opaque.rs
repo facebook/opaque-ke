@@ -256,6 +256,7 @@ impl<CS: CipherSuite> ClientRegistration<CS> {
         self,
         rng: &mut R,
         r2: RegistrationResponse<CS>,
+        slow_hash: &CS::SlowHash,
         params: ClientRegistrationFinishParameters,
     ) -> Result<ClientRegistrationFinishResult<CS>, ProtocolError> {
         let optional_ids = match params {
@@ -263,8 +264,11 @@ impl<CS: CipherSuite> ClientRegistration<CS> {
             ClientRegistrationFinishParameters::Default => None,
         };
 
-        let password_derived_key =
-            get_password_derived_key::<CS::Group, CS::SlowHash, CS::Hash>(&self.token, r2.beta)?;
+        let password_derived_key = get_password_derived_key::<CS::Group, CS::SlowHash, CS::Hash>(
+            slow_hash,
+            &self.token,
+            r2.beta,
+        )?;
 
         let h = Hkdf::<CS::Hash>::new(None, &password_derived_key);
         let mut masking_key = vec![0u8; <CS::Hash as Digest>::OutputSize::to_usize()];
@@ -549,6 +553,7 @@ impl<CS: CipherSuite> ClientLogin<CS> {
     pub fn finish(
         self,
         credential_response: CredentialResponse<CS>,
+        slow_hash: &CS::SlowHash,
         params: ClientLoginFinishParameters,
     ) -> Result<ClientLoginFinishResult<CS>, ProtocolError> {
         let (context, optional_ids) = match params {
@@ -562,6 +567,7 @@ impl<CS: CipherSuite> ClientLogin<CS> {
         };
 
         let password_derived_key = get_password_derived_key::<CS::Group, CS::SlowHash, CS::Hash>(
+            slow_hash,
             &self.token,
             credential_response.beta,
         )?;
@@ -891,11 +897,12 @@ impl<CS: CipherSuite> Drop for ServerLogin<CS> {
 // Helper functions
 
 fn get_password_derived_key<G: GroupWithMapToCurve, SH: SlowHash<D>, D: Hash>(
+    params: &SH,
     token: &oprf::Token<G>,
     beta: G,
 ) -> Result<Vec<u8>, InternalPakeError> {
     let oprf_output = oprf::finalize::<G, D>(&token.data, &token.blind, beta);
-    SH::hash(oprf_output)
+    params.hash(oprf_output)
 }
 
 fn oprf_key_from_seed<G: GroupWithMapToCurve, D: Hash>(
