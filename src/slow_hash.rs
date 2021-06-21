@@ -40,15 +40,14 @@ impl<D: Hash> SlowHash<D> for argon2::Argon2<'_> {
         input: GenericArray<u8, <D as Digest>::OutputSize>,
     ) -> Result<Vec<u8>, InternalPakeError> {
         let mut output = vec![0u8; <D as Digest>::OutputSize::to_usize()];
-        self
-            .hash_password_into(
-                argon2::Algorithm::Argon2id,
-                &input,
-                &[0; argon2::MIN_SALT_LENGTH],
-                &[],
-                &mut output,
-            )
-            .map_err(|_| InternalPakeError::SlowHashError)?;
+        self.hash_password_into(
+            argon2::Algorithm::Argon2id,
+            &input,
+            &[0; argon2::MIN_SALT_LENGTH],
+            &[],
+            &mut output,
+        )
+        .map_err(|_| InternalPakeError::SlowHashError)?;
         Ok(output)
     }
 }
