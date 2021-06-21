@@ -11,7 +11,7 @@ readme = "README.md"
 
 [features]
 default = ["u64_backend", "serialize"]
-argon = ["argon2"]
+slow-hash = ["argon2"]
 bench = []
 u64_backend = ["curve25519-dalek/u64_backend"]
 u32_backend = ["curve25519-dalek/u32_backend"]
@@ -28,7 +28,6 @@ generic-bytes = { version = "0.1.0" }
 hkdf = "0.10.0"
 hmac = "0.10.1"
 rand = "0.8"
-scrypt = { version = "0.5.0", optional = true }
 serde = { version = "1", optional = true }
 subtle = { version = "2.3.0", default-features = false }
 thiserror = "1.0.22"

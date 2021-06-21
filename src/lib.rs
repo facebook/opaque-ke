@@ -32,8 +32,8 @@
 //! for a working example of a simple password-based login using OPAQUE.
 //!
 //! Note that our choice of slow hashing function in this example, `NoOpHash`, is selected only to ensure
-//! that the tests execute quickly. A real application should use an actual slow hashing function, such as `scrypt`,
-//! which can be enabled through the `scrypt` feature. See more details in the [features](#features) section.
+//! that the tests execute quickly. A real application should use an actual slow hashing function, such as `Argon2`,
+//! which can be enabled through the `slow-hash` feature. See more details in the [features](#features) section.
 //!
 //! ## Setup
 //! To set up the protocol, the server begins by creating a `ServerSetup` object:
@@ -718,15 +718,12 @@
 //!
 //! # Features
 //!
-//! - The `scrypt` feature, when enabled, introduces a dependency on `scrypt` and implements the `SlowHash` trait for `scrypt`
+//! - The `slow-hash` feature, when enabled, introduces a dependency on `argon2` and implements the `SlowHash` trait for `Argon2`
 //! with a set of default parameters. In general, secure instantiations should choose to invoke a memory-hard password
 //! hashing function when the client's password is expected to have low entropy, instead of relying on [slow_hash::NoOpHash]
 //! as done in the above example. The more computationally intensive the `SlowHash` function is, the more resistant the server's
 //! password file records will be against offline dictionary and precomputation attacks; see
 //! [the OPAQUE paper](https://eprint.iacr.org/2018/163.pdf) for more details.
-//!
-//! - The `argon` feature, when enabled, introduces a dependency on `argon2` and implements the `SlowHash` trait for `argon2`
-//! with default parameters. This is an alternative to `scrypt`.
 //!
 //! - The `serialize` feature, enabled by default, provides convenience functions for serializing and deserializing with
 //! [serde](https://serde.rs/).
