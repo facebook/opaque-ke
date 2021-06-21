@@ -7,7 +7,7 @@
 
 use crate::{errors::InternalPakeError, hash::Hash};
 use digest::Digest;
-#[cfg(feature = "slow-hash")]
+#[cfg(any(feature = "argon", feature = "scrypt"))]
 use generic_array::typenum::Unsigned;
 use generic_array::GenericArray;
 
@@ -30,14 +30,14 @@ impl<D: Hash> SlowHash<D> for NoOpHash {
     }
 }
 
-#[cfg(feature = "slow-hash")]
+#[cfg(feature = "scrypt")]
 const DEFAULT_SCRYPT_LOG_N: u8 = 15u8;
-#[cfg(feature = "slow-hash")]
+#[cfg(feature = "scrypt")]
 const DEFAULT_SCRYPT_R: u32 = 8u32;
-#[cfg(feature = "slow-hash")]
+#[cfg(feature = "scrypt")]
 const DEFAULT_SCRYPT_P: u32 = 1u32;
 
-#[cfg(feature = "slow-hash")]
+#[cfg(feature = "scrypt")]
 impl<D: Hash> SlowHash<D> for scrypt::ScryptParams {
     fn hash(
         input: GenericArray<u8, <D as Digest>::OutputSize>,
@@ -47,6 +47,26 @@ impl<D: Hash> SlowHash<D> for scrypt::ScryptParams {
                 .map_err(|_| InternalPakeError::SlowHashError)?;
         let mut output = vec![0u8; <D as Digest>::OutputSize::to_usize()];
         scrypt::scrypt(&input, &[], &params, &mut output)
+            .map_err(|_| InternalPakeError::SlowHashError)?;
+        Ok(output)
+    }
+}
+
+#[cfg(feature = "argon")]
+impl<D: Hash> SlowHash<D> for argon2::Argon2<'_> {
+    fn hash(
+        input: GenericArray<u8, <D as Digest>::OutputSize>,
+    ) -> Result<Vec<u8>, InternalPakeError> {
+        let params = argon2::Argon2::default();
+        let mut output = vec![0u8; <D as Digest>::OutputSize::to_usize()];
+        params
+            .hash_password_into(
+                argon2::Algorithm::Argon2id,
+                &input,
+                &[0; argon2::MIN_SALT_LENGTH],
+                &[],
+                &mut output,
+            )
             .map_err(|_| InternalPakeError::SlowHashError)?;
         Ok(output)
     }
