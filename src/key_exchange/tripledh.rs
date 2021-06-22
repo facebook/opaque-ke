@@ -207,7 +207,8 @@ impl<D: Hash, G: Group> KeyExchange<D, G> for TripleDH {
 }
 
 /// The client state produced after the first key exchange message
-#[derive(PartialEq, Eq, Zeroize, Clone)]
+#[derive(PartialEq, Eq, Debug, Hash, Zeroize, Clone)]
+#[cfg_attr(feature = "serialize", derive(serde::Deserialize, serde::Serialize))]
 #[zeroize(drop)]
 pub struct Ke1State {
     client_e_sk: PrivateKey,
@@ -215,7 +216,8 @@ pub struct Ke1State {
 }
 
 /// The first key exchange message
-#[derive(PartialEq, Eq, Clone)]
+#[derive(PartialEq, Eq, Debug, Hash, Clone)]
+#[cfg_attr(feature = "serialize", derive(serde::Deserialize, serde::Serialize))]
 pub struct Ke1Message {
     pub(crate) client_nonce: GenericArray<u8, NonceLen>,
     pub(crate) client_e_pk: PublicKey,
@@ -272,7 +274,9 @@ impl FromBytes for Ke1Message {
     }
 }
 /// The server state produced after the second key exchange message
-#[derive(Clone)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+#[cfg_attr(feature = "serialize", derive(serde::Deserialize, serde::Serialize))]
+#[cfg_attr(feature = "serialize", serde(bound = ""))]
 pub struct Ke2State<HashLen: ArrayLength<u8>> {
     km3: GenericArray<u8, HashLen>,
     hashed_transcript: GenericArray<u8, HashLen>,
@@ -315,7 +319,9 @@ impl<HashLen: ArrayLength<u8>> ToBytesWithPointers for Ke2State<HashLen> {
 }
 
 /// The second key exchange message
-#[derive(Clone)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+#[cfg_attr(feature = "serialize", derive(serde::Deserialize, serde::Serialize))]
+#[cfg_attr(feature = "serialize", serde(bound = ""))]
 pub struct Ke2Message<HashLen: ArrayLength<u8>> {
     server_nonce: GenericArray<u8, NonceLen>,
     server_e_pk: PublicKey,
@@ -398,7 +404,9 @@ type TripleDHDerivationResult<D> = (
 );
 
 /// The third key exchange message
-#[derive(Clone)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+#[cfg_attr(feature = "serialize", derive(serde::Deserialize, serde::Serialize))]
+#[cfg_attr(feature = "serialize", serde(bound = ""))]
 pub struct Ke3Message<HashLen: ArrayLength<u8>> {
     mac: GenericArray<u8, HashLen>,
 }

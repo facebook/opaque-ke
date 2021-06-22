@@ -36,6 +36,7 @@ const STR_OPRF_KEY: &[u8] = b"OprfKey";
 // ============
 
 /// The state elements the server holds upon setup
+#[cfg_attr(feature = "serialize", derive(serde::Deserialize, serde::Serialize))]
 pub struct ServerSetup<CS: CipherSuite> {
     oprf_seed: GenericArray<u8, <CS::Hash as Digest>::OutputSize>,
     keypair: KeyPair<CS::Group>,
@@ -84,6 +85,16 @@ impl<CS: CipherSuite> ServerSetup<CS> {
     }
 }
 
+// Cannot be derived because it would require for CS to be bound.
+impl_clone_for!(
+    struct ServerSetup<CS: CipherSuite>,
+    [oprf_seed, keypair, fake_keypair],
+);
+impl_debug_eq_hash_for!(
+    struct ServerSetup<CS: CipherSuite>,
+    [oprf_seed, oprf_seed, fake_keypair],
+);
+
 // Registration
 // ============
 
@@ -93,14 +104,12 @@ pub struct ClientRegistration<CS: CipherSuite> {
     pub(crate) token: oprf::Token<CS::Group>,
 }
 
-// Cannot be derived because it would require for CS to be Clone.
-impl<CS: CipherSuite> Clone for ClientRegistration<CS> {
-    fn clone(&self) -> Self {
-        Self {
-            token: self.token.clone(),
-        }
-    }
-}
+impl_clone_for!(struct ClientRegistration<CS: CipherSuite>, [token]);
+impl_debug_eq_hash_for!(
+    struct ClientRegistration<CS: CipherSuite>,
+    [token],
+    [oprf::Token<CS::Group>],
+);
 
 impl<CS: CipherSuite> ClientRegistration<CS> {
     /// Serialization into bytes
@@ -306,12 +315,11 @@ impl<CS: CipherSuite> Clone for ServerRegistrationStartResult<CS> {
 /// The state elements the server holds to record a registration
 pub struct ServerRegistration<CS: CipherSuite>(RegistrationUpload<CS>);
 
-// Cannot be derived because it would require for CS to be Clone.
-impl<CS: CipherSuite> Clone for ServerRegistration<CS> {
-    fn clone(&self) -> Self {
-        Self(self.0.clone())
-    }
-}
+impl_clone_for!(tuple ServerRegistration<CS: CipherSuite>, [0]);
+impl_debug_eq_hash_for!(
+    tuple ServerRegistration<CS: CipherSuite>,
+    [0],
+);
 
 impl<CS: CipherSuite> ServerRegistration<CS> {
     /// Serialization into bytes
@@ -377,6 +385,14 @@ impl_serialize_and_deserialize_for!(ServerRegistration);
 // =====
 
 /// The state elements the client holds to perform a login
+#[cfg_attr(feature = "serialize", derive(serde::Deserialize, serde::Serialize))]
+#[cfg_attr(
+    feature = "serialize",
+    serde(bound(
+        deserialize = "oprf::Token<CS::Group>: serde::Deserialize<'de>, <CS::KeyExchange as KeyExchange<CS::Hash, CS::Group>>::KE1State: serde::Deserialize<'de>",
+        serialize = "oprf::Token<CS::Group>: serde::Serialize, <CS::KeyExchange as KeyExchange<CS::Hash, CS::Group>>::KE1State: serde::Serialize"
+    ))
+)]
 pub struct ClientLogin<CS: CipherSuite> {
     /// token containing the client's password and the blinding factor
     token: oprf::Token<CS::Group>,
@@ -384,16 +400,12 @@ pub struct ClientLogin<CS: CipherSuite> {
     serialized_credential_request: Vec<u8>,
 }
 
-// Cannot be derived because it would require for CS to be Clone.
-impl<CS: CipherSuite> Clone for ClientLogin<CS> {
-    fn clone(&self) -> Self {
-        Self {
-            token: self.token.clone(),
-            ke1_state: self.ke1_state.clone(),
-            serialized_credential_request: self.serialized_credential_request.clone(),
-        }
-    }
-}
+impl_clone_for!(struct ClientLogin<CS: CipherSuite>, [token, ke1_state, serialized_credential_request]);
+impl_debug_eq_hash_for!(
+    struct ClientLogin<CS: CipherSuite>,
+    [token, ke1_state, serialized_credential_request],
+    [oprf::Token<CS::Group>, <CS::KeyExchange as KeyExchange<CS::Hash, CS::Group>>::KE1State],
+);
 
 impl<CS: CipherSuite> ClientLogin<CS> {
     /// Serialization into bytes
@@ -627,15 +639,12 @@ pub struct ServerLogin<CS: CipherSuite> {
     _cs: PhantomData<CS>,
 }
 
-// Cannot be derived because it would require for CS to be Clone.
-impl<CS: CipherSuite> Clone for ServerLogin<CS> {
-    fn clone(&self) -> Self {
-        Self {
-            ke2_state: self.ke2_state.clone(),
-            _cs: PhantomData,
-        }
-    }
-}
+impl_clone_for!(struct ServerLogin<CS: CipherSuite>, [ke2_state, _cs]);
+impl_debug_eq_hash_for!(
+    struct ServerLogin<CS: CipherSuite>,
+    [ke2_state, _cs],
+    [<CS::KeyExchange as KeyExchange<CS::Hash, CS::Group>>::KE2State],
+);
 
 /// Optional parameters for server login start
 #[derive(Clone)]

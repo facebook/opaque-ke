@@ -15,7 +15,7 @@ slow-hash = ["argon2"]
 bench = []
 u64_backend = ["curve25519-dalek/u64_backend"]
 u32_backend = ["curve25519-dalek/u32_backend"]
-serialize = ["serde", "base64"]
+serialize = ["serde", "base64", "generic-array/serde", "curve25519-dalek/serde"]
 
 [dependencies]
 argon2 = { version = "0.2", optional = true }
@@ -28,7 +28,7 @@ generic-bytes = { version = "0.1.0" }
 hkdf = "0.11.0"
 hmac = "0.11.0"
 rand = "0.8"
-serde = { version = "1", optional = true }
+serde = { version = "1", features = ["derive"], optional = true }
 subtle = { version = "2.3.0", default-features = false }
 thiserror = "1.0.22"
 zeroize = { version = "1.1.1", features = ["zeroize_derive"] }

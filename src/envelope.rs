@@ -61,7 +61,7 @@ fn recover_keys_internal<CS: CipherSuite>(
     Ok(client_static_keypair)
 }
 
-#[derive(Clone, Copy, PartialEq, Zeroize)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, Zeroize)]
 #[zeroize(drop)]
 pub(crate) enum InnerEnvelopeMode {
     Zero = 0,
@@ -104,6 +104,8 @@ impl<CS: CipherSuite> Clone for Envelope<CS> {
         }
     }
 }
+
+impl_debug_eq_hash_for!(struct Envelope<CS: CipherSuite>, [mode, nonce, hmac]);
 
 // Note that this struct represents an envelope that has been "opened" with the asssociated
 // key. This key is also used to derive the export_key parameter, which is technically
