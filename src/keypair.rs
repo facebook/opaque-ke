@@ -35,12 +35,21 @@ pub trait SizedBytesExt: SizedBytes {
 impl<T> SizedBytesExt for T where T: SizedBytes {}
 
 /// A Keypair trait with public-private verification
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serialize", derive(serde::Deserialize, serde::Serialize))]
 pub struct KeyPair<G> {
     pk: PublicKey,
     sk: PrivateKey,
     _g: PhantomData<G>,
 }
+
+impl_clone_for!(
+    struct KeyPair<G>,
+    [pk, sk, _g],
+);
+impl_debug_eq_hash_for!(
+    struct KeyPair<G>,
+    [pk, sk, _g],
+);
 
 // This can't be derived because of the use of a phantom parameter
 impl<G> Zeroize for KeyPair<G> {
@@ -154,7 +163,8 @@ impl<G: Group + Debug> KeyPair<G> {
 type KeyLen = U32;
 
 /// A minimalist key type built around a \[u8; 32\]
-#[derive(Debug, PartialEq, Eq, Clone, Zeroize)]
+#[derive(Debug, PartialEq, Eq, Clone, Hash, Zeroize)]
+#[cfg_attr(feature = "serialize", derive(serde::Deserialize, serde::Serialize))]
 // Ensure Key material is zeroed after use.
 #[zeroize(drop)]
 #[repr(transparent)]
@@ -181,7 +191,8 @@ impl Key {
 }
 
 /// Wrapper around a Key to enforce that it's a private one.
-#[derive(Debug, PartialEq, Eq, Clone, Zeroize)]
+#[derive(Debug, PartialEq, Eq, Clone, Hash, Zeroize)]
+#[cfg_attr(feature = "serialize", derive(serde::Deserialize, serde::Serialize))]
 // Ensure Key material is zeroed after use.
 #[zeroize(drop)]
 #[repr(transparent)]
@@ -208,7 +219,8 @@ impl SizedBytes for PrivateKey {
 }
 
 /// Wrapper around a Key to enforce that it's a public one.
-#[derive(Debug, PartialEq, Eq, Clone, Zeroize)]
+#[derive(Debug, PartialEq, Eq, Clone, Hash, Zeroize)]
+#[cfg_attr(feature = "serialize", derive(serde::Deserialize, serde::Serialize))]
 // Ensure Key material is zeroed after use.
 #[zeroize(drop)]
 #[repr(transparent)]

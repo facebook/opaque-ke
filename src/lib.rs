@@ -748,6 +748,8 @@ compile_error!(
 pub mod errors;
 
 #[macro_use]
+mod impls;
+#[macro_use]
 mod serialization;
 
 // High-level API

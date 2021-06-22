@@ -12,11 +12,13 @@ use generic_array::GenericArray;
 use rand::{CryptoRng, RngCore};
 
 /// Used to store the OPRF input and blinding factor
-#[derive(Clone)]
 pub struct Token<Grp: Group> {
     pub(crate) data: Vec<u8>,
     pub(crate) blind: Grp::Scalar,
 }
+
+impl_clone_for!(struct Token<Grp: Group>, [data, blind]);
+impl_debug_eq_hash_for!(struct Token<Grp: Group>, [data, blind], [Grp::Scalar]);
 
 static STR_VOPRF: &[u8] = b"VOPRF06-HashToGroup-";
 static STR_VOPRF_FINALIZE: &[u8] = b"VOPRF06-Finalize-";

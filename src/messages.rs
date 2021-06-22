@@ -46,6 +46,8 @@ impl<CS: CipherSuite> Clone for RegistrationRequest<CS> {
     }
 }
 
+impl_debug_eq_hash_for!(struct RegistrationRequest<CS: CipherSuite>, [alpha], [CS::Group]);
+
 impl<CS: CipherSuite> RegistrationRequest<CS> {
     /// Serialization into bytes
     pub fn serialize(&self) -> Vec<u8> {
@@ -89,6 +91,12 @@ impl<CS: CipherSuite> Clone for RegistrationResponse<CS> {
         }
     }
 }
+
+impl_debug_eq_hash_for!(
+    struct RegistrationResponse<CS: CipherSuite>,
+    [beta, server_s_pk],
+    [CS::Group],
+);
 
 impl<CS: CipherSuite> RegistrationResponse<CS> {
     /// Serialization into bytes
@@ -136,16 +144,14 @@ pub struct RegistrationUpload<CS: CipherSuite> {
     pub(crate) client_s_pk: PublicKey,
 }
 
-// Cannot be derived because it would require for CS to be Clone.
-impl<CS: CipherSuite> Clone for RegistrationUpload<CS> {
-    fn clone(&self) -> Self {
-        Self {
-            envelope: self.envelope.clone(),
-            masking_key: self.masking_key.clone(),
-            client_s_pk: self.client_s_pk.clone(),
-        }
-    }
-}
+impl_clone_for!(
+    struct RegistrationUpload<CS: CipherSuite>,
+    [envelope, masking_key, client_s_pk],
+);
+impl_debug_eq_hash_for!(
+    struct RegistrationUpload<CS: CipherSuite>,
+    [envelope, masking_key, client_s_pk],
+);
 
 impl<CS: CipherSuite> RegistrationUpload<CS> {
     /// Serialization into bytes
@@ -211,6 +217,15 @@ impl<CS: CipherSuite> Clone for CredentialRequest<CS> {
     }
 }
 
+impl_debug_eq_hash_for!(
+    struct CredentialRequest<CS: CipherSuite>,
+    [alpha, ke1_message],
+    [
+        CS::Group,
+        <CS::KeyExchange as KeyExchange<CS::Hash, CS::Group>>::KE1Message
+    ],
+);
+
 impl<CS: CipherSuite> CredentialRequest<CS> {
     /// Serialization into bytes
     pub fn serialize(&self) -> Vec<u8> {
@@ -265,6 +280,15 @@ impl<CS: CipherSuite> Clone for CredentialResponse<CS> {
         }
     }
 }
+
+impl_debug_eq_hash_for!(
+    struct CredentialResponse<CS: CipherSuite>,
+    [beta, masking_nonce, masked_response, ke2_message],
+    [
+        CS::Group,
+        <CS::KeyExchange as KeyExchange<CS::Hash, CS::Group>>::KE2Message,
+    ],
+);
 
 impl<CS: CipherSuite> CredentialResponse<CS> {
     /// Serialization into bytes
@@ -336,14 +360,12 @@ pub struct CredentialFinalization<CS: CipherSuite> {
     pub(crate) ke3_message: <CS::KeyExchange as KeyExchange<CS::Hash, CS::Group>>::KE3Message,
 }
 
-// Cannot be derived because it would require for CS to be Clone.
-impl<CS: CipherSuite> Clone for CredentialFinalization<CS> {
-    fn clone(&self) -> Self {
-        Self {
-            ke3_message: self.ke3_message.clone(),
-        }
-    }
-}
+impl_clone_for!(struct CredentialFinalization<CS: CipherSuite>, [ke3_message]);
+impl_debug_eq_hash_for!(
+    struct CredentialFinalization<CS: CipherSuite>,
+    [ke3_message],
+    [<CS::KeyExchange as KeyExchange<CS::Hash, CS::Group>>::KE3Message],
+);
 
 impl<CS: CipherSuite> CredentialFinalization<CS> {
     /// Serialization into bytes
