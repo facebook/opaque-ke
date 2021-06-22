@@ -222,8 +222,8 @@ impl<CS: CipherSuite> Envelope<CS> {
         h.expand(&[nonce, STR_EXPORT_KEY].concat(), &mut export_key)
             .map_err(|_| InternalPakeError::HkdfError)?;
 
-        let mut hmac =
-            Hmac::<CS::Hash>::new_varkey(&hmac_key).map_err(|_| InternalPakeError::HmacError)?;
+        let mut hmac = Hmac::<CS::Hash>::new_from_slice(&hmac_key)
+            .map_err(|_| InternalPakeError::HmacError)?;
         hmac.update(nonce);
         hmac.update(aad);
 
@@ -285,8 +285,8 @@ impl<CS: CipherSuite> Envelope<CS> {
         h.expand(&[&self.nonce, STR_EXPORT_KEY].concat(), &mut export_key)
             .map_err(|_| InternalPakeError::HkdfError)?;
 
-        let mut hmac =
-            Hmac::<CS::Hash>::new_varkey(&hmac_key).map_err(|_| InternalPakeError::HmacError)?;
+        let mut hmac = Hmac::<CS::Hash>::new_from_slice(&hmac_key)
+            .map_err(|_| InternalPakeError::HmacError)?;
         hmac.update(&self.nonce);
         hmac.update(aad);
         if hmac.verify(&self.hmac).is_err() {
