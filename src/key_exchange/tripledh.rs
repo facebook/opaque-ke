@@ -106,7 +106,7 @@ impl<D: Hash, G: Group> KeyExchange<D, G> for TripleDH {
         )?;
 
         let mut mac_hasher =
-            Hmac::<D>::new_varkey(&km2).map_err(|_| InternalPakeError::HmacError)?;
+            Hmac::<D>::new_from_slice(&km2).map_err(|_| InternalPakeError::HmacError)?;
         mac_hasher.update(&transcript_hasher.clone().finalize());
         let mac = mac_hasher.finalize().into_bytes();
 
@@ -160,7 +160,7 @@ impl<D: Hash, G: Group> KeyExchange<D, G> for TripleDH {
         )?;
 
         let mut server_mac =
-            Hmac::<D>::new_varkey(&km2).map_err(|_| InternalPakeError::HmacError)?;
+            Hmac::<D>::new_from_slice(&km2).map_err(|_| InternalPakeError::HmacError)?;
         server_mac.update(&transcript_hasher.clone().finalize());
 
         if server_mac.verify(&ke2_message.mac).is_err() {
@@ -172,7 +172,7 @@ impl<D: Hash, G: Group> KeyExchange<D, G> for TripleDH {
         transcript_hasher.update(ke2_message.mac.to_vec());
 
         let mut client_mac =
-            Hmac::<D>::new_varkey(&km3).map_err(|_| InternalPakeError::HmacError)?;
+            Hmac::<D>::new_from_slice(&km3).map_err(|_| InternalPakeError::HmacError)?;
         client_mac.update(&transcript_hasher.finalize());
 
         Ok((
@@ -189,7 +189,7 @@ impl<D: Hash, G: Group> KeyExchange<D, G> for TripleDH {
         ke2_state: &Self::KE2State,
     ) -> Result<Vec<u8>, ProtocolError> {
         let mut client_mac =
-            Hmac::<D>::new_varkey(&ke2_state.km3).map_err(|_| InternalPakeError::HmacError)?;
+            Hmac::<D>::new_from_slice(&ke2_state.km3).map_err(|_| InternalPakeError::HmacError)?;
         client_mac.update(&ke2_state.hashed_transcript);
 
         if client_mac.verify(&ke3_message.mac).is_err() {
