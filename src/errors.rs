@@ -8,7 +8,7 @@ use displaydoc::Display;
 use thiserror::Error;
 
 /// Represents an error in the manipulation of internal cryptographic data
-#[derive(Debug, Display, Error)]
+#[derive(Clone, Debug, Display, Error, Eq, Hash, PartialEq)]
 pub enum InternalPakeError {
     /// Deserializing from a byte sequence failed
     InvalidByteSequence,
@@ -56,7 +56,7 @@ pub enum InternalPakeError {
 }
 
 /// Represents an error in password checking
-#[derive(Debug, Display, Error)]
+#[derive(Clone, Debug, Display, Error, Eq, Hash, PartialEq)]
 pub enum PakeError {
     /// This error results from an internal error during PRF construction
     ///
@@ -86,7 +86,7 @@ impl From<InternalPakeError> for PakeError {
 }
 
 /// Represents an error in protocol handling
-#[derive(Debug, Display, Error)]
+#[derive(Clone, Debug, Display, Error, Eq, Hash, PartialEq)]
 pub enum ProtocolError {
     /// This error results from an error during password verification
     ///
