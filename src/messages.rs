@@ -128,6 +128,11 @@ impl<CS: CipherSuite> RegistrationResponse<CS> {
 
         Ok(Self { server_s_pk, beta })
     }
+
+    /// Return the servers public key
+    pub fn public_key(&self) -> &PublicKey {
+        &self.server_s_pk
+    }
 }
 
 impl_serialize_and_deserialize_for!(RegistrationResponse);
