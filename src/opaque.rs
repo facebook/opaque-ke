@@ -241,6 +241,8 @@ pub struct ClientRegistrationFinishResult<CS: CipherSuite> {
     pub message: RegistrationUpload<CS>,
     /// The export key output by client registration
     pub export_key: GenericArray<u8, <CS::Hash as Digest>::OutputSize>,
+    /// The server's static public key
+    pub server_s_pk: PublicKey,
     /// Instance of the ClientRegistration, only used in tests for checking zeroize
     #[cfg(test)]
     pub state: ClientRegistration<CS>,
@@ -252,6 +254,7 @@ impl<CS: CipherSuite> Clone for ClientRegistrationFinishResult<CS> {
         Self {
             message: self.message.clone(),
             export_key: self.export_key.clone(),
+            server_s_pk: self.server_s_pk.clone(),
             #[cfg(test)]
             state: self.state.clone(),
         }
@@ -290,6 +293,7 @@ impl<CS: CipherSuite> ClientRegistration<CS> {
                 client_s_pk,
             },
             export_key,
+            server_s_pk: r2.server_s_pk,
             #[cfg(test)]
             state: self,
         })
