@@ -417,7 +417,8 @@
 //!
 //! A [ClientLoginFinishResult] contains the `server_s_pk` field, which is represents the static public key of the server that is established
 //! during the setup phase. This can be used by the client to verify the authenticity of the server it engages with during the login phase. In particular,
-//! the client can check that the static public key of the server supplied during registration matches this field during login.
+//! the client can check that the static public key of the server supplied during registration (with the `server_s_pk` field of
+//! [ClientRegistrationFinishResult]) matches this field during login.
 //! ```
 //! # use opaque_ke::{
 //! #   errors::ProtocolError,
@@ -439,13 +440,15 @@
 //! #     b"password",
 //! # )?;
 //! # let mut server_rng = OsRng;
-//! // During setup, server generates its static keypair
-//! let server_setup = ServerSetup::<Default>::new(&mut server_rng);
+//! # let server_setup = ServerSetup::<Default>::new(&mut server_rng);
 //! # let server_registration_start_result = ServerRegistration::<Default>::start(&server_setup, client_registration_start_result.message, b"alice@example.com")?;
-//!
-//! // During setup or registration, the server transmits its static public key to the client
-//! let server_s_pk = server_setup.keypair().public(); // obtained from the server
-//! # let client_registration_finish_result = client_registration_start_result.state.finish(&mut client_rng, server_registration_start_result.message, ClientRegistrationFinishParameters::default())?;
+//! // During registration, the client obtains a ClientRegistrationFinishResult with
+//! // a server_s_pk field
+//! let client_registration_finish_result = client_registration_start_result.state.finish(
+//!     &mut client_rng,
+//!     server_registration_start_result.message,
+//!     ClientRegistrationFinishParameters::default(),
+//! )?;
 //! # let password_file_bytes = ServerRegistration::<Default>::finish(client_registration_finish_result.message).serialize();
 //! # let client_login_start_result = ClientLogin::<Default>::start(
 //! #     &mut client_rng,
@@ -464,11 +467,11 @@
 //!     ClientLoginFinishParameters::default(),
 //! )?;
 //!
-//! // Check that the server's static public key matches what was obtained during
-//! // setup or registration
+//! // Check that the server's static public key obtained from login matches what
+//! // was obtained during registration
 //! assert_eq!(
+//!     &client_registration_finish_result.server_s_pk,
 //!     &client_login_finish_result.server_s_pk,
-//!     server_s_pk,
 //! );
 //! # Ok::<(), ProtocolError>(())
 //! ```
