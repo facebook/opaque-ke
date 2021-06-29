@@ -44,7 +44,7 @@ yanked = "warn"
 # The lint level for crates with security notices. Note that as of
 # 2019-12-17 there are no security notice advisories in
 # https://github.com/rustsec/advisory-db
-notice = "warn"
+notice = "deny"
 # A list of advisory IDs to ignore. Note that ignored advisories will still
 # output a note when they are encountered.
 ignore = [
