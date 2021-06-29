@@ -67,16 +67,6 @@ impl<G: Group> KeyPair<G> {
         &self.sk
     }
 
-    /// A constructor that receives public and private key independently as
-    /// bytes
-    pub fn new(public: Key, private: Key) -> Result<Self, InternalPakeError> {
-        Ok(Self {
-            pk: public,
-            sk: private,
-            _g: PhantomData,
-        })
-    }
-
     /// Generating a random key pair given a cryptographic rng
     pub(crate) fn generate_random<R: RngCore + CryptoRng>(rng: &mut R) -> Self {
         let sk = G::random_scalar(rng);
@@ -116,7 +106,11 @@ impl<G: Group> KeyPair<G> {
     pub fn from_private_key_slice(input: &[u8]) -> Result<Self, InternalPakeError> {
         let sk = Key::from_arr(GenericArray::from_slice(&input))?;
         let pk = Self::public_from_private(&sk);
-        Self::new(pk, sk)
+        Ok(Self {
+            pk,
+            sk,
+            _g: PhantomData,
+        })
     }
 
     #[cfg(test)]
