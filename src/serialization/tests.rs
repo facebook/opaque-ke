@@ -237,7 +237,7 @@ fn credential_response_roundtrip() {
     let identity = RistrettoPoint::identity();
     let identity_bytes = identity.to_arr().to_vec();
 
-    assert!(match CredentialRequest::<Default>::deserialize(
+    assert!(match CredentialResponse::<Default>::deserialize(
         &[
             identity_bytes,
             masking_nonce.to_vec(),
