@@ -5,7 +5,7 @@
 
 //! An implementation of the OPAQUE asymmetric password authentication key exchange protocol
 //!
-//! Note: This implementation is in sync with [draft-irtf-cfrg-opaque-03](https://www.ietf.org/archive/id/draft-irtf-cfrg-opaque-03.html),
+//! Note: This implementation is in sync with [draft-irtf-cfrg-opaque-05](https://www.ietf.org/archive/id/draft-irtf-cfrg-opaque-05.html),
 //! but this specification is subject to change, until the final version published by the IETF.
 //!
 //! # Overview

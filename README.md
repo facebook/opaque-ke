@@ -22,14 +22,14 @@ Installation
 Add the following line to the dependencies of your `Cargo.toml`:
 
 ```
-opaque-ke = "0.5.0"
+opaque-ke = "0.6.0"
 ```
 
 Resources
 ---------
 
 - [OPAQUE academic publication](https://eprint.iacr.org/2018/163.pdf), including formal definitions and a proof of security
-- [draft-irtf-cfrg-opaque-03](https://www.ietf.org/archive/id/draft-irtf-cfrg-opaque-03.html), containing a detailed (byte-level) specification for OPAQUE
+- [draft-irtf-cfrg-opaque-05](https://www.ietf.org/archive/id/draft-irtf-cfrg-opaque-05.html), containing a detailed (byte-level) specification for OPAQUE
 - ["Let's talk about PAKE"](https://blog.cryptographyengineering.com/2018/10/19/lets-talk-about-pake/), an introductory blog post written by Matthew Green that covers OPAQUE
 - [opaque-wasm](https://github.com/marucjmar/opaque-wasm), a WebAssembly package for this library
 
