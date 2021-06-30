@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.6.0 (June 30, 2021)
+
+* Synced implementation with draft-irtf-cfrg-opaque-05, which changes
+  the envelope structure and introduces a ServerSetup object to be
+  maintained by the server
+* Various security improvements: non-zero scalars, zeroizing on drop,
+  constant-time operations
+* Adding serde support behind a feature
+* Supporting common traits (eb59676)
+* Swapping out scrypt for argon2 (535b9b8) for the slow-hash feature
+* Adding support for common traits on public structs
+* Updated dependencies
+
 ## 0.5.0 (March 1, 2021)
 
 * Removed dependency on generic-bytes-derive package
