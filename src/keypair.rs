@@ -35,7 +35,11 @@ pub trait SizedBytesExt: SizedBytes {
 impl<T> SizedBytesExt for T where T: SizedBytes {}
 
 /// A Keypair trait with public-private verification
-#[cfg_attr(feature = "serialize", derive(serde::Deserialize, serde::Serialize), serde(bound = ""))]
+#[cfg_attr(
+    feature = "serialize",
+    derive(serde::Deserialize, serde::Serialize),
+    serde(bound = "")
+)]
 pub struct KeyPair<G> {
     pk: PublicKey<G>,
     sk: PrivateKey<G>,
@@ -117,12 +121,11 @@ impl<G: Group> KeyPair<G> {
 
     /// Obtains a KeyPair from a slice representing the private key
     pub fn from_private_key_slice(input: &[u8]) -> Result<Self, InternalPakeError> {
-        let sk = PrivateKey::new(Key::from_arr::<G::ScalarLen>(GenericArray::from_slice(input))?);
+        let sk = PrivateKey::new(Key::from_arr::<G::ScalarLen>(GenericArray::from_slice(
+            input,
+        ))?);
         let pk = Self::public_from_private(&sk);
-        Ok(Self {
-            pk,
-            sk,
-        })
+        Ok(Self { pk, sk })
     }
 
     #[cfg(test)]
@@ -174,7 +177,9 @@ impl Key {
     }
 
     #[allow(clippy::unnecessary_wraps)]
-    fn from_arr<L: ArrayLength<u8>>(key_bytes: &GenericArray<u8, L>) -> Result<Self, TryFromSizedBytesError> {
+    fn from_arr<L: ArrayLength<u8>>(
+        key_bytes: &GenericArray<u8, L>,
+    ) -> Result<Self, TryFromSizedBytesError> {
         Ok(Key(key_bytes.to_vec()))
     }
 }

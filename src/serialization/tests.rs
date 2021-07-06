@@ -211,8 +211,11 @@ fn credential_response_roundtrip() {
     let mut masking_nonce = vec![0u8; 32];
     rng.fill_bytes(&mut masking_nonce);
 
-    let mut masked_response =
-        vec![0u8; <PublicKey<RistrettoPoint> as SizedBytes>::Len::to_usize() + Envelope::<Default>::len()];
+    let mut masked_response = vec![
+        0u8;
+        <PublicKey<RistrettoPoint> as SizedBytes>::Len::to_usize()
+            + Envelope::<Default>::len()
+    ];
     rng.fill_bytes(&mut masked_response);
 
     let server_e_kp = KeyPair::<<Default as CipherSuite>::Group>::generate_random(&mut rng);

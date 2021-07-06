@@ -932,7 +932,8 @@ fn mask_response<CS: CipherSuite>(
     server_s_pk: &PublicKey<CS::Group>,
     envelope: &Envelope<CS>,
 ) -> Result<Vec<u8>, ProtocolError> {
-    let mut xor_pad = vec![0u8; <PublicKey<CS::Group> as SizedBytes>::Len::to_usize() + Envelope::<CS>::len()];
+    let mut xor_pad =
+        vec![0u8; <PublicKey<CS::Group> as SizedBytes>::Len::to_usize() + Envelope::<CS>::len()];
     Hkdf::<CS::Hash>::from_prk(masking_key)
         .map_err(|_| InternalPakeError::HkdfError)?
         .expand(
@@ -955,7 +956,8 @@ fn unmask_response<CS: CipherSuite>(
     masking_nonce: &[u8],
     masked_response: &[u8],
 ) -> Result<(PublicKey<CS::Group>, Envelope<CS>), ProtocolError> {
-    let mut xor_pad = vec![0u8; <PublicKey<CS::Group> as SizedBytes>::Len::to_usize() + Envelope::<CS>::len()];
+    let mut xor_pad =
+        vec![0u8; <PublicKey<CS::Group> as SizedBytes>::Len::to_usize() + Envelope::<CS>::len()];
     Hkdf::<CS::Hash>::from_prk(masking_key)
         .map_err(|_| InternalPakeError::HkdfError)?
         .expand(
