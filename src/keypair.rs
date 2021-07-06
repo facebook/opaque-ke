@@ -78,8 +78,8 @@ impl<G: Group> KeyPair<G> {
     /// Generating a random key pair given a cryptographic rng
     pub(crate) fn generate_random<R: RngCore + CryptoRng>(rng: &mut R) -> Self {
         let sk = G::random_nonzero_scalar(rng);
-        let sk_bytes = G::scalar_as_bytes(&sk);
-        let pk = G::base_point().mult_by_slice(sk_bytes);
+        let sk_bytes = G::scalar_as_bytes(sk);
+        let pk = G::base_point().mult_by_slice(&sk_bytes);
         Self {
             pk: PublicKey::new(Key(pk.to_arr().to_vec())),
             sk: PrivateKey::new(Key(sk_bytes.to_vec())),

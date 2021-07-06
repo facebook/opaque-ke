@@ -38,8 +38,8 @@ fn build_inner_envelope_internal<CS: CipherSuite>(
     h.expand(&[nonce, STR_PRIVATE_KEY].concat(), &mut keypair_seed)
         .map_err(|_| InternalPakeError::HkdfError)?;
     let client_static_keypair =
-        KeyPair::<CS::Group>::from_private_key_slice(CS::Group::scalar_as_bytes(
-            &CS::Group::hash_to_scalar::<CS::Hash>(&keypair_seed[..], STR_OPAQUE_HASH_TO_SCALAR)?,
+        KeyPair::<CS::Group>::from_private_key_slice(&CS::Group::scalar_as_bytes(
+            CS::Group::hash_to_scalar::<CS::Hash>(&keypair_seed[..], STR_OPAQUE_HASH_TO_SCALAR)?,
         ))?;
 
     Ok(client_static_keypair.public().clone())
@@ -54,8 +54,8 @@ fn recover_keys_internal<CS: CipherSuite>(
     h.expand(&[nonce, STR_PRIVATE_KEY].concat(), &mut keypair_seed)
         .map_err(|_| InternalPakeError::HkdfError)?;
     let client_static_keypair =
-        KeyPair::<CS::Group>::from_private_key_slice(CS::Group::scalar_as_bytes(
-            &CS::Group::hash_to_scalar::<CS::Hash>(&keypair_seed[..], STR_OPAQUE_HASH_TO_SCALAR)?,
+        KeyPair::<CS::Group>::from_private_key_slice(&CS::Group::scalar_as_bytes(
+            CS::Group::hash_to_scalar::<CS::Hash>(&keypair_seed[..], STR_OPAQUE_HASH_TO_SCALAR)?,
         ))?;
 
     Ok(client_static_keypair)

@@ -115,7 +115,7 @@ impl<CS: CipherSuite> ClientRegistration<CS> {
     /// Serialization into bytes
     pub fn serialize(&self) -> Vec<u8> {
         [
-            &CS::Group::scalar_as_bytes(&self.token.blind)[..],
+            &CS::Group::scalar_as_bytes(self.token.blind)[..],
             &self.token.data,
         ]
         .concat()
@@ -415,7 +415,7 @@ impl<CS: CipherSuite> ClientLogin<CS> {
     /// Serialization into bytes
     pub fn serialize(&self) -> Vec<u8> {
         let output: Vec<u8> = [
-            &CS::Group::scalar_as_bytes(&self.token.blind)[..],
+            &CS::Group::scalar_as_bytes(self.token.blind)[..],
             &serialize(&self.serialized_credential_request, 2),
             &serialize(&self.ke1_state.to_bytes(), 2),
             &self.token.data,
