@@ -58,7 +58,7 @@ pub trait Group: Copy + Sized + for<'a> Mul<&'a <Self as Group>::Scalar, Output 
     type UniformBytesLen: ArrayLength<u8>;
 
     /// Hashes a slice of pseudo-random bytes of the correct length to a curve point
-    fn hash_to_curve(uniform_bytes: &GenericArray<u8, Self::UniformBytesLen>) -> Self;
+    fn hash_to_curve(uniform_bytes: &GenericArray<u8, Self::UniformBytesLen>) -> Result<Self, InternalPakeError>;
 
     /// Get the base point for the group
     fn base_point() -> Self;
@@ -128,14 +128,14 @@ impl Group for RistrettoPoint {
     }
 
     type UniformBytesLen = U64;
-    fn hash_to_curve(uniform_bytes: &GenericArray<u8, Self::UniformBytesLen>) -> Self {
+    fn hash_to_curve(uniform_bytes: &GenericArray<u8, Self::UniformBytesLen>) -> Result<Self, InternalPakeError> {
         // https://caniuse.rs/features/array_gt_32_impls
         let bits: [u8; 64] = {
             let mut bytes = [0u8; 64];
             bytes.copy_from_slice(uniform_bytes);
             bytes
         };
-        RistrettoPoint::from_uniform_bytes(&bits)
+        Ok(RistrettoPoint::from_uniform_bytes(&bits))
     }
 
     fn base_point() -> Self {

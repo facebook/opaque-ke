@@ -43,9 +43,9 @@ impl GroupWithMapToCurve for RistrettoPoint {
     fn map_to_curve<H: Hash>(msg: &[u8], dst: &[u8]) -> Result<Self, InternalPakeError> {
         let uniform_bytes =
             expand_message_xmd::<H>(msg, dst, <H as Digest>::OutputSize::to_usize())?;
-        Ok(<Self as Group>::hash_to_curve(
+        <Self as Group>::hash_to_curve(
             &GenericArray::clone_from_slice(&uniform_bytes[..]),
-        ))
+        )
     }
 
     fn hash_to_scalar<H: Hash>(
