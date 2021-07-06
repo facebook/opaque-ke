@@ -445,7 +445,7 @@ fn populate_test_vectors(values: &Value) -> TestVectorParameters {
         dummy_private_key: parse_default!(
             values,
             "client_private_key",
-            vec![0u8; <PrivateKey as SizedBytes>::Len::to_usize()]
+            vec![0u8; <PrivateKey<RistrettoPoint> as SizedBytes>::Len::to_usize()]
         ),
         dummy_masking_key: parse_default!(values, "masking_key", vec![0u8; 64]),
         context: parse!(values, "Context"),

@@ -43,10 +43,10 @@ static STR_OPAQUE: &[u8] = b"OPAQUE-";
 pub struct TripleDH;
 
 impl<D: Hash, G: Group> KeyExchange<D, G> for TripleDH {
-    type KE1State = Ke1State;
+    type KE1State = Ke1State<G>;
     type KE2State = Ke2State<<D as FixedOutput>::OutputSize>;
-    type KE1Message = Ke1Message;
-    type KE2Message = Ke2Message<<D as FixedOutput>::OutputSize>;
+    type KE1Message = Ke1Message<G>;
+    type KE2Message = Ke2Message<G, <D as FixedOutput>::OutputSize>;
     type KE3Message = Ke3Message<<D as FixedOutput>::OutputSize>;
 
     fn generate_ke1<R: RngCore + CryptoRng>(
@@ -75,8 +75,8 @@ impl<D: Hash, G: Group> KeyExchange<D, G> for TripleDH {
         serialized_credential_request: Vec<u8>,
         l2_bytes: Vec<u8>,
         ke1_message: Self::KE1Message,
-        client_s_pk: PublicKey,
-        server_s_sk: PrivateKey,
+        client_s_pk: PublicKey<G>,
+        server_s_sk: PrivateKey<G>,
         id_u: Vec<u8>,
         id_s: Vec<u8>,
         context: Vec<u8>,
@@ -133,8 +133,8 @@ impl<D: Hash, G: Group> KeyExchange<D, G> for TripleDH {
         ke2_message: Self::KE2Message,
         ke1_state: &Self::KE1State,
         serialized_credential_request: &[u8],
-        server_s_pk: PublicKey,
-        client_s_sk: PrivateKey,
+        server_s_pk: PublicKey<G>,
+        client_s_sk: PrivateKey<G>,
         id_u: Vec<u8>,
         id_s: Vec<u8>,
         context: Vec<u8>,
@@ -208,23 +208,44 @@ impl<D: Hash, G: Group> KeyExchange<D, G> for TripleDH {
 }
 
 /// The client state produced after the first key exchange message
-#[derive(PartialEq, Eq, Debug, Hash, Zeroize, Clone)]
 #[cfg_attr(feature = "serialize", derive(serde::Deserialize, serde::Serialize))]
-#[zeroize(drop)]
-pub struct Ke1State {
-    client_e_sk: PrivateKey,
+pub struct Ke1State<G> {
+    client_e_sk: PrivateKey<G>,
     client_nonce: GenericArray<u8, NonceLen>,
+}
+
+impl_clone_for!(
+    struct Ke1State<G>,
+    [client_e_sk, client_nonce],
+);
+impl_debug_eq_hash_for!(
+    struct Ke1State<G>,
+    [client_e_sk, client_nonce],
+);
+
+// This can't be derived because of the use of a generic parameter
+impl<G> Zeroize for Ke1State<G> {
+    fn zeroize(&mut self) {
+        self.client_e_sk.zeroize();
+        self.client_nonce.zeroize();
+    }
+}
+
+impl<G> Drop for Ke1State<G> {
+    fn drop(&mut self) {
+        self.zeroize();
+    }
 }
 
 /// The first key exchange message
 #[derive(PartialEq, Eq, Debug, Hash, Clone)]
 #[cfg_attr(feature = "serialize", derive(serde::Deserialize, serde::Serialize))]
-pub struct Ke1Message {
+pub struct Ke1Message<G> {
     pub(crate) client_nonce: GenericArray<u8, NonceLen>,
-    pub(crate) client_e_pk: PublicKey,
+    pub(crate) client_e_pk: PublicKey<G>,
 }
 
-impl FromBytes for Ke1State {
+impl<G: Group> FromBytes for Ke1State<G> {
     fn from_bytes<CS: CipherSuite>(bytes: &[u8]) -> Result<Self, PakeError> {
         let nonce_len = NonceLen::to_usize();
         let checked_bytes = check_slice_size_atleast(bytes, KEY_LEN + nonce_len, "ke1_state")?;
@@ -238,7 +259,7 @@ impl FromBytes for Ke1State {
     }
 }
 
-impl ToBytesWithPointers for Ke1State {
+impl<G: Group> ToBytesWithPointers for Ke1State<G> {
     fn to_bytes(&self) -> Vec<u8> {
         let output: Vec<u8> = [&self.client_e_sk.to_arr(), &self.client_nonce[..]].concat();
         output
@@ -249,20 +270,20 @@ impl ToBytesWithPointers for Ke1State {
         vec![
             (
                 self.client_e_sk.as_ptr(),
-                <PrivateKey as SizedBytes>::Len::to_usize(),
+                <PrivateKey<G> as SizedBytes>::Len::to_usize(),
             ),
             (self.client_nonce.as_ptr(), NonceLen::to_usize()),
         ]
     }
 }
 
-impl ToBytes for Ke1Message {
+impl<G: Group> ToBytes for Ke1Message<G> {
     fn to_bytes(&self) -> Vec<u8> {
         [&self.client_nonce[..], &self.client_e_pk.to_arr()].concat()
     }
 }
 
-impl FromBytes for Ke1Message {
+impl<G: Group> FromBytes for Ke1Message<G> {
     fn from_bytes<CS: CipherSuite>(ke1_message_bytes: &[u8]) -> Result<Self, PakeError> {
         let nonce_len = NonceLen::to_usize();
         let checked_nonce =
@@ -323,9 +344,9 @@ impl<HashLen: ArrayLength<u8>> ToBytesWithPointers for Ke2State<HashLen> {
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 #[cfg_attr(feature = "serialize", derive(serde::Deserialize, serde::Serialize))]
 #[cfg_attr(feature = "serialize", serde(bound = ""))]
-pub struct Ke2Message<HashLen: ArrayLength<u8>> {
+pub struct Ke2Message<G, HashLen: ArrayLength<u8>> {
     server_nonce: GenericArray<u8, NonceLen>,
-    server_e_pk: PublicKey,
+    server_e_pk: PublicKey<G>,
     mac: GenericArray<u8, HashLen>,
 }
 
@@ -344,19 +365,19 @@ impl<HashLen: ArrayLength<u8>> FromBytes for Ke2State<HashLen> {
     }
 }
 
-impl<HashLen: ArrayLength<u8>> ToBytes for Ke2Message<HashLen> {
+impl<G: Group, HashLen: ArrayLength<u8>> ToBytes for Ke2Message<G, HashLen> {
     fn to_bytes(&self) -> Vec<u8> {
         [&self.to_bytes_without_info_or_mac(), &self.mac[..]].concat()
     }
 }
 
-impl<HashLen: ArrayLength<u8>> Ke2Message<HashLen> {
+impl<G: Group, HashLen: ArrayLength<u8>> Ke2Message<G, HashLen> {
     fn to_bytes_without_info_or_mac(&self) -> Vec<u8> {
         [&self.server_nonce[..], &self.server_e_pk.to_arr()].concat()
     }
 }
 
-impl<HashLen: ArrayLength<u8>> FromBytes for Ke2Message<HashLen> {
+impl<G: Group, HashLen: ArrayLength<u8>> FromBytes for Ke2Message<G, HashLen> {
     fn from_bytes<CS: CipherSuite>(input: &[u8]) -> Result<Self, PakeError> {
         let nonce_len = NonceLen::to_usize();
         let checked_nonce = check_slice_size_atleast(input, nonce_len, "ke2_message nonce")?;
@@ -387,13 +408,13 @@ impl<HashLen: ArrayLength<u8>> FromBytes for Ke2Message<HashLen> {
 
 #[allow(clippy::upper_case_acronyms)]
 // The triple of public and private components used in the 3DH computation
-struct TripleDHComponents {
-    pk1: PublicKey,
-    sk1: PrivateKey,
-    pk2: PublicKey,
-    sk2: PrivateKey,
-    pk3: PublicKey,
-    sk3: PrivateKey,
+struct TripleDHComponents<G> {
+    pk1: PublicKey<G>,
+    sk1: PrivateKey<G>,
+    pk2: PublicKey<G>,
+    sk2: PrivateKey<G>,
+    pk3: PublicKey<G>,
+    sk3: PrivateKey<G>,
 }
 
 #[allow(clippy::upper_case_acronyms)]
@@ -433,7 +454,7 @@ impl<HashLen: ArrayLength<u8>> FromBytes for Ke3Message<HashLen> {
 // Internal function which takes the public and private components of the client and server keypairs, along
 // with some auxiliary metadata, to produce the session key and two MAC keys
 fn derive_3dh_keys<D: Hash, G: Group>(
-    dh: TripleDHComponents,
+    dh: TripleDHComponents<G>,
     hashed_derivation_transcript: &[u8],
 ) -> Result<TripleDHDerivationResult<D>, ProtocolError> {
     let ikm: Vec<u8> = [

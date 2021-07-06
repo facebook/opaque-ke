@@ -79,7 +79,7 @@ pub struct RegistrationResponse<CS: CipherSuite> {
     /// The server's oprf output
     pub(crate) beta: CS::Group,
     /// Server's static public key
-    pub(crate) server_s_pk: PublicKey,
+    pub(crate) server_s_pk: PublicKey<CS::Group>,
 }
 
 // Cannot be derived because it would require for CS to be Clone.
@@ -107,7 +107,7 @@ impl<CS: CipherSuite> RegistrationResponse<CS> {
     /// Deserialization from bytes
     pub fn deserialize(input: &[u8]) -> Result<Self, ProtocolError> {
         let elem_len = <CS::Group as Group>::ElemLen::to_usize();
-        let key_len = <PublicKey as SizedBytes>::Len::to_usize();
+        let key_len = <PublicKey<CS::Group> as SizedBytes>::Len::to_usize();
         let checked_slice =
             check_slice_size(input, elem_len + key_len, "registration_response_bytes")?;
 
@@ -141,7 +141,7 @@ pub struct RegistrationUpload<CS: CipherSuite> {
     /// The masking key used to mask the envelope
     pub(crate) masking_key: GenericArray<u8, <CS::Hash as Digest>::OutputSize>,
     /// The user's public key
-    pub(crate) client_s_pk: PublicKey,
+    pub(crate) client_s_pk: PublicKey<CS::Group>,
 }
 
 impl_clone_for!(
@@ -166,7 +166,7 @@ impl<CS: CipherSuite> RegistrationUpload<CS> {
 
     /// Deserialization from bytes
     pub fn deserialize(input: &[u8]) -> Result<Self, ProtocolError> {
-        let key_len = <PublicKey as SizedBytes>::Len::to_usize();
+        let key_len = <PublicKey<CS::Group> as SizedBytes>::Len::to_usize();
         let hash_len = <CS::Hash as Digest>::OutputSize::to_usize();
         let checked_slice =
             check_slice_size_atleast(input, key_len + hash_len, "registration_upload_bytes")?;
@@ -311,7 +311,7 @@ impl<CS: CipherSuite> CredentialResponse<CS> {
     /// Deserialization from bytes
     pub fn deserialize(input: &[u8]) -> Result<Self, ProtocolError> {
         let elem_len = <CS::Group as Group>::ElemLen::to_usize();
-        let key_len = <PublicKey as SizedBytes>::Len::to_usize();
+        let key_len = <PublicKey<CS::Group> as SizedBytes>::Len::to_usize();
         let nonce_len: usize = 32;
         let envelope_len = Envelope::<CS>::len();
         let masked_response_len = key_len + envelope_len;

@@ -69,7 +69,7 @@ impl<CS: CipherSuite> ServerSetup<CS> {
     /// Deserialization from bytes
     pub fn deserialize(input: &[u8]) -> Result<Self, ProtocolError> {
         let seed_len = <CS::Hash as Digest>::OutputSize::to_usize();
-        let key_len = <PrivateKey as SizedBytes>::Len::to_usize();
+        let key_len = <PrivateKey<CS::Group> as SizedBytes>::Len::to_usize();
         let checked_slice = check_slice_size(input, seed_len + key_len + key_len, "server_setup")?;
 
         Ok(Self {
@@ -242,7 +242,7 @@ pub struct ClientRegistrationFinishResult<CS: CipherSuite> {
     /// The export key output by client registration
     pub export_key: GenericArray<u8, <CS::Hash as Digest>::OutputSize>,
     /// The server's static public key
-    pub server_s_pk: PublicKey,
+    pub server_s_pk: PublicKey<CS::Group>,
     /// Instance of the ClientRegistration, only used in tests for checking zeroize
     #[cfg(test)]
     pub state: ClientRegistration<CS>,
@@ -517,7 +517,7 @@ pub struct ClientLoginFinishResult<CS: CipherSuite> {
     /// The client-side export key
     pub export_key: GenericArray<u8, <CS::Hash as Digest>::OutputSize>,
     /// The server's static public key
-    pub server_s_pk: PublicKey,
+    pub server_s_pk: PublicKey<CS::Group>,
     /// Instance of the ClientLogin, only used in tests for checking zeroize
     #[cfg(test)]
     pub state: ClientLogin<CS>,
@@ -915,7 +915,7 @@ fn oprf_key_from_seed<G: GroupWithMapToCurve, D: Hash>(
     oprf_seed: &GenericArray<u8, D::OutputSize>,
     credential_identifier: &[u8],
 ) -> Result<G::Scalar, InternalPakeError> {
-    let mut oprf_key_bytes = vec![0u8; <PrivateKey as SizedBytes>::Len::to_usize()];
+    let mut oprf_key_bytes = vec![0u8; <PrivateKey<G> as SizedBytes>::Len::to_usize()];
     Hkdf::<D>::from_prk(oprf_seed)
         .map_err(|_| InternalPakeError::HkdfError)?
         .expand(
@@ -929,10 +929,10 @@ fn oprf_key_from_seed<G: GroupWithMapToCurve, D: Hash>(
 fn mask_response<CS: CipherSuite>(
     masking_key: &[u8],
     masking_nonce: &[u8],
-    server_s_pk: &PublicKey,
+    server_s_pk: &PublicKey<CS::Group>,
     envelope: &Envelope<CS>,
 ) -> Result<Vec<u8>, ProtocolError> {
-    let mut xor_pad = vec![0u8; <PublicKey as SizedBytes>::Len::to_usize() + Envelope::<CS>::len()];
+    let mut xor_pad = vec![0u8; <PublicKey<CS::Group> as SizedBytes>::Len::to_usize() + Envelope::<CS>::len()];
     Hkdf::<CS::Hash>::from_prk(masking_key)
         .map_err(|_| InternalPakeError::HkdfError)?
         .expand(
@@ -954,8 +954,8 @@ fn unmask_response<CS: CipherSuite>(
     masking_key: &[u8],
     masking_nonce: &[u8],
     masked_response: &[u8],
-) -> Result<(PublicKey, Envelope<CS>), ProtocolError> {
-    let mut xor_pad = vec![0u8; <PublicKey as SizedBytes>::Len::to_usize() + Envelope::<CS>::len()];
+) -> Result<(PublicKey<CS::Group>, Envelope<CS>), ProtocolError> {
+    let mut xor_pad = vec![0u8; <PublicKey<CS::Group> as SizedBytes>::Len::to_usize() + Envelope::<CS>::len()];
     Hkdf::<CS::Hash>::from_prk(masking_key)
         .map_err(|_| InternalPakeError::HkdfError)?
         .expand(
@@ -968,7 +968,7 @@ fn unmask_response<CS: CipherSuite>(
         .zip(masked_response.iter())
         .map(|(&x1, &x2)| x1 ^ x2)
         .collect();
-    let key_len = <PublicKey as SizedBytes>::Len::to_usize();
+    let key_len = <PublicKey<CS::Group> as SizedBytes>::Len::to_usize();
     let unchecked_server_s_pk =
         PublicKey::from_arr(&GenericArray::clone_from_slice(&plaintext[..key_len]))?;
     let envelope = Envelope::deserialize(&plaintext[key_len..])?;

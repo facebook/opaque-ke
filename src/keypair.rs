@@ -11,7 +11,7 @@ use crate::errors::InternalPakeError;
 use crate::group::Group;
 #[cfg(test)]
 use generic_array::typenum::Unsigned;
-use generic_array::{typenum::U32, GenericArray};
+use generic_array::{ArrayLength, GenericArray};
 use generic_bytes::{SizedBytes, TryFromSizedBytesError};
 #[cfg(test)]
 use proptest::prelude::*;
@@ -35,20 +35,19 @@ pub trait SizedBytesExt: SizedBytes {
 impl<T> SizedBytesExt for T where T: SizedBytes {}
 
 /// A Keypair trait with public-private verification
-#[cfg_attr(feature = "serialize", derive(serde::Deserialize, serde::Serialize))]
+#[cfg_attr(feature = "serialize", derive(serde::Deserialize, serde::Serialize), serde(bound = ""))]
 pub struct KeyPair<G> {
-    pk: PublicKey,
-    sk: PrivateKey,
-    _g: PhantomData<G>,
+    pk: PublicKey<G>,
+    sk: PrivateKey<G>,
 }
 
 impl_clone_for!(
     struct KeyPair<G>,
-    [pk, sk, _g],
+    [pk, sk],
 );
 impl_debug_eq_hash_for!(
     struct KeyPair<G>,
-    [pk, sk, _g],
+    [pk, sk],
 );
 
 // This can't be derived because of the use of a phantom parameter
@@ -67,12 +66,12 @@ impl<G> Drop for KeyPair<G> {
 
 impl<G: Group> KeyPair<G> {
     /// The public key component
-    pub fn public(&self) -> &PublicKey {
+    pub fn public(&self) -> &PublicKey<G> {
         &self.pk
     }
 
     /// The private key component
-    pub fn private(&self) -> &PrivateKey {
+    pub fn private(&self) -> &PrivateKey<G> {
         &self.sk
     }
 
@@ -82,17 +81,16 @@ impl<G: Group> KeyPair<G> {
         let sk_bytes = G::scalar_as_bytes(&sk);
         let pk = G::base_point().mult_by_slice(sk_bytes);
         Self {
-            pk: PublicKey(Key(pk.to_arr().to_vec())),
-            sk: PrivateKey(Key(sk_bytes.to_vec())),
-            _g: PhantomData,
+            pk: PublicKey::new(Key(pk.to_arr().to_vec())),
+            sk: PrivateKey::new(Key(sk_bytes.to_vec())),
         }
     }
 
     /// Obtaining a public key from secret bytes. At all times, we should have
     /// &public_from_private(self.private()) == self.public()
-    pub(crate) fn public_from_private(bytes: &PrivateKey) -> PublicKey {
+    pub(crate) fn public_from_private(bytes: &PrivateKey<G>) -> PublicKey<G> {
         let bytes_data = GenericArray::<u8, G::ScalarLen>::from_slice(&bytes.0[..]);
-        PublicKey(Key(G::base_point()
+        PublicKey::new(Key(G::base_point()
             .mult_by_slice(bytes_data)
             .to_arr()
             .to_vec()))
@@ -102,14 +100,14 @@ impl<G: Group> KeyPair<G> {
     /// material provided through the network which fits the key
     /// representation (i.e. can be mapped to a curve point), but presents
     /// some risk - e.g. small subgroup check
-    pub(crate) fn check_public_key(key: PublicKey) -> Result<PublicKey, InternalPakeError> {
+    pub(crate) fn check_public_key(key: PublicKey<G>) -> Result<PublicKey<G>, InternalPakeError> {
         G::from_element_slice(GenericArray::from_slice(&key.0)).map(|_| key)
     }
 
     /// Computes the diffie hellman function on a public key and private key
     pub(crate) fn diffie_hellman(
-        pk: PublicKey,
-        sk: PrivateKey,
+        pk: PublicKey<G>,
+        sk: PrivateKey<G>,
     ) -> Result<Vec<u8>, InternalPakeError> {
         let pk_data = GenericArray::<u8, G::ElemLen>::from_slice(&pk.0[..]);
         let point = G::from_element_slice(pk_data)?;
@@ -119,20 +117,19 @@ impl<G: Group> KeyPair<G> {
 
     /// Obtains a KeyPair from a slice representing the private key
     pub fn from_private_key_slice(input: &[u8]) -> Result<Self, InternalPakeError> {
-        let sk = PrivateKey(Key::from_arr(GenericArray::from_slice(input))?);
+        let sk = PrivateKey::new(Key::from_arr::<G::ScalarLen>(GenericArray::from_slice(input))?);
         let pk = Self::public_from_private(&sk);
         Ok(Self {
             pk,
             sk,
-            _g: PhantomData,
         })
     }
 
     #[cfg(test)]
     pub fn as_byte_ptrs(&self) -> Vec<(*const u8, usize)> {
         vec![
-            (self.pk.as_ptr(), KeyLen::to_usize()),
-            (self.sk.as_ptr(), KeyLen::to_usize()),
+            (self.pk.as_ptr(), G::ElemLen::to_usize()),
+            (self.sk.as_ptr(), G::ScalarLen::to_usize()),
         ]
     }
 }
@@ -154,8 +151,6 @@ impl<G: Group + Debug> KeyPair<G> {
     }
 }
 
-type KeyLen = U32;
-
 /// A minimalist key type built around a \[u8; 32\]
 #[derive(Debug, PartialEq, Eq, Clone, Hash, Zeroize)]
 #[cfg_attr(feature = "serialize", derive(serde::Deserialize, serde::Serialize))]
@@ -174,69 +169,131 @@ impl Deref for Key {
 
 // Don't make it implement SizedBytes so that it's not constructible outside of this module.
 impl Key {
-    fn to_arr(&self) -> GenericArray<u8, KeyLen> {
+    fn to_arr<L: ArrayLength<u8>>(&self) -> GenericArray<u8, L> {
         GenericArray::clone_from_slice(&self.0[..])
     }
 
     #[allow(clippy::unnecessary_wraps)]
-    fn from_arr(key_bytes: &GenericArray<u8, KeyLen>) -> Result<Self, TryFromSizedBytesError> {
+    fn from_arr<L: ArrayLength<u8>>(key_bytes: &GenericArray<u8, L>) -> Result<Self, TryFromSizedBytesError> {
         Ok(Key(key_bytes.to_vec()))
     }
 }
 
 /// Wrapper around a Key to enforce that it's a private one.
-#[derive(Debug, PartialEq, Eq, Clone, Hash, Zeroize)]
 #[cfg_attr(feature = "serialize", derive(serde::Deserialize, serde::Serialize))]
-// Ensure Key material is zeroed after use.
-#[zeroize(drop)]
 #[repr(transparent)]
-pub struct PrivateKey(Key);
+pub struct PrivateKey<G> {
+    key: Key,
+    _g: PhantomData<G>,
+}
 
-impl Deref for PrivateKey {
-    type Target = Key;
+impl_clone_for!(
+    struct PrivateKey<G>,
+    [key, _g],
+);
+impl_debug_eq_hash_for!(
+    struct PrivateKey<G>,
+    [key, _g],
+);
 
-    fn deref(&self) -> &Self::Target {
-        &self.0
+// This can't be derived because of the use of a phantom parameter
+impl<G> Zeroize for PrivateKey<G> {
+    fn zeroize(&mut self) {
+        self.key.zeroize();
     }
 }
 
-impl SizedBytes for PrivateKey {
-    type Len = KeyLen;
+impl<G> Drop for PrivateKey<G> {
+    fn drop(&mut self) {
+        self.zeroize();
+    }
+}
+
+impl<G> Deref for PrivateKey<G> {
+    type Target = Key;
+
+    fn deref(&self) -> &Self::Target {
+        &self.key
+    }
+}
+
+impl<G> PrivateKey<G> {
+    fn new(key: Key) -> Self {
+        Self {
+            key,
+            _g: PhantomData,
+        }
+    }
+}
+
+impl<G: Group> SizedBytes for PrivateKey<G> {
+    type Len = G::ScalarLen;
 
     fn to_arr(&self) -> GenericArray<u8, Self::Len> {
-        self.0.to_arr()
+        self.key.to_arr()
     }
 
     fn from_arr(key_bytes: &GenericArray<u8, Self::Len>) -> Result<Self, TryFromSizedBytesError> {
-        Ok(PrivateKey(Key::from_arr(key_bytes)?))
+        Ok(PrivateKey::new(Key::from_arr(key_bytes)?))
     }
 }
 
 /// Wrapper around a Key to enforce that it's a public one.
-#[derive(Debug, PartialEq, Eq, Clone, Hash, Zeroize)]
 #[cfg_attr(feature = "serialize", derive(serde::Deserialize, serde::Serialize))]
-// Ensure Key material is zeroed after use.
-#[zeroize(drop)]
 #[repr(transparent)]
-pub struct PublicKey(Key);
+pub struct PublicKey<G> {
+    key: Key,
+    _g: PhantomData<G>,
+}
 
-impl Deref for PublicKey {
-    type Target = Key;
+impl_clone_for!(
+    struct PublicKey<G>,
+    [key, _g],
+);
+impl_debug_eq_hash_for!(
+    struct PublicKey<G>,
+    [key, _g],
+);
 
-    fn deref(&self) -> &Self::Target {
-        &self.0
+// This can't be derived because of the use of a phantom parameter
+impl<G> Zeroize for PublicKey<G> {
+    fn zeroize(&mut self) {
+        self.key.zeroize();
     }
 }
 
-impl SizedBytes for PublicKey {
-    type Len = KeyLen;
+impl<G> Drop for PublicKey<G> {
+    fn drop(&mut self) {
+        self.zeroize();
+    }
+}
+
+impl<G> Deref for PublicKey<G> {
+    type Target = Key;
+
+    fn deref(&self) -> &Self::Target {
+        &self.key
+    }
+}
+
+impl<G> PublicKey<G> {
+    fn new(key: Key) -> Self {
+        Self {
+            key,
+            _g: PhantomData,
+        }
+    }
+}
+
+impl<G: Group> SizedBytes for PublicKey<G> {
+    type Len = G::ElemLen;
 
     fn to_arr(&self) -> GenericArray<u8, Self::Len> {
-        self.0.to_arr()
+        self.key.to_arr()
     }
 
     fn from_arr(key_bytes: &GenericArray<u8, Self::Len>) -> Result<Self, TryFromSizedBytesError> {
-        Ok(PublicKey(Key::from_arr(key_bytes)?))
+        Ok(PublicKey::new(Key::from_arr(key_bytes)?))
     }
 }
 
@@ -251,7 +308,7 @@ mod tests {
 
     #[test]
     fn test_zeroize_key() -> Result<(), ProtocolError> {
-        let key_len = KeyLen::to_usize();
+        let key_len = <RistrettoPoint as Group>::ElemLen::to_usize();
         let mut key = Key(vec![1u8; key_len]);
         let ptr = key.as_ptr();
 

@@ -30,7 +30,7 @@ pub trait Group: Copy + Sized + for<'a> Mul<&'a <Self as Group>::Scalar, Output 
     /// The type of base field scalars
     type Scalar: Zeroize + Clone;
     /// The byte length necessary to represent scalars
-    type ScalarLen: ArrayLength<u8>;
+    type ScalarLen: ArrayLength<u8> + 'static;
     /// Return a scalar from its fixed-length bytes representation
     fn from_scalar_slice(
         scalar_bits: &GenericArray<u8, Self::ScalarLen>,
@@ -43,7 +43,7 @@ pub trait Group: Copy + Sized + for<'a> Mul<&'a <Self as Group>::Scalar, Output 
     fn scalar_invert(scalar: &Self::Scalar) -> Self::Scalar;
 
     /// The byte length necessary to represent group elements
-    type ElemLen: ArrayLength<u8>;
+    type ElemLen: ArrayLength<u8> + 'static;
     /// Return an element from its fixed-length bytes representation
     fn from_element_slice(
         element_bits: &GenericArray<u8, Self::ElemLen>,
