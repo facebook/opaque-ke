@@ -73,7 +73,7 @@ fn test_blind() -> Result<(), PakeError> {
 
         assert_eq!(
             &parameters.blind,
-            &RistrettoPoint::scalar_as_bytes(&token.blind).to_vec()
+            &RistrettoPoint::scalar_as_bytes(token.blind).to_vec()
         );
         assert_eq!(
             &parameters.blinded_element,
