@@ -307,13 +307,13 @@ fn generate_parameters<CS: CipherSuite>() -> TestVectorParameters {
     .unwrap();
 
     let blinding_factor = CS::Group::random_nonzero_scalar(&mut rng);
-    let blinding_factor_bytes = CS::Group::scalar_as_bytes(blinding_factor).clone();
+    let blinding_factor_bytes = CS::Group::scalar_as_bytes(blinding_factor);
 
     let mut blinding_factor_registration_rng = CycleRng::new(blinding_factor_bytes.to_vec());
     let client_registration_start_result =
         ClientRegistration::<CS>::start(&mut blinding_factor_registration_rng, password).unwrap();
     let blinding_factor_bytes_returned =
-        CS::Group::scalar_as_bytes(client_registration_start_result.state.token.blind).clone();
+        CS::Group::scalar_as_bytes(client_registration_start_result.state.token.blind);
     assert_eq!(
         hex::encode(&blinding_factor_bytes),
         hex::encode(&blinding_factor_bytes_returned)
