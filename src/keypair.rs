@@ -53,7 +53,7 @@ impl_debug_eq_hash_for!(
     [pk, sk],
 );
 
-// This can't be derived because of the use of a phantom parameter
+// This can't be derived because of the use of a generic parameter
 impl<G: Group> Zeroize for KeyPair<G> {
     fn zeroize(&mut self) {
         self.pk.zeroize();
@@ -230,7 +230,7 @@ impl_debug_eq_hash_for!(
     [0],
 );
 
-// This can't be derived because of the use of a phantom parameter
+// This can't be derived because of the use of a generic parameter
 impl<G: Group> Zeroize for PrivateKey<G> {
     fn zeroize(&mut self) {
         self.0.zeroize();
