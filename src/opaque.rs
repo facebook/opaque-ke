@@ -398,15 +398,15 @@ pub struct ClientLogin<CS: CipherSuite> {
 
 impl<CS: CipherSuite> ClientLogin<CS> {
     /// Serialization into bytes
-    pub fn serialize(&self) -> Vec<u8> {
+    pub fn serialize(&self) -> Result<Vec<u8>, ProtocolError> {
         let output: Vec<u8> = [
             &CS::Group::scalar_as_bytes(&self.token.blind)[..],
-            &serialize(&self.serialized_credential_request, 2),
-            &serialize(&self.ke1_state.to_bytes(), 2),
+            &serialize(&self.serialized_credential_request, 2)?,
+            &serialize(&self.ke1_state.to_bytes()?, 2)?,
             &self.token.data,
         ]
         .concat();
-        output
+        Ok(output)
     }
 
     /// Deserialization from bytes
@@ -541,7 +541,7 @@ impl<CS: CipherSuite> ClientLogin<CS> {
         let (ke1_state, ke1_message) = CS::KeyExchange::generate_ke1(info, rng)?;
 
         let credential_request = CredentialRequest { alpha, ke1_message };
-        let serialized_credential_request = credential_request.serialize();
+        let serialized_credential_request = credential_request.serialize()?;
 
         Ok(ClientLoginStartResult {
             message: credential_request,
@@ -605,8 +605,10 @@ impl<CS: CipherSuite> ClientLogin<CS> {
             .envelope
             .open(&password_derived_key, &server_s_pk_bytes, &optional_ids)
             .map_err(|e| match e {
-                InternalPakeError::SealOpenHmacError => PakeError::InvalidLoginError,
-                err => PakeError::from(err),
+                ProtocolError::VerificationError(PakeError::CryptoError(
+                    InternalPakeError::SealOpenHmacError,
+                )) => ProtocolError::VerificationError(PakeError::InvalidLoginError),
+                err => err,
             })?;
 
         let client_s_sk = Key::from_bytes(&opened_envelope.client_s_sk)?;
@@ -693,7 +695,7 @@ pub struct ServerLoginFinishResult<CS: CipherSuite> {
 
 impl<CS: CipherSuite> ServerLogin<CS> {
     /// Serialization into bytes
-    pub fn serialize(&self) -> Vec<u8> {
+    pub fn serialize(&self) -> Result<Vec<u8>, ProtocolError> {
         self.ke2_state.to_bytes()
     }
 
@@ -780,7 +782,7 @@ impl<CS: CipherSuite> ServerLogin<CS> {
             Some((id_u, id_s)) => (id_u, id_s),
         };
 
-        let l1_bytes = &l1.serialize();
+        let l1_bytes = &l1.serialize()?;
         let beta = oprf::evaluate(l1.alpha, &password_file.oprf_key);
         let server_s_pk = KeyPair::<CS::Group>::public_from_private(&server_s_sk);
 
@@ -945,7 +947,7 @@ impl<CS: CipherSuite> Drop for ServerLogin<CS> {
 fn get_password_derived_key<G: GroupWithMapToCurve, SH: SlowHash<D>, D: Hash>(
     token: &oprf::Token<G>,
     beta: G,
-) -> Result<Vec<u8>, InternalPakeError> {
-    let oprf_output = oprf::finalize::<G, D>(&token.data, &token.blind, beta);
-    SH::hash(oprf_output)
+) -> Result<Vec<u8>, ProtocolError> {
+    let oprf_output = oprf::finalize::<G, D>(&token.data, &token.blind, beta)?;
+    SH::hash(oprf_output).map_err(ProtocolError::from)
 }

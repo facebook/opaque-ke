@@ -358,8 +358,16 @@ fn generate_parameters<CS: CipherSuite>() -> TestVectorParameters {
         ClientLoginStartParameters::WithInfo(info1.to_vec()),
     )
     .unwrap();
-    let credential_request_bytes = client_login_start_result.message.serialize().to_vec();
-    let client_login_state = client_login_start_result.state.serialize().to_vec();
+    let credential_request_bytes = client_login_start_result
+        .message
+        .serialize()
+        .unwrap()
+        .to_vec();
+    let client_login_state = client_login_start_result
+        .state
+        .serialize()
+        .unwrap()
+        .to_vec();
 
     let mut server_e_sk_and_nonce_rng = CycleRng::new(
         [
@@ -380,8 +388,16 @@ fn generate_parameters<CS: CipherSuite>() -> TestVectorParameters {
         ),
     )
     .unwrap();
-    let credential_response_bytes = server_login_start_result.message.serialize().to_vec();
-    let server_login_state = server_login_start_result.state.serialize().to_vec();
+    let credential_response_bytes = server_login_start_result
+        .message
+        .serialize()
+        .unwrap()
+        .to_vec();
+    let server_login_state = server_login_start_result
+        .state
+        .serialize()
+        .unwrap()
+        .to_vec();
 
     let client_login_finish_result = client_login_start_result
         .state
@@ -390,7 +406,7 @@ fn generate_parameters<CS: CipherSuite>() -> TestVectorParameters {
             ClientLoginFinishParameters::WithIdentifiers(id_u.to_vec(), id_s.to_vec()),
         )
         .unwrap();
-    let credential_finalization_bytes = client_login_finish_result.message.serialize();
+    let credential_finalization_bytes = client_login_finish_result.message.serialize().unwrap();
 
     TestVectorParameters {
         client_s_pk: client_s_kp.public().to_arr().to_vec(),
@@ -535,11 +551,11 @@ fn test_credential_request() -> Result<(), ProtocolError> {
     )?;
     assert_eq!(
         hex::encode(&parameters.credential_request),
-        hex::encode(client_login_start_result.message.serialize())
+        hex::encode(client_login_start_result.message.serialize().unwrap())
     );
     assert_eq!(
         hex::encode(&parameters.client_login_state),
-        hex::encode(client_login_start_result.state.serialize())
+        hex::encode(client_login_start_result.state.serialize()?)
     );
     Ok(())
 }
@@ -569,11 +585,11 @@ fn test_credential_response() -> Result<(), ProtocolError> {
     );
     assert_eq!(
         hex::encode(&parameters.credential_response),
-        hex::encode(server_login_start_result.message.serialize())
+        hex::encode(server_login_start_result.message.serialize().unwrap())
     );
     assert_eq!(
         hex::encode(&parameters.server_login_state),
-        hex::encode(server_login_start_result.state.serialize())
+        hex::encode(server_login_start_result.state.serialize().unwrap())
     );
     Ok(())
 }
@@ -606,7 +622,7 @@ fn test_credential_finalization() -> Result<(), ProtocolError> {
     );
     assert_eq!(
         hex::encode(&parameters.credential_finalization),
-        hex::encode(client_login_finish_result.message.serialize())
+        hex::encode(client_login_finish_result.message.serialize().unwrap())
     );
     assert_eq!(
         hex::encode(&parameters.export_key),

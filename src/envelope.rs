@@ -177,8 +177,8 @@ impl<D: Hash> Envelope<D> {
         client_s_sk: &[u8],
         server_s_pk: &[u8],
         optional_ids: Option<(Vec<u8>, Vec<u8>)>,
-    ) -> Result<(Self, GenericArray<u8, <D as Digest>::OutputSize>), InternalPakeError> {
-        let aad = construct_aad(server_s_pk, &optional_ids);
+    ) -> Result<(Self, GenericArray<u8, <D as Digest>::OutputSize>), ProtocolError> {
+        let aad = construct_aad(server_s_pk, &optional_ids)?;
         Self::seal_raw(rng, key, &client_s_sk, &aad, mode_from_ids(&optional_ids))
     }
 
@@ -190,7 +190,7 @@ impl<D: Hash> Envelope<D> {
         plaintext: &[u8],
         aad: &[u8],
         mode: InnerEnvelopeMode,
-    ) -> Result<(Self, GenericArray<u8, <D as Digest>::OutputSize>), InternalPakeError> {
+    ) -> Result<(Self, GenericArray<u8, <D as Digest>::OutputSize>), ProtocolError> {
         let mut nonce = vec![0u8; NONCE_LEN];
         rng.fill_bytes(&mut nonce);
 
@@ -239,18 +239,18 @@ impl<D: Hash> Envelope<D> {
         key: &[u8],
         server_s_pk: &[u8],
         optional_ids: &Option<(Vec<u8>, Vec<u8>)>,
-    ) -> Result<OpenedEnvelope<D>, InternalPakeError> {
+    ) -> Result<OpenedEnvelope<D>, ProtocolError> {
         // First, check that mode matches
         if self.inner_envelope.mode != mode_from_ids(optional_ids) {
-            return Err(InternalPakeError::IncompatibleEnvelopeModeError);
+            return Err(InternalPakeError::IncompatibleEnvelopeModeError.into());
         }
 
-        let aad = construct_aad(server_s_pk, optional_ids);
+        let aad = construct_aad(server_s_pk, optional_ids)?;
         let opened = self.open_raw(key, &aad)?;
 
         if opened.plaintext.len() != <Key as SizedBytes>::Len::to_usize() {
             // Plaintext should consist of a single key
-            return Err(InternalPakeError::UnexpectedEnvelopeContentsError);
+            return Err(InternalPakeError::UnexpectedEnvelopeContentsError.into());
         }
 
         Ok(OpenedEnvelope {
@@ -325,12 +325,15 @@ impl<D: Hash> Drop for Envelope<D> {
 
 // Helper functions
 
-fn construct_aad(server_s_pk: &[u8], optional_ids: &Option<(Vec<u8>, Vec<u8>)>) -> Vec<u8> {
-    let ids = optional_ids
-        .iter()
-        .flat_map(|(l, r)| [serialize(l, 2), serialize(r, 2)].concat())
-        .collect();
-    [server_s_pk.to_vec(), ids].concat()
+fn construct_aad(
+    server_s_pk: &[u8],
+    optional_ids: &Option<(Vec<u8>, Vec<u8>)>,
+) -> Result<Vec<u8>, ProtocolError> {
+    let ids = match optional_ids {
+        Some((l, r)) => [serialize(l, 2)?, serialize(r, 2)?].concat(),
+        None => vec![],
+    };
+    Ok([server_s_pk.to_vec(), ids].concat())
 }
 
 pub(crate) fn mode_from_ids(optional_ids: &Option<(Vec<u8>, Vec<u8>)>) -> InnerEnvelopeMode {

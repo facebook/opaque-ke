@@ -172,7 +172,7 @@ fn credential_request_roundtrip() {
 
     let ke1m: Vec<u8> = [
         &client_nonce[..],
-        &serialize(&info.to_vec(), 2),
+        &serialize(&info.to_vec(), 2).unwrap(),
         &client_e_kp.public(),
     ]
     .concat();
@@ -182,7 +182,7 @@ fn credential_request_roundtrip() {
     input.extend_from_slice(&ke1m[..]);
 
     let l1 = CredentialRequest::<Default>::deserialize(input.as_slice()).unwrap();
-    let l1_bytes = l1.serialize();
+    let l1_bytes = l1.serialize().unwrap();
     assert_eq!(input, l1_bytes);
 }
 
@@ -222,7 +222,7 @@ fn credential_response_roundtrip() {
     let ke2m: Vec<u8> = [
         &server_nonce[..],
         &server_e_kp.public(),
-        &serialize(&e_info.to_vec(), 2),
+        &serialize(&e_info.to_vec(), 2).unwrap(),
         &mac[..],
     ]
     .concat();
@@ -234,7 +234,7 @@ fn credential_response_roundtrip() {
     input.extend_from_slice(&ke2m[..]);
 
     let l2 = CredentialResponse::<Default>::deserialize(&input).unwrap();
-    let l2_bytes = l2.serialize();
+    let l2_bytes = l2.serialize().unwrap();
     assert_eq!(input, l2_bytes);
 }
 
@@ -247,7 +247,7 @@ fn login_third_message_roundtrip() {
     let input: Vec<u8> = [&mac[..]].concat();
 
     let l3 = CredentialFinalization::<Default>::deserialize(&input).unwrap();
-    let l3_bytes = l3.serialize();
+    let l3_bytes = l3.serialize().unwrap();
     assert_eq!(input, l3_bytes);
 }
 
@@ -267,13 +267,13 @@ fn client_login_roundtrip() {
     // serialization order: scalar, credential_request, ke1_state, password
     let bytes: Vec<u8> = [
         &sc.as_bytes()[..],
-        &serialize(&serialized_credential_request, 2),
-        &serialize(&l1_data, 2),
+        &serialize(&serialized_credential_request, 2).unwrap(),
+        &serialize(&l1_data, 2).unwrap(),
         &pw[..],
     ]
     .concat();
     let reg = ClientLogin::<Default>::deserialize(&bytes[..]).unwrap();
-    let reg_bytes = reg.serialize();
+    let reg_bytes = reg.serialize().unwrap();
     assert_eq!(reg_bytes, bytes);
 }
 
@@ -290,14 +290,14 @@ fn ke1_message_roundtrip() {
 
     let ke1m: Vec<u8> = [
         &client_nonce[..],
-        &serialize(&info.to_vec(), 2),
+        &serialize(&info.to_vec(), 2).unwrap(),
         &client_e_kp.public(),
     ]
     .concat();
     let reg =
         <TripleDH as KeyExchange<sha2::Sha512, RistrettoPoint>>::KE1Message::try_from(&ke1m[..])
             .unwrap();
-    let reg_bytes = reg.to_bytes();
+    let reg_bytes = reg.to_bytes().unwrap();
     assert_eq!(reg_bytes, ke1m);
 }
 
@@ -316,7 +316,7 @@ fn ke2_message_roundtrip() {
     let ke2m: Vec<u8> = [
         &server_nonce[..],
         &server_e_kp.public(),
-        &serialize(&e_info.to_vec(), 2),
+        &serialize(&e_info.to_vec(), 2).unwrap(),
         &mac[..],
     ]
     .concat();
@@ -324,7 +324,7 @@ fn ke2_message_roundtrip() {
     let reg =
         <TripleDH as KeyExchange<sha2::Sha512, RistrettoPoint>>::KE2Message::try_from(&ke2m[..])
             .unwrap();
-    let reg_bytes = reg.to_bytes();
+    let reg_bytes = reg.to_bytes().unwrap();
     assert_eq!(reg_bytes, ke2m);
 }
 
@@ -339,7 +339,7 @@ fn ke3_message_roundtrip() {
     let reg =
         <TripleDH as KeyExchange<sha2::Sha512, RistrettoPoint>>::KE3Message::try_from(&ke3m[..])
             .unwrap();
-    let reg_bytes = reg.to_bytes();
+    let reg_bytes = reg.to_bytes().unwrap();
     assert_eq!(reg_bytes, ke3m);
 }
 
@@ -347,7 +347,7 @@ proptest! {
 
 #[test]
 fn test_i2osp_os2ip(bytes in vec(any::<u8>(), 0..std::mem::size_of::<usize>())) {
-    assert_eq!(i2osp(os2ip(&bytes)?, bytes.len()), bytes);
+    assert_eq!(i2osp(os2ip(&bytes)?, bytes.len())?, bytes);
 }
 
 #[test]

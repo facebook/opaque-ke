@@ -457,7 +457,7 @@ fn test_ke1() -> Result<(), ProtocolError> {
         )?;
         assert_eq!(
             hex::encode(&parameters.KE1),
-            hex::encode(client_login_start_result.message.serialize())
+            hex::encode(client_login_start_result.message.serialize()?)
         );
     }
     Ok(())
@@ -492,7 +492,7 @@ fn test_ke2() -> Result<(), ProtocolError> {
         );
         assert_eq!(
             hex::encode(&parameters.KE2),
-            hex::encode(server_login_start_result.message.serialize())
+            hex::encode(server_login_start_result.message.serialize()?)
         );
     }
     Ok(())
@@ -536,7 +536,7 @@ fn test_ke3() -> Result<(), ProtocolError> {
         );
         assert_eq!(
             hex::encode(&parameters.KE3),
-            hex::encode(client_login_finish_result.message.serialize())
+            hex::encode(client_login_finish_result.message.serialize()?)
         );
         assert_eq!(
             hex::encode(&parameters.export_key),

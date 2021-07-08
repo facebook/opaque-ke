@@ -6,7 +6,7 @@
 //! Defines the GroupWithMapToCurve trait to specify how to map a password to a
 //! curve point
 
-use crate::errors::InternalPakeError;
+use crate::errors::{InternalPakeError, ProtocolError};
 use crate::group::Group;
 use crate::hash::Hash;
 use crate::serialization::i2osp;
@@ -22,12 +22,12 @@ pub trait GroupWithMapToCurve: Group {
     const SUITE_ID: usize;
 
     /// transforms a password and domain separation tag (DST) into a curve point
-    fn map_to_curve<H: Hash>(msg: &[u8], dst: &[u8]) -> Result<Self, InternalPakeError>;
+    fn map_to_curve<H: Hash>(msg: &[u8], dst: &[u8]) -> Result<Self, ProtocolError>;
 
     /// Generates the contextString parameter as defined in
     /// <https://www.ietf.org/archive/id/draft-irtf-cfrg-voprf-05.txt>
-    fn get_context_string(mode: u8) -> Vec<u8> {
-        [i2osp(mode as usize, 1), i2osp(Self::SUITE_ID, 2)].concat()
+    fn get_context_string(mode: u8) -> Result<Vec<u8>, ProtocolError> {
+        Ok([i2osp(mode as usize, 1)?, i2osp(Self::SUITE_ID, 2)?].concat())
     }
 }
 
@@ -36,7 +36,7 @@ impl GroupWithMapToCurve for RistrettoPoint {
 
     // Implements the hash_to_ristretto255() function from
     // https://www.ietf.org/archive/id/draft-irtf-cfrg-hash-to-curve-10.txt
-    fn map_to_curve<H: Hash>(msg: &[u8], dst: &[u8]) -> Result<Self, InternalPakeError> {
+    fn map_to_curve<H: Hash>(msg: &[u8], dst: &[u8]) -> Result<Self, ProtocolError> {
         let uniform_bytes =
             expand_message_xmd::<H>(msg, dst, <H as Digest>::OutputSize::to_usize())?;
         Ok(<Self as Group>::hash_to_curve(
@@ -65,24 +65,24 @@ pub(crate) fn expand_message_xmd<H: Hash>(
     msg: &[u8],
     dst: &[u8],
     len_in_bytes: usize,
-) -> Result<Vec<u8>, InternalPakeError> {
+) -> Result<Vec<u8>, ProtocolError> {
     let b_in_bytes = <H as Digest>::OutputSize::to_usize();
     let r_in_bytes = <H as BlockInput>::BlockSize::to_usize();
 
     let ell = div_ceil(len_in_bytes, b_in_bytes);
     if ell > 255 {
-        return Err(InternalPakeError::HashToCurveError);
+        return Err(InternalPakeError::HashToCurveError.into());
     }
-    let dst_prime = [dst, &i2osp(dst.len(), 1)].concat();
-    let z_pad = i2osp(0, r_in_bytes);
-    let l_i_b_str = i2osp(len_in_bytes, 2);
-    let msg_prime = [&z_pad, msg, &l_i_b_str, &i2osp(0, 1), &dst_prime].concat();
+    let dst_prime = [dst, &i2osp(dst.len(), 1)?].concat();
+    let z_pad = i2osp(0, r_in_bytes)?;
+    let l_i_b_str = i2osp(len_in_bytes, 2)?;
+    let msg_prime = [&z_pad, msg, &l_i_b_str, &i2osp(0, 1)?, &dst_prime].concat();
 
     let mut b: Vec<Vec<u8>> = vec![H::digest(&msg_prime).to_vec()]; // b[0]
 
     let mut h = H::new();
     h.update(&b[0]);
-    h.update(&i2osp(1, 1));
+    h.update(&i2osp(1, 1)?);
     h.update(&dst_prime);
     b.push(h.finalize_reset().to_vec()); // b[1]
 
@@ -91,7 +91,7 @@ pub(crate) fn expand_message_xmd<H: Hash>(
 
     for i in 2..(ell + 1) {
         h.update(xor(&b[0], &b[i - 1])?);
-        h.update(&i2osp(i, 1));
+        h.update(&i2osp(i, 1)?);
         h.update(&dst_prime);
         b.push(h.finalize_reset().to_vec()); // b[i]
         uniform_bytes.extend_from_slice(&b[i]);

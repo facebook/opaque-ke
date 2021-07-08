@@ -61,11 +61,11 @@ pub trait KeyExchange<D: Hash, G: Group> {
 }
 
 pub trait ToBytes {
-    fn to_bytes(&self) -> Vec<u8>;
+    fn to_bytes(&self) -> Result<Vec<u8>, ProtocolError>;
 }
 
 pub trait ToBytesWithPointers {
-    fn to_bytes(&self) -> Vec<u8>;
+    fn to_bytes(&self) -> Result<Vec<u8>, ProtocolError>;
 
     // Only used for tests to grab raw pointers to data
     #[cfg(test)]

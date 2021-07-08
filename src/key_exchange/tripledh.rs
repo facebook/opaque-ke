@@ -89,9 +89,9 @@ impl<D: Hash, G: Group> KeyExchange<D, G> for TripleDH {
 
         let mut transcript_hasher = D::new()
             .chain(STR_3DH)
-            .chain(&serialize(&id_u, 2))
+            .chain(&serialize(&id_u, 2)?)
             .chain(&serialized_credential_request[..])
-            .chain(&serialize(&id_s, 2))
+            .chain(&serialize(&id_s, 2)?)
             .chain(&l2_bytes[..])
             .chain(&server_nonce[..])
             .chain(&server_e_kp.public().to_arr());
@@ -119,7 +119,7 @@ impl<D: Hash, G: Group> KeyExchange<D, G> for TripleDH {
             .map(|(&x1, &x2)| x1 ^ x2)
             .collect();
 
-        transcript_hasher.update(&serialize(&ciphertext, 2));
+        transcript_hasher.update(&serialize(&ciphertext, 2)?);
 
         let mut mac_hasher =
             Hmac::<D>::new_varkey(&km2).map_err(|_| InternalPakeError::HmacError)?;
@@ -157,9 +157,9 @@ impl<D: Hash, G: Group> KeyExchange<D, G> for TripleDH {
     ) -> Result<(Vec<u8>, Vec<u8>, Self::KE3Message), ProtocolError> {
         let mut transcript_hasher = D::new()
             .chain(STR_3DH)
-            .chain(&serialize(&id_u, 2))
+            .chain(&serialize(&id_u, 2)?)
             .chain(&serialized_credential_request)
-            .chain(&serialize(&id_s, 2))
+            .chain(&serialize(&id_s, 2)?)
             .chain(&l2_component[..])
             .chain(&ke2_message.to_bytes_without_info_or_mac());
 
@@ -175,7 +175,7 @@ impl<D: Hash, G: Group> KeyExchange<D, G> for TripleDH {
             &transcript_hasher.clone().finalize(),
         )?;
 
-        transcript_hasher.update(&serialize(&ke2_message.e_info[..], 2));
+        transcript_hasher.update(&serialize(&ke2_message.e_info[..], 2)?);
 
         let mut server_mac =
             Hmac::<D>::new_varkey(&km2).map_err(|_| InternalPakeError::HmacError)?;
@@ -269,9 +269,9 @@ impl TryFrom<&[u8]> for Ke1State {
 }
 
 impl ToBytesWithPointers for Ke1State {
-    fn to_bytes(&self) -> Vec<u8> {
+    fn to_bytes(&self) -> Result<Vec<u8>, ProtocolError> {
         let output: Vec<u8> = [&self.client_e_sk.to_arr(), &self.client_nonce[..]].concat();
-        output
+        Ok(output)
     }
 
     #[cfg(test)]
@@ -287,13 +287,13 @@ impl ToBytesWithPointers for Ke1State {
 }
 
 impl ToBytes for Ke1Message {
-    fn to_bytes(&self) -> Vec<u8> {
-        [
+    fn to_bytes(&self) -> Result<Vec<u8>, ProtocolError> {
+        Ok([
             &self.client_nonce[..],
-            &serialize(&self.info, 2),
+            &serialize(&self.info, 2)?,
             &self.client_e_pk.to_arr(),
         ]
-        .concat()
+        .concat())
     }
 }
 
@@ -339,13 +339,13 @@ impl<HashLen: ArrayLength<u8>> Drop for Ke2State<HashLen> {
 }
 
 impl<HashLen: ArrayLength<u8>> ToBytesWithPointers for Ke2State<HashLen> {
-    fn to_bytes(&self) -> Vec<u8> {
-        [
+    fn to_bytes(&self) -> Result<Vec<u8>, ProtocolError> {
+        Ok([
             &self.km3[..],
             &self.hashed_transcript[..],
             &self.session_key[..],
         ]
-        .concat()
+        .concat())
     }
 
     #[cfg(test)]
@@ -384,13 +384,13 @@ impl<HashLen: ArrayLength<u8>> TryFrom<&[u8]> for Ke2State<HashLen> {
 }
 
 impl<HashLen: ArrayLength<u8>> ToBytes for Ke2Message<HashLen> {
-    fn to_bytes(&self) -> Vec<u8> {
-        [
+    fn to_bytes(&self) -> Result<Vec<u8>, ProtocolError> {
+        Ok([
             &self.to_bytes_without_info_or_mac(),
-            &serialize(&self.e_info, 2),
+            &serialize(&self.e_info, 2)?,
             &self.mac[..],
         ]
-        .concat()
+        .concat())
     }
 }
 
@@ -449,8 +449,8 @@ pub struct Ke3Message<HashLen: ArrayLength<u8>> {
 }
 
 impl<HashLen: ArrayLength<u8>> ToBytes for Ke3Message<HashLen> {
-    fn to_bytes(&self) -> Vec<u8> {
-        self.mac.to_vec()
+    fn to_bytes(&self) -> Result<Vec<u8>, ProtocolError> {
+        Ok(self.mac.to_vec())
     }
 }
 
@@ -546,9 +546,9 @@ fn hkdf_expand_label_extracted<D: Hash>(
     let mut opaque_label: Vec<u8> = Vec::new();
     opaque_label.extend_from_slice(&STR_OPAQUE);
     opaque_label.extend_from_slice(&label);
-    hkdf_label.extend_from_slice(&serialize(&opaque_label, 1));
+    hkdf_label.extend_from_slice(&serialize(&opaque_label, 1)?);
 
-    hkdf_label.extend_from_slice(&serialize(&context, 1));
+    hkdf_label.extend_from_slice(&serialize(&context, 1)?);
 
     hkdf.expand(&hkdf_label, &mut okm)
         .map_err(|_| InternalPakeError::HkdfError)?;

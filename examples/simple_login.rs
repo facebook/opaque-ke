@@ -99,7 +99,7 @@ fn account_login(
         ClientLoginStartParameters::default(),
     )
     .unwrap();
-    let credential_request_bytes = client_login_start_result.message.serialize();
+    let credential_request_bytes = client_login_start_result.message.serialize().unwrap();
 
     // Client sends credential_request_bytes to server
 
@@ -113,7 +113,7 @@ fn account_login(
         ServerLoginStartParameters::default(),
     )
     .unwrap();
-    let credential_response_bytes = server_login_start_result.message.serialize();
+    let credential_response_bytes = server_login_start_result.message.serialize().unwrap();
 
     // Server sends credential_response_bytes to client
 
@@ -127,7 +127,7 @@ fn account_login(
         return false;
     }
     let client_login_finish_result = result.unwrap();
-    let credential_finalization_bytes = client_login_finish_result.message.serialize();
+    let credential_finalization_bytes = client_login_finish_result.message.serialize().unwrap();
 
     // Client sends credential_finalization_bytes to server
 

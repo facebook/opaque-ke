@@ -131,11 +131,11 @@ pub struct CredentialRequest<CS: CipherSuite> {
 
 impl<CS: CipherSuite> CredentialRequest<CS> {
     /// Serialization into bytes
-    pub fn serialize(&self) -> Vec<u8> {
+    pub fn serialize(&self) -> Result<Vec<u8>, ProtocolError> {
         let mut credential_request: Vec<u8> = Vec::new();
         credential_request.extend_from_slice(&self.alpha.to_arr());
-        credential_request.extend_from_slice(&self.ke1_message.to_bytes());
-        credential_request
+        credential_request.extend_from_slice(&self.ke1_message.to_bytes()?);
+        Ok(credential_request)
     }
 
     /// Deserialization from bytes
@@ -172,12 +172,12 @@ pub struct CredentialResponse<CS: CipherSuite> {
 
 impl<CS: CipherSuite> CredentialResponse<CS> {
     /// Serialization into bytes
-    pub fn serialize(&self) -> Vec<u8> {
-        [
+    pub fn serialize(&self) -> Result<Vec<u8>, ProtocolError> {
+        Ok([
             Self::serialize_without_ke(&self.beta, &self.server_s_pk, &self.envelope),
-            self.ke2_message.to_bytes(),
+            self.ke2_message.to_bytes()?,
         ]
-        .concat()
+        .concat())
     }
 
     pub(crate) fn serialize_without_ke(
@@ -237,7 +237,7 @@ pub struct CredentialFinalization<CS: CipherSuite> {
 
 impl<CS: CipherSuite> CredentialFinalization<CS> {
     /// Serialization into bytes
-    pub fn serialize(&self) -> Vec<u8> {
+    pub fn serialize(&self) -> Result<Vec<u8>, ProtocolError> {
         self.ke3_message.to_bytes()
     }
 

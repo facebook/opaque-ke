@@ -63,7 +63,7 @@ fn populate_test_vectors(values: &Value) -> VOPRFTestVectorParameters {
 
 // Tests input -> blind, blinded_element
 #[test]
-fn test_blind() -> Result<(), PakeError> {
+fn test_blind() -> Result<(), ProtocolError> {
     for tv in OPRF_RISTRETTO255_SHA512 {
         let parameters = populate_test_vectors(&serde_json::from_str(tv).unwrap());
         let mut rng = CycleRng::new(parameters.blind.to_vec());
@@ -106,7 +106,7 @@ fn test_evaluate() -> Result<(), PakeError> {
 
 // Tests input, blind, evaluation_element -> output
 #[test]
-fn test_finalize() -> Result<(), PakeError> {
+fn test_finalize() -> Result<(), ProtocolError> {
     for tv in OPRF_RISTRETTO255_SHA512 {
         let parameters = populate_test_vectors(&serde_json::from_str(tv).unwrap());
 
@@ -116,7 +116,7 @@ fn test_finalize() -> Result<(), PakeError> {
             RistrettoPoint::from_element_slice(GenericArray::from_slice(
                 &parameters.evaluation_element,
             ))?,
-        );
+        )?;
 
         assert_eq!(&parameters.output, &output.to_vec());
     }
