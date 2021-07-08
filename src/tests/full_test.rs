@@ -368,7 +368,11 @@ fn generate_parameters<CS: CipherSuite>() -> TestVectorParameters {
     let client_login_start_result =
         ClientLogin::<CS>::start(&mut client_login_start_rng, password).unwrap();
     let credential_request_bytes = client_login_start_result.message.serialize().to_vec();
-    let client_login_state = client_login_start_result.state.serialize().to_vec();
+    let client_login_state = client_login_start_result
+        .state
+        .serialize()
+        .unwrap()
+        .to_vec();
 
     let mut server_e_sk_and_nonce_rng = CycleRng::new(
         [
@@ -594,7 +598,7 @@ fn test_credential_request() -> Result<(), ProtocolError> {
     );
     assert_eq!(
         hex::encode(&parameters.client_login_state),
-        hex::encode(client_login_start_result.state.serialize())
+        hex::encode(client_login_start_result.state.serialize()?)
     );
     Ok(())
 }
