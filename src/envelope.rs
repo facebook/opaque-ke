@@ -32,7 +32,7 @@ const NONCE_LEN: usize = 32;
 fn build_inner_envelope_internal<CS: CipherSuite>(
     random_pwd: &[u8],
     nonce: &[u8],
-) -> Result<PublicKey<CS::Group>, InternalPakeError> {
+) -> Result<PublicKey<CS::Group>, ProtocolError> {
     let h = Hkdf::<CS::Hash>::new(None, random_pwd);
     let mut keypair_seed = vec![0u8; <PrivateKey<CS::Group> as SizedBytes>::Len::to_usize()];
     h.expand(&[nonce, STR_PRIVATE_KEY].concat(), &mut keypair_seed)
@@ -48,7 +48,7 @@ fn build_inner_envelope_internal<CS: CipherSuite>(
 fn recover_keys_internal<CS: CipherSuite>(
     random_pwd: &[u8],
     nonce: &[u8],
-) -> Result<KeyPair<CS::Group>, InternalPakeError> {
+) -> Result<KeyPair<CS::Group>, ProtocolError> {
     let h = Hkdf::<CS::Hash>::new(None, random_pwd);
     let mut keypair_seed = vec![0u8; <PrivateKey<CS::Group> as SizedBytes>::Len::to_usize()];
     h.expand(&[nonce, STR_PRIVATE_KEY].concat(), &mut keypair_seed)
@@ -188,7 +188,7 @@ impl<CS: CipherSuite> Envelope<CS> {
             PublicKey<CS::Group>,
             GenericArray<u8, <CS::Hash as Digest>::OutputSize>,
         ),
-        InternalPakeError,
+        ProtocolError,
     > {
         let mut nonce = vec![0u8; NONCE_LEN];
         rng.fill_bytes(&mut nonce);
@@ -199,7 +199,7 @@ impl<CS: CipherSuite> Envelope<CS> {
         );
 
         let (id_u, id_s) =
-            bytestrings_from_identifiers(&optional_ids, &client_s_pk.to_arr(), server_s_pk);
+            bytestrings_from_identifiers(&optional_ids, &client_s_pk.to_arr(), server_s_pk)?;
         let aad = construct_aad(&id_u, &id_s, server_s_pk);
 
         let (envelope, export_key) = Self::seal_raw(key, &nonce, &aad, mode)?;
@@ -246,10 +246,10 @@ impl<CS: CipherSuite> Envelope<CS> {
         key: &[u8],
         server_s_pk: &[u8],
         optional_ids: &Option<Identifiers>,
-    ) -> Result<OpenedEnvelope<CS>, InternalPakeError> {
+    ) -> Result<OpenedEnvelope<CS>, ProtocolError> {
         let client_static_keypair = match self.mode {
             InnerEnvelopeMode::Zero => {
-                return Err(InternalPakeError::IncompatibleEnvelopeModeError)
+                return Err(InternalPakeError::IncompatibleEnvelopeModeError.into())
             }
             InnerEnvelopeMode::Internal => recover_keys_internal::<CS>(key, &self.nonce)?,
         };
@@ -258,7 +258,7 @@ impl<CS: CipherSuite> Envelope<CS> {
             optional_ids,
             &client_static_keypair.public().to_arr(),
             server_s_pk,
-        );
+        )?;
         let aad = construct_aad(&id_u, &id_s, server_s_pk);
 
         let opened = self.open_raw(key, &aad)?;

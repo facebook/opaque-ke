@@ -283,13 +283,13 @@ fn client_login_roundtrip() {
     // serialization order: scalar, credential_request, ke1_state, password
     let bytes: Vec<u8> = [
         &sc.as_bytes()[..],
-        &serialize(&serialized_credential_request, 2),
-        &serialize(&l1_data, 2),
+        &serialize(&serialized_credential_request, 2).unwrap(),
+        &serialize(&l1_data, 2).unwrap(),
         &pw[..],
     ]
     .concat();
     let reg = ClientLogin::<Default>::deserialize(&bytes[..]).unwrap();
-    let reg_bytes = reg.serialize();
+    let reg_bytes = reg.serialize().unwrap();
     assert_eq!(reg_bytes, bytes);
 }
 
@@ -350,7 +350,7 @@ proptest! {
 
 #[test]
 fn test_i2osp_os2ip(bytes in vec(any::<u8>(), 0..std::mem::size_of::<usize>())) {
-    assert_eq!(i2osp(os2ip(&bytes)?, bytes.len()), bytes);
+    assert_eq!(i2osp(os2ip(&bytes)?, bytes.len())?, bytes);
 }
 
 #[test]

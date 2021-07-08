@@ -86,7 +86,7 @@ impl<D: Hash, G: Group> KeyExchange<D, G> for TripleDH {
 
         let mut transcript_hasher = D::new()
             .chain(STR_RFC)
-            .chain(&serialize(&context, 2))
+            .chain(&serialize(&context, 2)?)
             .chain(&id_u)
             .chain(&serialized_credential_request[..])
             .chain(&id_s)
@@ -141,7 +141,7 @@ impl<D: Hash, G: Group> KeyExchange<D, G> for TripleDH {
     ) -> Result<(Vec<u8>, Self::KE3Message), ProtocolError> {
         let mut transcript_hasher = D::new()
             .chain(STR_RFC)
-            .chain(&serialize(&context, 2))
+            .chain(&serialize(&context, 2)?)
             .chain(&id_u)
             .chain(&serialized_credential_request)
             .chain(&id_s)
@@ -522,9 +522,9 @@ fn hkdf_expand_label_extracted<D: Hash>(
     let mut opaque_label: Vec<u8> = Vec::new();
     opaque_label.extend_from_slice(STR_OPAQUE);
     opaque_label.extend_from_slice(label);
-    hkdf_label.extend_from_slice(&serialize(&opaque_label, 1));
+    hkdf_label.extend_from_slice(&serialize(&opaque_label, 1)?);
 
-    hkdf_label.extend_from_slice(&serialize(context, 1));
+    hkdf_label.extend_from_slice(&serialize(context, 1)?);
 
     hkdf.expand(&hkdf_label, &mut okm)
         .map_err(|_| InternalPakeError::HkdfError)?;
