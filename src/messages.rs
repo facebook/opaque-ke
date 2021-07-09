@@ -126,7 +126,7 @@ impl<CS: CipherSuite> RegistrationResponse<CS> {
             &checked_slice[elem_len..],
         )?)?;
 
-        Ok(Self { server_s_pk, beta })
+        Ok(Self { beta, server_s_pk })
     }
 }
 
