@@ -104,8 +104,8 @@ impl<CS: CipherSuite> RegistrationResponse<CS> {
             KeyPair::<CS::Group>::check_public_key(Key::from_bytes(&checked_slice[elem_len..])?)?;
 
         Ok(Self {
-            server_s_pk: server_s_pk.to_arr().to_vec(),
             beta,
+            server_s_pk: server_s_pk.to_arr().to_vec(),
         })
     }
 }
