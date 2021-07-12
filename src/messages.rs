@@ -128,6 +128,16 @@ impl<CS: CipherSuite> RegistrationResponse<CS> {
 
         Ok(Self { beta, server_s_pk })
     }
+
+    #[cfg(test)]
+    /// Only used for tests, where we can set the beta value to test for the reflection
+    /// error case
+    pub fn set_beta_for_testing(&self, new_beta: CS::Group) -> Self {
+        Self {
+            beta: new_beta,
+            server_s_pk: self.server_s_pk.clone(),
+        }
+    }
 }
 
 impl_serialize_and_deserialize_for!(RegistrationResponse);
@@ -255,6 +265,12 @@ impl<CS: CipherSuite> CredentialRequest<CS> {
 
         Ok(Self { alpha, ke1_message })
     }
+
+    /// Only used for testing purposes
+    #[cfg(test)]
+    pub fn get_alpha_for_testing(&self) -> CS::Group {
+        self.alpha
+    }
 }
 
 impl_serialize_and_deserialize_for!(CredentialRequest);
@@ -349,6 +365,18 @@ impl<CS: CipherSuite> CredentialResponse<CS> {
             masked_response,
             ke2_message,
         })
+    }
+
+    #[cfg(test)]
+    /// Only used for tests, where we can set the beta value to test for the reflection
+    /// error case
+    pub fn set_beta_for_testing(&self, new_beta: CS::Group) -> Self {
+        Self {
+            beta: new_beta,
+            masking_nonce: self.masking_nonce.clone(),
+            masked_response: self.masked_response.clone(),
+            ke2_message: self.ke2_message.clone(),
+        }
     }
 }
 

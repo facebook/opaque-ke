@@ -75,38 +75,38 @@ static STR_CREDENTIAL_IDENTIFIER: &str = "credential_identifier";
 
 static TEST_VECTOR: &str = r#"
 {
-    "client_s_pk": "0a6c4964697edd7399bd5d785053a1e2539c488d01368e4e413d16e12fec097f",
-    "client_s_sk": "aa831710cef76640aa5a9dc1442a20276fefb476a13ba0e58b503ef0ef1f2e0d",
-    "client_e_pk": "be80f3170a73645d10246cfa928e086c994d206c611468b1f5f053b82d3feb07",
-    "client_e_sk": "21bb9572af542ec7bf97487d81f3c80115f615067a8d1267722aea841d594108",
-    "server_s_pk": "3883f3d1d9703cdb90d12d388730f73b91b682fb5f375ce1a191b2ce025de703",
-    "server_s_sk": "bd8d91db143ac70aad47d7c6651578df489a8eaca3f91e7ea8116d89d1319303",
-    "server_e_pk": "1014d0390f2a96649a1ff6352a030bd78b98771d588d9b204c0121f6b520f96d",
-    "server_e_sk": "14774279665c0ae85e78f1e33d809eaa282a1adc8688a76e6ff4f87c3c34720a",
-    "fake_sk": "59905ec82b7db1d9eb54dec8660905b011de8030af1d3ed9bb3c135103db7b08",
+    "client_s_pk": "e4a2b9e3aee013bf72f35a00847861631c61f5b1f02e3b8e191fcd14f53a1436",
+    "client_s_sk": "fa12397b47d1b9cac12902a6d5aa751839e7d2eb97338718936724ef5a867106",
+    "client_e_pk": "50a57787f5cebc6be96834eb2ea4ef35556c1c4c7780161b65724e4a1057d32a",
+    "client_e_sk": "4d113729710988d19529ab39447726d615e179bf9bcff6c09febe7e18518aa02",
+    "server_s_pk": "6c381cb5a5c7c8718537793886053f9ffb4e0a6944efc036384344caf16c174e",
+    "server_s_sk": "df4aace3a5b6b02f54584a5cdfc280b7f381d44f57f25ce4b0008ed92a7c270f",
+    "server_e_pk": "24f9d4f69de78834757ad9f16b08997a205249e125ad151f979f63380950cb19",
+    "server_e_sk": "6dc1d8525660605c3abcd86ec8a690f8af3d5bece6ea76d860a0de644d9d6508",
+    "fake_sk": "db40438a3dea4ee7dde5840af0050fbade18bc2b231b4469b2bf4ce0ebd25206",
     "credential_identifier": "637265644964656e746966696572",
     "id_u": "696455",
     "id_s": "696453",
     "password": "70617373776f7264",
-    "blinding_factor": "9a8f70c839f0a9dd821d00208f43e89442df2b844a0cf0dcc0508e8dd3cc3c00",
-    "oprf_seed": "bd122c79da3f2b04b05793dea984c1229448c8281638f3e7a263b4933b7ba1a82141ad1e24b08076bafb218d0639dcc10d56e87de10c050499b2121c02e4de27",
-    "masking_nonce": "e56ddfa0e8008f7960e8eef1e05e96ffbc3b86e2e4ff208d711055ecb34e7a16ec457b7d3caea53224fe7f1e4f883de940d04fa2ae69622743c80b75ebe7f809",
-    "envelope_nonce": "2bad92ff095e50a2b1a995027a46da433610646223cf7932506c550fc1407b97",
-    "client_nonce": "f71932596f3e394216b5bacae7e1baa29ed87736bae5ffa311d81b57503391b4",
-    "server_nonce": "dbddcbe38456a6f6d91ccd9321436c74b81e83083dc084a571758ed710293dd9",
+    "blinding_factor": "c8fa84eba32048544608f67a0ab43aebe21ab78ebbddf32e8210b9b7dbc50002",
+    "oprf_seed": "e6403df8aa116b9b1bc0010506110422ca462bd763fcd9e2dbc2258613acdf0d431e5bb53097f1d4cd35aa5725a4375fa7ff8bdd81b59b4da74782e9c98781e1",
+    "masking_nonce": "0ab98ae7b94c33c362f9bc47e56ced702a5e118fd7d71c148642c1df3ee95ef0aeab6c5bce7313f86d8b68067d0d6788ff5405c17c230d3c348cb1f1b9af66f0",
+    "envelope_nonce": "0512216114d8fd3157cc148adc77985aee1868a79181abf1c88fc4b38e972dc8",
+    "client_nonce": "8f752fbb35518786eb32a951a8d1dc5fb591b0ca752d18d71e8cc05c52d5a199",
+    "server_nonce": "9f790dea5a443cf4a3b0215f676e733cbfa3eb8d20a95fd1494466f568882bd4",
     "context": "636f6e74657874",
-    "registration_request": "beb3c2ade1d495856db52d9ce9c1729aae621a6b90a4e892a6f48e08a3290032",
-    "registration_response": "84d28db17b088e33583c3579e54d74bfca04d2fe542049c1302a48125dcc8b343883f3d1d9703cdb90d12d388730f73b91b682fb5f375ce1a191b2ce025de703",
-    "registration_upload": "f637f1f78397fbc7fd403b2f2c0185a0d61749799e39f46c0f32c0e1629e4e35c903e24984244885abd0ba4e38249c22aeee196b7ab357c0eeb8c70118cb9ac6e377b835bb4b3d0677de272651d2e37da651e42b8dd2460b818fa0243fb69598aa831710cef76640aa5a9dc1442a20276fefb476a13ba0e58b503ef0ef1f2e0d5ddd6ad89f1c35cd5b5f8624ccf83b5e48ba57e1d29e4976ec3ca01dc4c83df5b3f5b891a2e67535d13e0baebc0aeee8807ba2a7254a376687dda6d527d7a069",
-    "credential_request": "beb3c2ade1d495856db52d9ce9c1729aae621a6b90a4e892a6f48e08a3290032f71932596f3e394216b5bacae7e1baa29ed87736bae5ffa311d81b57503391b4be80f3170a73645d10246cfa928e086c994d206c611468b1f5f053b82d3feb07",
-    "credential_response": "84d28db17b088e33583c3579e54d74bfca04d2fe542049c1302a48125dcc8b34e56ddfa0e8008f7960e8eef1e05e96ffbc3b86e2e4ff208d711055ecb34e7a169266466939f4ea87803eee09cc4657f16bfe4e04218818376d0eaefe03104a08ff0fb79b22494078c67f3e35b4e74f5830bff2c60a885bcf7a4b6d3ae1884a13144fb6ef6e9de572cd8d111a246243cb77d9242ee009d32f29a2bfa884d672a646415c1e2ef241f67a6572c7f2c4c6297a5b44c2d25f63348371f6bd509d238314774279665c0ae85e78f1e33d809eaa282a1adc8688a76e6ff4f87c3c34720ac26e902d6251c25a81546601e727ca875961a86b21a56c6aa8ea8b5412a5c05c885a44bf7efa323db909cdafbd5f87bd8bd90328c8f3323063677bb2ebbf385bccc1857a2beb6a0ce9feb23eb7bde83f12200aa4a3ee7aab8d216e2b085206cc",
-    "credential_finalization": "a88839b8eabbf400d30e8f65fe9219045213af3a227643324eedce7042db99bb3bf40f6fa0939d75b0e4ddc9dcd751a09c321aa777bc5022e52e7d8314972ca6",
-    "client_registration_state": "9a8f70c839f0a9dd821d00208f43e89442df2b844a0cf0dcc0508e8dd3cc3c0070617373776f7264",
-    "client_login_state": "9a8f70c839f0a9dd821d00208f43e89442df2b844a0cf0dcc0508e8dd3cc3c000060beb3c2ade1d495856db52d9ce9c1729aae621a6b90a4e892a6f48e08a3290032f71932596f3e394216b5bacae7e1baa29ed87736bae5ffa311d81b57503391b4be80f3170a73645d10246cfa928e086c994d206c611468b1f5f053b82d3feb07004021bb9572af542ec7bf97487d81f3c80115f615067a8d1267722aea841d594108f71932596f3e394216b5bacae7e1baa29ed87736bae5ffa311d81b57503391b470617373776f7264",
-    "server_login_state": "4d7cb8dac6a41b430f8d18e846461e5f6100f884f4916d7bd2e09f3642598358cabd9bc3e00a9fb6140d106ceab8c08437d9ea0967ffd31178f1e4659bf0571162b453052f9b0c0e6ba47dc6a7bf50d27702b3184164bdf8bb946b951b59d05298c24c401980856eb25590541316e324a0c32dae96ad8c0fb5995f8b69f37dabeff8b2b00ab3c5790b7277b63fef74bc61d4c2d4eed56690f33bb1ab0e7a0d3dfb51978be7b575b9ddf01ba5d6bb934267fc4c865d6a18aacc5246b6dddf519f",
-    "password_file": "f637f1f78397fbc7fd403b2f2c0185a0d61749799e39f46c0f32c0e1629e4e35c903e24984244885abd0ba4e38249c22aeee196b7ab357c0eeb8c70118cb9ac6e377b835bb4b3d0677de272651d2e37da651e42b8dd2460b818fa0243fb69598aa831710cef76640aa5a9dc1442a20276fefb476a13ba0e58b503ef0ef1f2e0d5ddd6ad89f1c35cd5b5f8624ccf83b5e48ba57e1d29e4976ec3ca01dc4c83df5b3f5b891a2e67535d13e0baebc0aeee8807ba2a7254a376687dda6d527d7a069",
-    "export_key": "11112a0747b2c943de39ac237ceed5b7e4a6a36359545cbb2cdd600c639603891d4ec768c63eb0a2d9b79282815369e2370449a8ab415f9bc12e5d8fc1c4b976",
-    "session_key": "eff8b2b00ab3c5790b7277b63fef74bc61d4c2d4eed56690f33bb1ab0e7a0d3dfb51978be7b575b9ddf01ba5d6bb934267fc4c865d6a18aacc5246b6dddf519f"
+    "registration_request": "c4d73dc3087bab36dd9cf0dd6b405e0474d8d12b41a7bd7317ff8ae04416696e",
+    "registration_response": "9e024b7621ad17a1809d25a3ca47c42eb12cf67e052a453c38ab119f4344ae026c381cb5a5c7c8718537793886053f9ffb4e0a6944efc036384344caf16c174e",
+    "registration_upload": "a8f448f10d547cd8186cfd7ab33ec055a5bc9f05306fafd6816c84356fb0f8672f0991ad6d648a22b937055e4db6a5fd381cf5e9fa3ed4128338202039b292cdad8ebc3b1bbd332230e4914c7d4c910642f8c22f4494e2e56c99aff79a698759fa12397b47d1b9cac12902a6d5aa751839e7d2eb97338718936724ef5a8671067c616a828ff31a550e31d5fc178d3ac8171b2213967b504513d982ce66c9e93159cc7fe10e845060fcb721b6e681b60f6bb981c12d14ba39d6f3c1a33afe71da",
+    "credential_request": "c4d73dc3087bab36dd9cf0dd6b405e0474d8d12b41a7bd7317ff8ae04416696e8f752fbb35518786eb32a951a8d1dc5fb591b0ca752d18d71e8cc05c52d5a19950a57787f5cebc6be96834eb2ea4ef35556c1c4c7780161b65724e4a1057d32a",
+    "credential_response": "9e024b7621ad17a1809d25a3ca47c42eb12cf67e052a453c38ab119f4344ae020ab98ae7b94c33c362f9bc47e56ced702a5e118fd7d71c148642c1df3ee95ef086ce2acd2daf1d9528991d88e4baaa43cf6b93527ba08b1a734471ab11f85b469785dd0b2f144131370c169e81fcffae8febdd7543303f6f6de974274f6018904dde8dc42044718430f2c986266d93f7a56109a7ea85318481ee51f1098ee4de4d260c4b41172ddce3f3d10c1193c972eedfa6cb807c6a198a06620adb5945d66dc1d8525660605c3abcd86ec8a690f8af3d5bece6ea76d860a0de644d9d65089cee765b7149cad46e928a79a294d410fe63f8e4be824dfc00d9a233fc2c4378199ff3e47a208757018a0084f65fb76f9645c10a687a1421a634e8a3fbadb10d49fca58e37e00c4e1963b67798a4577014422b316c0621d5c25584f1a00d8dd3",
+    "credential_finalization": "6398492ae387d8816552721723fdf602da8d30e39a489a6f373f6a012ae3b27e7f2b9a739f64de3faa1409596cec67cb916d510fbc2bdf2dd48db56bbdd354ee",
+    "client_registration_state": "c4d73dc3087bab36dd9cf0dd6b405e0474d8d12b41a7bd7317ff8ae04416696ec8fa84eba32048544608f67a0ab43aebe21ab78ebbddf32e8210b9b7dbc5000270617373776f7264",
+    "client_login_state": "c8fa84eba32048544608f67a0ab43aebe21ab78ebbddf32e8210b9b7dbc500020060c4d73dc3087bab36dd9cf0dd6b405e0474d8d12b41a7bd7317ff8ae04416696e8f752fbb35518786eb32a951a8d1dc5fb591b0ca752d18d71e8cc05c52d5a19950a57787f5cebc6be96834eb2ea4ef35556c1c4c7780161b65724e4a1057d32a00404d113729710988d19529ab39447726d615e179bf9bcff6c09febe7e18518aa028f752fbb35518786eb32a951a8d1dc5fb591b0ca752d18d71e8cc05c52d5a19970617373776f7264",
+    "server_login_state": "a6e54e3c6f8c98dbcaddcc67bf9835afb398a922a516a854a96342037a4931c46ff55ce773b85a70aa09c89c15c77beb8df0fa528b2b091ce30e88ae3b29306ab476323aac7cc3fe9ef8793c6cea8e1d54d9ea2d663729a3095494572e952ac61180e42793c167951787b3bda61bce732c76dd9a7a11a7c835cbad8b19bdc75bdde7a653389faca8ad458f03faea5d130b374259940f0183f3b666c930c6c7947a0c0cc48d3848da0e2d4be117a3dfb8837f76528bb4ed40ba9412db51fe14eb",
+    "password_file": "a8f448f10d547cd8186cfd7ab33ec055a5bc9f05306fafd6816c84356fb0f8672f0991ad6d648a22b937055e4db6a5fd381cf5e9fa3ed4128338202039b292cdad8ebc3b1bbd332230e4914c7d4c910642f8c22f4494e2e56c99aff79a698759fa12397b47d1b9cac12902a6d5aa751839e7d2eb97338718936724ef5a8671067c616a828ff31a550e31d5fc178d3ac8171b2213967b504513d982ce66c9e93159cc7fe10e845060fcb721b6e681b60f6bb981c12d14ba39d6f3c1a33afe71da",
+    "export_key": "d2884167b7fb2a9aca88f606438d2d2c3b99ed086f916f982efe041a8b1d57ddbc6f04f9fd0d4fa2537b0bc645f3280335a9bcc9b99bab12cd301480a7e85a07",
+    "session_key": "dde7a653389faca8ad458f03faea5d130b374259940f0183f3b666c930c6c7947a0c0cc48d3848da0e2d4be117a3dfb8837f76528bb4ed40ba9412db51fe14eb"
 }
 "#;
 
@@ -482,7 +482,7 @@ fn test_serialization() -> Result<(), ProtocolError> {
             serde_json::to_string(&client_registration_start_result.message).unwrap();
         assert_eq!(
             registration_request_json,
-            r#""vrPCreHUlYVttS2c6cFymq5iGmuQpOiSpvSOCKMpADI=""#
+            r#""xNc9wwh7qzbdnPDda0BeBHTY0StBp71zF/+K4EQWaW4=""#
         );
         let registration_request: RegistrationRequest<RistrettoSha5123dhNoSlowHash> =
             serde_json::from_str(&registration_request_json).unwrap();
@@ -1063,5 +1063,91 @@ fn test_scalar_always_nonzero() -> Result<(), ProtocolError> {
             .get_alpha_for_testing()
     );
 
+    Ok(())
+}
+
+#[test]
+fn test_reflected_value_error_registration() -> Result<(), ProtocolError> {
+    let credential_identifier = b"credentialIdentifier";
+    let password = b"password";
+    let mut client_rng = OsRng;
+    let mut server_rng = OsRng;
+    let server_setup = ServerSetup::<RistrettoSha5123dhNoSlowHash>::new(&mut server_rng);
+    let client_registration_start_result =
+        ClientRegistration::<RistrettoSha5123dhNoSlowHash>::start(&mut client_rng, password)?;
+    let alpha = client_registration_start_result
+        .message
+        .get_alpha_for_testing();
+    let server_registration_start_result =
+        ServerRegistration::<RistrettoSha5123dhNoSlowHash>::start(
+            &server_setup,
+            client_registration_start_result.message,
+            credential_identifier,
+        )?;
+
+    let reflected_registration_response = server_registration_start_result
+        .message
+        .set_beta_for_testing(alpha);
+
+    let client_registration_finish_result = client_registration_start_result.state.finish(
+        &mut client_rng,
+        reflected_registration_response,
+        ClientRegistrationFinishParameters::default(),
+    );
+
+    assert!(match client_registration_finish_result {
+        Err(ProtocolError::ReflectedValueError) => true,
+        _ => false,
+    });
+
+    Ok(())
+}
+
+#[test]
+fn test_reflected_value_error_login() -> Result<(), ProtocolError> {
+    let credential_identifier = b"credentialIdentifier";
+    let password = b"password";
+    let mut client_rng = OsRng;
+    let mut server_rng = OsRng;
+    let server_setup = ServerSetup::<RistrettoSha5123dhNoSlowHash>::new(&mut server_rng);
+    let client_registration_start_result =
+        ClientRegistration::<RistrettoSha5123dhNoSlowHash>::start(&mut client_rng, password)?;
+    let server_registration_start_result =
+        ServerRegistration::<RistrettoSha5123dhNoSlowHash>::start(
+            &server_setup,
+            client_registration_start_result.message,
+            credential_identifier,
+        )?;
+    let client_registration_finish_result = client_registration_start_result.state.finish(
+        &mut client_rng,
+        server_registration_start_result.message,
+        ClientRegistrationFinishParameters::default(),
+    )?;
+    let p_file = ServerRegistration::finish(client_registration_finish_result.message);
+    let client_login_start_result =
+        ClientLogin::<RistrettoSha5123dhNoSlowHash>::start(&mut client_rng, password)?;
+    let alpha = client_login_start_result.message.get_alpha_for_testing();
+    let server_login_start_result = ServerLogin::<RistrettoSha5123dhNoSlowHash>::start(
+        &mut server_rng,
+        &server_setup,
+        Some(p_file),
+        client_login_start_result.message,
+        credential_identifier,
+        ServerLoginStartParameters::default(),
+    )?;
+
+    let reflected_credential_response = server_login_start_result
+        .message
+        .set_beta_for_testing(alpha);
+
+    let client_login_result = client_login_start_result.state.finish(
+        reflected_credential_response,
+        ClientLoginFinishParameters::default(),
+    );
+
+    assert!(match client_login_result {
+        Err(ProtocolError::ReflectedValueError) => true,
+        _ => false,
+    });
     Ok(())
 }
