@@ -68,6 +68,9 @@ pub trait Group: Copy + Sized + for<'a> Mul<&'a <Self as Group>::Scalar, Output 
 
     /// Returns if the group element is equal to the identity (1)
     fn is_identity(&self) -> bool;
+
+    /// Compares in constant time if the group elements are equal
+    fn ct_equal(&self, other: &Self) -> bool;
 }
 
 /// The implementation of such a subgroup for Ristretto
@@ -150,5 +153,9 @@ impl Group for RistrettoPoint {
     /// Returns if the group element is equal to the identity (1)
     fn is_identity(&self) -> bool {
         self == &Self::identity()
+    }
+
+    fn ct_equal(&self, other: &Self) -> bool {
+        constant_time_eq::constant_time_eq(&self.to_arr(), &other.to_arr())
     }
 }
