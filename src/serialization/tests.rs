@@ -56,9 +56,10 @@ fn client_registration_roundtrip() {
     let pw = b"hunter2";
     let mut rng = OsRng;
     let sc = <RistrettoPoint as Group>::random_nonzero_scalar(&mut rng);
+    let elem = <RistrettoPoint as Group>::base_point() * sc;
 
-    // serialization order: scalar, password
-    let bytes: Vec<u8> = [&sc.as_bytes()[..], &pw[..]].concat();
+    // serialization order: scalar, password, group element
+    let bytes: Vec<u8> = [&elem.to_arr(), &sc.as_bytes()[..], &pw[..]].concat();
     let reg = ClientRegistration::<Default>::deserialize(&bytes[..]).unwrap();
     let reg_bytes = reg.serialize();
     assert_eq!(reg_bytes, bytes);

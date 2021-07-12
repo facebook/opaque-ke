@@ -108,6 +108,16 @@ impl<CS: CipherSuite> RegistrationResponse<CS> {
             server_s_pk: server_s_pk.to_arr().to_vec(),
         })
     }
+
+    #[cfg(test)]
+    /// Only used for tests, where we can set the beta value to test for the reflection
+    /// error case
+    pub fn set_beta_for_testing(&self, new_beta: CS::Group) -> Self {
+        Self {
+            beta: new_beta,
+            server_s_pk: self.server_s_pk.clone(),
+        }
+    }
 }
 
 /// The final message from the client, containing sealed cryptographic
@@ -191,6 +201,12 @@ impl<CS: CipherSuite> CredentialRequest<CS> {
 
         Ok(Self { alpha, ke1_message })
     }
+
+    /// Only used for testing purposes
+    #[cfg(test)]
+    pub fn get_alpha_for_testing(&self) -> CS::Group {
+        self.alpha
+    }
 }
 
 /// The answer sent by the server to the user, upon reception of the
@@ -265,6 +281,18 @@ impl<CS: CipherSuite> CredentialResponse<CS> {
             envelope,
             ke2_message,
         })
+    }
+
+    #[cfg(test)]
+    /// Only used for tests, where we can set the beta value to test for the reflection
+    /// error case
+    pub fn set_beta_for_testing(&self, new_beta: CS::Group) -> Self {
+        Self {
+            beta: new_beta,
+            server_s_pk: self.server_s_pk.clone(),
+            envelope: self.envelope.clone(),
+            ke2_message: self.ke2_message.clone(),
+        }
     }
 }
 

@@ -359,6 +359,7 @@ impl<HashLen: ArrayLength<u8>> ToBytesWithPointers for Ke2State<HashLen> {
 }
 
 /// The second key exchange message
+#[derive(Clone)]
 pub struct Ke2Message<HashLen: ArrayLength<u8>> {
     server_nonce: GenericArray<u8, NonceLen>,
     server_e_pk: Key,

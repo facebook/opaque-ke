@@ -18,7 +18,7 @@ pub trait KeyExchange<D: Hash, G: Group> {
     type KE1State: for<'r> TryFrom<&'r [u8], Error = PakeError> + ToBytesWithPointers + Zeroize;
     type KE2State: for<'r> TryFrom<&'r [u8], Error = PakeError> + ToBytesWithPointers + Zeroize;
     type KE1Message: for<'r> TryFrom<&'r [u8], Error = PakeError> + ToBytes;
-    type KE2Message: for<'r> TryFrom<&'r [u8], Error = PakeError> + ToBytes;
+    type KE2Message: for<'r> TryFrom<&'r [u8], Error = PakeError> + ToBytes + Clone;
     type KE3Message: for<'r> TryFrom<&'r [u8], Error = PakeError> + ToBytes;
 
     fn generate_ke1<R: RngCore + CryptoRng>(
