@@ -31,6 +31,7 @@ use zeroize::Zeroize;
 const STR_CREDENTIAL_RESPONSE_PAD: &[u8] = b"CredentialResponsePad";
 const STR_MASKING_KEY: &[u8] = b"MaskingKey";
 const STR_OPRF_KEY: &[u8] = b"OprfKey";
+const STR_OPAQUE_DERIVE_KEY_PAIR: &[u8] = b"OPAQUE-DeriveKeyPair";
 
 // Server Setup
 // ============
@@ -917,15 +918,12 @@ fn oprf_key_from_seed<G: GroupWithMapToCurve, D: Hash>(
     oprf_seed: &GenericArray<u8, D::OutputSize>,
     credential_identifier: &[u8],
 ) -> Result<G::Scalar, ProtocolError> {
-    let mut oprf_key_bytes = vec![0u8; <PrivateKey<G> as SizedBytes>::Len::to_usize()];
+    let mut ikm = vec![0u8; <PrivateKey<G> as SizedBytes>::Len::to_usize()];
     Hkdf::<D>::from_prk(oprf_seed)
         .map_err(|_| InternalPakeError::HkdfError)?
-        .expand(
-            &[credential_identifier, STR_OPRF_KEY].concat(),
-            &mut oprf_key_bytes,
-        )
+        .expand(&[credential_identifier, STR_OPRF_KEY].concat(), &mut ikm)
         .map_err(|_| InternalPakeError::HkdfError)?;
-    G::hash_to_scalar::<D>(&oprf_key_bytes[..], b"")
+    G::hash_to_scalar::<D>(&ikm[..], STR_OPAQUE_DERIVE_KEY_PAIR)
 }
 
 fn mask_response<CS: CipherSuite>(

@@ -24,22 +24,22 @@ struct VOPRFTestVectorParameters {
 static OPRF_RISTRETTO255_SHA512: &[&str] = &[
     r#"
     {
-        "sksm": "758cbac0e1eb4265d80f6e6489d9a74d788f7ddeda67d7fb3c08b08f44bda30a",
+        "sksm": "caeff69352df4905a9121a4997704ca8cee1524a110819eb87deba1a39ec1701",
         "input": "00",
         "blind": "c604c785ada70d77a5256ae21767de8c3304115237d262134f5e46e512cf8e03",
-        "blinded_element": "3c7f2d901c0d4f245503a186086fbdf5d8b4408432b25c5163e8b5a19c258348",
-        "evaluation_element": "fc6c2b854553bf1ed6674072ed0bde1a9911e02b4bd64aa02cfb428f30251e77",
-        "output": "d8ed12382086c74564ae19b7a2b5ed9bdc52656d1fc151faaae51aaba86291e8df0b2143a92f24d44d5efd0892e2e26721d27d88745343493634a66d3a925e3a"
+        "blinded_element": "fc20e03aff3a9de9b37e8d35886ade11ec7d85c2a1fb5bb0b1686c64e07ac467",
+        "evaluation_element": "7c72cc293cd7d44c0b57c273f27befd598b132edc665694bdc9c42a4d3083c0a",
+        "output": "e3a209dce2d3ea3d84fcddb282818caebb756a341e08a310d9904314f5392085d13c3f76339d745db0f46974a6049c3ea9546305af55d37760b2136d9b3f0134"
     }
     "#,
     r#"
     {
-        "sksm": "758cbac0e1eb4265d80f6e6489d9a74d788f7ddeda67d7fb3c08b08f44bda30a",
+        "sksm": "caeff69352df4905a9121a4997704ca8cee1524a110819eb87deba1a39ec1701",
         "input": "5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a",
         "blind": "5ed895206bfc53316d307b23e46ecc6623afb3086da74189a416012be037e50b",
-        "blinded_element": "28a5e797b710f76d20a52507145fbf320a574ec2c8ab0e33e65dd2c277d0ee56",
-        "evaluation_element": "345e140b707257ae83d4911f7ead3177891e7a62c54097732802c4c7a98ab25a",
-        "output": "4d5f4221b5ebfd4d1a9dd54830e1ed0bce5a8f30a792723a6fddfe6cfe9f86bb1d95a3725818aeb725eb0b1b52e01ee9a72f47042372ef66c307770054d674fc"
+        "blinded_element": "483d4f39de5ff77fa0f9a0ad2334dd5bf87f2cda868539d21de67ce49e7d1536",
+        "evaluation_element": "026f2758fc62f02a7ff95f35ec6f20186aa57c0274361655543ea235d7b2aa34",
+        "output": "2c17dc3e9398dadb44bb2d3360c446302e99f1fe0ec40f0b1ad25c9cf002be1e4b41b4900ef056537fe8c14532ccea4d796f5feab9541af48057d83c0db86fe9"
     }
     "#,
 ];
