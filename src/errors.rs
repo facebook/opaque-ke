@@ -103,6 +103,9 @@ pub enum ProtocolError {
     /// This error occurs when the client request cannot be handled
     /// Client request cannot be handled.
     ClientError,
+    /// This error occurs when the client detects that the server has
+    /// reflected the OPRF value (beta == alpha)
+    ReflectedValueError,
 }
 
 // This is meant to express future(ly) non-trivial ways of converting the

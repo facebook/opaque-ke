@@ -101,11 +101,12 @@ impl_debug_eq_hash_for!(
 
 /// The state elements the client holds to register itself
 pub struct ClientRegistration<CS: CipherSuite> {
+    alpha: CS::Group,
     /// token containing the client's password and the blinding factor
     pub(crate) token: oprf::Token<CS::Group>,
 }
 
-impl_clone_for!(struct ClientRegistration<CS: CipherSuite>, [token]);
+impl_clone_for!(struct ClientRegistration<CS: CipherSuite>, [token, alpha]);
 impl_debug_eq_hash_for!(
     struct ClientRegistration<CS: CipherSuite>,
     [token],
@@ -116,6 +117,7 @@ impl<CS: CipherSuite> ClientRegistration<CS> {
     /// Serialization into bytes
     pub fn serialize(&self) -> Vec<u8> {
         [
+            &self.alpha.to_arr().to_vec(),
             &CS::Group::scalar_as_bytes(self.token.blind)[..],
             &self.token.data,
         ]
@@ -124,7 +126,9 @@ impl<CS: CipherSuite> ClientRegistration<CS> {
 
     /// Deserialization from bytes
     pub fn deserialize(input: &[u8]) -> Result<Self, ProtocolError> {
-        let min_expected_len = <CS::Group as Group>::ScalarLen::to_usize();
+        let elem_len = <CS::Group as Group>::ElemLen::to_usize();
+        let scalar_len = <CS::Group as Group>::ScalarLen::to_usize();
+        let min_expected_len = elem_len + scalar_len;
         let checked_slice = (if input.len() <= min_expected_len {
             Err(InternalPakeError::SizeError {
                 name: "client_registration_bytes",
@@ -135,13 +139,18 @@ impl<CS: CipherSuite> ClientRegistration<CS> {
             Ok(input)
         })?;
 
+        let alpha =
+            CS::Group::from_element_slice(GenericArray::from_slice(&checked_slice[..elem_len]))?;
+
         // Check that the message is actually containing an element of the
         // correct subgroup
-        let scalar_len = min_expected_len;
-        let blinding_factor_bytes = GenericArray::from_slice(&checked_slice[..scalar_len]);
+        let blinding_factor_bytes =
+            GenericArray::from_slice(&checked_slice[elem_len..elem_len + scalar_len]);
         let blinding_factor = CS::Group::from_scalar_slice(blinding_factor_bytes)?;
-        let password = checked_slice[scalar_len..].to_vec();
+
+        let password = checked_slice[elem_len + scalar_len..].to_vec();
         Ok(Self {
+            alpha,
             token: oprf::Token {
                 data: password,
                 blind: blinding_factor,
@@ -231,7 +240,7 @@ impl<CS: CipherSuite> ClientRegistration<CS> {
 
         Ok(ClientRegistrationStartResult {
             message: RegistrationRequest::<CS> { alpha },
-            state: Self { token },
+            state: Self { alpha, token },
         })
     }
 }
@@ -275,6 +284,11 @@ impl<CS: CipherSuite> ClientRegistration<CS> {
             ClientRegistrationFinishParameters::WithIdentifiers(ids) => Some(ids),
             ClientRegistrationFinishParameters::Default => None,
         };
+
+        // Check for reflected value from server and halt if detected
+        if self.alpha.ct_equal(&r2.beta) {
+            return Err(ProtocolError::ReflectedValueError);
+        }
 
         let password_derived_key =
             get_password_derived_key::<CS::Group, CS::SlowHash, CS::Hash>(&self.token, r2.beta)?;
@@ -577,6 +591,13 @@ impl<CS: CipherSuite> ClientLogin<CS> {
                 (context, Some(ids))
             }
         };
+
+        // Check if beta value from server is equal to alpha value from client
+        let credential_request =
+            CredentialRequest::<CS>::deserialize(&self.serialized_credential_request[..])?;
+        if credential_request.alpha.ct_equal(&credential_response.beta) {
+            return Err(ProtocolError::ReflectedValueError);
+        }
 
         let password_derived_key = get_password_derived_key::<CS::Group, CS::SlowHash, CS::Hash>(
             &self.token,
