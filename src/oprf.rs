@@ -21,8 +21,8 @@ pub struct Token<Grp: Group> {
 impl_clone_for!(struct Token<Grp: Group>, [data, blind]);
 impl_debug_eq_hash_for!(struct Token<Grp: Group>, [data, blind], [Grp::Scalar]);
 
-static STR_VOPRF: &[u8] = b"VOPRF06-HashToGroup-";
-static STR_VOPRF_FINALIZE: &[u8] = b"VOPRF06-Finalize-";
+static STR_VOPRF: &[u8] = b"HashToGroup-VOPRF07-";
+static STR_VOPRF_FINALIZE: &[u8] = b"Finalize-VOPRF07-";
 static MODE_BASE: u8 = 0x00;
 
 /// Computes the first step for the multiplicative blinding version of DH-OPRF. This
