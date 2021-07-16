@@ -51,7 +51,13 @@ pub struct ServerSetup<CS: CipherSuite> {
     pub(crate) fake_keypair: KeyPair<CS::Group>,
 }
 
-impl<CS: CipherSuite<Group = G, PrivateKey = PrivateKey<G>>, G: Group> ServerSetup<CS> {
+impl<
+        CS: CipherSuite<Group = G, PrivateKey = PrivateKey<G>>,
+        G: Group + GroupWithMapToCurve<UniformBytesLen = <CS::Hash as Digest>::OutputSize>,
+    > ServerSetup<CS>
+where
+    <CS as CipherSuite>::KeyExchange: KeyExchange<<CS as CipherSuite>::Hash, G>,
+{
     /// Generate a new instance of server setup
     pub fn new<R: CryptoRng + RngCore>(rng: &mut R) -> Self {
         let mut seed = vec![0u8; <CS::Hash as Digest>::OutputSize::to_usize()];
