@@ -41,23 +41,20 @@ const STR_OPAQUE_DERIVE_KEY_PAIR: &[u8] = b"OPAQUE-DeriveKeyPair";
     feature = "serialize",
     derive(serde::Deserialize, serde::Serialize),
     serde(bound(
-        deserialize = "KeyPair<CS::Group, CS::PrivateKey>: serde::Deserialize<'de>",
-        serialize = "KeyPair<CS::Group, CS::PrivateKey>: serde::Serialize"
+        deserialize = "KeyPair<CS::Group, S>: serde::Deserialize<'de>",
+        serialize = "KeyPair<CS::Group, S>: serde::Serialize"
     ))
 )]
-pub struct ServerSetup<CS: CipherSuite> {
+pub struct ServerSetup<
+    CS: CipherSuite,
+    S: SecretKey<CS::Group> = PrivateKey<<CS as CipherSuite>::Group>,
+> {
     oprf_seed: GenericArray<u8, <CS::Hash as Digest>::OutputSize>,
-    keypair: KeyPair<CS::Group, CS::PrivateKey>,
+    keypair: KeyPair<CS::Group, S>,
     pub(crate) fake_keypair: KeyPair<CS::Group>,
 }
 
-impl<
-        CS: CipherSuite<Group = G, PrivateKey = PrivateKey<G>>,
-        G: Group + GroupWithMapToCurve<UniformBytesLen = <CS::Hash as Digest>::OutputSize>,
-    > ServerSetup<CS>
-where
-    <CS as CipherSuite>::KeyExchange: KeyExchange<<CS as CipherSuite>::Hash, G>,
-{
+impl<CS: CipherSuite> ServerSetup<CS, PrivateKey<CS::Group>> {
     /// Generate a new instance of server setup
     pub fn new<R: CryptoRng + RngCore>(rng: &mut R) -> Self {
         let mut seed = vec![0u8; <CS::Hash as Digest>::OutputSize::to_usize()];
@@ -71,7 +68,7 @@ where
     }
 }
 
-impl<CS: CipherSuite> ServerSetup<CS> {
+impl<CS: CipherSuite, S: SecretKey<CS::Group>> ServerSetup<CS, S> {
     /// Serialization into bytes
     pub fn serialize(&self) -> Vec<u8> {
         [
@@ -96,7 +93,7 @@ impl<CS: CipherSuite> ServerSetup<CS> {
     }
 
     /// Returns the keypair
-    pub fn keypair(&self) -> &KeyPair<CS::Group, CS::PrivateKey> {
+    pub fn keypair(&self) -> &KeyPair<CS::Group, S> {
         &self.keypair
     }
 }
