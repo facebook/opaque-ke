@@ -12,7 +12,7 @@ use crate::{
         traits::{FromBytes, KeyExchange, ToBytes},
         tripledh::{NonceLen, TripleDH},
     },
-    keypair::{KeyPair, PublicKey},
+    keypair::{KeyPair, PrivateKey, PublicKey},
     serialization::{i2osp, os2ip, serialize},
     *,
 };
@@ -31,6 +31,7 @@ impl CipherSuite for Default {
     type KeyExchange = TripleDH;
     type Hash = sha2::Sha512;
     type SlowHash = crate::slow_hash::NoOpHash;
+    type PrivateKey = PrivateKey<RistrettoPoint>;
 }
 
 const HASH_SIZE: usize = 64; // Because of SHA512
