@@ -26,10 +26,11 @@ use std::collections::HashMap;
 use std::process::exit;
 
 use opaque_ke::{
-    ciphersuite::CipherSuite, rand::rngs::OsRng, ClientLogin, ClientLoginFinishParameters,
-    ClientRegistration, ClientRegistrationFinishParameters, CredentialFinalization,
-    CredentialRequest, CredentialResponse, RegistrationRequest, RegistrationResponse,
-    RegistrationUpload, ServerLogin, ServerLoginStartParameters, ServerRegistration, ServerSetup,
+    ciphersuite::CipherSuite, keypair::PrivateKey, rand::rngs::OsRng, ClientLogin,
+    ClientLoginFinishParameters, ClientRegistration, ClientRegistrationFinishParameters,
+    CredentialFinalization, CredentialRequest, CredentialResponse, RegistrationRequest,
+    RegistrationResponse, RegistrationUpload, ServerLogin, ServerLoginStartParameters,
+    ServerRegistration, ServerSetup,
 };
 
 // The ciphersuite trait allows to specify the underlying primitives
@@ -41,6 +42,7 @@ impl CipherSuite for Default {
     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
     type Hash = sha2::Sha512;
     type SlowHash = opaque_ke::slow_hash::NoOpHash;
+    type PrivateKey = PrivateKey<Self::Group>;
 }
 
 // Password-based registration between a client and server

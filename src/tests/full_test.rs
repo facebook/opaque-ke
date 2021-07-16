@@ -10,7 +10,7 @@ use crate::{
     errors::*,
     group::Group,
     key_exchange::tripledh::{NonceLen, TripleDH},
-    keypair::KeyPair,
+    keypair::{KeyPair, PrivateKey},
     opaque::*,
     slow_hash::NoOpHash,
     tests::mock_rng::CycleRng,
@@ -33,6 +33,7 @@ impl CipherSuite for RistrettoSha5123dhNoSlowHash {
     type KeyExchange = TripleDH;
     type Hash = sha2::Sha512;
     type SlowHash = NoOpHash;
+    type PrivateKey = PrivateKey<RistrettoPoint>;
 }
 
 pub struct TestVectorParameters {

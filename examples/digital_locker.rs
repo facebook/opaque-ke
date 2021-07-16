@@ -32,6 +32,7 @@ use std::process::exit;
 
 use opaque_ke::{
     ciphersuite::CipherSuite,
+    keypair::PrivateKey,
     rand::{rngs::OsRng, RngCore},
     ClientLogin, ClientLoginFinishParameters, ClientRegistration,
     ClientRegistrationFinishParameters, CredentialFinalization, CredentialRequest,
@@ -48,6 +49,7 @@ impl CipherSuite for Default {
     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
     type Hash = sha2::Sha512;
     type SlowHash = opaque_ke::slow_hash::NoOpHash;
+    type PrivateKey = PrivateKey<Self::Group>;
 }
 
 struct Locker {

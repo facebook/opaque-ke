@@ -12,7 +12,7 @@ use crate::{
     group::Group,
     hash::Hash,
     key_exchange::traits::{FromBytes, KeyExchange, ToBytesWithPointers},
-    keypair::{KeyPair, PrivateKey, PublicKey},
+    keypair::{KeyPair, PrivateKey, PublicKey, SecretKey},
     map_to_curve::GroupWithMapToCurve,
     oprf,
     serialization::{serialize, tokenize},
@@ -37,14 +37,21 @@ const STR_OPAQUE_DERIVE_KEY_PAIR: &[u8] = b"OPAQUE-DeriveKeyPair";
 // ============
 
 /// The state elements the server holds upon setup
-#[cfg_attr(feature = "serialize", derive(serde::Deserialize, serde::Serialize))]
+#[cfg_attr(
+    feature = "serialize",
+    derive(serde::Deserialize, serde::Serialize),
+    serde(bound(
+        deserialize = "KeyPair<CS::Group, CS::PrivateKey>: serde::Deserialize<'de>",
+        serialize = "KeyPair<CS::Group, CS::PrivateKey>: serde::Serialize"
+    ))
+)]
 pub struct ServerSetup<CS: CipherSuite> {
     oprf_seed: GenericArray<u8, <CS::Hash as Digest>::OutputSize>,
-    keypair: KeyPair<CS::Group>,
+    keypair: KeyPair<CS::Group, CS::PrivateKey>,
     pub(crate) fake_keypair: KeyPair<CS::Group>,
 }
 
-impl<CS: CipherSuite> ServerSetup<CS> {
+impl<CS: CipherSuite<Group = G, PrivateKey = PrivateKey<G>>, G: Group> ServerSetup<CS> {
     /// Generate a new instance of server setup
     pub fn new<R: CryptoRng + RngCore>(rng: &mut R) -> Self {
         let mut seed = vec![0u8; <CS::Hash as Digest>::OutputSize::to_usize()];
@@ -56,13 +63,15 @@ impl<CS: CipherSuite> ServerSetup<CS> {
             fake_keypair: KeyPair::<CS::Group>::generate_random(rng),
         }
     }
+}
 
+impl<CS: CipherSuite> ServerSetup<CS> {
     /// Serialization into bytes
     pub fn serialize(&self) -> Vec<u8> {
         [
             self.oprf_seed.to_vec(),
-            self.keypair.private().to_arr().to_vec(),
-            self.fake_keypair.private().to_arr().to_vec(),
+            self.keypair.private().serialize(),
+            self.fake_keypair.private().serialize(),
         ]
         .concat()
     }
@@ -81,7 +90,7 @@ impl<CS: CipherSuite> ServerSetup<CS> {
     }
 
     /// Returns the keypair
-    pub fn keypair(&self) -> &KeyPair<CS::Group> {
+    pub fn keypair(&self) -> &KeyPair<CS::Group, CS::PrivateKey> {
         &self.keypair
     }
 }
@@ -775,7 +784,7 @@ impl<CS: CipherSuite> ServerLogin<CS> {
         };
 
         let server_s_sk = server_setup.keypair.private();
-        let server_s_pk = KeyPair::<CS::Group>::public_from_private(server_s_sk);
+        let server_s_pk = server_s_sk.public_key()?;
 
         let mut masking_nonce = vec![0u8; 32];
         rng.fill_bytes(&mut masking_nonce);

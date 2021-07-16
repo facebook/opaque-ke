@@ -8,7 +8,7 @@ use crate::{
     errors::{PakeError, ProtocolError},
     group::Group,
     hash::Hash,
-    keypair::{PrivateKey, PublicKey},
+    keypair::{PrivateKey, PublicKey, SecretKey},
 };
 use rand::{CryptoRng, RngCore};
 use zeroize::Zeroize;
@@ -25,13 +25,13 @@ pub trait KeyExchange<D: Hash, G: Group> {
     ) -> Result<(Self::KE1State, Self::KE1Message), ProtocolError>;
 
     #[allow(clippy::too_many_arguments, clippy::type_complexity)]
-    fn generate_ke2<R: RngCore + CryptoRng>(
+    fn generate_ke2<R: RngCore + CryptoRng, S: SecretKey<G>>(
         rng: &mut R,
         l1_bytes: Vec<u8>,
         l2_bytes: Vec<u8>,
         ke1_message: Self::KE1Message,
         client_s_pk: PublicKey<G>,
-        server_s_sk: PrivateKey<G>,
+        server_s_sk: S,
         id_u: Vec<u8>,
         id_s: Vec<u8>,
         context: Vec<u8>,

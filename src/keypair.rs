@@ -7,7 +7,7 @@
 
 #![allow(unsafe_code)]
 
-use crate::errors::InternalPakeError;
+use crate::errors::{InternalPakeError, PakeError, ProtocolError};
 use crate::group::Group;
 #[cfg(test)]
 use generic_array::typenum::Unsigned;
@@ -37,63 +37,72 @@ impl<T> SizedBytesExt for T where T: SizedBytes {}
 #[cfg_attr(
     feature = "serialize",
     derive(serde::Deserialize, serde::Serialize),
-    serde(bound = "")
+    serde(bound(
+        deserialize = "S: serde::Deserialize<'de>",
+        serialize = "S: serde::Serialize"
+    ))
 )]
-pub struct KeyPair<G: Group> {
+pub struct KeyPair<G: Group, S: SecretKey<G> = PrivateKey<G>> {
     pk: PublicKey<G>,
-    sk: PrivateKey<G>,
+    sk: S,
 }
 
-impl_clone_for!(
-    struct KeyPair<G: Group>,
-    [pk, sk],
-);
-impl_debug_eq_hash_for!(
-    struct KeyPair<G: Group>,
-    [pk, sk],
-);
+impl<G: Group, S: SecretKey<G>> Clone for KeyPair<G, S> {
+    fn clone(&self) -> Self {
+        Self {
+            pk: self.pk.clone(),
+            sk: self.sk.clone(),
+        }
+    }
+}
+
+impl<G: Group, S: SecretKey<G> + Debug> Debug for KeyPair<G, S> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("KeyPair")
+            .field("pk", &self.pk)
+            .field("sk", &self.sk)
+            .finish()
+    }
+}
+
+impl<G: Group, S: SecretKey<G> + PartialEq> PartialEq for KeyPair<G, S> {
+    fn eq(&self, other: &Self) -> bool {
+        self.pk.eq(&other.pk) && self.sk.eq(&other.sk)
+    }
+}
+
+impl<G: Group, S: SecretKey<G> + Eq> Eq for KeyPair<G, S> {}
+
+impl<G: Group, S: SecretKey<G> + std::hash::Hash> std::hash::Hash for KeyPair<G, S> {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.pk.hash(state);
+        self.sk.hash(state);
+    }
+}
 
 // This can't be derived because of the use of a generic parameter
-impl<G: Group> Zeroize for KeyPair<G> {
+impl<G: Group, S: SecretKey<G>> Zeroize for KeyPair<G, S> {
     fn zeroize(&mut self) {
         self.pk.zeroize();
         self.sk.zeroize();
     }
 }
 
-impl<G: Group> Drop for KeyPair<G> {
+impl<G: Group, S: SecretKey<G>> Drop for KeyPair<G, S> {
     fn drop(&mut self) {
         self.zeroize();
     }
 }
 
-impl<G: Group> KeyPair<G> {
+impl<G: Group, S: SecretKey<G>> KeyPair<G, S> {
     /// The public key component
     pub fn public(&self) -> &PublicKey<G> {
         &self.pk
     }
 
     /// The private key component
-    pub fn private(&self) -> &PrivateKey<G> {
+    pub fn private(&self) -> &S {
         &self.sk
-    }
-
-    /// Generating a random key pair given a cryptographic rng
-    pub(crate) fn generate_random<R: RngCore + CryptoRng>(rng: &mut R) -> Self {
-        let sk = G::random_nonzero_scalar(rng);
-        let sk_bytes = G::scalar_as_bytes(sk);
-        let pk = G::base_point().mult_by_slice(&sk_bytes);
-        Self {
-            pk: PublicKey(Key(pk.to_arr())),
-            sk: PrivateKey(Key(sk_bytes)),
-        }
-    }
-
-    /// Obtaining a public key from secret bytes. At all times, we should have
-    /// &public_from_private(self.private()) == self.public()
-    pub(crate) fn public_from_private(bytes: &PrivateKey<G>) -> PublicKey<G> {
-        let bytes_data = GenericArray::<u8, G::ScalarLen>::from_slice(&bytes.0[..]);
-        PublicKey(Key(G::base_point().mult_by_slice(bytes_data).to_arr()))
     }
 
     /// Check whether a public key is valid. This is meant to be applied on
@@ -104,22 +113,24 @@ impl<G: Group> KeyPair<G> {
         G::from_element_slice(GenericArray::from_slice(&key.0)).map(|_| key)
     }
 
-    /// Computes the diffie hellman function on a public key and private key
-    pub(crate) fn diffie_hellman(
-        pk: PublicKey<G>,
-        sk: PrivateKey<G>,
-    ) -> Result<Vec<u8>, InternalPakeError> {
-        let pk_data = GenericArray::<u8, G::ElemLen>::from_slice(&pk.0[..]);
-        let point = G::from_element_slice(pk_data)?;
-        let secret_data = GenericArray::<u8, G::ScalarLen>::from_slice(&sk.0[..]);
-        Ok(G::mult_by_slice(&point, secret_data).to_arr().to_vec())
-    }
-
     /// Obtains a KeyPair from a slice representing the private key
-    pub fn from_private_key_slice(input: &[u8]) -> Result<Self, InternalPakeError> {
-        let sk = PrivateKey(Key(GenericArray::clone_from_slice(input)));
-        let pk = Self::public_from_private(&sk);
+    pub fn from_private_key_slice(input: &[u8]) -> Result<Self, ProtocolError> {
+        let sk = S::deserialize(input)?;
+        let pk = sk.public_key()?;
         Ok(Self { pk, sk })
+    }
+}
+
+impl<G: Group> KeyPair<G> {
+    /// Generating a random key pair given a cryptographic rng
+    pub(crate) fn generate_random<R: RngCore + CryptoRng>(rng: &mut R) -> Self {
+        let sk = G::random_nonzero_scalar(rng);
+        let sk_bytes = G::scalar_as_bytes(sk);
+        let pk = G::base_point().mult_by_slice(&sk_bytes);
+        Self {
+            pk: PublicKey(Key(pk.to_arr())),
+            sk: PrivateKey(Key(sk_bytes)),
+        }
     }
 
     #[cfg(test)]
@@ -263,6 +274,45 @@ impl<G: Group> SizedBytes for PrivateKey<G> {
     }
 }
 
+/// A trait specifying the requirements for a private key container
+pub trait SecretKey<G: Group>: Clone + Sized + Zeroize {
+    /// Diffie-Hellman key exchange implementation
+    fn diffie_hellman(&self, pk: PublicKey<G>) -> Result<Vec<u8>, InternalPakeError>;
+
+    /// Returns public key from private key
+    fn public_key(&self) -> Result<PublicKey<G>, InternalPakeError>;
+
+    /// Serialization into bytes
+    fn serialize(&self) -> Vec<u8>;
+
+    /// Deserialization from bytes
+    fn deserialize(input: &[u8]) -> Result<Self, ProtocolError>;
+}
+
+impl<G: Group> SecretKey<G> for PrivateKey<G> {
+    fn diffie_hellman(&self, pk: PublicKey<G>) -> Result<Vec<u8>, InternalPakeError> {
+        let pk_data = GenericArray::<u8, G::ElemLen>::from_slice(&pk.0[..]);
+        let point = G::from_element_slice(pk_data)?;
+        let secret_data = GenericArray::<u8, G::ScalarLen>::from_slice(&self.0[..]);
+        Ok(G::mult_by_slice(&point, secret_data).to_arr().to_vec())
+    }
+
+    fn public_key(&self) -> Result<PublicKey<G>, InternalPakeError> {
+        let bytes_data = GenericArray::<u8, G::ScalarLen>::from_slice(&self.0[..]);
+        Ok(PublicKey(Key(G::base_point()
+            .mult_by_slice(bytes_data)
+            .to_arr())))
+    }
+
+    fn serialize(&self) -> Vec<u8> {
+        self.to_vec()
+    }
+
+    fn deserialize(input: &[u8]) -> Result<Self, ProtocolError> {
+        PrivateKey::from_bytes(input).map_err(|_| PakeError::SerializationError.into())
+    }
+}
+
 /// Wrapper around a Key to enforce that it's a public one.
 #[cfg_attr(feature = "serialize", derive(serde::Deserialize, serde::Serialize))]
 #[repr(transparent)]
@@ -364,15 +414,15 @@ mod tests {
         fn test_ristretto_pub_from_priv(kp in KeyPair::<RistrettoPoint>::uniform_keypair_strategy()) {
             let pk = kp.public();
             let sk = kp.private();
-            prop_assert_eq!(&KeyPair::<RistrettoPoint>::public_from_private(sk), pk);
+            prop_assert_eq!(&sk.public_key()?, pk);
         }
 
         #[test]
         fn test_ristretto_dh(kp1 in KeyPair::<RistrettoPoint>::uniform_keypair_strategy(),
                           kp2 in KeyPair::<RistrettoPoint>::uniform_keypair_strategy()) {
 
-            let dh1 = KeyPair::<RistrettoPoint>::diffie_hellman(kp1.public().clone(), kp2.private().clone())?;
-            let dh2 = KeyPair::<RistrettoPoint>::diffie_hellman(kp2.public().clone(), kp1.private().clone())?;
+            let dh1 = kp2.private().diffie_hellman(kp1.public().clone())?;
+            let dh2 = kp1.private().diffie_hellman(kp2.public().clone())?;
 
             prop_assert_eq!(dh1, dh2);
         }

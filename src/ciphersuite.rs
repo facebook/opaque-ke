@@ -6,8 +6,8 @@
 //! Defines the CipherSuite trait to specify the underlying primitives for OPAQUE
 
 use crate::{
-    hash::Hash, key_exchange::traits::KeyExchange, map_to_curve::GroupWithMapToCurve,
-    slow_hash::SlowHash,
+    hash::Hash, key_exchange::traits::KeyExchange, keypair::SecretKey,
+    map_to_curve::GroupWithMapToCurve, slow_hash::SlowHash,
 };
 use digest::Digest;
 
@@ -31,4 +31,6 @@ pub trait CipherSuite {
     type Hash: Hash;
     /// A slow hashing function, typically used for password hashing
     type SlowHash: SlowHash<Self::Hash>;
+    /// A private key container, allows remote key implementations
+    type PrivateKey: SecretKey<Self::Group>;
 }

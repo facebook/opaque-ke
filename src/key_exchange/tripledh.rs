@@ -13,7 +13,7 @@ use crate::{
     group::Group,
     hash::Hash,
     key_exchange::traits::{FromBytes, KeyExchange, ToBytes, ToBytesWithPointers},
-    keypair::{KeyPair, PrivateKey, PublicKey, SizedBytesExt},
+    keypair::{KeyPair, PrivateKey, PublicKey, SecretKey, SizedBytesExt},
     serialization::serialize,
 };
 use digest::{Digest, FixedOutput};
@@ -70,13 +70,13 @@ impl<D: Hash, G: Group> KeyExchange<D, G> for TripleDH {
     }
 
     #[allow(clippy::type_complexity)]
-    fn generate_ke2<R: RngCore + CryptoRng>(
+    fn generate_ke2<R: RngCore + CryptoRng, S: SecretKey<G>>(
         rng: &mut R,
         serialized_credential_request: Vec<u8>,
         l2_bytes: Vec<u8>,
         ke1_message: Self::KE1Message,
         client_s_pk: PublicKey<G>,
-        server_s_sk: PrivateKey<G>,
+        server_s_sk: S,
         id_u: Vec<u8>,
         id_s: Vec<u8>,
         context: Vec<u8>,
@@ -94,7 +94,7 @@ impl<D: Hash, G: Group> KeyExchange<D, G> for TripleDH {
             .chain(&server_nonce[..])
             .chain(&server_e_kp.public().to_arr());
 
-        let (session_key, km2, km3) = derive_3dh_keys::<D, G>(
+        let (session_key, km2, km3) = derive_3dh_keys::<D, G, S>(
             TripleDHComponents {
                 pk1: ke1_message.client_e_pk.clone(),
                 sk1: server_e_kp.private().clone(),
@@ -148,7 +148,7 @@ impl<D: Hash, G: Group> KeyExchange<D, G> for TripleDH {
             .chain(&l2_component[..])
             .chain(&ke2_message.to_bytes_without_info_or_mac());
 
-        let (session_key, km2, km3) = derive_3dh_keys::<D, G>(
+        let (session_key, km2, km3) = derive_3dh_keys::<D, G, PrivateKey<G>>(
             TripleDHComponents {
                 pk1: ke2_message.server_e_pk.clone(),
                 sk1: ke1_state.client_e_sk.clone(),
@@ -408,11 +408,11 @@ impl<G: Group, HashLen: ArrayLength<u8>> FromBytes for Ke2Message<G, HashLen> {
 
 #[allow(clippy::upper_case_acronyms)]
 // The triple of public and private components used in the 3DH computation
-struct TripleDHComponents<G: Group> {
+struct TripleDHComponents<G: Group, S: SecretKey<G>> {
     pk1: PublicKey<G>,
     sk1: PrivateKey<G>,
     pk2: PublicKey<G>,
-    sk2: PrivateKey<G>,
+    sk2: S,
     pk3: PublicKey<G>,
     sk3: PrivateKey<G>,
 }
@@ -453,14 +453,14 @@ impl<HashLen: ArrayLength<u8>> FromBytes for Ke3Message<HashLen> {
 
 // Internal function which takes the public and private components of the client and server keypairs, along
 // with some auxiliary metadata, to produce the session key and two MAC keys
-fn derive_3dh_keys<D: Hash, G: Group>(
-    dh: TripleDHComponents<G>,
+fn derive_3dh_keys<D: Hash, G: Group, S: SecretKey<G>>(
+    dh: TripleDHComponents<G, S>,
     hashed_derivation_transcript: &[u8],
 ) -> Result<TripleDHDerivationResult<D>, ProtocolError> {
     let ikm: Vec<u8> = [
-        &KeyPair::<G>::diffie_hellman(dh.pk1, dh.sk1)?[..],
-        &KeyPair::<G>::diffie_hellman(dh.pk2, dh.sk2)?[..],
-        &KeyPair::<G>::diffie_hellman(dh.pk3, dh.sk3)?[..],
+        &dh.sk1.diffie_hellman(dh.pk1)?[..],
+        &dh.sk2.diffie_hellman(dh.pk2)?[..],
+        &dh.sk3.diffie_hellman(dh.pk3)?[..],
     ]
     .concat();
 
