@@ -13,6 +13,12 @@
 * Adding support for common traits on public structs
 * Updated dependencies
 
+## 0.5.1 (July 16, 2021)
+
+* Various security improvements: non-zero scalars, zeroizing on drop,
+  constant-time operations, reflected value check, and adding an
+  i2osp error condition
+
 ## 0.5.0 (March 1, 2021)
 
 * Removed dependency on generic-bytes-derive package
