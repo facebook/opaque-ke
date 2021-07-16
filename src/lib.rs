@@ -26,7 +26,6 @@
 //!     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
 //!     type Hash = sha2::Sha512;
 //!     type SlowHash = opaque_ke::slow_hash::NoOpHash;
-//!     type PrivateKey = opaque_ke::keypair::PrivateKey<Self::Group>;
 //! }
 //! ```
 //! See [examples/simple_login.rs](https://github.com/novifinancial/opaque-ke/blob/master/examples/simple_login.rs)
@@ -48,7 +47,6 @@
 //! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
 //! #     type Hash = sha2::Sha512;
 //! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
-//! #     type PrivateKey = opaque_ke::keypair::PrivateKey<Self::Group>;
 //! # }
 //! use rand::{rngs::OsRng, RngCore};
 //! let mut rng = OsRng;
@@ -81,7 +79,6 @@
 //! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
 //! #     type Hash = sha2::Sha512;
 //! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
-//! #     type PrivateKey = opaque_ke::keypair::PrivateKey<Self::Group>;
 //! # }
 //! use opaque_ke::ClientRegistration;
 //! use rand::{rngs::OsRng, RngCore};
@@ -112,7 +109,6 @@
 //! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
 //! #     type Hash = sha2::Sha512;
 //! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
-//! #     type PrivateKey = opaque_ke::keypair::PrivateKey<Self::Group>;
 //! # }
 //! # use rand::{rngs::OsRng, RngCore};
 //! # let mut client_rng = OsRng;
@@ -150,7 +146,6 @@
 //! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
 //! #     type Hash = sha2::Sha512;
 //! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
-//! #     type PrivateKey = opaque_ke::keypair::PrivateKey<Self::Group>;
 //! # }
 //! # use rand::{rngs::OsRng, RngCore};
 //! # let mut client_rng = OsRng;
@@ -189,7 +184,6 @@
 //! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
 //! #     type Hash = sha2::Sha512;
 //! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
-//! #     type PrivateKey = opaque_ke::keypair::PrivateKey<Self::Group>;
 //! # }
 //! # use rand::{rngs::OsRng, RngCore};
 //! # let mut client_rng = OsRng;
@@ -232,7 +226,6 @@
 //! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
 //! #     type Hash = sha2::Sha512;
 //! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
-//! #     type PrivateKey = opaque_ke::keypair::PrivateKey<Self::Group>;
 //! # }
 //! # use rand::{rngs::OsRng, RngCore};
 //! use opaque_ke::ClientLogin;
@@ -266,7 +259,6 @@
 //! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
 //! #     type Hash = sha2::Sha512;
 //! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
-//! #     type PrivateKey = opaque_ke::keypair::PrivateKey<Self::Group>;
 //! # }
 //! # use rand::{rngs::OsRng, RngCore};
 //! # let mut client_rng = OsRng;
@@ -320,7 +312,6 @@
 //! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
 //! #     type Hash = sha2::Sha512;
 //! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
-//! #     type PrivateKey = opaque_ke::keypair::PrivateKey<Self::Group>;
 //! # }
 //! # use rand::{rngs::OsRng, RngCore};
 //! # let mut client_rng = OsRng;
@@ -366,7 +357,6 @@
 //! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
 //! #     type Hash = sha2::Sha512;
 //! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
-//! #     type PrivateKey = opaque_ke::keypair::PrivateKey<Self::Group>;
 //! # }
 //! # use rand::{rngs::OsRng, RngCore};
 //! # let mut client_rng = OsRng;
@@ -442,7 +432,6 @@
 //! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
 //! #     type Hash = sha2::Sha512;
 //! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
-//! #     type PrivateKey = opaque_ke::keypair::PrivateKey<Self::Group>;
 //! # }
 //! # use rand::{rngs::OsRng, RngCore};
 //! # let mut client_rng = OsRng;
@@ -520,7 +509,6 @@
 //! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
 //! #     type Hash = sha2::Sha512;
 //! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
-//! #     type PrivateKey = opaque_ke::keypair::PrivateKey<Self::Group>;
 //! # }
 //! # use rand::{rngs::OsRng, RngCore};
 //! # let mut client_rng = OsRng;
@@ -586,7 +574,6 @@
 //! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
 //! #     type Hash = sha2::Sha512;
 //! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
-//! #     type PrivateKey = opaque_ke::keypair::PrivateKey<Self::Group>;
 //! # }
 //! # use rand::{rngs::OsRng, RngCore};
 //! # let mut client_rng = OsRng;
@@ -624,7 +611,6 @@
 //! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
 //! #     type Hash = sha2::Sha512;
 //! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
-//! #     type PrivateKey = opaque_ke::keypair::PrivateKey<Self::Group>;
 //! # }
 //! # use rand::{rngs::OsRng, RngCore};
 //! # let mut client_rng = OsRng;
@@ -674,7 +660,6 @@
 //! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
 //! #     type Hash = sha2::Sha512;
 //! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
-//! #     type PrivateKey = opaque_ke::keypair::PrivateKey<Self::Group>;
 //! # }
 //! # use rand::{rngs::OsRng, RngCore};
 //! # let mut client_rng = OsRng;

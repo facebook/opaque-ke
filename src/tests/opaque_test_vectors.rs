@@ -21,7 +21,6 @@ impl CipherSuite for Ristretto255Sha512NoSlowHash {
     type KeyExchange = TripleDH;
     type Hash = sha2::Sha512;
     type SlowHash = NoOpHash;
-    type PrivateKey = PrivateKey<RistrettoPoint>;
 }
 
 #[derive(PartialEq)]
