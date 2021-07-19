@@ -1,7 +1,8 @@
 # Changelog
 
-## 0.5.1 (July 16, 2021)
+## 1.0.0 (July 19, 2021)
 
+* Branched from v0.5.0
 * Various security improvements: non-zero scalars, zeroizing on drop,
   constant-time operations, reflected value check, and adding an
   i2osp error condition

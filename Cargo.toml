@@ -1,6 +1,6 @@
 [package]
 name = "opaque-ke"
-version = "0.5.1"
+version = "1.0.0"
 repository = "https://github.com/novifinancial/opaque-ke"
 keywords = ["cryptography", "crypto", "opaque", "passwords", "authentication"]
 description = "An implementation of the OPAQUE password-authenticated key exchange protocol"
