@@ -80,13 +80,13 @@ impl<D: Hash, G: Group> KeyExchange<D, G> for TripleDH {
         id_u: Vec<u8>,
         id_s: Vec<u8>,
         context: Vec<u8>,
-    ) -> Result<(Self::KE2State, Self::KE2Message), ProtocolError> {
+    ) -> Result<(Self::KE2State, Self::KE2Message), ProtocolError<S::Error>> {
         let server_e_kp = KeyPair::<G>::generate_random(rng);
         let server_nonce = generate_nonce::<R>(rng);
 
         let mut transcript_hasher = D::new()
             .chain(STR_RFC)
-            .chain(&serialize(&context, 2)?)
+            .chain(&serialize(&context, 2).map_err(PakeError::into_custom)?)
             .chain(&id_u)
             .chain(&serialized_credential_request[..])
             .chain(&id_s)
@@ -456,11 +456,15 @@ impl<HashLen: ArrayLength<u8>> FromBytes for Ke3Message<HashLen> {
 fn derive_3dh_keys<D: Hash, G: Group, S: SecretKey<G>>(
     dh: TripleDHComponents<G, S>,
     hashed_derivation_transcript: &[u8],
-) -> Result<TripleDHDerivationResult<D>, ProtocolError> {
+) -> Result<TripleDHDerivationResult<D>, ProtocolError<S::Error>> {
     let ikm: Vec<u8> = [
-        &dh.sk1.diffie_hellman(dh.pk1)?[..],
+        &dh.sk1
+            .diffie_hellman(dh.pk1)
+            .map_err(InternalPakeError::into_custom)?[..],
         &dh.sk2.diffie_hellman(dh.pk2)?[..],
-        &dh.sk3.diffie_hellman(dh.pk3)?[..],
+        &dh.sk3
+            .diffie_hellman(dh.pk3)
+            .map_err(InternalPakeError::into_custom)?[..],
     ]
     .concat();
 
@@ -469,25 +473,29 @@ fn derive_3dh_keys<D: Hash, G: Group, S: SecretKey<G>>(
         &extracted_ikm,
         STR_HANDSHAKE_SECRET,
         hashed_derivation_transcript,
-    )?;
+    )
+    .map_err(ProtocolError::into_custom)?;
     let session_key = derive_secrets::<D>(
         &extracted_ikm,
         STR_SESSION_KEY,
         hashed_derivation_transcript,
-    )?;
+    )
+    .map_err(ProtocolError::into_custom)?;
 
     let km2 = hkdf_expand_label::<D>(
         &handshake_secret,
         STR_SERVER_MAC,
         b"",
         <D as Digest>::OutputSize::to_usize(),
-    )?;
+    )
+    .map_err(ProtocolError::into_custom)?;
     let km3 = hkdf_expand_label::<D>(
         &handshake_secret,
         STR_CLIENT_MAC,
         b"",
         <D as Digest>::OutputSize::to_usize(),
-    )?;
+    )
+    .map_err(ProtocolError::into_custom)?;
 
     Ok((
         GenericArray::clone_from_slice(&session_key),

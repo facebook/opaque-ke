@@ -14,7 +14,7 @@ use crate::{
     },
     group::Group,
     key_exchange::traits::{FromBytes, KeyExchange, ToBytes},
-    keypair::{KeyPair, PublicKey, SizedBytesExt},
+    keypair::{KeyPair, PublicKey, SecretKey, SizedBytesExt},
     opaque::ServerSetup,
 };
 use digest::Digest;
@@ -193,9 +193,9 @@ impl<CS: CipherSuite> RegistrationUpload<CS> {
     }
 
     // Creates a dummy instance used for faking a [CredentialResponse]
-    pub(crate) fn dummy<R: RngCore + CryptoRng>(
+    pub(crate) fn dummy<R: RngCore + CryptoRng, S: SecretKey<CS::Group>>(
         rng: &mut R,
-        server_setup: &ServerSetup<CS>,
+        server_setup: &ServerSetup<CS, S>,
     ) -> Self {
         let mut masking_key = vec![0u8; <CS::Hash as Digest>::OutputSize::to_usize()];
         rng.fill_bytes(&mut masking_key);

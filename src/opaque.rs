@@ -80,7 +80,7 @@ impl<CS: CipherSuite, S: SecretKey<CS::Group>> ServerSetup<CS, S> {
     }
 
     /// Deserialization from bytes
-    pub fn deserialize(input: &[u8]) -> Result<Self, ProtocolError> {
+    pub fn deserialize(input: &[u8]) -> Result<Self, ProtocolError<S::Error>> {
         let seed_len = <CS::Hash as Digest>::OutputSize::to_usize();
         let key_len = <PrivateKey<CS::Group> as SizedBytes>::Len::to_usize();
         let checked_slice = check_slice_size(input, seed_len + key_len + key_len, "server_setup")?;
@@ -88,7 +88,8 @@ impl<CS: CipherSuite, S: SecretKey<CS::Group>> ServerSetup<CS, S> {
         Ok(Self {
             oprf_seed: GenericArray::clone_from_slice(&checked_slice[..seed_len]),
             keypair: KeyPair::from_private_key_slice(&checked_slice[seed_len..seed_len + key_len])?,
-            fake_keypair: KeyPair::from_private_key_slice(&checked_slice[seed_len + key_len..])?,
+            fake_keypair: KeyPair::from_private_key_slice(&checked_slice[seed_len + key_len..])
+                .map_err(ProtocolError::into_custom)?,
         })
     }
 
@@ -402,9 +403,9 @@ impl<CS: CipherSuite> ServerRegistration<CS> {
     }
 
     // Creates a dummy instance used for faking a [CredentialResponse]
-    pub(crate) fn dummy<R: RngCore + CryptoRng>(
+    pub(crate) fn dummy<R: RngCore + CryptoRng, S: SecretKey<CS::Group>>(
         rng: &mut R,
-        server_setup: &ServerSetup<CS>,
+        server_setup: &ServerSetup<CS, S>,
     ) -> Self {
         Self(RegistrationUpload::dummy(rng, server_setup))
     }
@@ -763,14 +764,14 @@ impl<CS: CipherSuite> ServerLogin<CS> {
 
     /// From the client's "blinded" password, returns a challenge to be
     /// sent back to the client, as well as a ServerLogin
-    pub fn start<R: RngCore + CryptoRng>(
+    pub fn start<R: RngCore + CryptoRng, S: SecretKey<CS::Group>>(
         rng: &mut R,
-        server_setup: &ServerSetup<CS>,
+        server_setup: &ServerSetup<CS, S>,
         password_file: Option<ServerRegistration<CS>>,
         l1: CredentialRequest<CS>,
         credential_identifier: &[u8],
         params: ServerLoginStartParameters,
-    ) -> Result<ServerLoginStartResult<CS>, ProtocolError> {
+    ) -> Result<ServerLoginStartResult<CS>, ProtocolError<S::Error>> {
         let record = match password_file {
             Some(x) => x,
             None => ServerRegistration::dummy(rng, server_setup),
@@ -797,20 +798,23 @@ impl<CS: CipherSuite> ServerLogin<CS> {
             &masking_nonce,
             &server_s_pk,
             &record.0.envelope,
-        )?;
+        )
+        .map_err(ProtocolError::into_custom)?;
 
         let (id_u, id_s) = bytestrings_from_identifiers(
             &optional_ids,
             &client_s_pk.to_arr(),
             &server_s_pk.to_arr(),
-        )?;
+        )
+        .map_err(ProtocolError::into_custom)?;
 
         let l1_bytes = &l1.serialize();
 
         let oprf_key = oprf_key_from_seed::<CS::Group, CS::Hash>(
             &server_setup.oprf_seed,
             credential_identifier,
-        )?;
+        )
+        .map_err(ProtocolError::into_custom)?;
         let beta = oprf::evaluate(l1.alpha, &oprf_key);
 
         let credential_response_component =
