@@ -35,7 +35,7 @@ pub trait KeyExchange<D: Hash, G: Group> {
         id_u: Vec<u8>,
         id_s: Vec<u8>,
         context: Vec<u8>,
-    ) -> Result<(Self::KE2State, Self::KE2Message), ProtocolError>;
+    ) -> Result<(Self::KE2State, Self::KE2Message), ProtocolError<S::Error>>;
 
     #[allow(clippy::too_many_arguments, clippy::type_complexity)]
     fn generate_ke3(

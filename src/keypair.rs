@@ -114,7 +114,7 @@ impl<G: Group, S: SecretKey<G>> KeyPair<G, S> {
     }
 
     /// Obtains a KeyPair from a slice representing the private key
-    pub fn from_private_key_slice(input: &[u8]) -> Result<Self, ProtocolError> {
+    pub fn from_private_key_slice(input: &[u8]) -> Result<Self, ProtocolError<S::Error>> {
         let sk = S::deserialize(input)?;
         let pk = sk.public_key()?;
         Ok(Self { pk, sk })
@@ -276,20 +276,24 @@ impl<G: Group> SizedBytes for PrivateKey<G> {
 
 /// A trait specifying the requirements for a private key container
 pub trait SecretKey<G: Group>: Clone + Sized + Zeroize {
+    type Error;
+
     /// Diffie-Hellman key exchange implementation
-    fn diffie_hellman(&self, pk: PublicKey<G>) -> Result<Vec<u8>, InternalPakeError>;
+    fn diffie_hellman(&self, pk: PublicKey<G>) -> Result<Vec<u8>, InternalPakeError<Self::Error>>;
 
     /// Returns public key from private key
-    fn public_key(&self) -> Result<PublicKey<G>, InternalPakeError>;
+    fn public_key(&self) -> Result<PublicKey<G>, InternalPakeError<Self::Error>>;
 
     /// Serialization into bytes
     fn serialize(&self) -> Vec<u8>;
 
     /// Deserialization from bytes
-    fn deserialize(input: &[u8]) -> Result<Self, InternalPakeError>;
+    fn deserialize(input: &[u8]) -> Result<Self, InternalPakeError<Self::Error>>;
 }
 
 impl<G: Group> SecretKey<G> for PrivateKey<G> {
+    type Error = std::convert::Infallible;
+
     fn diffie_hellman(&self, pk: PublicKey<G>) -> Result<Vec<u8>, InternalPakeError> {
         let pk_data = GenericArray::<u8, G::ElemLen>::from_slice(&pk.0[..]);
         let point = G::from_element_slice(pk_data)?;
