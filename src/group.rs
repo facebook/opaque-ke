@@ -163,3 +163,74 @@ impl Group for RistrettoPoint {
         constant_time_eq::constant_time_eq(&self.to_arr(), &other.to_arr())
     }
 }
+
+#[cfg(feature = "p256")]
+impl Group for p256::ProjectivePoint {
+    type ElemLen = generic_array::typenum::U33;
+    type Scalar = p256::Scalar;
+    type ScalarLen = U32;
+    type UniformBytesLen = U32;
+
+    fn from_scalar_slice(
+        scalar_bits: &GenericArray<u8, Self::ScalarLen>,
+    ) -> Result<Self::Scalar, InternalPakeError> {
+        Ok(p256::Scalar::from_bytes_reduced(scalar_bits))
+    }
+
+    fn random_nonzero_scalar<R: RngCore + CryptoRng>(rng: &mut R) -> Self::Scalar {
+        use p256::elliptic_curve::Field;
+
+        p256::Scalar::random(rng)
+    }
+
+    fn scalar_as_bytes(scalar: Self::Scalar) -> GenericArray<u8, Self::ScalarLen> {
+        scalar.into()
+    }
+
+    fn scalar_invert(scalar: &Self::Scalar) -> Self::Scalar {
+        scalar.invert().unwrap_or(p256::Scalar::zero())
+    }
+
+    fn from_element_slice(
+        element_bits: &GenericArray<u8, Self::ElemLen>,
+    ) -> Result<Self, InternalPakeError> {
+        use p256::elliptic_curve::group::GroupEncoding;
+
+        Option::from(Self::from_bytes(element_bits)).ok_or(InternalPakeError::PointError)
+    }
+
+    fn to_arr(&self) -> GenericArray<u8, Self::ElemLen> {
+        use p256::elliptic_curve::group::GroupEncoding;
+
+        self.to_bytes()
+    }
+
+    fn hash_to_curve(
+        uniform_bytes: &GenericArray<u8, Self::UniformBytesLen>,
+    ) -> Result<Self, InternalPakeError> {
+        use p256::elliptic_curve::sec1::FromEncodedPoint;
+
+        Self::from_encoded_point(&p256::EncodedPoint::from_secret_key(
+            &p256::SecretKey::new(p256::ScalarBytes::from_scalar(
+                &p256::Scalar::from_bytes_reduced(uniform_bytes),
+            )),
+            true,
+        ))
+        .ok_or(InternalPakeError::PointError)
+    }
+
+    fn base_point() -> Self {
+        Self::generator()
+    }
+
+    fn mult_by_slice(&self, scalar: &GenericArray<u8, Self::ScalarLen>) -> Self {
+        self * &p256::Scalar::from_bytes_reduced(scalar)
+    }
+
+    fn is_identity(&self) -> bool {
+        self == &p256::ProjectivePoint::identity()
+    }
+    fn ct_equal(&self, other: &Self) -> bool {
+        constant_time_eq::constant_time_eq(&self.to_arr(), &other.to_arr())
+    }
+}

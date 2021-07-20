@@ -28,6 +28,7 @@ generic-array = "0.14.4"
 generic-bytes = { version = "0.1.0" }
 hkdf = "0.11.0"
 hmac = "0.11.0"
+p256 = { version = "0.9", optional = true }
 rand = "0.8"
 serde = { version = "1", features = ["derive"], optional = true }
 subtle = { version = "2.3.0", default-features = false }

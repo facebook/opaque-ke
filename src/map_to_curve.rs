@@ -56,6 +56,27 @@ impl GroupWithMapToCurve for RistrettoPoint {
     }
 }
 
+#[cfg(feature = "p256")]
+impl GroupWithMapToCurve for p256::ProjectivePoint {
+    const SUITE_ID: usize = 0x0003;
+
+    fn map_to_curve<H: Hash>(msg: &[u8], dst: &[u8]) -> Result<Self, ProtocolError> {
+        let uniform_bytes =
+            expand_message_xmd::<H>(msg, dst, <H as Digest>::OutputSize::to_usize())?;
+        <Self as Group>::hash_to_curve(&GenericArray::clone_from_slice(&uniform_bytes[..]))
+            .map_err(ProtocolError::from)
+    }
+
+    fn hash_to_scalar<H: Hash>(input: &[u8], dst: &[u8]) -> Result<Self::Scalar, ProtocolError> {
+        const LEN_IN_BYTES: usize = 32;
+        let uniform_bytes = expand_message_xmd::<H>(input, dst, LEN_IN_BYTES)?;
+        let mut bits = [0; LEN_IN_BYTES];
+        bits.copy_from_slice(&uniform_bytes[..]);
+
+        Ok(p256::Scalar::from_bytes_reduced(&bits.into()))
+    }
+}
+
 // Computes ceil(x / y)
 fn div_ceil(x: usize, y: usize) -> usize {
     let additive = (x % y != 0) as usize;
