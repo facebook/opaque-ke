@@ -7,7 +7,7 @@
 
 #![allow(unsafe_code)]
 
-use crate::errors::{InternalPakeError, PakeError, ProtocolError};
+use crate::errors::{InternalPakeError, ProtocolError};
 use crate::group::Group;
 #[cfg(test)]
 use generic_array::typenum::Unsigned;
@@ -286,7 +286,7 @@ pub trait SecretKey<G: Group>: Clone + Sized + Zeroize {
     fn serialize(&self) -> Vec<u8>;
 
     /// Deserialization from bytes
-    fn deserialize(input: &[u8]) -> Result<Self, ProtocolError>;
+    fn deserialize(input: &[u8]) -> Result<Self, InternalPakeError>;
 }
 
 impl<G: Group> SecretKey<G> for PrivateKey<G> {
@@ -308,8 +308,8 @@ impl<G: Group> SecretKey<G> for PrivateKey<G> {
         self.to_vec()
     }
 
-    fn deserialize(input: &[u8]) -> Result<Self, ProtocolError> {
-        PrivateKey::from_bytes(input).map_err(|_| PakeError::SerializationError.into())
+    fn deserialize(input: &[u8]) -> Result<Self, InternalPakeError> {
+        PrivateKey::from_bytes(input).map_err(InternalPakeError::from)
     }
 }
 
