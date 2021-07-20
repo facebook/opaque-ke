@@ -115,7 +115,11 @@ impl<G: Group, S: SecretKey<G>> KeyPair<G, S> {
 
     /// Obtains a KeyPair from a slice representing the private key
     pub fn from_private_key_slice(input: &[u8]) -> Result<Self, ProtocolError<S::Error>> {
-        let sk = S::deserialize(input)?;
+        Self::from_private_key(S::deserialize(input)?)
+    }
+
+    /// Obtains a KeyPair from a private key
+    pub fn from_private_key(sk: S) -> Result<Self, ProtocolError<S::Error>> {
         let pk = sk.public_key()?;
         Ok(Self { pk, sk })
     }
