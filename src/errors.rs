@@ -101,6 +101,7 @@ impl<T: Debug> Debug for InternalPakeError<T> {
 impl<T: Error> Error for InternalPakeError<T> {}
 
 impl InternalPakeError {
+    /// Convert `InternalPakeError<Infallible>` into `InternalPakeError<T>
     pub fn into_custom<T>(self) -> InternalPakeError<T> {
         match self {
             Self::Custom(_) => unreachable!(),
@@ -187,6 +188,7 @@ impl<T> From<InternalPakeError<T>> for PakeError<T> {
 }
 
 impl PakeError {
+    /// Convert `PakeError<Infallible>` into `PakeError<T>
     pub fn into_custom<T>(self) -> PakeError<T> {
         match self {
             Self::CryptoError(internal_pake_error) => {
@@ -273,6 +275,7 @@ impl<T> From<::std::convert::Infallible> for ProtocolError<T> {
 }
 
 impl ProtocolError {
+    /// Convert `ProtocolError<Infallible>` into `ProtocolError<T>
     pub fn into_custom<T>(self) -> ProtocolError<T> {
         match self {
             Self::VerificationError(pake_error) => {
