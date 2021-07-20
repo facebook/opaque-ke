@@ -280,6 +280,7 @@ impl<G: Group> SizedBytes for PrivateKey<G> {
 
 /// A trait specifying the requirements for a private key container
 pub trait SecretKey<G: Group>: Clone + Sized + Zeroize {
+    /// Custom error type that can be passed down to `InternalPakeError::Custom`
     type Error;
 
     /// Diffie-Hellman key exchange implementation
