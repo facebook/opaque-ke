@@ -57,18 +57,27 @@ pub struct ServerSetup<
 impl<CS: CipherSuite> ServerSetup<CS, PrivateKey<CS::Group>> {
     /// Generate a new instance of server setup
     pub fn new<R: CryptoRng + RngCore>(rng: &mut R) -> Self {
+        let keypair = KeyPair::<CS::Group>::generate_random(rng);
+        Self::new_with_key(rng, keypair)
+    }
+}
+
+impl<CS: CipherSuite, S: SecretKey<CS::Group>> ServerSetup<CS, S> {
+    /// Create [`ServerSetup`] with the given keypair
+    pub fn new_with_key<R: CryptoRng + RngCore>(
+        rng: &mut R,
+        keypair: KeyPair<CS::Group, S>,
+    ) -> Self {
         let mut seed = vec![0u8; <CS::Hash as Digest>::OutputSize::to_usize()];
         rng.fill_bytes(&mut seed);
 
         Self {
             oprf_seed: GenericArray::clone_from_slice(&seed[..]),
-            keypair: KeyPair::<CS::Group>::generate_random(rng),
+            keypair,
             fake_keypair: KeyPair::<CS::Group>::generate_random(rng),
         }
     }
-}
 
-impl<CS: CipherSuite, S: SecretKey<CS::Group>> ServerSetup<CS, S> {
     /// Serialization into bytes
     pub fn serialize(&self) -> Vec<u8> {
         [
@@ -375,8 +384,8 @@ impl<CS: CipherSuite> ServerRegistration<CS> {
 
     /// From the client's "blinded" password, returns a response to be
     /// sent back to the client, as well as a ServerRegistration
-    pub fn start(
-        server_setup: &ServerSetup<CS>,
+    pub fn start<S: SecretKey<CS::Group>>(
+        server_setup: &ServerSetup<CS, S>,
         message: RegistrationRequest<CS>,
         credential_identifier: &[u8],
     ) -> Result<ServerRegistrationStartResult<CS>, ProtocolError> {
