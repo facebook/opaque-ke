@@ -445,4 +445,97 @@ mod tests {
             prop_assert_eq!(sk_bytes, kp2_private_bytes);
         }
     }
+
+    #[test]
+    fn remote_key() -> anyhow::Result<()> {
+        use crate::{
+            CipherSuite, ClientLogin, ClientLoginFinishParameters, ClientLoginFinishResult,
+            ClientLoginStartResult, ClientRegistration, ClientRegistrationFinishParameters,
+            ClientRegistrationFinishResult, ClientRegistrationStartResult, ServerLogin,
+            ServerLoginStartParameters, ServerLoginStartResult, ServerRegistration,
+            ServerRegistrationStartResult, ServerSetup,
+        };
+        use curve25519_dalek::ristretto::RistrettoPoint;
+        use rand::rngs::OsRng;
+
+        struct Default;
+
+        impl CipherSuite for Default {
+            type Group = RistrettoPoint;
+            type KeyExchange = crate::key_exchange::tripledh::TripleDH;
+            type Hash = sha2::Sha512;
+            type SlowHash = crate::slow_hash::NoOpHash;
+        }
+
+        #[derive(Clone, Zeroize)]
+        struct RemoteKey(PrivateKey<RistrettoPoint>);
+
+        impl SecretKey<RistrettoPoint> for RemoteKey {
+            type Error = std::convert::Infallible;
+
+            fn diffie_hellman(
+                &self,
+                pk: PublicKey<RistrettoPoint>,
+            ) -> Result<Vec<u8>, InternalPakeError<Self::Error>> {
+                self.0.diffie_hellman(pk)
+            }
+
+            fn public_key(
+                &self,
+            ) -> Result<PublicKey<RistrettoPoint>, InternalPakeError<Self::Error>> {
+                self.0.public_key()
+            }
+
+            fn serialize(&self) -> Vec<u8> {
+                self.0.serialize()
+            }
+
+            fn deserialize(input: &[u8]) -> Result<Self, InternalPakeError<Self::Error>> {
+                PrivateKey::deserialize(input).map(Self)
+            }
+        }
+
+        const PASSWORD: &str = "password";
+
+        let sk = RistrettoPoint::random_nonzero_scalar(&mut OsRng);
+        let sk_bytes = RistrettoPoint::scalar_as_bytes(sk);
+        let sk = RemoteKey(PrivateKey::from_arr(&sk_bytes).unwrap());
+        let keypair = KeyPair::from_private_key(sk)?;
+
+        let server_setup = ServerSetup::<Default, RemoteKey>::new_with_key(&mut OsRng, keypair);
+
+        let ClientRegistrationStartResult {
+            message,
+            state: client,
+        } = ClientRegistration::<Default>::start(&mut OsRng, PASSWORD.as_bytes())?;
+        let ServerRegistrationStartResult { message } =
+            ServerRegistration::start(&server_setup, message, &[])?;
+        let ClientRegistrationFinishResult { message, .. } = client.finish(
+            &mut OsRng,
+            message,
+            ClientRegistrationFinishParameters::Default,
+        )?;
+        let file = ServerRegistration::finish(message);
+
+        let ClientLoginStartResult {
+            message,
+            state: client,
+        } = ClientLogin::<Default>::start(&mut OsRng, PASSWORD.as_bytes())?;
+        let ServerLoginStartResult {
+            message,
+            state: server,
+        } = ServerLogin::start(
+            &mut OsRng,
+            &server_setup,
+            Some(file),
+            message,
+            &[],
+            ServerLoginStartParameters::default(),
+        )?;
+        let ClientLoginFinishResult { message, .. } =
+            client.finish(message, ClientLoginFinishParameters::Default)?;
+        server.finish(message)?;
+
+        Ok(())
+    }
 }
