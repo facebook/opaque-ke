@@ -719,6 +719,65 @@
 //! which is indistinguishable from the normal credential response message that the server would return for a registered client.
 //! The dummy message is created by passing a `None` to the password_file parameter for [ServerLogin::start].
 //!
+//! ## Remote private key
+//!
+//! Servers that want to store their private key for example in an HSM or Vault, can do this with the [`SecretKey`](keypair::SecretKey`) trait.
+//! This allows [`ServerSetup`] to be constructed with an existing keypair with opaque-ke never requiring access to the bytes of the private key.
+//! ```
+//! # use curve25519_dalek::ristretto::RistrettoPoint;
+//! # use generic_array::{GenericArray, typenum::U32};
+//! # use generic_bytes::SizedBytes;
+//! # use opaque_ke::{CipherSuite, errors::{InternalPakeError}, keypair::{KeyPair, PrivateKey, PublicKey, SecretKey}, ServerSetup};
+//! # use rand::rngs::OsRng;
+//! # use zeroize::Zeroize;
+//! # struct Default;
+//! # impl CipherSuite for Default {
+//! #     type Group = RistrettoPoint;
+//! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
+//! #     type Hash = sha2::Sha512;
+//! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
+//! # }
+//! # #[derive(Debug)]
+//! # struct YourRemoteKeyError;
+//! # #[derive(Clone, serde::Deserialize, serde::Serialize, Zeroize)]
+//! # struct YourRemoteKey(PrivateKey<RistrettoPoint>);
+//! # impl YourRemoteKey {
+//! #     fn diffie_hellman(&self, pk: &[u8]) -> Result<Vec<u8>, YourRemoteKeyError> { todo!() }
+//! #     fn public_key(&self) -> Result<GenericArray<u8, U32>, YourRemoteKeyError> { Ok(GenericArray::default()) }
+//! # }
+//! impl SecretKey<RistrettoPoint> for YourRemoteKey {
+//!     type Error = YourRemoteKeyError;
+//!
+//!     fn diffie_hellman(
+//!         &self,
+//!         pk: PublicKey<RistrettoPoint>,
+//!     ) -> Result<Vec<u8>, InternalPakeError<Self::Error>> {
+//!         YourRemoteKey::diffie_hellman(self, &pk.to_arr()).map_err(InternalPakeError::Custom)
+//!     }
+//!
+//!     fn public_key(
+//!         &self
+//!     ) -> Result<PublicKey<RistrettoPoint>, InternalPakeError<Self::Error>> {
+//!         let pk = YourRemoteKey::public_key(self).map_err(InternalPakeError::Custom)?;
+//!         PublicKey::from_arr(&pk).map_err(InternalPakeError::from)
+//!     }
+//!
+//!     fn serialize(&self) -> Vec<u8> {
+//!         // if you use serde and the "serialize" crate feature, you won't need this
+//!         todo!()
+//!     }
+//!
+//!     fn deserialize(input: &[u8]) -> Result<Self, InternalPakeError<Self::Error>> {
+//!         // if you use serde and the "serialize" crate feature, you won't need this
+//!         todo!()
+//!     }
+//! }
+//! 
+//! # let remote_key = YourRemoteKey(PrivateKey::from_arr(&GenericArray::default()).unwrap());
+//! let keypair = KeyPair::from_private_key(remote_key).unwrap();
+//! let server_setup = ServerSetup::<Default, YourRemoteKey>::new_with_key(&mut OsRng, keypair);
+//! ```
+//!
 //! # Features
 //!
 //! - The `slow-hash` feature, when enabled, introduces a dependency on `argon2` and implements the `SlowHash` trait for `Argon2`
