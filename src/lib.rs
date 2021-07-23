@@ -719,10 +719,11 @@
 //! which is indistinguishable from the normal credential response message that the server would return for a registered client.
 //! The dummy message is created by passing a `None` to the password_file parameter for [ServerLogin::start].
 //!
-//! ## Remote private key
+//! ## Remote Private Keys
 //!
-//! Servers that want to store their private key for example in an HSM or Vault, can do this with the [`SecretKey`](keypair::SecretKey`) trait.
-//! This allows [`ServerSetup`] to be constructed with an existing keypair with opaque-ke never requiring access to the bytes of the private key.
+//! Servers that want to store their private key in an external location (e.g. in an HSM or vault) can do so with the
+//! [`SecretKey`](keypair::SecretKey`) trait. This allows [`ServerSetup`] to be constructed using an existing keypair
+//! without exposing the bytes of the private key to this library.
 //! ```
 //! # use curve25519_dalek::ristretto::RistrettoPoint;
 //! # use generic_array::{GenericArray, typenum::U32};

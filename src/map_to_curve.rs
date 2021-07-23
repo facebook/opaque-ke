@@ -71,7 +71,7 @@ fn xor(x: &[u8], y: &[u8]) -> Result<Vec<u8>, InternalPakeError> {
 }
 
 /// Corresponds to the expand_message_xmd() function defined in
-/// https://www.ietf.org/archive/id/draft-irtf-cfrg-hash-to-curve-10.txt
+/// <https://www.ietf.org/archive/id/draft-irtf-cfrg-hash-to-curve-10.txt>
 pub fn expand_message_xmd<H: Hash>(
     msg: &[u8],
     dst: &[u8],
