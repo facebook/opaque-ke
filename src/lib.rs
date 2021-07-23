@@ -739,7 +739,7 @@
 //! # }
 //! # #[derive(Debug)]
 //! # struct YourRemoteKeyError;
-//! # #[derive(Clone, serde::Deserialize, serde::Serialize, Zeroize)]
+//! # #[derive(Clone, Zeroize)]
 //! # struct YourRemoteKey(PrivateKey<RistrettoPoint>);
 //! # impl YourRemoteKey {
 //! #     fn diffie_hellman(&self, pk: &[u8]) -> Result<Vec<u8>, YourRemoteKeyError> { todo!() }
