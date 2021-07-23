@@ -772,7 +772,7 @@
 //!         todo!()
 //!     }
 //! }
-//! 
+//!
 //! # let remote_key = YourRemoteKey(PrivateKey::from_arr(&GenericArray::default()).unwrap());
 //! let keypair = KeyPair::from_private_key(remote_key).unwrap();
 //! let server_setup = ServerSetup::<Default, YourRemoteKey>::new_with_key(&mut OsRng, keypair);
