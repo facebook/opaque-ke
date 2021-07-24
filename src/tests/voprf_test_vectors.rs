@@ -43,6 +43,29 @@ static OPRF_RISTRETTO255_SHA512: &[&str] = &[
     }
     "#,
 ];
+#[cfg(feature = "p256")]
+static OPRF_P256_SHA256: &[&str] = &[
+    r#"
+    {
+        "sksm": "a1b2355828f2c76de6749af9d093bd9fe0f2cada3ec653cd9a6d3126a7a7827b",
+        "input": "00",
+        "blind": "5d9e7f6efd3093c32ecceabd57fb03cf760c926d2a7bfa265babf29ec98af0d0",
+        "blinded_element": "03e3c379698da853d9844098fa0ac676970d5ec24167b598714cd2ee188604ddd2",
+        "evaluation_element": "03ea54e8d095332d1a601a3f8a5013188aea036bf9b563236f7fd3b046908b42fd",
+        "output": "464e3e51e4086a824d9a2f939524d7069ae4072a788bc9d5daa0762b25826437"
+    }
+    "#,
+    r#"
+    {
+        "sksm": "a1b2355828f2c76de6749af9d093bd9fe0f2cada3ec653cd9a6d3126a7a7827b",
+        "input": "5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a",
+        "blind": "825155ab61f17605af2ae2e935c78d857c9407bcd45128d57d338f1671b5fcbe",
+        "blinded_element": "030b40be181ffbb3c3ae4a4911287c43261f5e4034781def69c51608f372a02102",
+        "evaluation_element": "03115ad70ea55dbb4006da0ee3589a3582f31ef9cd143996d1e31a25ad3abdcf6f",
+        "output": "b597d58c843d0f9d2712121b0a3e2912ebee1c829eed3089eade9af4359ab275"
+    }
+    "#,
+];
 
 fn decode(values: &Value, key: &str) -> Option<Vec<u8>> {
     values[key]
@@ -74,6 +97,23 @@ fn test_blind() -> Result<(), ProtocolError> {
         assert_eq!(
             &parameters.blind,
             &RistrettoPoint::scalar_as_bytes(token.blind).to_vec()
+        );
+        assert_eq!(
+            &parameters.blinded_element,
+            &blinded_element.to_arr().to_vec()
+        );
+    }
+    #[cfg(feature = "p256")]
+    for tv in OPRF_P256_SHA256 {
+        let parameters = populate_test_vectors(&serde_json::from_str(tv).unwrap());
+        let mut rng = CycleRng::new(parameters.blind.to_vec());
+
+        let (token, blinded_element) =
+            oprf::blind::<_, p256::ProjectivePoint, sha2::Sha256>(&parameters.input, &mut rng)?;
+
+        assert_eq!(
+            &parameters.blind,
+            &p256::ProjectivePoint::scalar_as_bytes(token.blind).to_vec()
         );
         assert_eq!(
             &parameters.blinded_element,
