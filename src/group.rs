@@ -453,47 +453,6 @@ fn map_to_curve_simple_swu(
     let z = f.element(z);
     let u = f.element(u);
 
-    /*// Constants:
-    let c1 = 0; // 1.  c1 = (q - 3) / 4           # Integer arithmetic
-    let c2 = -z.pow_internal(&BigInt::from(3)); // 2.  c2 = sqrt(-Z^3)
-
-    // Steps:
-    let mut tv1 = u.square(); // 1.  tv1 = u^2
-    let tv3 = &z * tv1; // 2.  tv3 = Z * tv1
-    let mut tv2 = tv3.square(); // 3.  tv2 = tv3^2
-    let mut xd = &tv2 + &tv3; // 4.   xd = tv2 + tv3
-    let mut x1n = &xd + f.one(); // 5.  x1n = xd + 1
-    x1n = x1n * &b; // 6.  x1n = x1n * B
-    xd = -&a * xd; // 7.   xd = -A * xd
-    let e1 = xd.is_zero(); // 8.   e1 = xd == 0
-    xd = cmov(&xd, &(z * &a), e1); // 9.   xd = CMOV(xd, Z * A, e1)  # If xd == 0, set xd = Z * A
-    tv1 = xd.square(); // 10. tv2 = xd^2
-    let gxd = &tv2 * &xd; // 11. gxd = tv2 * xd             # gxd == xd^3
-    tv2 = a * tv2; // 12. tv2 = A * tv2
-    let mut gx1 = x1n.square(); // 13. gx1 = x1n^2
-    gx1 = gx1 + tv2; // 14. gx1 = gx1 + tv2            # x1n^2 + A * xd^2
-    gx1 = gx1 * &x1n; // 15. gx1 = gx1 * x1n            # x1n^3 + A * x1n * xd^2
-    tv2 = b * &gxd; // 16. tv2 = B * gxd
-    gx1 = gx1 + tv2; // 17. gx1 = gx1 + tv2            # x1n^3 + A * x1n * xd^2 + B * xd^3
-    let mut tv4 = gxd.square(); // 18. tv4 = gxd^2
-    tv2 = &gx1 * &gxd; // 19. tv2 = gx1 * gxd
-    tv4 = tv4 * &tv2; // 20. tv4 = tv4 * tv2            # gx1 * gxd^3
-    let mut y1 = tv4.pow_internal(&BigInt::from(c1)); // 21.  y1 = tv4^c1               # (gx1 * gxd^3)^((q - 3) / 4)
-    y1 = y1 * tv2; // 22.  y1 = y1 * tv2             # gx1 * gxd * (gx1 * gxd^3)^((q - 3) / 4)
-    let x2n = tv3 * &x1n; // 23. x2n = tv3 * x1n            # x2 = x2n / xd = Z * u^2 * x1n / xd
-    let mut y2 = &y1 * c2; // 24.  y2 = y1 * c2              # y2 = y1 * sqrt(-Z^3)
-    y2 = y2 * tv1; // 25.  y2 = y2 * tv1
-    y2 = y2 * &u; // 26.  y2 = y2 * u
-    tv2 = y1.square(); // 27. tv2 = y1^2
-    tv2 = tv2 * gxd; // 28. tv2 = tv2 * gxd
-    let e2 = tv2 == gx1; // 29.  e2 = tv2 == gx1
-    let xn = cmov(&x2n, &x1n, e2); // 30.  xn = CMOV(x2n, x1n, e2)   # If e2, x = x1, else x = x2
-    let mut y = cmov(&y2, &y1, e2); // 31.   y = CMOV(y2, y1, e2)     # If e2, y = y1, else y = y2
-    let e3 = u.sgn0() == y.sgn0(); // 32.  e3 = sgn0(u) == sgn0(y)   # Fix sign of y
-    y = cmov(&-&y, &y, e3); // 33.   y = CMOV(-y, y, e3)
-    let (xn, xd, yn, _yd) = (xn, xd, y, 1); // 34. return (xn, xd, y, 1)
-    ((xn / xd).number, yn.number) // (xn, xd, yn, yd) => (xn / xd, yn / yd)*/
-
     // Constants:
     let c1 = -&b / &a; // 1.  c1 = -B / A
     let c2 = -f.one() / &z; // 2.  c2 = -1 / Z
