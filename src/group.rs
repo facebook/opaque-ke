@@ -271,7 +271,9 @@ impl Group for p256_::ProjectivePoint {
         self == &Self::identity()
     }
     fn ct_equal(&self, other: &Self) -> bool {
-        constant_time_eq::constant_time_eq(&self.to_arr(), &other.to_arr())
+        use p256_::elliptic_curve::subtle::ConstantTimeEq;
+
+        self.ct_eq(other).into()
     }
 }
 
