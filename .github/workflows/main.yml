@@ -15,6 +15,7 @@ jobs:
         backend_feature:
           - u64_backend
           - u32_backend
+          - p256,u64_backend
         toolchain:
           - stable
           - 1.41.0
@@ -49,6 +50,7 @@ jobs:
         backend_feature:
           - u64_backend
           - u32_backend
+          - p256,u64_backend
     steps:
       - uses: actions/checkout@v2
       - uses: hecrj/setup-rust-action@v1
@@ -67,6 +69,7 @@ jobs:
         backend_feature:
           - u64_backend
           - u32_backend
+          - p256,u64_backend
     steps:
       - uses: actions/checkout@v2
       - uses: hecrj/setup-rust-action@v1
@@ -81,6 +84,7 @@ jobs:
         backend_feature:
           - u64_backend
           - u32_backend
+          - p256,u64_backend
     steps:
       - uses: actions/checkout@v2
       - uses: hecrj/setup-rust-action@v1
