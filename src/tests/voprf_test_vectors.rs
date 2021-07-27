@@ -3,8 +3,10 @@
 // This source code is licensed under the MIT license found in the
 // LICENSE file in the root directory of this source tree.
 
+use crate::hash::Hash;
+use crate::map_to_curve::GroupWithMapToCurve;
 use crate::tests::mock_rng::CycleRng;
-use crate::{errors::*, group::Group, oprf};
+use crate::{errors::*, oprf};
 use curve25519_dalek::ristretto::RistrettoPoint;
 use generic_array::GenericArray;
 use serde_json::Value;
@@ -84,37 +86,34 @@ fn populate_test_vectors(values: &Value) -> VOPRFTestVectorParameters {
     }
 }
 
-// Tests input -> blind, blinded_element
 #[test]
-fn test_blind() -> Result<(), ProtocolError> {
-    for tv in OPRF_RISTRETTO255_SHA512 {
-        let parameters = populate_test_vectors(&serde_json::from_str(tv).unwrap());
-        let mut rng = CycleRng::new(parameters.blind.to_vec());
+fn tests() -> Result<(), ProtocolError> {
+    test_blind::<RistrettoPoint, Sha512>(OPRF_RISTRETTO255_SHA512)?;
+    test_evaluate::<RistrettoPoint>(OPRF_RISTRETTO255_SHA512)?;
+    test_finalize::<RistrettoPoint, Sha512>(OPRF_RISTRETTO255_SHA512)?;
 
-        let (token, blinded_element) =
-            oprf::blind::<_, RistrettoPoint, Sha512>(&parameters.input, &mut rng)?;
-
-        assert_eq!(
-            &parameters.blind,
-            &RistrettoPoint::scalar_as_bytes(token.blind).to_vec()
-        );
-        assert_eq!(
-            &parameters.blinded_element,
-            &blinded_element.to_arr().to_vec()
-        );
-    }
     #[cfg(feature = "p256")]
-    for tv in OPRF_P256_SHA256 {
+    {
+        use p256_::ProjectivePoint;
+        use sha2::Sha256;
+
+        test_blind::<ProjectivePoint, Sha256>(OPRF_P256_SHA256)?;
+        test_evaluate::<ProjectivePoint>(OPRF_P256_SHA256)?;
+        test_finalize::<ProjectivePoint, Sha256>(OPRF_P256_SHA256)?;
+    }
+
+    Ok(())
+}
+
+// Tests input -> blind, blinded_element
+fn test_blind<G: GroupWithMapToCurve, H: Hash>(tvs: &[&str]) -> Result<(), ProtocolError> {
+    for tv in tvs {
         let parameters = populate_test_vectors(&serde_json::from_str(tv).unwrap());
         let mut rng = CycleRng::new(parameters.blind.to_vec());
 
-        let (token, blinded_element) =
-            oprf::blind::<_, p256_::ProjectivePoint, sha2::Sha256>(&parameters.input, &mut rng)?;
+        let (token, blinded_element) = oprf::blind::<_, G, H>(&parameters.input, &mut rng)?;
 
-        assert_eq!(
-            &parameters.blind,
-            &p256_::ProjectivePoint::scalar_as_bytes(token.blind).to_vec()
-        );
+        assert_eq!(&parameters.blind, &G::scalar_as_bytes(token.blind).to_vec());
         assert_eq!(
             &parameters.blinded_element,
             &blinded_element.to_arr().to_vec()
@@ -124,16 +123,12 @@ fn test_blind() -> Result<(), ProtocolError> {
 }
 
 // Tests sksm, blinded_element -> evaluation_element
-#[test]
-fn test_evaluate() -> Result<(), PakeError> {
-    for tv in OPRF_RISTRETTO255_SHA512 {
+fn test_evaluate<G: GroupWithMapToCurve>(tvs: &[&str]) -> Result<(), PakeError> {
+    for tv in tvs {
         let parameters = populate_test_vectors(&serde_json::from_str(tv).unwrap());
-        let evaluation_element = oprf::evaluate::<RistrettoPoint>(
-            RistrettoPoint::from_element_slice(GenericArray::from_slice(
-                &parameters.blinded_element,
-            ))
-            .unwrap(),
-            &RistrettoPoint::from_scalar_slice(GenericArray::from_slice(&parameters.sksm)).unwrap(),
+        let evaluation_element = oprf::evaluate::<G>(
+            G::from_element_slice(GenericArray::from_slice(&parameters.blinded_element)).unwrap(),
+            &G::from_scalar_slice(GenericArray::from_slice(&parameters.sksm)).unwrap(),
         );
 
         assert_eq!(
@@ -145,17 +140,14 @@ fn test_evaluate() -> Result<(), PakeError> {
 }
 
 // Tests input, blind, evaluation_element -> output
-#[test]
-fn test_finalize() -> Result<(), ProtocolError> {
-    for tv in OPRF_RISTRETTO255_SHA512 {
+fn test_finalize<G: GroupWithMapToCurve, H: Hash>(tvs: &[&str]) -> Result<(), ProtocolError> {
+    for tv in tvs {
         let parameters = populate_test_vectors(&serde_json::from_str(tv).unwrap());
 
-        let output = oprf::finalize::<RistrettoPoint, Sha512>(
+        let output = oprf::finalize::<G, H>(
             &parameters.input,
-            &RistrettoPoint::from_scalar_slice(GenericArray::from_slice(&parameters.blind))?,
-            RistrettoPoint::from_element_slice(GenericArray::from_slice(
-                &parameters.evaluation_element,
-            ))?,
+            &G::from_scalar_slice(GenericArray::from_slice(&parameters.blind))?,
+            G::from_element_slice(GenericArray::from_slice(&parameters.evaluation_element))?,
         )?;
 
         assert_eq!(&parameters.output, &output.to_vec());
