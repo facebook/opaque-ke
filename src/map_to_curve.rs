@@ -57,12 +57,20 @@ impl GroupWithMapToCurve for RistrettoPoint {
 }
 
 #[cfg(feature = "p256")]
-impl GroupWithMapToCurve for p256::ProjectivePoint {
+impl GroupWithMapToCurve for p256_::ProjectivePoint {
     const SUITE_ID: usize = 0x0003;
 
     fn map_to_curve<H: Hash>(msg: &[u8], dst: &[u8]) -> Result<Self, ProtocolError> {
-        let uniform_bytes =
-            expand_message_xmd::<H>(msg, dst, <H as Digest>::OutputSize::to_usize())?;
+        // https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-hash-to-curve-11#section-8.2
+        // `P256_XMD:SHA-256_SSWU_RO_` has an `L` of `48`
+        const L: usize = 48;
+
+        // https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-hash-to-curve-11#section-3
+        // `hash_to_curve` calls `hash_to_field` with a `count` of `2`
+        // https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-hash-to-curve-11#section-5.3
+        // `hash_to_field` calls `expand_message` with a `len_in_bytes` of `count * L`
+        let uniform_bytes = expand_message_xmd::<H>(msg, dst, 2 * L)?;
+
         <Self as Group>::hash_to_curve(&GenericArray::clone_from_slice(&uniform_bytes[..]))
             .map_err(ProtocolError::from)
     }
@@ -73,7 +81,7 @@ impl GroupWithMapToCurve for p256::ProjectivePoint {
         let mut bits = [0; LEN_IN_BYTES];
         bits.copy_from_slice(&uniform_bytes[..]);
 
-        Ok(p256::Scalar::from_bytes_reduced(&bits.into()))
+        Ok(p256_::Scalar::from_bytes_reduced(&bits.into()))
     }
 }
 

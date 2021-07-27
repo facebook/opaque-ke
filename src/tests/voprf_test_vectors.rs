@@ -109,11 +109,11 @@ fn test_blind() -> Result<(), ProtocolError> {
         let mut rng = CycleRng::new(parameters.blind.to_vec());
 
         let (token, blinded_element) =
-            oprf::blind::<_, p256::ProjectivePoint, sha2::Sha256>(&parameters.input, &mut rng)?;
+            oprf::blind::<_, p256_::ProjectivePoint, sha2::Sha256>(&parameters.input, &mut rng)?;
 
         assert_eq!(
             &parameters.blind,
-            &p256::ProjectivePoint::scalar_as_bytes(token.blind).to_vec()
+            &p256_::ProjectivePoint::scalar_as_bytes(token.blind).to_vec()
         );
         assert_eq!(
             &parameters.blinded_element,
