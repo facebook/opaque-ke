@@ -19,6 +19,9 @@ jobs:
         toolchain:
           - stable
           - 1.41.0
+        exclude:
+          - backend_feature: p256,u64_backend
+          - toolchain: 1.41.0
     name: test
     steps:
       - name: Checkout sources
