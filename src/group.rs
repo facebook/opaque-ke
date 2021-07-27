@@ -418,7 +418,10 @@ fn map_to_curve_simple_swu(
         /// Corresponds to the sqrt_3mod4() function defined in
         /// <https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-hash-to-curve-11#appendix-I.1>
         fn sqrt(&self) -> Self {
-            self.pow_internal(&((self.f.0 + 1) >> 2))
+            // constant
+            let c1 = (self.f.0 + 1) >> 2;
+
+            self.pow_internal(&c1)
         }
 
         /// Corresponds to the sgn0_m_eq_1() function defined in
@@ -434,7 +437,10 @@ fn map_to_curve_simple_swu(
         /// Corresponds to the is_square() function defined in
         /// <https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-hash-to-curve-11#section-4>
         fn is_square(&self) -> bool {
-            let result = self.pow_internal(&((self.f.0 - 1) >> 1));
+            // constant
+            let exponent = (self.f.0 - 1) >> 1;
+
+            let result = self.pow_internal(&exponent);
             result.number.is_one() || result.is_zero()
         }
     }
@@ -454,8 +460,10 @@ fn map_to_curve_simple_swu(
     let u = f.element(u);
 
     // Constants:
-    let c1 = -&b / &a; // 1.  c1 = -B / A
-    let c2 = -f.one() / &z; // 2.  c2 = -1 / Z
+    // 1.  c1 = -B / A
+    let c1 = -&b / &a;
+    // 2.  c2 = -1 / Z
+    let c2 = -f.one() / &z;
 
     // Steps:
     // 1.  tv1 = Z * u^2
