@@ -76,12 +76,24 @@ impl GroupWithMapToCurve for p256_::ProjectivePoint {
     }
 
     fn hash_to_scalar<H: Hash>(input: &[u8], dst: &[u8]) -> Result<Self::Scalar, ProtocolError> {
-        const LEN_IN_BYTES: usize = 32;
-        let uniform_bytes = expand_message_xmd::<H>(input, dst, LEN_IN_BYTES)?;
-        let mut bits = [0; LEN_IN_BYTES];
-        bits.copy_from_slice(&uniform_bytes[..]);
+        use num_bigint::BigUint;
+        use num_integer::Integer;
+        use std::str::FromStr;
 
-        Ok(p256_::Scalar::from_bytes_reduced(&bits.into()))
+        // https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-hash-to-curve-11#section-8.2
+        // `p: 2^256 - 2^224 + 2^192 + 2^96 - 1`
+        let p = BigUint::from_str(
+            "115792089210356248762697446949407573530086143415290314195533631308867097853951",
+        )
+        .unwrap();
+        // `P256_XMD:SHA-256_SSWU_RO_` has an `L` of `48`
+        const L: usize = 48;
+        let uniform_bytes = expand_message_xmd::<H>(input, dst, L)?;
+        let bytes = BigUint::from_bytes_be(&uniform_bytes).mod_floor(&p);
+
+        Ok(p256_::Scalar::from_bytes_reduced(GenericArray::from_slice(
+            &bytes.to_bytes_be(),
+        )))
     }
 }
 

@@ -200,9 +200,11 @@ impl Group for p256_::ProjectivePoint {
     }
 
     fn to_arr(&self) -> GenericArray<u8, Self::ElemLen> {
-        use p256_::elliptic_curve::group::GroupEncoding;
+        use p256_::elliptic_curve::sec1::ToEncodedPoint;
 
-        self.to_bytes()
+        let mut bytes = self.to_affine().to_encoded_point(true).as_bytes().to_vec();
+        bytes.resize(33, 0);
+        GenericArray::clone_from_slice(&bytes)
     }
 
     fn hash_to_curve(
@@ -243,16 +245,12 @@ impl Group for p256_::ProjectivePoint {
 
         // convert to `p256` types
         let p0 = AffinePoint::from_encoded_point(&EncodedPoint::from_affine_coordinates(
-            q0x.to_bytes_be().1[..].into(),
-            q0y.to_bytes_be().1[..].into(),
-            false,
+            &q0x, &q0y, false,
         ))
         .ok_or(InternalPakeError::PointError)?
         .to_curve();
         let p1 = AffinePoint::from_encoded_point(&EncodedPoint::from_affine_coordinates(
-            q1x.to_bytes_be().1[..].into(),
-            q1y.to_bytes_be().1[..].into(),
-            false,
+            &q1x, &q1y, false,
         ))
         .ok_or(InternalPakeError::PointError)?;
 
@@ -281,13 +279,13 @@ impl Group for p256_::ProjectivePoint {
 /// Corresponds to the map_to_curve_simple_swu() function defined in
 /// <https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-hash-to-curve-11#appendix-F.2>
 #[allow(clippy::many_single_char_names)]
-fn map_to_curve_simple_swu(
+fn map_to_curve_simple_swu<N: ArrayLength<u8>>(
     u: &num_bigint::BigInt,
     a: &num_bigint::BigInt,
     b: &num_bigint::BigInt,
     p: &num_bigint::BigInt,
     z: &num_bigint::BigInt,
-) -> (num_bigint::BigInt, num_bigint::BigInt) {
+) -> (GenericArray<u8, N>, GenericArray<u8, N>) {
     use num_bigint::BigInt;
     use num_integer::Integer;
     use num_traits::One;
@@ -445,6 +443,10 @@ fn map_to_curve_simple_swu(
             let result = self.pow_internal(&exponent);
             result.number.is_one() || result.is_zero()
         }
+
+        fn to_bytes<N: ArrayLength<u8>>(&self) -> GenericArray<u8, N> {
+            GenericArray::clone_from_slice(&self.number.mod_floor(self.f.0).to_bytes_be().1)
+        }
     }
 
     fn cmov<'a>(x: &FieldElement<'a>, y: &FieldElement<'a>, b: bool) -> FieldElement<'a> {
@@ -511,7 +513,7 @@ fn map_to_curve_simple_swu(
     // 21.   y = CMOV(-y, y, e3)
     y = cmov(&-&y, &y, e3);
     // 22. return (x, y)
-    (x.number, y.number)
+    (x.to_bytes(), y.to_bytes())
 }
 
 #[cfg(test)]
@@ -639,35 +641,25 @@ mod tests {
             let (q0x, q0y) = super::map_to_curve_simple_swu(&u0, &a, &b, &p, &z);
             let (q1x, q1y) = super::map_to_curve_simple_swu(&u1, &a, &b, &p, &z);
 
-            assert_eq!(BigInt::parse_bytes(tv.q0x.as_bytes(), 16).unwrap(), q0x);
-            assert_eq!(BigInt::parse_bytes(tv.q0y.as_bytes(), 16).unwrap(), q0y);
-            assert_eq!(BigInt::parse_bytes(tv.q1x.as_bytes(), 16).unwrap(), q1x);
-            assert_eq!(BigInt::parse_bytes(tv.q1y.as_bytes(), 16).unwrap(), q1y);
+            assert_eq!(tv.q0x, hex::encode(q0x));
+            assert_eq!(tv.q0y, hex::encode(q0y));
+            assert_eq!(tv.q1x, hex::encode(q1x));
+            assert_eq!(tv.q1y, hex::encode(q1y));
 
             let p0 = AffinePoint::from_encoded_point(&EncodedPoint::from_affine_coordinates(
-                q0x.to_bytes_be().1[..].into(),
-                q0y.to_bytes_be().1[..].into(),
-                false,
+                &q0x, &q0y, false,
             ))
             .unwrap()
             .to_curve();
             let p1 = AffinePoint::from_encoded_point(&EncodedPoint::from_affine_coordinates(
-                q1x.to_bytes_be().1[..].into(),
-                q1y.to_bytes_be().1[..].into(),
-                false,
+                &q1x, &q1y, false,
             ))
             .unwrap();
 
             let p = (p0 + p1).to_encoded_point(false);
 
-            assert_eq!(
-                BigInt::parse_bytes(tv.px.as_bytes(), 16).unwrap(),
-                BigInt::from_bytes_be(Sign::Plus, &p.x().unwrap()[..])
-            );
-            assert_eq!(
-                BigInt::parse_bytes(tv.py.as_bytes(), 16).unwrap(),
-                BigInt::from_bytes_be(Sign::Plus, &p.y().unwrap()[..])
-            );
+            assert_eq!(tv.px, hex::encode(p.x().unwrap()));
+            assert_eq!(tv.py, hex::encode(p.y().unwrap()));
         }
     }
 }
