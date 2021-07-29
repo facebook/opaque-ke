@@ -339,7 +339,7 @@ impl<CS: CipherSuite> ClientRegistration<CS> {
             #[cfg(test)]
             state: self,
             #[cfg(test)]
-            randomized_pwd: password_derived_key
+            randomized_pwd: password_derived_key,
         })
     }
 }
