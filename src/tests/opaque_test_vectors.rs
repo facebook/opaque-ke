@@ -390,6 +390,7 @@ b9467e8bfa9a4006aba7f21b74b4ce3bccd686785878b0ec9b3fc4200228014d5d073
 ~~~
 "#];
 
+#[cfg(feature = "p256")]
 static P256_TEST_VECTORS: &[&str] = &[
     r#"
 ### OPAQUE-3DH Real Test Vector 3
@@ -609,6 +610,7 @@ session_key: 3a04636e2c14b4ef3a01070a2ff129cd2248318d8b85d6c4368f5115
 "#,
 ];
 
+#[cfg(feature = "p256")]
 static P256_FAKE_TEST_VECTORS: &[&str] = &[r#"
 ### OPAQUE-3DH Fake Test Vector 2
 
