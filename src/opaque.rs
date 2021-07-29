@@ -278,6 +278,9 @@ pub struct ClientRegistrationFinishResult<CS: CipherSuite> {
     /// Instance of the ClientRegistration, only used in tests for checking zeroize
     #[cfg(test)]
     pub state: ClientRegistration<CS>,
+    /// Password derived key, only used in tests
+    #[cfg(test)]
+    pub randomized_pwd: Vec<u8>,
 }
 
 // Cannot be derived because it would require for CS to be Clone.
@@ -289,6 +292,8 @@ impl<CS: CipherSuite> Clone for ClientRegistrationFinishResult<CS> {
             server_s_pk: self.server_s_pk.clone(),
             #[cfg(test)]
             state: self.state.clone(),
+            #[cfg(test)]
+            randomized_pwd: self.randomized_pwd.clone(),
         }
     }
 }
@@ -333,6 +338,8 @@ impl<CS: CipherSuite> ClientRegistration<CS> {
             server_s_pk: r2.server_s_pk,
             #[cfg(test)]
             state: self,
+            #[cfg(test)]
+            randomized_pwd: password_derived_key
         })
     }
 }
