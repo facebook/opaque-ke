@@ -25,6 +25,10 @@ Add the following line to the dependencies of your `Cargo.toml`:
 opaque-ke = "0.6.0"
 ```
 
+### Minimum Supported Rust Version
+
+Rust **1.51** or higher.
+
 Resources
 ---------
 

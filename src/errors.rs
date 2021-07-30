@@ -40,23 +40,23 @@ pub enum InternalPakeError<T = Infallible> {
     HmacError,
     /// Computing the slow hashing function failed
     SlowHashError,
-    /// This error occurs when the envelope seal fails
-    /// Constructing the envelope seal failed.
+    /** This error occurs when the envelope seal fails
+    Constructing the envelope seal failed. */
     SealError,
-    /// This error occurs when the envelope seal open fails
-    /// Opening the envelope seal failed.
+    /** This error occurs when the envelope seal open fails
+    Opening the envelope seal failed. */
     SealOpenError,
-    /// This error occurs when the envelope seal open hmac check fails
-    /// HMAC check in seal open failed.
+    /** This error occurs when the envelope seal open hmac check fails
+    HMAC check in seal open failed. */
     SealOpenHmacError,
-    /// This error occurs when the envelope cannot be constructed properly
-    /// based on the credentials that were specified to be required.
+    /** This error occurs when the envelope cannot be constructed properly
+    based on the credentials that were specified to be required. */
     InvalidEnvelopeStructureError,
-    /// This error occurs when attempting to open an envelope of the wrong
-    /// type (base mode, custom identifier)
+    /** This error occurs when attempting to open an envelope of the wrong
+    type (base mode, custom identifier) */
     IncompatibleEnvelopeModeError,
-    /// This error occurs when the envelope is opened and deserialization
-    /// fails
+    /** This error occurs when the envelope is opened and deserialization
+    fails */
     UnexpectedEnvelopeContentsError,
 }
 
@@ -137,12 +137,12 @@ impl InternalPakeError {
 /// Represents an error in password checking
 #[derive(Clone, Display, Eq, Hash, PartialEq)]
 pub enum PakeError<T = Infallible> {
-    /// This error results from an internal error during PRF construction
-    ///
-    /// Internal error during PRF verification: {0}
+    /** This error results from an internal error during PRF construction
+
+    Internal error during PRF verification: {0} */
     CryptoError(InternalPakeError<T>),
-    /// This error occurs when the server object that is being called finish() on is malformed
-    /// Incomplete set of keys passed into finish() function
+    /** This error occurs when the server object that is being called finish() on is malformed
+    Incomplete set of keys passed into finish() function */
     IncompleteKeysError,
     /// The provided server public key doesn't match the sealed one
     IncompatibleServerStaticPublicKeyError,
@@ -209,23 +209,23 @@ impl PakeError {
 /// Represents an error in protocol handling
 #[derive(Clone, Display, Eq, Hash, PartialEq)]
 pub enum ProtocolError<T = Infallible> {
-    /// This error results from an error during password verification
-    ///
-    /// Internal error during password verification: {0}
+    /** This error results from an error during password verification
+
+    Internal error during password verification: {0} */
     VerificationError(PakeError<T>),
     /// This error occurs when the inner envelope is malformed
     InvalidInnerEnvelopeError,
-    /// This error occurs when the server answer cannot be handled
-    /// Server response cannot be handled.
+    /** This error occurs when the server answer cannot be handled
+    Server response cannot be handled. */
     ServerError,
-    /// This error occurs when the server specifies an envelope credentials
-    /// format that is invalid
+    /** This error occurs when the server specifies an envelope credentials
+    format that is invalid */
     ServerInvalidEnvelopeCredentialsFormatError,
-    /// This error occurs when the client request cannot be handled
-    /// Client request cannot be handled.
+    /** This error occurs when the client request cannot be handled
+    Client request cannot be handled. */
     ClientError,
-    /// This error occurs when the client detects that the server has
-    /// reflected the OPRF value (beta == alpha)
+    /** This error occurs when the client detects that the server has
+    reflected the OPRF value (beta == alpha) */
     ReflectedValueError,
 }
 
