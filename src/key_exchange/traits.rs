@@ -28,7 +28,12 @@ pub type GenerateKe2Result<K, D, G> = (
 #[cfg(not(test))]
 pub type GenerateKe3Result<K, D, G> = (Vec<u8>, <K as KeyExchange<D, G>>::KE3Message);
 #[cfg(test)]
-pub type GenerateKe3Result<K, D, G> = (Vec<u8>, <K as KeyExchange<D, G>>::KE3Message, Vec<u8>);
+pub type GenerateKe3Result<K, D, G> = (
+    Vec<u8>,
+    <K as KeyExchange<D, G>>::KE3Message,
+    Vec<u8>,
+    generic_array::GenericArray<u8, <D as digest::Digest>::OutputSize>,
+);
 
 pub trait KeyExchange<D: Hash, G: Group> {
     type KE1State: FromBytes + ToBytesWithPointers + Zeroize + Clone;

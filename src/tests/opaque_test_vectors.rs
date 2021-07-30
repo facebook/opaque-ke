@@ -67,6 +67,7 @@ pub struct TestVectorParameters {
     pub randomized_pwd: Vec<u8>,
     pub handshake_secret: Vec<u8>,
     pub server_mac_key: Vec<u8>,
+    pub client_mac_key: Vec<u8>,
 }
 
 // Pulled from "OPAQUE-3DH Test Vector 1" and "OPAQUE-3DH Test Vector 6"
@@ -490,6 +491,7 @@ fn populate_test_vectors(values: &Value) -> TestVectorParameters {
         randomized_pwd: parse!(values, "randomized_pwd"),
         handshake_secret: parse!(values, "handshake_secret"),
         server_mac_key: parse!(values, "server_mac_key"),
+        client_mac_key: parse!(values, "client_mac_key"),
     }
 }
 
@@ -705,6 +707,10 @@ fn test_ke3() -> Result<(), ProtocolError> {
         assert_eq!(
             hex::encode(&parameters.handshake_secret),
             hex::encode(&client_login_finish_result.handshake_secret)
+        );
+        assert_eq!(
+            hex::encode(&parameters.client_mac_key),
+            hex::encode(&client_login_finish_result.client_mac_key)
         );
         assert_eq!(
             hex::encode(&parameters.KE3),
