@@ -122,24 +122,24 @@ pub(crate) struct OpenedInnerEnvelope<D: Hash> {
 }
 
 #[cfg(not(test))]
-type SealRaw<CS> = (
+type SealRawResult<CS> = (
     Envelope<CS>,
     GenericArray<u8, <<CS as CipherSuite>::Hash as Digest>::OutputSize>,
 );
 #[cfg(test)]
-type SealRaw<CS> = (
+type SealRawResult<CS> = (
     Envelope<CS>,
     GenericArray<u8, <<CS as CipherSuite>::Hash as Digest>::OutputSize>,
     Vec<u8>,
 );
 #[cfg(not(test))]
-type Seal<CS> = (
+type SealResult<CS> = (
     Envelope<CS>,
     PublicKey<<CS as CipherSuite>::Group>,
     GenericArray<u8, <<CS as CipherSuite>::Hash as Digest>::OutputSize>,
 );
 #[cfg(test)]
-type Seal<CS> = (
+type SealResult<CS> = (
     Envelope<CS>,
     PublicKey<<CS as CipherSuite>::Group>,
     GenericArray<u8, <<CS as CipherSuite>::Hash as Digest>::OutputSize>,
@@ -207,7 +207,7 @@ impl<CS: CipherSuite> Envelope<CS> {
         key: &[u8],
         server_s_pk: &[u8],
         optional_ids: Option<Identifiers>,
-    ) -> Result<Seal<CS>, ProtocolError> {
+    ) -> Result<SealResult<CS>, ProtocolError> {
         let mut nonce = vec![0u8; NONCE_LEN];
         rng.fill_bytes(&mut nonce);
 
@@ -238,7 +238,7 @@ impl<CS: CipherSuite> Envelope<CS> {
         nonce: &[u8],
         aad: &[u8],
         mode: InnerEnvelopeMode,
-    ) -> Result<SealRaw<CS>, InternalPakeError> {
+    ) -> Result<SealRawResult<CS>, InternalPakeError> {
         let h = Hkdf::<CS::Hash>::new(None, key);
         let mut hmac_key = vec![0u8; Self::hmac_key_size()];
         let mut export_key = vec![0u8; Self::export_key_size()];
