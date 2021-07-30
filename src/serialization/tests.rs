@@ -155,7 +155,7 @@ fn registration_upload_roundtrip() {
     let mut masking_key = vec![0u8; <sha2::Sha512 as Digest>::OutputSize::to_usize()];
     rng.fill_bytes(&mut masking_key);
 
-    let (envelope, _) =
+    let (envelope, _, _) =
         Envelope::<Default>::seal_raw(&key, &nonce, &pubkey_bytes, InnerEnvelopeMode::Internal)
             .unwrap();
     let envelope_bytes = envelope.serialize();
