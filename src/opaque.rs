@@ -280,7 +280,7 @@ pub struct ClientRegistrationFinishResult<CS: CipherSuite> {
     pub state: ClientRegistration<CS>,
     /// Password derived key, only used in tests
     #[cfg(test)]
-    pub randomized_pwd: Vec<u8>,
+    pub randomized_pwd: GenericArray<u8, <CS::Hash as Digest>::OutputSize>,
 }
 
 // Cannot be derived because it would require for CS to be Clone.
@@ -320,7 +320,8 @@ impl<CS: CipherSuite> ClientRegistration<CS> {
         let password_derived_key =
             get_password_derived_key::<CS::Group, CS::SlowHash, CS::Hash>(&self.token, r2.beta)?;
 
-        let h = Hkdf::<CS::Hash>::new(None, &password_derived_key);
+        #[cfg_attr(not(test), allow(unused_variables))]
+        let (randomized_pwd, h) = Hkdf::<CS::Hash>::extract(None, &password_derived_key);
         let mut masking_key = vec![0u8; <CS::Hash as Digest>::OutputSize::to_usize()];
         h.expand(STR_MASKING_KEY, &mut masking_key)
             .map_err(|_| InternalPakeError::HkdfError)?;
@@ -339,7 +340,7 @@ impl<CS: CipherSuite> ClientRegistration<CS> {
             #[cfg(test)]
             state: self,
             #[cfg(test)]
-            randomized_pwd: password_derived_key,
+            randomized_pwd,
         })
     }
 }
