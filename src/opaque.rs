@@ -278,6 +278,12 @@ pub struct ClientRegistrationFinishResult<CS: CipherSuite> {
     /// Instance of the ClientRegistration, only used in tests for checking zeroize
     #[cfg(test)]
     pub state: ClientRegistration<CS>,
+    /// AuthKey, only used in tests
+    #[cfg(test)]
+    pub auth_key: Vec<u8>,
+    /// Password derived key, only used in tests
+    #[cfg(test)]
+    pub randomized_pwd: GenericArray<u8, <CS::Hash as Digest>::OutputSize>,
 }
 
 // Cannot be derived because it would require for CS to be Clone.
@@ -289,6 +295,10 @@ impl<CS: CipherSuite> Clone for ClientRegistrationFinishResult<CS> {
             server_s_pk: self.server_s_pk.clone(),
             #[cfg(test)]
             state: self.state.clone(),
+            #[cfg(test)]
+            auth_key: self.auth_key.clone(),
+            #[cfg(test)]
+            randomized_pwd: self.randomized_pwd.clone(),
         }
     }
 }
@@ -315,24 +325,29 @@ impl<CS: CipherSuite> ClientRegistration<CS> {
         let password_derived_key =
             get_password_derived_key::<CS::Group, CS::SlowHash, CS::Hash>(&self.token, r2.beta)?;
 
-        let h = Hkdf::<CS::Hash>::new(None, &password_derived_key);
+        #[cfg_attr(not(test), allow(unused_variables))]
+        let (randomized_pwd, h) = Hkdf::<CS::Hash>::extract(None, &password_derived_key);
         let mut masking_key = vec![0u8; <CS::Hash as Digest>::OutputSize::to_usize()];
         h.expand(STR_MASKING_KEY, &mut masking_key)
             .map_err(|_| InternalPakeError::HkdfError)?;
 
-        let (envelope, client_s_pk, export_key) =
+        let result =
             Envelope::<CS>::seal(rng, &password_derived_key, &r2.server_s_pk, optional_ids)?;
 
         Ok(ClientRegistrationFinishResult {
             message: RegistrationUpload {
-                envelope,
+                envelope: result.0,
                 masking_key: GenericArray::clone_from_slice(&masking_key[..]),
-                client_s_pk,
+                client_s_pk: result.1,
             },
-            export_key,
+            export_key: result.2,
             server_s_pk: r2.server_s_pk,
             #[cfg(test)]
             state: self,
+            #[cfg(test)]
+            auth_key: result.3,
+            #[cfg(test)]
+            randomized_pwd,
         })
     }
 }
@@ -342,6 +357,9 @@ impl<CS: CipherSuite> ClientRegistration<CS> {
 pub struct ServerRegistrationStartResult<CS: CipherSuite> {
     /// The registration resposne message to send to the client
     pub message: RegistrationResponse<CS>,
+    /// OPRF key, only used in tests
+    #[cfg(test)]
+    pub oprf_key: GenericArray<u8, <CS::Group as Group>::ScalarLen>,
 }
 
 // Cannot be derived because it would require for CS to be Clone.
@@ -349,6 +367,8 @@ impl<CS: CipherSuite> Clone for ServerRegistrationStartResult<CS> {
     fn clone(&self) -> Self {
         Self {
             message: self.message.clone(),
+            #[cfg(test)]
+            oprf_key: self.oprf_key.clone(),
         }
     }
 }
@@ -402,6 +422,8 @@ impl<CS: CipherSuite> ServerRegistration<CS> {
                 beta,
                 server_s_pk: server_setup.keypair.public().clone(),
             },
+            #[cfg(test)]
+            oprf_key: CS::Group::scalar_as_bytes(oprf_key),
         })
     }
 
@@ -558,6 +580,12 @@ pub struct ClientLoginFinishResult<CS: CipherSuite> {
     /// Instance of the ClientLogin, only used in tests for checking zeroize
     #[cfg(test)]
     pub state: ClientLogin<CS>,
+    /// Handshake secret, only used in tests
+    #[cfg(test)]
+    pub handshake_secret: Vec<u8>,
+    /// Client MAC key, only used in tests
+    #[cfg(test)]
+    pub client_mac_key: GenericArray<u8, <CS::Hash as Digest>::OutputSize>,
 }
 
 // Cannot be derived because it would require for CS to be Clone.
@@ -570,6 +598,10 @@ impl<CS: CipherSuite> Clone for ClientLoginFinishResult<CS> {
             server_s_pk: self.server_s_pk.clone(),
             #[cfg(test)]
             state: self.state.clone(),
+            #[cfg(test)]
+            handshake_secret: self.handshake_secret.clone(),
+            #[cfg(test)]
+            client_mac_key: self.client_mac_key.clone(),
         }
     }
 }
@@ -660,7 +692,7 @@ impl<CS: CipherSuite> ClientLogin<CS> {
             &credential_response.masked_response,
         );
 
-        let (session_key, ke3_message) = CS::KeyExchange::generate_ke3(
+        let result = CS::KeyExchange::generate_ke3(
             credential_response_component,
             credential_response.ke2_message,
             &self.ke1_state,
@@ -673,12 +705,18 @@ impl<CS: CipherSuite> ClientLogin<CS> {
         )?;
 
         Ok(ClientLoginFinishResult {
-            message: CredentialFinalization { ke3_message },
-            session_key,
+            message: CredentialFinalization {
+                ke3_message: result.1,
+            },
+            session_key: result.0,
             export_key: opened_envelope.export_key.clone(),
             server_s_pk,
             #[cfg(test)]
             state: self,
+            #[cfg(test)]
+            handshake_secret: result.2,
+            #[cfg(test)]
+            client_mac_key: result.3,
         })
     }
 }
@@ -721,6 +759,15 @@ pub struct ServerLoginStartResult<CS: CipherSuite> {
     pub message: CredentialResponse<CS>,
     /// The state that the server must keep in order to finish the protocl
     pub state: ServerLogin<CS>,
+    /// Handshake secret, only used in tests
+    #[cfg(test)]
+    pub handshake_secret: Vec<u8>,
+    /// Server MAC key, only used in tests
+    #[cfg(test)]
+    pub server_mac_key: GenericArray<u8, <CS::Hash as Digest>::OutputSize>,
+    /// OPRF key, only used in tests
+    #[cfg(test)]
+    pub oprf_key: GenericArray<u8, <CS::Group as Group>::ScalarLen>,
 }
 
 // Cannot be derived because it would require for CS to be Clone.
@@ -729,6 +776,12 @@ impl<CS: CipherSuite> Clone for ServerLoginStartResult<CS> {
         Self {
             message: self.message.clone(),
             state: self.state.clone(),
+            #[cfg(test)]
+            handshake_secret: self.handshake_secret.clone(),
+            #[cfg(test)]
+            server_mac_key: self.server_mac_key.clone(),
+            #[cfg(test)]
+            oprf_key: self.oprf_key.clone(),
         }
     }
 }
@@ -829,7 +882,7 @@ impl<CS: CipherSuite> ServerLogin<CS> {
         let credential_response_component =
             CredentialResponse::<CS>::serialize_without_ke(&beta, &masking_nonce, &masked_response);
 
-        let (ke2_state, ke2_message) = CS::KeyExchange::generate_ke2(
+        let result = CS::KeyExchange::generate_ke2(
             rng,
             l1_bytes.to_vec(),
             credential_response_component,
@@ -845,15 +898,21 @@ impl<CS: CipherSuite> ServerLogin<CS> {
             beta,
             masking_nonce,
             masked_response,
-            ke2_message,
+            ke2_message: result.1,
         };
 
         Ok(ServerLoginStartResult {
             message: credential_response,
             state: Self {
                 _cs: PhantomData,
-                ke2_state,
+                ke2_state: result.0,
             },
+            #[cfg(test)]
+            handshake_secret: result.2,
+            #[cfg(test)]
+            server_mac_key: result.3,
+            #[cfg(test)]
+            oprf_key: CS::Group::scalar_as_bytes(oprf_key),
         })
     }
 

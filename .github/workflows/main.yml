@@ -18,10 +18,10 @@ jobs:
           - p256,u64_backend
         toolchain:
           - stable
-          - 1.41.0
+          - 1.51.0
         exclude:
           - backend_feature: p256,u64_backend
-            toolchain: 1.41.0
+            toolchain: 1.51.0
     name: test
     steps:
       - name: Checkout sources
@@ -101,7 +101,7 @@ jobs:
       matrix:
         toolchain:
           - stable
-          - 1.41.0
+          - 1.51.0
     name: test simple_login command-line example
     steps:
       - name: install expect
@@ -125,7 +125,7 @@ jobs:
       matrix:
         toolchain:
           - stable
-          - 1.41.0
+          - 1.51.0
     name: test digital_locker command-line example
     steps:
       - name: install expect

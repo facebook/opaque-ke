@@ -509,7 +509,7 @@ mod tests {
             message,
             state: client,
         } = ClientRegistration::<Default>::start(&mut OsRng, PASSWORD.as_bytes())?;
-        let ServerRegistrationStartResult { message } =
+        let ServerRegistrationStartResult { message, .. } =
             ServerRegistration::start(&server_setup, message, &[])?;
         let ClientRegistrationFinishResult { message, .. } = client.finish(
             &mut OsRng,
@@ -525,6 +525,7 @@ mod tests {
         let ServerLoginStartResult {
             message,
             state: server,
+            ..
         } = ServerLogin::start(
             &mut OsRng,
             &server_setup,

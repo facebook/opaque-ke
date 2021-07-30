@@ -12,7 +12,9 @@ use crate::{
     },
     group::Group,
     hash::Hash,
-    key_exchange::traits::{FromBytes, KeyExchange, ToBytes, ToBytesWithPointers},
+    key_exchange::traits::{
+        FromBytes, GenerateKe2Result, GenerateKe3Result, KeyExchange, ToBytes, ToBytesWithPointers,
+    },
     keypair::{KeyPair, PrivateKey, PublicKey, SecretKey, SizedBytesExt},
     serialization::serialize,
 };
@@ -79,7 +81,7 @@ impl<D: Hash, G: Group> KeyExchange<D, G> for TripleDH {
         id_u: Vec<u8>,
         id_s: Vec<u8>,
         context: Vec<u8>,
-    ) -> Result<(Self::KE2State, Self::KE2Message), ProtocolError<S::Error>> {
+    ) -> Result<GenerateKe2Result<Self, D, G>, ProtocolError<S::Error>> {
         let server_e_kp = KeyPair::<G>::generate_random(rng);
         let server_nonce = generate_nonce::<R>(rng);
 
@@ -93,7 +95,7 @@ impl<D: Hash, G: Group> KeyExchange<D, G> for TripleDH {
             .chain(&server_nonce[..])
             .chain(&server_e_kp.public().to_arr());
 
-        let (session_key, km2, km3) = derive_3dh_keys::<D, G, S>(
+        let result = derive_3dh_keys::<D, G, S>(
             TripleDHComponents {
                 pk1: ke1_message.client_e_pk.clone(),
                 sk1: server_e_kp.private().clone(),
@@ -106,7 +108,7 @@ impl<D: Hash, G: Group> KeyExchange<D, G> for TripleDH {
         )?;
 
         let mut mac_hasher =
-            Hmac::<D>::new_from_slice(&km2).map_err(|_| InternalPakeError::HmacError)?;
+            Hmac::<D>::new_from_slice(&result.1).map_err(|_| InternalPakeError::HmacError)?;
         mac_hasher.update(&transcript_hasher.clone().finalize());
         let mac = mac_hasher.finalize().into_bytes();
 
@@ -114,15 +116,19 @@ impl<D: Hash, G: Group> KeyExchange<D, G> for TripleDH {
 
         Ok((
             Ke2State {
-                km3,
+                km3: result.2,
                 hashed_transcript: transcript_hasher.finalize(),
-                session_key,
+                session_key: result.0,
             },
             Ke2Message {
                 server_nonce,
                 server_e_pk: server_e_kp.public().clone(),
                 mac,
             },
+            #[cfg(test)]
+            result.3,
+            #[cfg(test)]
+            result.1,
         ))
     }
 
@@ -137,7 +143,7 @@ impl<D: Hash, G: Group> KeyExchange<D, G> for TripleDH {
         id_u: Vec<u8>,
         id_s: Vec<u8>,
         context: Vec<u8>,
-    ) -> Result<(Vec<u8>, Self::KE3Message), ProtocolError> {
+    ) -> Result<GenerateKe3Result<Self, D, G>, ProtocolError> {
         let mut transcript_hasher = D::new()
             .chain(STR_RFC)
             .chain(&serialize(&context, 2)?)
@@ -147,7 +153,7 @@ impl<D: Hash, G: Group> KeyExchange<D, G> for TripleDH {
             .chain(&l2_component[..])
             .chain(&ke2_message.to_bytes_without_info_or_mac());
 
-        let (session_key, km2, km3) = derive_3dh_keys::<D, G, PrivateKey<G>>(
+        let result = derive_3dh_keys::<D, G, PrivateKey<G>>(
             TripleDHComponents {
                 pk1: ke2_message.server_e_pk.clone(),
                 sk1: ke1_state.client_e_sk.clone(),
@@ -160,7 +166,7 @@ impl<D: Hash, G: Group> KeyExchange<D, G> for TripleDH {
         )?;
 
         let mut server_mac =
-            Hmac::<D>::new_from_slice(&km2).map_err(|_| InternalPakeError::HmacError)?;
+            Hmac::<D>::new_from_slice(&result.1).map_err(|_| InternalPakeError::HmacError)?;
         server_mac.update(&transcript_hasher.clone().finalize());
 
         if server_mac.verify(&ke2_message.mac).is_err() {
@@ -172,14 +178,18 @@ impl<D: Hash, G: Group> KeyExchange<D, G> for TripleDH {
         transcript_hasher.update(ke2_message.mac.to_vec());
 
         let mut client_mac =
-            Hmac::<D>::new_from_slice(&km3).map_err(|_| InternalPakeError::HmacError)?;
+            Hmac::<D>::new_from_slice(&result.2).map_err(|_| InternalPakeError::HmacError)?;
         client_mac.update(&transcript_hasher.finalize());
 
         Ok((
-            session_key.to_vec(),
+            result.0.to_vec(),
             Ke3Message {
                 mac: client_mac.finalize().into_bytes(),
             },
+            #[cfg(test)]
+            result.3,
+            #[cfg(test)]
+            result.2,
         ))
     }
 
@@ -424,12 +434,20 @@ struct TripleDHComponents<G: Group, S: SecretKey<G>> {
     sk3: PrivateKey<G>,
 }
 
-#[allow(clippy::upper_case_acronyms)]
 // Consists of a session key, followed by two mac keys: (session_key, km2, km3)
+#[cfg(not(test))]
+#[allow(clippy::upper_case_acronyms)]
 type TripleDHDerivationResult<D> = (
     GenericArray<u8, <D as FixedOutput>::OutputSize>,
     GenericArray<u8, <D as FixedOutput>::OutputSize>,
     GenericArray<u8, <D as FixedOutput>::OutputSize>,
+);
+#[cfg(test)]
+type TripleDHDerivationResult<D> = (
+    GenericArray<u8, <D as FixedOutput>::OutputSize>,
+    GenericArray<u8, <D as FixedOutput>::OutputSize>,
+    GenericArray<u8, <D as FixedOutput>::OutputSize>,
+    Vec<u8>,
 );
 
 /// The third key exchange message
@@ -508,6 +526,8 @@ fn derive_3dh_keys<D: Hash, G: Group, S: SecretKey<G>>(
         GenericArray::clone_from_slice(&session_key),
         GenericArray::clone_from_slice(&km2),
         GenericArray::clone_from_slice(&km3),
+        #[cfg(test)]
+        handshake_secret,
     ))
 }
 

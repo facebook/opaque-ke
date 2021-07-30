@@ -121,6 +121,31 @@ pub(crate) struct OpenedInnerEnvelope<D: Hash> {
     pub(crate) export_key: GenericArray<u8, <D as Digest>::OutputSize>,
 }
 
+#[cfg(not(test))]
+type SealRawResult<CS> = (
+    Envelope<CS>,
+    GenericArray<u8, <<CS as CipherSuite>::Hash as Digest>::OutputSize>,
+);
+#[cfg(test)]
+type SealRawResult<CS> = (
+    Envelope<CS>,
+    GenericArray<u8, <<CS as CipherSuite>::Hash as Digest>::OutputSize>,
+    Vec<u8>,
+);
+#[cfg(not(test))]
+type SealResult<CS> = (
+    Envelope<CS>,
+    PublicKey<<CS as CipherSuite>::Group>,
+    GenericArray<u8, <<CS as CipherSuite>::Hash as Digest>::OutputSize>,
+);
+#[cfg(test)]
+type SealResult<CS> = (
+    Envelope<CS>,
+    PublicKey<<CS as CipherSuite>::Group>,
+    GenericArray<u8, <<CS as CipherSuite>::Hash as Digest>::OutputSize>,
+    Vec<u8>,
+);
+
 impl<CS: CipherSuite> Envelope<CS> {
     fn hmac_key_size() -> usize {
         <CS::Hash as Digest>::OutputSize::to_usize()
@@ -182,14 +207,7 @@ impl<CS: CipherSuite> Envelope<CS> {
         key: &[u8],
         server_s_pk: &[u8],
         optional_ids: Option<Identifiers>,
-    ) -> Result<
-        (
-            Self,
-            PublicKey<CS::Group>,
-            GenericArray<u8, <CS::Hash as Digest>::OutputSize>,
-        ),
-        ProtocolError,
-    > {
+    ) -> Result<SealResult<CS>, ProtocolError> {
         let mut nonce = vec![0u8; NONCE_LEN];
         rng.fill_bytes(&mut nonce);
 
@@ -202,8 +220,14 @@ impl<CS: CipherSuite> Envelope<CS> {
             bytestrings_from_identifiers(&optional_ids, &client_s_pk.to_arr(), server_s_pk)?;
         let aad = construct_aad(&id_u, &id_s, server_s_pk);
 
-        let (envelope, export_key) = Self::seal_raw(key, &nonce, &aad, mode)?;
-        Ok((envelope, client_s_pk, export_key))
+        let result = Self::seal_raw(key, &nonce, &aad, mode)?;
+        Ok((
+            result.0,
+            client_s_pk,
+            result.1,
+            #[cfg(test)]
+            result.2,
+        ))
     }
 
     /// Uses a key to convert the plaintext into an envelope, authenticated by the aad field.
@@ -214,7 +238,7 @@ impl<CS: CipherSuite> Envelope<CS> {
         nonce: &[u8],
         aad: &[u8],
         mode: InnerEnvelopeMode,
-    ) -> Result<(Self, GenericArray<u8, <CS::Hash as Digest>::OutputSize>), InternalPakeError> {
+    ) -> Result<SealRawResult<CS>, InternalPakeError> {
         let h = Hkdf::<CS::Hash>::new(None, key);
         let mut hmac_key = vec![0u8; Self::hmac_key_size()];
         let mut export_key = vec![0u8; Self::export_key_size()];
@@ -238,6 +262,8 @@ impl<CS: CipherSuite> Envelope<CS> {
                 hmac: hmac_bytes,
             },
             GenericArray::clone_from_slice(&export_key),
+            #[cfg(test)]
+            hmac_key,
         ))
     }
 

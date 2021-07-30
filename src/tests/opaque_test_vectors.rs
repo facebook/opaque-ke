@@ -73,6 +73,12 @@ pub struct TestVectorParameters {
     pub KE3: Vec<u8>,
     pub export_key: Vec<u8>,
     pub session_key: Vec<u8>,
+    pub auth_key: Vec<u8>,
+    pub randomized_pwd: Vec<u8>,
+    pub handshake_secret: Vec<u8>,
+    pub server_mac_key: Vec<u8>,
+    pub client_mac_key: Vec<u8>,
+    pub oprf_key: Vec<u8>,
 }
 
 // Pulled from https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-opaque-06#appendix-C
@@ -781,6 +787,12 @@ fn populate_test_vectors<CS: CipherSuite>(values: &Value) -> TestVectorParameter
         blind_login: parse!(values, "blind_login"),
         export_key: parse!(values, "export_key"),
         session_key: parse!(values, "session_key"),
+        auth_key: parse!(values, "auth_key"),
+        randomized_pwd: parse!(values, "randomized_pwd"),
+        handshake_secret: parse!(values, "handshake_secret"),
+        server_mac_key: parse!(values, "server_mac_key"),
+        client_mac_key: parse!(values, "client_mac_key"),
+        oprf_key: parse!(values, "oprf_key"),
     }
 }
 
@@ -861,6 +873,10 @@ fn test_registration_response<CS: CipherSuite>(tvs: &[&str]) -> Result<(), Proto
             &parameters.credential_identifier,
         )?;
         assert_eq!(
+            hex::encode(parameters.oprf_key),
+            hex::encode(server_registration_start_result.oprf_key)
+        );
+        assert_eq!(
             hex::encode(parameters.registration_response),
             hex::encode(server_registration_start_result.message.serialize())
         );
@@ -884,6 +900,14 @@ fn test_registration_upload<CS: CipherSuite>(tvs: &[&str]) -> Result<(), Protoco
             },
         )?;
 
+        assert_eq!(
+            hex::encode(parameters.auth_key),
+            hex::encode(result.auth_key)
+        );
+        assert_eq!(
+            hex::encode(parameters.randomized_pwd),
+            hex::encode(result.randomized_pwd)
+        );
         assert_eq!(
             hex::encode(parameters.registration_upload),
             hex::encode(result.message.serialize())
@@ -954,6 +978,18 @@ fn test_ke2<CS: CipherSuite>(tvs: &[&str]) -> Result<(), ProtocolError> {
             },
         )?;
         assert_eq!(
+            hex::encode(&parameters.handshake_secret),
+            hex::encode(server_login_start_result.handshake_secret)
+        );
+        assert_eq!(
+            hex::encode(&parameters.server_mac_key),
+            hex::encode(server_login_start_result.server_mac_key)
+        );
+        assert_eq!(
+            hex::encode(&parameters.oprf_key),
+            hex::encode(server_login_start_result.oprf_key)
+        );
+        assert_eq!(
             hex::encode(&parameters.KE2),
             hex::encode(server_login_start_result.message.serialize())
         );
@@ -986,6 +1022,14 @@ fn test_ke3<CS: CipherSuite>(tvs: &[&str]) -> Result<(), ProtocolError> {
         assert_eq!(
             hex::encode(&parameters.session_key),
             hex::encode(&client_login_finish_result.session_key)
+        );
+        assert_eq!(
+            hex::encode(&parameters.handshake_secret),
+            hex::encode(&client_login_finish_result.handshake_secret)
+        );
+        assert_eq!(
+            hex::encode(&parameters.client_mac_key),
+            hex::encode(&client_login_finish_result.client_mac_key)
         );
         assert_eq!(
             hex::encode(&parameters.KE3),
