@@ -573,7 +573,7 @@ pub struct ClientLoginFinishResult<CS: CipherSuite> {
     /// Instance of the ClientLogin, only used in tests for checking zeroize
     #[cfg(test)]
     pub state: ClientLogin<CS>,
-    /// Handshake secret, only used tests
+    /// Handshake secret, only used in tests
     #[cfg(test)]
     pub handshake_secret: Vec<u8>,
     /// Client MAC key, only used in tests
@@ -752,9 +752,10 @@ pub struct ServerLoginStartResult<CS: CipherSuite> {
     pub message: CredentialResponse<CS>,
     /// The state that the server must keep in order to finish the protocl
     pub state: ServerLogin<CS>,
-    /// Handshake secret, only used tests
+    /// Handshake secret, only used in tests
     #[cfg(test)]
     pub handshake_secret: Vec<u8>,
+    /// Server MAC key, only used in tests
     #[cfg(test)]
     pub server_mac_key: GenericArray<u8, <CS::Hash as Digest>::OutputSize>,
 }
