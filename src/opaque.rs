@@ -278,6 +278,9 @@ pub struct ClientRegistrationFinishResult<CS: CipherSuite> {
     /// Instance of the ClientRegistration, only used in tests for checking zeroize
     #[cfg(test)]
     pub state: ClientRegistration<CS>,
+    /// AuthKey, only used in tests
+    #[cfg(test)]
+    pub auth_key: Vec<u8>,
     /// Password derived key, only used in tests
     #[cfg(test)]
     pub randomized_pwd: GenericArray<u8, <CS::Hash as Digest>::OutputSize>,
@@ -292,6 +295,8 @@ impl<CS: CipherSuite> Clone for ClientRegistrationFinishResult<CS> {
             server_s_pk: self.server_s_pk.clone(),
             #[cfg(test)]
             state: self.state.clone(),
+            #[cfg(test)]
+            auth_key: self.auth_key.clone(),
             #[cfg(test)]
             randomized_pwd: self.randomized_pwd.clone(),
         }
@@ -326,19 +331,21 @@ impl<CS: CipherSuite> ClientRegistration<CS> {
         h.expand(STR_MASKING_KEY, &mut masking_key)
             .map_err(|_| InternalPakeError::HkdfError)?;
 
-        let (envelope, client_s_pk, export_key) =
+        let result =
             Envelope::<CS>::seal(rng, &password_derived_key, &r2.server_s_pk, optional_ids)?;
 
         Ok(ClientRegistrationFinishResult {
             message: RegistrationUpload {
-                envelope,
+                envelope: result.0,
                 masking_key: GenericArray::clone_from_slice(&masking_key[..]),
-                client_s_pk,
+                client_s_pk: result.1,
             },
-            export_key,
+            export_key: result.2,
             server_s_pk: r2.server_s_pk,
             #[cfg(test)]
             state: self,
+            #[cfg(test)]
+            auth_key: result.3,
             #[cfg(test)]
             randomized_pwd,
         })

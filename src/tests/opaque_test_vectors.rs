@@ -63,6 +63,7 @@ pub struct TestVectorParameters {
     pub KE3: Vec<u8>,
     pub export_key: Vec<u8>,
     pub session_key: Vec<u8>,
+    pub auth_key: Vec<u8>,
     pub randomized_pwd: Vec<u8>,
 }
 
@@ -483,6 +484,7 @@ fn populate_test_vectors(values: &Value) -> TestVectorParameters {
         blind_login: parse!(values, "blind_login"),
         export_key: parse!(values, "export_key"),
         session_key: parse!(values, "session_key"),
+        auth_key: parse!(values, "auth_key"),
         randomized_pwd: parse!(values, "randomized_pwd"),
     }
 }
@@ -569,6 +571,10 @@ fn test_registration_upload() -> Result<(), ProtocolError> {
             },
         )?;
 
+        assert_eq!(
+            hex::encode(parameters.auth_key),
+            hex::encode(result.auth_key)
+        );
         assert_eq!(
             hex::encode(parameters.randomized_pwd),
             hex::encode(result.randomized_pwd)
