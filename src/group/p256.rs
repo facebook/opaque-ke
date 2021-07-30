@@ -1,3 +1,13 @@
+// Copyright (c) Facebook, Inc. and its affiliates.
+//
+// This source code is licensed under the MIT license found in the
+// LICENSE file in the root directory of this source tree.
+
+#![allow(
+    clippy::borrow_interior_mutable_const,
+    clippy::declare_interior_mutable_const
+)]
+
 use std::ops::Mul;
 use std::str::FromStr;
 
@@ -6,6 +16,7 @@ use generic_array::{ArrayLength, GenericArray};
 use num_bigint::{BigInt, Sign};
 use num_integer::Integer;
 use num_traits::{One, ToPrimitive};
+use once_cell::sync::Lazy;
 use p256_::elliptic_curve::group::prime::PrimeCurveAffine;
 use p256_::elliptic_curve::group::GroupEncoding;
 use p256_::elliptic_curve::sec1::{FromEncodedPoint, ToEncodedPoint};
@@ -18,6 +29,37 @@ use std::ops::{Add, Div, Neg, Sub};
 use crate::errors::InternalPakeError;
 
 use super::Group;
+
+// https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-hash-to-curve-11#section-8.2
+// `p: 2^256 - 2^224 + 2^192 + 2^96 - 1`
+const P: Lazy<BigInt> = Lazy::new(|| {
+    BigInt::from_str(
+        "115792089210356248762697446949407573530086143415290314195533631308867097853951",
+    )
+    .unwrap()
+});
+// `A: -3`
+const A: Lazy<BigInt> = Lazy::new(|| BigInt::from(-3));
+// `B: 0x5ac635d8aa3a93e7b3ebbd55769886bc651d06b0cc53b0f63bce3c3e27d2604b`
+const B: Lazy<BigInt> = Lazy::new(|| {
+    BigInt::parse_bytes(
+        b"5ac635d8aa3a93e7b3ebbd55769886bc651d06b0cc53b0f63bce3c3e27d2604b",
+        16,
+    )
+    .unwrap()
+});
+// `L: 48`
+pub const L: usize = 48;
+// `Z: -10`
+const Z: Lazy<BigInt> = Lazy::new(|| BigInt::from(-10));
+// https://nvlpubs.nist.gov/nistpubs/FIPS/NIST.FIPS.186-4.pdf#[{%22num%22:211,%22gen%22:0},{%22name%22:%22XYZ%22},70,700,0]
+// P-256 `n` is defined as `115792089210356248762697446949407573529996955224135760342 422259061068512044369`
+pub const R: Lazy<BigInt> = Lazy::new(|| {
+    BigInt::from_str(
+        "115792089210356248762697446949407573529996955224135760342422259061068512044369",
+    )
+    .unwrap()
+});
 
 #[cfg(feature = "p256")]
 impl Group for ProjectivePoint {
@@ -59,32 +101,13 @@ impl Group for ProjectivePoint {
     fn hash_to_curve(
         uniform_bytes: &GenericArray<u8, Self::UniformBytesLen>,
     ) -> Result<Self, InternalPakeError> {
-        // https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-hash-to-curve-11#section-8.2
-        // `p: 2^256 - 2^224 + 2^192 + 2^96 - 1`
-        let p = BigInt::from_str(
-            "115792089210356248762697446949407573530086143415290314195533631308867097853951",
-        )
-        .unwrap();
-        // `A: -3`
-        let a = BigInt::from(-3);
-        // `B: 0x5ac635d8aa3a93e7b3ebbd55769886bc651d06b0cc53b0f63bce3c3e27d2604b`
-        let b = BigInt::parse_bytes(
-            b"5ac635d8aa3a93e7b3ebbd55769886bc651d06b0cc53b0f63bce3c3e27d2604b",
-            16,
-        )
-        .unwrap();
-        // `L: 48`
-        const L: usize = 48;
-        // `Z: -10`
-        let z = BigInt::from(-10);
-
         // extract points
         let u0 = BigInt::from_bytes_be(Sign::Plus, &uniform_bytes[0..L]);
         let u1 = BigInt::from_bytes_be(Sign::Plus, &uniform_bytes[L..L * 2]);
 
         // map to curve
-        let (q0x, q0y) = map_to_curve_simple_swu(&u0, &a, &b, &p, &z);
-        let (q1x, q1y) = map_to_curve_simple_swu(&u1, &a, &b, &p, &z);
+        let (q0x, q0y) = map_to_curve_simple_swu(&u0, &A, &B, &P, &Z);
+        let (q1x, q1y) = map_to_curve_simple_swu(&u1, &A, &B, &P, &Z);
 
         // convert to `p256` types
         let p0 = AffinePoint::from_encoded_point(&EncodedPoint::from_affine_coordinates(
@@ -352,6 +375,7 @@ fn map_to_curve_simple_swu<N: ArrayLength<u8>>(
 
 #[cfg(test)]
 mod tests {
+    use super::*;
 
     struct Params {
         msg: &'static str,
@@ -367,25 +391,6 @@ mod tests {
 
     #[test]
     fn map_to_curve_simple_swu() {
-        use num_bigint::{BigInt, Sign};
-        use num_integer::Integer;
-        use p256_::elliptic_curve::group::prime::PrimeCurveAffine;
-        use p256_::elliptic_curve::sec1::{FromEncodedPoint, ToEncodedPoint};
-        use p256_::{AffinePoint, EncodedPoint};
-        use std::str::FromStr;
-
-        let p = BigInt::from_str(
-            "115792089210356248762697446949407573530086143415290314195533631308867097853951",
-        )
-        .unwrap();
-        let a = BigInt::from(-3);
-        let b = BigInt::parse_bytes(
-            b"5ac635d8aa3a93e7b3ebbd55769886bc651d06b0cc53b0f63bce3c3e27d2604b",
-            16,
-        )
-        .unwrap();
-        let z = BigInt::from(-10);
-
         // Test vectors taken from https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-hash-to-curve-11#appendix-J.1.1
         let test_vectors: Vec<Params> = vec![
             Params {
@@ -465,14 +470,14 @@ mod tests {
             )
             .unwrap();
 
-            let u0 = BigInt::from_bytes_be(Sign::Plus, &uniform_bytes[..48]).mod_floor(&p);
-            let u1 = BigInt::from_bytes_be(Sign::Plus, &uniform_bytes[48..]).mod_floor(&p);
+            let u0 = BigInt::from_bytes_be(Sign::Plus, &uniform_bytes[..48]).mod_floor(&P);
+            let u1 = BigInt::from_bytes_be(Sign::Plus, &uniform_bytes[48..]).mod_floor(&P);
 
             assert_eq!(BigInt::parse_bytes(tv.u0.as_bytes(), 16).unwrap(), u0);
             assert_eq!(BigInt::parse_bytes(tv.u1.as_bytes(), 16).unwrap(), u1);
 
-            let (q0x, q0y) = super::map_to_curve_simple_swu(&u0, &a, &b, &p, &z);
-            let (q1x, q1y) = super::map_to_curve_simple_swu(&u1, &a, &b, &p, &z);
+            let (q0x, q0y) = super::map_to_curve_simple_swu(&u0, &A, &B, &P, &Z);
+            let (q1x, q1y) = super::map_to_curve_simple_swu(&u1, &A, &B, &P, &Z);
 
             assert_eq!(tv.q0x, hex::encode(q0x));
             assert_eq!(tv.q0y, hex::encode(q0y));

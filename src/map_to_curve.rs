@@ -61,38 +61,27 @@ impl GroupWithMapToCurve for p256_::ProjectivePoint {
     const SUITE_ID: usize = 0x0003;
 
     fn map_to_curve<H: Hash>(msg: &[u8], dst: &[u8]) -> Result<Self, ProtocolError> {
-        // https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-hash-to-curve-11#section-8.2
-        // `P256_XMD:SHA-256_SSWU_RO_` has an `L` of `48`
-        const L: usize = 48;
-
         // https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-hash-to-curve-11#section-3
         // `hash_to_curve` calls `hash_to_field` with a `count` of `2`
         // https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-hash-to-curve-11#section-5.3
         // `hash_to_field` calls `expand_message` with a `len_in_bytes` of `count * L`
-        let uniform_bytes = expand_message_xmd::<H>(msg, dst, 2 * L)?;
+        let uniform_bytes = expand_message_xmd::<H>(msg, dst, 2 * crate::group::p256::L)?;
 
         <Self as Group>::hash_to_curve(&GenericArray::clone_from_slice(&uniform_bytes[..]))
             .map_err(ProtocolError::from)
     }
 
     fn hash_to_scalar<H: Hash>(input: &[u8], dst: &[u8]) -> Result<Self::Scalar, ProtocolError> {
-        use num_bigint::BigUint;
+        use num_bigint::{BigInt, Sign};
         use num_integer::Integer;
-        use std::str::FromStr;
 
-        // https://nvlpubs.nist.gov/nistpubs/FIPS/NIST.FIPS.186-4.pdf#[{%22num%22:211,%22gen%22:0},{%22name%22:%22XYZ%22},70,700,0]
-        // P-256 `n` is defined as `115792089210356248762697446949407573529996955224135760342 422259061068512044369`
-        let r = BigUint::from_str(
-            "115792089210356248762697446949407573529996955224135760342422259061068512044369",
-        )
-        .unwrap();
-        // `P256_XMD:SHA-256_SSWU_RO_` has an `L` of `48`
-        const L: usize = 48;
-        let uniform_bytes = expand_message_xmd::<H>(input, dst, L)?;
-        let bytes = BigUint::from_bytes_be(&uniform_bytes).mod_floor(&r);
+        let uniform_bytes = expand_message_xmd::<H>(input, dst, crate::group::p256::L)?;
+        #[allow(clippy::borrow_interior_mutable_const)]
+        let bytes =
+            BigInt::from_bytes_be(Sign::Plus, &uniform_bytes).mod_floor(&crate::group::p256::R);
 
         Ok(p256_::Scalar::from_bytes_reduced(GenericArray::from_slice(
-            &bytes.to_bytes_be(),
+            &bytes.to_bytes_be().1,
         )))
     }
 }

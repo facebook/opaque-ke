@@ -7,7 +7,7 @@
 //! OPAQUE's OPRF
 
 #[cfg(feature = "p256")]
-mod p256;
+pub(crate) mod p256;
 mod ristretto;
 
 use crate::errors::InternalPakeError;
