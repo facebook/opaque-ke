@@ -576,6 +576,9 @@ pub struct ClientLoginFinishResult<CS: CipherSuite> {
     /// Handshake secret, only used tests
     #[cfg(test)]
     pub handshake_secret: Vec<u8>,
+    /// Client MAC key, only used in tests
+    #[cfg(test)]
+    pub client_mac_key: GenericArray<u8, <CS::Hash as Digest>::OutputSize>,
 }
 
 // Cannot be derived because it would require for CS to be Clone.
@@ -590,6 +593,8 @@ impl<CS: CipherSuite> Clone for ClientLoginFinishResult<CS> {
             state: self.state.clone(),
             #[cfg(test)]
             handshake_secret: self.handshake_secret.clone(),
+            #[cfg(test)]
+            client_mac_key: self.client_mac_key.clone(),
         }
     }
 }
@@ -703,6 +708,8 @@ impl<CS: CipherSuite> ClientLogin<CS> {
             state: self,
             #[cfg(test)]
             handshake_secret: result.2,
+            #[cfg(test)]
+            client_mac_key: result.3,
         })
     }
 }
