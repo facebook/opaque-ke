@@ -80,6 +80,8 @@ impl GroupWithMapToCurve for p256_::ProjectivePoint {
         use num_integer::Integer;
         use std::str::FromStr;
 
+        // https://nvlpubs.nist.gov/nistpubs/FIPS/NIST.FIPS.186-4.pdf#[{%22num%22:211,%22gen%22:0},{%22name%22:%22XYZ%22},70,700,0]
+        // P-256 `n` is defined as `115792089210356248762697446949407573529996955224135760342 422259061068512044369`
         let r = BigUint::from_str(
             "115792089210356248762697446949407573529996955224135760342422259061068512044369",
         )
