@@ -8,6 +8,10 @@
 //! Note: This implementation is in sync with [draft-irtf-cfrg-opaque-05](https://www.ietf.org/archive/id/draft-irtf-cfrg-opaque-05.html),
 //! but this specification is subject to change, until the final version published by the IETF.
 //!
+//! ### Minimum Supported Rust Version
+//!
+//! Rust **1.51** or higher.
+//!
 //! # Overview
 //!
 //! OPAQUE is a protocol between a client and a server. They must first agree on a collection of primitives
