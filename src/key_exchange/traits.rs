@@ -23,6 +23,7 @@ pub type GenerateKe2Result<K, D, G> = (
     <K as KeyExchange<D, G>>::KE2State,
     <K as KeyExchange<D, G>>::KE2Message,
     Vec<u8>,
+    generic_array::GenericArray<u8, <D as digest::Digest>::OutputSize>,
 );
 #[cfg(not(test))]
 pub type GenerateKe3Result<K, D, G> = (Vec<u8>, <K as KeyExchange<D, G>>::KE3Message);
