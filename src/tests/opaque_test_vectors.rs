@@ -68,6 +68,7 @@ pub struct TestVectorParameters {
     pub handshake_secret: Vec<u8>,
     pub server_mac_key: Vec<u8>,
     pub client_mac_key: Vec<u8>,
+    pub oprf_key: Vec<u8>,
 }
 
 // Pulled from "OPAQUE-3DH Test Vector 1" and "OPAQUE-3DH Test Vector 6"
@@ -492,6 +493,7 @@ fn populate_test_vectors(values: &Value) -> TestVectorParameters {
         handshake_secret: parse!(values, "handshake_secret"),
         server_mac_key: parse!(values, "server_mac_key"),
         client_mac_key: parse!(values, "client_mac_key"),
+        oprf_key: parse!(values, "oprf_key"),
     }
 }
 
@@ -549,6 +551,10 @@ fn test_registration_response() -> Result<(), ProtocolError> {
                 RegistrationRequest::deserialize(&parameters.registration_request[..]).unwrap(),
                 &parameters.credential_identifier,
             )?;
+        assert_eq!(
+            hex::encode(parameters.oprf_key),
+            hex::encode(server_registration_start_result.oprf_key)
+        );
         assert_eq!(
             hex::encode(parameters.registration_response),
             hex::encode(server_registration_start_result.message.serialize())
@@ -666,6 +672,10 @@ fn test_ke2() -> Result<(), ProtocolError> {
         assert_eq!(
             hex::encode(&parameters.server_mac_key),
             hex::encode(server_login_start_result.server_mac_key)
+        );
+        assert_eq!(
+            hex::encode(&parameters.oprf_key),
+            hex::encode(server_login_start_result.oprf_key)
         );
         assert_eq!(
             hex::encode(&parameters.KE2),

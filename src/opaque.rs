@@ -357,6 +357,9 @@ impl<CS: CipherSuite> ClientRegistration<CS> {
 pub struct ServerRegistrationStartResult<CS: CipherSuite> {
     /// The registration resposne message to send to the client
     pub message: RegistrationResponse<CS>,
+    /// OPRF key, only used in tests
+    #[cfg(test)]
+    pub oprf_key: GenericArray<u8, <CS::Group as Group>::ScalarLen>,
 }
 
 // Cannot be derived because it would require for CS to be Clone.
@@ -364,6 +367,8 @@ impl<CS: CipherSuite> Clone for ServerRegistrationStartResult<CS> {
     fn clone(&self) -> Self {
         Self {
             message: self.message.clone(),
+            #[cfg(test)]
+            oprf_key: self.oprf_key.clone(),
         }
     }
 }
@@ -417,6 +422,8 @@ impl<CS: CipherSuite> ServerRegistration<CS> {
                 beta,
                 server_s_pk: server_setup.keypair.public().clone(),
             },
+            #[cfg(test)]
+            oprf_key: CS::Group::scalar_as_bytes(oprf_key),
         })
     }
 
@@ -758,6 +765,9 @@ pub struct ServerLoginStartResult<CS: CipherSuite> {
     /// Server MAC key, only used in tests
     #[cfg(test)]
     pub server_mac_key: GenericArray<u8, <CS::Hash as Digest>::OutputSize>,
+    /// OPRF key, only used in tests
+    #[cfg(test)]
+    pub oprf_key: GenericArray<u8, <CS::Group as Group>::ScalarLen>,
 }
 
 // Cannot be derived because it would require for CS to be Clone.
@@ -770,6 +780,8 @@ impl<CS: CipherSuite> Clone for ServerLoginStartResult<CS> {
             handshake_secret: self.handshake_secret.clone(),
             #[cfg(test)]
             server_mac_key: self.server_mac_key.clone(),
+            #[cfg(test)]
+            oprf_key: self.oprf_key.clone(),
         }
     }
 }
@@ -899,6 +911,8 @@ impl<CS: CipherSuite> ServerLogin<CS> {
             handshake_secret: result.2,
             #[cfg(test)]
             server_mac_key: result.3,
+            #[cfg(test)]
+            oprf_key: CS::Group::scalar_as_bytes(oprf_key),
         })
     }
 
