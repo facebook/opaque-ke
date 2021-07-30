@@ -128,6 +128,8 @@ impl<D: Hash, G: Group> KeyExchange<D, G> for TripleDH {
             },
             #[cfg(test)]
             result.3,
+            #[cfg(test)]
+            result.1,
         ))
     }
 
