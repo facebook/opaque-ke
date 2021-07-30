@@ -80,16 +80,14 @@ impl GroupWithMapToCurve for p256_::ProjectivePoint {
         use num_integer::Integer;
         use std::str::FromStr;
 
-        // https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-hash-to-curve-11#section-8.2
-        // `p: 2^256 - 2^224 + 2^192 + 2^96 - 1`
-        let p = BigUint::from_str(
-            "115792089210356248762697446949407573530086143415290314195533631308867097853951",
+        let r = BigUint::from_str(
+            "115792089210356248762697446949407573529996955224135760342422259061068512044369",
         )
         .unwrap();
         // `P256_XMD:SHA-256_SSWU_RO_` has an `L` of `48`
         const L: usize = 48;
         let uniform_bytes = expand_message_xmd::<H>(input, dst, L)?;
-        let bytes = BigUint::from_bytes_be(&uniform_bytes).mod_floor(&p);
+        let bytes = BigUint::from_bytes_be(&uniform_bytes).mod_floor(&r);
 
         Ok(p256_::Scalar::from_bytes_reduced(GenericArray::from_slice(
             &bytes.to_bytes_be(),

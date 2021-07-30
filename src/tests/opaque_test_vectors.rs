@@ -820,13 +820,13 @@ fn tests() -> Result<(), ProtocolError> {
     #[cfg(feature = "p256")]
     {
         test_registration_request::<P256Sha256NoSlowHash>(P256_TEST_VECTORS)?;
-        //test_registration_response::<P256Sha256NoSlowHash>(P256_TEST_VECTORS)?;
-        //test_registration_upload::<P256Sha256NoSlowHash>(P256_TEST_VECTORS)?;
+        test_registration_response::<P256Sha256NoSlowHash>(P256_TEST_VECTORS)?;
+        test_registration_upload::<P256Sha256NoSlowHash>(P256_TEST_VECTORS)?;
         test_ke1::<P256Sha256NoSlowHash>(P256_TEST_VECTORS)?;
-        //test_ke2::<P256Sha256NoSlowHash>(P256_TEST_VECTORS)?;
-        //test_ke3::<P256Sha256NoSlowHash>(P256_TEST_VECTORS)?;
-        //test_server_login_finish::<P256Sha256NoSlowHash>(P256_TEST_VECTORS)?;
-        //test_fake_vectors::<P256Sha256NoSlowHash>(P256_FAKE_TEST_VECTORS)?;
+        test_ke2::<P256Sha256NoSlowHash>(P256_TEST_VECTORS)?;
+        test_ke3::<P256Sha256NoSlowHash>(P256_TEST_VECTORS)?;
+        test_server_login_finish::<P256Sha256NoSlowHash>(P256_TEST_VECTORS)?;
+        test_fake_vectors::<P256Sha256NoSlowHash>(P256_FAKE_TEST_VECTORS)?;
     }
 
     Ok(())
