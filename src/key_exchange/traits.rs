@@ -13,6 +13,22 @@ use crate::{
 use rand::{CryptoRng, RngCore};
 use zeroize::Zeroize;
 
+#[cfg(not(test))]
+pub type GenerateKe2Result<K, D, G> = (
+    <K as KeyExchange<D, G>>::KE2State,
+    <K as KeyExchange<D, G>>::KE2Message,
+);
+#[cfg(test)]
+pub type GenerateKe2Result<K, D, G> = (
+    <K as KeyExchange<D, G>>::KE2State,
+    <K as KeyExchange<D, G>>::KE2Message,
+    Vec<u8>,
+);
+#[cfg(not(test))]
+pub type GenerateKe3Result<K, D, G> = (Vec<u8>, <K as KeyExchange<D, G>>::KE3Message);
+#[cfg(test)]
+pub type GenerateKe3Result<K, D, G> = (Vec<u8>, <K as KeyExchange<D, G>>::KE3Message, Vec<u8>);
+
 pub trait KeyExchange<D: Hash, G: Group> {
     type KE1State: FromBytes + ToBytesWithPointers + Zeroize + Clone;
     type KE2State: FromBytes + ToBytesWithPointers + Zeroize + Clone;
@@ -35,7 +51,7 @@ pub trait KeyExchange<D: Hash, G: Group> {
         id_u: Vec<u8>,
         id_s: Vec<u8>,
         context: Vec<u8>,
-    ) -> Result<(Self::KE2State, Self::KE2Message), ProtocolError<S::Error>>;
+    ) -> Result<GenerateKe2Result<Self, D, G>, ProtocolError<S::Error>>;
 
     #[allow(clippy::too_many_arguments, clippy::type_complexity)]
     fn generate_ke3(
@@ -48,7 +64,7 @@ pub trait KeyExchange<D: Hash, G: Group> {
         id_u: Vec<u8>,
         id_s: Vec<u8>,
         context: Vec<u8>,
-    ) -> Result<(Vec<u8>, Self::KE3Message), ProtocolError>;
+    ) -> Result<GenerateKe3Result<Self, D, G>, ProtocolError>;
 
     #[allow(clippy::type_complexity)]
     fn finish_ke(

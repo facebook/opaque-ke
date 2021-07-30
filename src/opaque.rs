@@ -573,6 +573,9 @@ pub struct ClientLoginFinishResult<CS: CipherSuite> {
     /// Instance of the ClientLogin, only used in tests for checking zeroize
     #[cfg(test)]
     pub state: ClientLogin<CS>,
+    /// Handshake secret, only used tests
+    #[cfg(test)]
+    pub handshake_secret: Vec<u8>,
 }
 
 // Cannot be derived because it would require for CS to be Clone.
@@ -585,6 +588,8 @@ impl<CS: CipherSuite> Clone for ClientLoginFinishResult<CS> {
             server_s_pk: self.server_s_pk.clone(),
             #[cfg(test)]
             state: self.state.clone(),
+            #[cfg(test)]
+            handshake_secret: self.handshake_secret.clone(),
         }
     }
 }
@@ -675,7 +680,7 @@ impl<CS: CipherSuite> ClientLogin<CS> {
             &credential_response.masked_response,
         );
 
-        let (session_key, ke3_message) = CS::KeyExchange::generate_ke3(
+        let result = CS::KeyExchange::generate_ke3(
             credential_response_component,
             credential_response.ke2_message,
             &self.ke1_state,
@@ -688,12 +693,16 @@ impl<CS: CipherSuite> ClientLogin<CS> {
         )?;
 
         Ok(ClientLoginFinishResult {
-            message: CredentialFinalization { ke3_message },
-            session_key,
+            message: CredentialFinalization {
+                ke3_message: result.1,
+            },
+            session_key: result.0,
             export_key: opened_envelope.export_key.clone(),
             server_s_pk,
             #[cfg(test)]
             state: self,
+            #[cfg(test)]
+            handshake_secret: result.2,
         })
     }
 }
@@ -736,6 +745,9 @@ pub struct ServerLoginStartResult<CS: CipherSuite> {
     pub message: CredentialResponse<CS>,
     /// The state that the server must keep in order to finish the protocl
     pub state: ServerLogin<CS>,
+    /// Handshake secret, only used tests
+    #[cfg(test)]
+    pub handshake_secret: Vec<u8>,
 }
 
 // Cannot be derived because it would require for CS to be Clone.
@@ -744,6 +756,8 @@ impl<CS: CipherSuite> Clone for ServerLoginStartResult<CS> {
         Self {
             message: self.message.clone(),
             state: self.state.clone(),
+            #[cfg(test)]
+            handshake_secret: self.handshake_secret.clone(),
         }
     }
 }
@@ -844,7 +858,7 @@ impl<CS: CipherSuite> ServerLogin<CS> {
         let credential_response_component =
             CredentialResponse::<CS>::serialize_without_ke(&beta, &masking_nonce, &masked_response);
 
-        let (ke2_state, ke2_message) = CS::KeyExchange::generate_ke2(
+        let result = CS::KeyExchange::generate_ke2(
             rng,
             l1_bytes.to_vec(),
             credential_response_component,
@@ -860,15 +874,17 @@ impl<CS: CipherSuite> ServerLogin<CS> {
             beta,
             masking_nonce,
             masked_response,
-            ke2_message,
+            ke2_message: result.1,
         };
 
         Ok(ServerLoginStartResult {
             message: credential_response,
             state: Self {
                 _cs: PhantomData,
-                ke2_state,
+                ke2_state: result.0,
             },
+            #[cfg(test)]
+            handshake_secret: result.2,
         })
     }
 
