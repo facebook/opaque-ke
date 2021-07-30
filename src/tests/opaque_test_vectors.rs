@@ -23,6 +23,16 @@ impl CipherSuite for Ristretto255Sha512NoSlowHash {
     type SlowHash = NoOpHash;
 }
 
+#[cfg(feature = "p256")]
+struct P256Sha256NoSlowHash;
+#[cfg(feature = "p256")]
+impl CipherSuite for P256Sha256NoSlowHash {
+    type Group = p256_::ProjectivePoint;
+    type KeyExchange = TripleDH;
+    type Hash = sha2::Sha256;
+    type SlowHash = NoOpHash;
+}
+
 #[derive(PartialEq)]
 pub enum EnvelopeMode {
     Base,
@@ -71,9 +81,8 @@ pub struct TestVectorParameters {
     pub oprf_key: Vec<u8>,
 }
 
-// Pulled from "OPAQUE-3DH Test Vector 1" and "OPAQUE-3DH Test Vector 6"
-// of https://datatracker.ietf.org/doc/draft-irtf-cfrg-opaque/
-static TEST_VECTORS: &[&str] = &[
+// Pulled from https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-opaque-06#appendix-C
+static RISTRETTO_TEST_VECTORS: &[&str] = &[
     r#"
 ### OPAQUE-3DH Real Test Vector 1
 
@@ -316,7 +325,7 @@ a75706750b72c4943c3985cae5f31969dea9c74192c8bf601e2d062fcb141c89234ff
 "#,
 ];
 
-static FAKE_TEST_VECTORS: &[&str] = &[r#"
+static RISTRETTO_FAKE_TEST_VECTORS: &[&str] = &[r#"
 ### OPAQUE-3DH Fake Test Vector 1
 
 #### Configuration
@@ -387,6 +396,294 @@ b9467e8bfa9a4006aba7f21b74b4ce3bccd686785878b0ec9b3fc4200228014d5d073
 ~~~
 "#];
 
+#[cfg(feature = "p256")]
+static P256_TEST_VECTORS: &[&str] = &[
+    r#"
+### OPAQUE-3DH Real Test Vector 3
+
+#### Configuration
+
+~~~
+OPRF: 0003
+Hash: SHA256
+MHF: Identity
+KDF: HKDF-SHA256
+MAC: HMAC-SHA256
+EnvelopeMode: 01
+Group: P256_XMD:SHA-256_SSWU_RO_
+Context: 4f50415155452d504f43
+Nh: 32
+Npk: 33
+Nsk: 32
+Nm: 32
+Nx: 32
+Nok: 32
+~~~
+
+#### Input Values
+
+~~~
+oprf_seed: 77bfc065218c9a5593c952161b93193f025b3474102519e6984fa64831
+0dd1bf
+credential_identifier: 31323334
+password: 436f7272656374486f72736542617474657279537461706c65
+envelope_nonce: 2527e48c983deeb54c9c6337fdd9e120de85343dc7887f00248f1
+acacc4a8319
+masking_nonce: cb792f3657240ce5296dd5633e7333531009c11ee6ab46b6111f15
+6d96a160b2
+server_private_key: 87ef09986545b295e8f5bbbaa7ad3dce15eb299eb2a5b3487
+5ff421b1d63d7a3
+server_public_key: 025b95a6add1f2f3d038811b5ad3494bed73b1e2500d8dadec
+592d88406e25c2f2
+server_nonce: 8018e88ecfc53891529278c47239f8fe6f1be88972721898ef81cc0
+a76a0b550
+client_nonce: 967fcded96ed46986e60fcbdf985232639f537377ca3fcf07ad4899
+56b2e9019
+server_keyshare: 0242bc29993976185dacf6be815cbfa923aac80fad8b7f020c9d
+4f18e0b6867a17
+client_keyshare: 03358b4eae039953116889466bfddeb40168e39ed83809fd5f0d
+5f2de9c5234398
+server_private_keyshare: b1c0063e442238bdd89cd62b4c3ad31f016b68085d25
+f85613f5838cd7c6b16a
+client_private_keyshare: 10256ab078bc1edbaf79bee4cd28dd9db89179dcc921
+9bc8f388b533f5439099
+blind_registration: d50e29b581d716c3c05c4a0d6110b510cb5c9959bee817fde
+b1eabd7ccd74fee
+blind_login: 503d8495c6d04efaee8370c45fa1dfad70201edd140cec8ed6c73b5f
+cd15c478
+~~~
+
+#### Intermediate Values
+
+~~~
+client_public_key: 02680493263d3bc4c7af455ba1219fd9bbe329fd0c2a0248e8
+7321ded8ff17b386
+auth_key: 570a8105a7d86679b4c9d009edc9627af6b17e8b2d2f0d50cbd13ea8a00
+82cd7
+randomized_pwd: 04f1615bc400765f22f7af1277a0814b5665ad1d4ef9bf1829880
+2a0f6b4636b
+envelope: 2527e48c983deeb54c9c6337fdd9e120de85343dc7887f00248f1acacc4
+a8319890e251c4b6397fb35900ff46ae1df1e86eed2d23005c6b9c61caa4e12af8bf5
+handshake_secret: 56212ac60eca9f917f6a4ce6aefe762743da701b008ec986cd1
+87ff75df5df84
+server_mac_key: 8c7f132b6cd9a7e4ce9171cd469d02dc1ab0e8d96f4e1ddca1718
+55fc723203f
+client_mac_key: 348cb4526417423090d386ce43459d652a6489122e27d3953ed47
+5b3ab9cd336
+oprf_key: d153d662a1e7dd4383837aa7125685d2be6f8041472ecbfd610e46952a6
+a24f1
+~~~
+
+#### Output Values
+
+~~~
+registration_request: 0325768a660df0c15f6f2a1dcbb7efd4f1c92702401edf3
+e2f0742c8dce85d5fa8
+registration_response: 0244211a4d2a067f7a61ed88dff6764856d347465f330d
+0e15502700afd1865911025b95a6add1f2f3d038811b5ad3494bed73b1e2500d8dade
+c592d88406e25c2f2
+registration_upload: 02680493263d3bc4c7af455ba1219fd9bbe329fd0c2a0248
+e87321ded8ff17b3868efb26f2bb390fd23b90c49ae680c4560fbd2b3c4f32891505c
+ad7d95b7bc58e2527e48c983deeb54c9c6337fdd9e120de85343dc7887f00248f1aca
+cc4a8319890e251c4b6397fb35900ff46ae1df1e86eed2d23005c6b9c61caa4e12af8
+bf5
+KE1: 03884e56429f1ee53559f2e244392eb8f994fd46c8fd9ffdd24ac5a7af963a66
+3b967fcded96ed46986e60fcbdf985232639f537377ca3fcf07ad489956b2e9019033
+58b4eae039953116889466bfddeb40168e39ed83809fd5f0d5f2de9c5234398
+KE2: 0383fff1b3e8003723dff1b1f90a7934a036bd6691aca0366b07a100bf2bb3dc
+2acb792f3657240ce5296dd5633e7333531009c11ee6ab46b6111f156d96a160b23b6
+a5ff1ce8035a1dca4776f32f43c7ce626d796da0f27fc9897522fc1fab70d2fb443d8
+2a4333770057e929c2f9977d40a64e8b4a5a553d25a8b8392b4adbf0a0a6e87f26165
+0d04084823b23b07d351e3b947778a43859be3ba218b22d054edf8018e88ecfc53891
+529278c47239f8fe6f1be88972721898ef81cc0a76a0b5500242bc29993976185dacf
+6be815cbfa923aac80fad8b7f020c9d4f18e0b6867a171e7fda886b9fd9f3bc9e37c4
+04ca07f7a5c9a6f98df20a5cac42371162731faa
+KE3: 86a57a3e1a2e537ea667031091c025cb539826dbbb1756683220dd239d4a7bff
+export_key: a83a3fe26af0dadb63d15ed808a4dc2edb57f45212554ecc1af5e0273
+50651de
+session_key: e26d54798ce8a66fb415cb67f4d87647dcd3d8aa79a7ab6a5f701b82
+f037b1e3
+~~~
+"#,
+    r#"
+### OPAQUE-3DH Real Test Vector 4
+
+#### Configuration
+
+~~~
+OPRF: 0003
+Hash: SHA256
+MHF: Identity
+KDF: HKDF-SHA256
+MAC: HMAC-SHA256
+EnvelopeMode: 01
+Group: P256_XMD:SHA-256_SSWU_RO_
+Context: 4f50415155452d504f43
+Nh: 32
+Npk: 33
+Nsk: 32
+Nm: 32
+Nx: 32
+Nok: 32
+~~~
+
+#### Input Values
+
+~~~
+client_identity: 616c696365
+server_identity: 626f62
+oprf_seed: 482123652ea37c7e4a0f9f1984ff1f2a310fe428d9de5819bf63b3942d
+be09f9
+credential_identifier: 31323334
+password: 436f7272656374486f72736542617474657279537461706c65
+envelope_nonce: 75c245690f9669a9af5699e8b23d6d1fa9e697aeb4526267d942b
+842e4426e42
+masking_nonce: 5947586f69259e0708bdfab794f689eec14c7deb7edde68c816451
+56cf278f21
+server_private_key: c728ebf47b1c65594d77dab871872dba848bdf20ed725f0fa
+3b58e7d8f3eab2b
+server_public_key: 029a2c6097fbbcf3457fe3ff7d4ef8e89dab585a67dfed0905
+c9f104d909138bae
+server_nonce: 581ac468101aee528cc6b69daac7a90de8837d49708e76310767cbe
+4af18594d
+client_nonce: 46498f95ec7986f0602019b3fbb646db87a2fdbc12176d4f7ab74fa
+5fadace60
+server_keyshare: 022aa8746ab4329d591296652d44f6dfb04470103311bacd7ad5
+1060ef5abac41b
+client_keyshare: 02a9f857ad3eabe09047049e8b8cee72feea2acb7fc487777c0b
+22d3add6a0e0c0
+server_private_keyshare: 48a5baa24274d5acc5e007a44f2147549ac8dd675564
+2638f1029631944beed4
+client_private_keyshare: 161e3aaa50f50e33344022969d17d9cf4c88b7a9eec4
+c36bf64de079abb6dc7b
+blind_registration: 9280e203ef27d9ef0d1d189bb3c02a66ef9a72d48cca6c1f9
+afc1fedea22567c
+blind_login: 4308682dc1bdab92ff91bb1a5fc5bc084223fe4369beddca3f1640a6
+645455ad
+~~~
+
+#### Intermediate Values
+
+~~~
+client_public_key: 02e89507b3a1a946e8096cd7e1e8fbc31e2dd39fecc49580ed
+2659262c08ea33eb
+auth_key: 76cba5b349c60c5a19ab06b70a3191d3418318b5a203fd298b18a0eda53
+efd1a
+randomized_pwd: 74649c9c7b0d7436c4873984732fe45e19dabd1a96d7e9175468a
+85ed16bea65
+envelope: 75c245690f9669a9af5699e8b23d6d1fa9e697aeb4526267d942b842e44
+26e423938d818ea53f58fdaab8541765d5171e99b1bdc2c63e8e1eaf62d3a60aacabe
+handshake_secret: 22f608959308cb4dff55cf77c006ea8e9bc66df75d7076a927a
+3d21d3fce5562
+server_mac_key: 76e1415cfcf0ff271533fdd4ce4fffb4110ba1ff4aa9a02a1734d
+9ae0e0ce47a
+client_mac_key: 9341b0b36ac36875910cd1260cd8dc6d6cd58e0fb6503fece6524
+11b6f627bf7
+oprf_key: f14e1fc34ba1218bfd3f7373f036889bf4f35a8fbc9e8c9c07ccf2d2388
+79d9c
+~~~
+
+#### Output Values
+
+~~~
+registration_request: 02792b0f4670aced5970a68b01bb951004ccad962159be4
+b6783170c9ad68f6052
+registration_response: 03cc3491b4bcb3e4804f3eadbc6a04c8fff18cc9ca5a4f
+eeb577fdfebd71f5060f029a2c6097fbbcf3457fe3ff7d4ef8e89dab585a67dfed090
+5c9f104d909138bae
+registration_upload: 02e89507b3a1a946e8096cd7e1e8fbc31e2dd39fecc49580
+ed2659262c08ea33eb260603b2690f3d466fb0b747e256283bed94836ac98c10d4588
+1372046d3b1e875c245690f9669a9af5699e8b23d6d1fa9e697aeb4526267d942b842
+e4426e423938d818ea53f58fdaab8541765d5171e99b1bdc2c63e8e1eaf62d3a60aac
+abe
+KE1: 02fe96fc48d9fc921edd8e92ada581cbcc2a65e30962d0002ea5242f5baf627f
+f646498f95ec7986f0602019b3fbb646db87a2fdbc12176d4f7ab74fa5fadace6002a
+9f857ad3eabe09047049e8b8cee72feea2acb7fc487777c0b22d3add6a0e0c0
+KE2: 035115b21dde0992cb812926d65c7dccd5e0f8ffff573da4a7c1e603e0e40827
+895947586f69259e0708bdfab794f689eec14c7deb7edde68c81645156cf278f21cef
+3adc4e524db33258c5774efaec59750eaf3755a2dfa194ec593ce41a7a17f889978a2
+f97ced10bd1592793497e58b5d05a02ebf003f8a8949a2f8a22a09e4d1b8ba19c9e77
+4b6f31545ac4c02aba4ad8e26b4f43d65319f8d1c5a5a04668d4b581ac468101aee52
+8cc6b69daac7a90de8837d49708e76310767cbe4af18594d022aa8746ab4329d59129
+6652d44f6dfb04470103311bacd7ad51060ef5abac41bbe51a3c1deeeab8ded9273ad
+681001416cbb6d1f0976548f36d1ddb1d3b1f948
+KE3: 5770a1ce912fecf1fa339fe1646b2abfe8dd683767c885a0f1dedba8dfab653e
+export_key: 5b92e3454d59062460a87ad2ff6546d862f722c6fbd7678a0997b3c9d
+c61e9a0
+session_key: 3a04636e2c14b4ef3a01070a2ff129cd2248318d8b85d6c4368f5115
+0f0348ff
+~~~
+"#,
+];
+
+#[cfg(feature = "p256")]
+static P256_FAKE_TEST_VECTORS: &[&str] = &[r#"
+### OPAQUE-3DH Fake Test Vector 2
+
+#### Configuration
+
+~~~
+OPRF: 0003
+Hash: SHA256
+MHF: Identity
+KDF: HKDF-SHA256
+MAC: HMAC-SHA256
+EnvelopeMode: 01
+Group: P256_XMD:SHA-256_SSWU_RO_
+Context: 4f50415155452d504f43
+Nh: 32
+Npk: 33
+Nsk: 32
+Nm: 32
+Nx: 32
+Nok: 32
+~~~
+
+#### Input Values
+
+~~~
+client_identity: 616c696365
+server_identity: 626f62
+oprf_seed: 42cd4f606841ca8f403920a8ecf2d60399962f49d83f857ca86676b272
+1c4366
+credential_identifier: 31323334
+masking_nonce: d3974af728aeafc9e5af4b4cab57d7e7dfbe0ef6b08df28fae5269
+229cac2332
+client_private_key: 0e6b97ef90ea8cedbada0e1295233ba417790ed8e99676903
+71d527ddad59a64
+client_public_key: 033043e30c3dd5fb22d0b3d167acc28878ea7c3ac49cf82b2e
+b4b60a8299a67f7a
+server_private_key: b08b686382820021a7d32ad3cb8ff60f15437b5cb00c53f21
+f3fa17ac31d2bc0
+server_public_key: 03983ac5783e6a460a526066f1398cdc648518a985cc26a66f
+c7573a71ce36dbe5
+server_nonce: 1a60a3e31bb007db74b7114aab2f196ef6bec942a9b4fe6c61143fa
+c34d42143
+server_keyshare: 03eefd21dd74c665064ebcbf63ac5ebce9a45097d47dfc08d845
+52a105419b44aa
+server_private_keyshare: 751e5012ba0c535e008b2389bea166a5d59a49353f12
+20f5e345f0546463ccdf
+masking_key: 5b8caab90accd4f239e85ec978f6a6346edc0019c5671e81034ead61
+5ce096fc
+KE1: 028bc054fff79a9e0f0315e31cc035384aedd9d50ea8ee36630d39876ca4e592
+93d797d24fe5ad528130825016bfdc2eeaeef19914c366a615bcdbefd1f04b7208023
+843b78440c0e79d828ac4c2658d1cedf7e9795f2242527a4c1a254501d2ca1a
+~~~
+
+#### Output Values
+
+~~~
+KE2: 0353685a152940706b1ed877b2da12f3c9f417d38fab56f3228c60f72429f602
+d9d3974af728aeafc9e5af4b4cab57d7e7dfbe0ef6b08df28fae5269229cac23329a9
+93151e43ac41ce18939444cea5d012b8a8316ed439d6fccf06b064f7564722f555750
+61897fbb6051f37e3247d08804437259fb9b022cc12715caca4ac12ef7a8b2f101269
+37619ce4725e6b821de5f44ddb71a8582883aa9b5aaefa9e3d0231a60a3e31bb007db
+74b7114aab2f196ef6bec942a9b4fe6c61143fac34d4214303eefd21dd74c665064eb
+cbf63ac5ebce9a45097d47dfc08d84552a105419b44aadb37380855acdd939b7eb300
+708d78b17ff0f99cee4ca4777c7628fb8ff591d1
+~~~
+"#];
+
 macro_rules! parse {
     ( $v:ident, $s:expr ) => {
         parse_default!($v, $s, vec![])
@@ -405,7 +702,9 @@ macro_rules! parse_default {
 macro_rules! rfc_to_params {
     ( $v:ident ) => {
         $v.iter()
-            .map(|x| populate_test_vectors(&serde_json::from_str(rfc_to_json(x).as_str()).unwrap()))
+            .map(|x| {
+                populate_test_vectors::<CS>(&serde_json::from_str(rfc_to_json(x).as_str()).unwrap())
+            })
             .collect::<Vec<TestVectorParameters>>()
     };
 }
@@ -446,12 +745,12 @@ fn decode(values: &Value, key: &str) -> Option<Vec<u8>> {
         .and_then(|s| hex::decode(&s.to_string()).ok())
 }
 
-fn populate_test_vectors(values: &Value) -> TestVectorParameters {
+fn populate_test_vectors<CS: CipherSuite>(values: &Value) -> TestVectorParameters {
     TestVectorParameters {
         dummy_private_key: parse_default!(
             values,
             "client_private_key",
-            vec![0u8; <PrivateKey<RistrettoPoint> as SizedBytes>::Len::to_usize()]
+            vec![0u8; <PrivateKey<CS::Group> as SizedBytes>::Len::to_usize()]
         ),
         dummy_masking_key: parse_default!(values, "masking_key", vec![0u8; 64]),
         context: parse!(values, "Context"),
@@ -497,8 +796,10 @@ fn populate_test_vectors(values: &Value) -> TestVectorParameters {
     }
 }
 
-fn get_password_file_bytes(parameters: &TestVectorParameters) -> Result<Vec<u8>, ProtocolError> {
-    let password_file = ServerRegistration::<Ristretto255Sha512NoSlowHash>::finish(
+fn get_password_file_bytes<CS: CipherSuite>(
+    parameters: &TestVectorParameters,
+) -> Result<Vec<u8>, ProtocolError> {
+    let password_file = ServerRegistration::<CS>::finish(
         RegistrationUpload::deserialize(&parameters.registration_upload[..]).unwrap(),
     );
 
@@ -518,14 +819,36 @@ fn parse_identifiers(
 }
 
 #[test]
-fn test_registration_request() -> Result<(), ProtocolError> {
-    for parameters in rfc_to_params!(TEST_VECTORS) {
+fn tests() -> Result<(), ProtocolError> {
+    test_registration_request::<Ristretto255Sha512NoSlowHash>(RISTRETTO_TEST_VECTORS)?;
+    test_registration_response::<Ristretto255Sha512NoSlowHash>(RISTRETTO_TEST_VECTORS)?;
+    test_registration_upload::<Ristretto255Sha512NoSlowHash>(RISTRETTO_TEST_VECTORS)?;
+    test_ke1::<Ristretto255Sha512NoSlowHash>(RISTRETTO_TEST_VECTORS)?;
+    test_ke2::<Ristretto255Sha512NoSlowHash>(RISTRETTO_TEST_VECTORS)?;
+    test_ke3::<Ristretto255Sha512NoSlowHash>(RISTRETTO_TEST_VECTORS)?;
+    test_server_login_finish::<Ristretto255Sha512NoSlowHash>(RISTRETTO_TEST_VECTORS)?;
+    test_fake_vectors::<Ristretto255Sha512NoSlowHash>(RISTRETTO_FAKE_TEST_VECTORS)?;
+
+    #[cfg(feature = "p256")]
+    {
+        test_registration_request::<P256Sha256NoSlowHash>(P256_TEST_VECTORS)?;
+        test_registration_response::<P256Sha256NoSlowHash>(P256_TEST_VECTORS)?;
+        test_registration_upload::<P256Sha256NoSlowHash>(P256_TEST_VECTORS)?;
+        test_ke1::<P256Sha256NoSlowHash>(P256_TEST_VECTORS)?;
+        test_ke2::<P256Sha256NoSlowHash>(P256_TEST_VECTORS)?;
+        test_ke3::<P256Sha256NoSlowHash>(P256_TEST_VECTORS)?;
+        test_server_login_finish::<P256Sha256NoSlowHash>(P256_TEST_VECTORS)?;
+        test_fake_vectors::<P256Sha256NoSlowHash>(P256_FAKE_TEST_VECTORS)?;
+    }
+
+    Ok(())
+}
+
+fn test_registration_request<CS: CipherSuite>(tvs: &[&str]) -> Result<(), ProtocolError> {
+    for parameters in rfc_to_params!(tvs) {
         let mut rng = CycleRng::new(parameters.blind_registration.to_vec());
         let client_registration_start_result =
-            ClientRegistration::<Ristretto255Sha512NoSlowHash>::start(
-                &mut rng,
-                &parameters.password,
-            )?;
+            ClientRegistration::<CS>::start(&mut rng, &parameters.password)?;
         assert_eq!(
             hex::encode(&parameters.registration_request),
             hex::encode(client_registration_start_result.message.serialize())
@@ -534,10 +857,9 @@ fn test_registration_request() -> Result<(), ProtocolError> {
     Ok(())
 }
 
-#[test]
-fn test_registration_response() -> Result<(), ProtocolError> {
-    for parameters in rfc_to_params!(TEST_VECTORS) {
-        let server_setup = ServerSetup::<Ristretto255Sha512NoSlowHash>::deserialize(
+fn test_registration_response<CS: CipherSuite>(tvs: &[&str]) -> Result<(), ProtocolError> {
+    for parameters in rfc_to_params!(tvs) {
+        let server_setup = ServerSetup::<CS>::deserialize(
             &[
                 &parameters.oprf_seed[..],
                 &parameters.server_private_key[..],
@@ -545,12 +867,11 @@ fn test_registration_response() -> Result<(), ProtocolError> {
             ]
             .concat(),
         )?;
-        let server_registration_start_result =
-            ServerRegistration::<Ristretto255Sha512NoSlowHash>::start(
-                &server_setup,
-                RegistrationRequest::deserialize(&parameters.registration_request[..]).unwrap(),
-                &parameters.credential_identifier,
-            )?;
+        let server_registration_start_result = ServerRegistration::<CS>::start(
+            &server_setup,
+            RegistrationRequest::deserialize(&parameters.registration_request[..]).unwrap(),
+            &parameters.credential_identifier,
+        )?;
         assert_eq!(
             hex::encode(parameters.oprf_key),
             hex::encode(server_registration_start_result.oprf_key)
@@ -563,15 +884,11 @@ fn test_registration_response() -> Result<(), ProtocolError> {
     Ok(())
 }
 
-#[test]
-fn test_registration_upload() -> Result<(), ProtocolError> {
-    for parameters in rfc_to_params!(TEST_VECTORS) {
+fn test_registration_upload<CS: CipherSuite>(tvs: &[&str]) -> Result<(), ProtocolError> {
+    for parameters in rfc_to_params!(tvs) {
         let mut rng = CycleRng::new(parameters.blind_registration.to_vec());
         let client_registration_start_result =
-            ClientRegistration::<Ristretto255Sha512NoSlowHash>::start(
-                &mut rng,
-                &parameters.password,
-            )?;
+            ClientRegistration::<CS>::start(&mut rng, &parameters.password)?;
 
         let mut finish_registration_rng = CycleRng::new(parameters.envelope_nonce);
         let result = client_registration_start_result.state.finish(
@@ -604,9 +921,8 @@ fn test_registration_upload() -> Result<(), ProtocolError> {
     Ok(())
 }
 
-#[test]
-fn test_ke1() -> Result<(), ProtocolError> {
-    for parameters in rfc_to_params!(TEST_VECTORS) {
+fn test_ke1<CS: CipherSuite>(tvs: &[&str]) -> Result<(), ProtocolError> {
+    for parameters in rfc_to_params!(tvs) {
         let client_login_start = [
             parameters.blind_login,
             parameters.client_private_keyshare,
@@ -614,10 +930,8 @@ fn test_ke1() -> Result<(), ProtocolError> {
         ]
         .concat();
         let mut client_login_start_rng = CycleRng::new(client_login_start);
-        let client_login_start_result = ClientLogin::<Ristretto255Sha512NoSlowHash>::start(
-            &mut client_login_start_rng,
-            &parameters.password,
-        )?;
+        let client_login_start_result =
+            ClientLogin::<CS>::start(&mut client_login_start_rng, &parameters.password)?;
         assert_eq!(
             hex::encode(&parameters.KE1),
             hex::encode(client_login_start_result.message.serialize())
@@ -626,10 +940,9 @@ fn test_ke1() -> Result<(), ProtocolError> {
     Ok(())
 }
 
-#[test]
-fn test_ke2() -> Result<(), ProtocolError> {
-    for parameters in rfc_to_params!(TEST_VECTORS) {
-        let server_setup = ServerSetup::<Ristretto255Sha512NoSlowHash>::deserialize(
+fn test_ke2<CS: CipherSuite>(tvs: &[&str]) -> Result<(), ProtocolError> {
+    for parameters in rfc_to_params!(tvs) {
+        let server_setup = ServerSetup::<CS>::deserialize(
             &[
                 &parameters.oprf_seed[..],
                 &parameters.server_private_key[..],
@@ -638,8 +951,8 @@ fn test_ke2() -> Result<(), ProtocolError> {
             .concat(),
         )?;
 
-        let record = ServerRegistration::<Ristretto255Sha512NoSlowHash>::deserialize(
-            &get_password_file_bytes(&parameters)?[..],
+        let record = ServerRegistration::<CS>::deserialize(
+            &get_password_file_bytes::<CS>(&parameters)?[..],
         )?;
 
         let mut server_private_keyshare_and_nonce_rng = CycleRng::new(
@@ -650,12 +963,11 @@ fn test_ke2() -> Result<(), ProtocolError> {
             ]
             .concat(),
         );
-        let server_login_start_result = ServerLogin::<Ristretto255Sha512NoSlowHash>::start(
+        let server_login_start_result = ServerLogin::<CS>::start(
             &mut server_private_keyshare_and_nonce_rng,
             &server_setup,
             Some(record),
-            CredentialRequest::<Ristretto255Sha512NoSlowHash>::deserialize(&parameters.KE1[..])
-                .unwrap(),
+            CredentialRequest::<CS>::deserialize(&parameters.KE1[..]).unwrap(),
             &parameters.credential_identifier,
             match parse_identifiers(parameters.client_identity, parameters.server_identity) {
                 None => ServerLoginStartParameters::WithContext(parameters.context.to_vec()),
@@ -685,9 +997,8 @@ fn test_ke2() -> Result<(), ProtocolError> {
     Ok(())
 }
 
-#[test]
-fn test_ke3() -> Result<(), ProtocolError> {
-    for parameters in rfc_to_params!(TEST_VECTORS) {
+fn test_ke3<CS: CipherSuite>(tvs: &[&str]) -> Result<(), ProtocolError> {
+    for parameters in rfc_to_params!(tvs) {
         let client_login_start = [
             parameters.blind_login,
             parameters.client_private_keyshare,
@@ -695,13 +1006,11 @@ fn test_ke3() -> Result<(), ProtocolError> {
         ]
         .concat();
         let mut client_login_start_rng = CycleRng::new(client_login_start);
-        let client_login_start_result = ClientLogin::<Ristretto255Sha512NoSlowHash>::start(
-            &mut client_login_start_rng,
-            &parameters.password,
-        )?;
+        let client_login_start_result =
+            ClientLogin::<CS>::start(&mut client_login_start_rng, &parameters.password)?;
 
         let client_login_finish_result = client_login_start_result.state.finish(
-            CredentialResponse::<Ristretto255Sha512NoSlowHash>::deserialize(&parameters.KE2[..])?,
+            CredentialResponse::<CS>::deserialize(&parameters.KE2[..])?,
             match parse_identifiers(parameters.client_identity, parameters.server_identity) {
                 None => ClientLoginFinishParameters::WithContext(parameters.context),
                 Some(ids) => {
@@ -734,10 +1043,9 @@ fn test_ke3() -> Result<(), ProtocolError> {
     Ok(())
 }
 
-#[test]
-fn test_server_login_finish() -> Result<(), ProtocolError> {
-    for parameters in rfc_to_params!(TEST_VECTORS) {
-        let server_setup = ServerSetup::<Ristretto255Sha512NoSlowHash>::deserialize(
+fn test_server_login_finish<CS: CipherSuite>(tvs: &[&str]) -> Result<(), ProtocolError> {
+    for parameters in rfc_to_params!(tvs) {
+        let server_setup = ServerSetup::<CS>::deserialize(
             &[
                 &parameters.oprf_seed[..],
                 &parameters.server_private_key[..],
@@ -746,8 +1054,8 @@ fn test_server_login_finish() -> Result<(), ProtocolError> {
             .concat(),
         )?;
 
-        let record = ServerRegistration::<Ristretto255Sha512NoSlowHash>::deserialize(
-            &get_password_file_bytes(&parameters)?[..],
+        let record = ServerRegistration::<CS>::deserialize(
+            &get_password_file_bytes::<CS>(&parameters)?[..],
         )?;
 
         let mut server_private_keyshare_and_nonce_rng = CycleRng::new(
@@ -758,12 +1066,11 @@ fn test_server_login_finish() -> Result<(), ProtocolError> {
             ]
             .concat(),
         );
-        let server_login_start_result = ServerLogin::<Ristretto255Sha512NoSlowHash>::start(
+        let server_login_start_result = ServerLogin::<CS>::start(
             &mut server_private_keyshare_and_nonce_rng,
             &server_setup,
             Some(record),
-            CredentialRequest::<Ristretto255Sha512NoSlowHash>::deserialize(&parameters.KE1[..])
-                .unwrap(),
+            CredentialRequest::<CS>::deserialize(&parameters.KE1[..]).unwrap(),
             &parameters.credential_identifier,
             match parse_identifiers(parameters.client_identity, parameters.server_identity) {
                 None => ServerLoginStartParameters::WithContext(parameters.context.to_vec()),
@@ -786,10 +1093,9 @@ fn test_server_login_finish() -> Result<(), ProtocolError> {
     Ok(())
 }
 
-#[test]
-fn test_fake_vectors() -> Result<(), ProtocolError> {
-    for parameters in rfc_to_params!(FAKE_TEST_VECTORS) {
-        let server_setup = ServerSetup::<Ristretto255Sha512NoSlowHash>::deserialize(
+fn test_fake_vectors<CS: CipherSuite>(tvs: &[&str]) -> Result<(), ProtocolError> {
+    for parameters in rfc_to_params!(tvs) {
+        let server_setup = ServerSetup::<CS>::deserialize(
             &[
                 &parameters.oprf_seed[..],
                 &parameters.server_private_key[..],
@@ -807,12 +1113,11 @@ fn test_fake_vectors() -> Result<(), ProtocolError> {
             ]
             .concat(),
         );
-        let server_login_start_result = ServerLogin::<Ristretto255Sha512NoSlowHash>::start(
+        let server_login_start_result = ServerLogin::<CS>::start(
             &mut server_private_keyshare_and_nonce_rng,
             &server_setup,
             None,
-            CredentialRequest::<Ristretto255Sha512NoSlowHash>::deserialize(&parameters.KE1[..])
-                .unwrap(),
+            CredentialRequest::<CS>::deserialize(&parameters.KE1[..]).unwrap(),
             &parameters.credential_identifier,
             match parse_identifiers(parameters.client_identity, parameters.server_identity) {
                 None => ServerLoginStartParameters::WithContext(parameters.context.to_vec()),

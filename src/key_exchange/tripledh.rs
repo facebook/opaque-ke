@@ -30,7 +30,6 @@ use rand::{CryptoRng, RngCore};
 use std::convert::TryFrom;
 use zeroize::Zeroize;
 
-const KEY_LEN: usize = 32;
 pub(crate) type NonceLen = U32;
 
 static STR_RFC: &[u8] = b"RFCXXXX";
@@ -213,7 +212,9 @@ impl<D: Hash, G: Group> KeyExchange<D, G> for TripleDH {
     }
 
     fn ke2_message_size() -> usize {
-        NonceLen::to_usize() + KEY_LEN + <<D as FixedOutput>::OutputSize as Unsigned>::to_usize()
+        NonceLen::to_usize()
+            + <G as Group>::ElemLen::to_usize()
+            + <<D as FixedOutput>::OutputSize as Unsigned>::to_usize()
     }
 }
 
@@ -257,13 +258,15 @@ pub struct Ke1Message<G: Group> {
 
 impl<G: Group> FromBytes for Ke1State<G> {
     fn from_bytes<CS: CipherSuite>(bytes: &[u8]) -> Result<Self, PakeError> {
+        let key_len = <G as Group>::ElemLen::to_usize();
+
         let nonce_len = NonceLen::to_usize();
-        let checked_bytes = check_slice_size_atleast(bytes, KEY_LEN + nonce_len, "ke1_state")?;
+        let checked_bytes = check_slice_size_atleast(bytes, key_len + nonce_len, "ke1_state")?;
 
         Ok(Self {
-            client_e_sk: PrivateKey::from_bytes(&checked_bytes[..KEY_LEN])?,
+            client_e_sk: PrivateKey::from_bytes(&checked_bytes[..key_len])?,
             client_nonce: GenericArray::clone_from_slice(
-                &checked_bytes[KEY_LEN..KEY_LEN + nonce_len],
+                &checked_bytes[key_len..key_len + nonce_len],
             ),
         })
     }
@@ -296,8 +299,11 @@ impl<G: Group> ToBytes for Ke1Message<G> {
 impl<G: Group> FromBytes for Ke1Message<G> {
     fn from_bytes<CS: CipherSuite>(ke1_message_bytes: &[u8]) -> Result<Self, PakeError> {
         let nonce_len = NonceLen::to_usize();
-        let checked_nonce =
-            check_slice_size(ke1_message_bytes, nonce_len + KEY_LEN, "ke1_message nonce")?;
+        let checked_nonce = check_slice_size(
+            ke1_message_bytes,
+            nonce_len + <G as Group>::ElemLen::to_usize(),
+            "ke1_message nonce",
+        )?;
 
         Ok(Self {
             client_nonce: GenericArray::clone_from_slice(&checked_nonce[..nonce_len]),
@@ -389,23 +395,24 @@ impl<G: Group, HashLen: ArrayLength<u8>> Ke2Message<G, HashLen> {
 
 impl<G: Group, HashLen: ArrayLength<u8>> FromBytes for Ke2Message<G, HashLen> {
     fn from_bytes<CS: CipherSuite>(input: &[u8]) -> Result<Self, PakeError> {
+        let key_len = <G as Group>::ElemLen::to_usize();
         let nonce_len = NonceLen::to_usize();
         let checked_nonce = check_slice_size_atleast(input, nonce_len, "ke2_message nonce")?;
 
         let unchecked_server_e_pk = check_slice_size_atleast(
             &checked_nonce[nonce_len..],
-            KEY_LEN,
+            key_len,
             "ke2_message server_e_pk",
         )?;
         let checked_mac = check_slice_size(
-            &unchecked_server_e_pk[KEY_LEN..],
+            &unchecked_server_e_pk[key_len..],
             HashLen::to_usize(),
             "ke1_message mac",
         )?;
 
         // Check the public key bytes
         let server_e_pk = KeyPair::<CS::Group>::check_public_key(PublicKey::from_bytes(
-            &unchecked_server_e_pk[..KEY_LEN],
+            &unchecked_server_e_pk[..key_len],
         )?)?;
 
         Ok(Self {

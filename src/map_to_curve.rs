@@ -56,6 +56,36 @@ impl GroupWithMapToCurve for RistrettoPoint {
     }
 }
 
+#[cfg(feature = "p256")]
+impl GroupWithMapToCurve for p256_::ProjectivePoint {
+    const SUITE_ID: usize = 0x0003;
+
+    fn map_to_curve<H: Hash>(msg: &[u8], dst: &[u8]) -> Result<Self, ProtocolError> {
+        // https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-hash-to-curve-11#section-3
+        // `hash_to_curve` calls `hash_to_field` with a `count` of `2`
+        // https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-hash-to-curve-11#section-5.3
+        // `hash_to_field` calls `expand_message` with a `len_in_bytes` of `count * L`
+        let uniform_bytes = expand_message_xmd::<H>(msg, dst, 2 * crate::group::p256::L)?;
+
+        <Self as Group>::hash_to_curve(&GenericArray::clone_from_slice(&uniform_bytes[..]))
+            .map_err(ProtocolError::from)
+    }
+
+    fn hash_to_scalar<H: Hash>(input: &[u8], dst: &[u8]) -> Result<Self::Scalar, ProtocolError> {
+        use num_bigint::{BigInt, Sign};
+        use num_integer::Integer;
+
+        let uniform_bytes = expand_message_xmd::<H>(input, dst, crate::group::p256::L)?;
+        #[allow(clippy::borrow_interior_mutable_const)]
+        let bytes =
+            BigInt::from_bytes_be(Sign::Plus, &uniform_bytes).mod_floor(&crate::group::p256::R);
+
+        Ok(p256_::Scalar::from_bytes_reduced(GenericArray::from_slice(
+            &bytes.to_bytes_be().1,
+        )))
+    }
+}
+
 // Computes ceil(x / y)
 fn div_ceil(x: usize, y: usize) -> usize {
     let additive = (x % y != 0) as usize;
