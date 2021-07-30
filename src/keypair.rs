@@ -525,6 +525,7 @@ mod tests {
         let ServerLoginStartResult {
             message,
             state: server,
+            ..
         } = ServerLogin::start(
             &mut OsRng,
             &server_setup,

@@ -65,6 +65,7 @@ pub struct TestVectorParameters {
     pub session_key: Vec<u8>,
     pub auth_key: Vec<u8>,
     pub randomized_pwd: Vec<u8>,
+    pub handshake_secret: Vec<u8>,
 }
 
 // Pulled from "OPAQUE-3DH Test Vector 1" and "OPAQUE-3DH Test Vector 6"
@@ -486,6 +487,7 @@ fn populate_test_vectors(values: &Value) -> TestVectorParameters {
         session_key: parse!(values, "session_key"),
         auth_key: parse!(values, "auth_key"),
         randomized_pwd: parse!(values, "randomized_pwd"),
+        handshake_secret: parse!(values, "handshake_secret"),
     }
 }
 
@@ -654,6 +656,10 @@ fn test_ke2() -> Result<(), ProtocolError> {
             },
         )?;
         assert_eq!(
+            hex::encode(&parameters.handshake_secret),
+            hex::encode(server_login_start_result.handshake_secret)
+        );
+        assert_eq!(
             hex::encode(&parameters.KE2),
             hex::encode(server_login_start_result.message.serialize())
         );
@@ -689,6 +695,10 @@ fn test_ke3() -> Result<(), ProtocolError> {
         assert_eq!(
             hex::encode(&parameters.session_key),
             hex::encode(&client_login_finish_result.session_key)
+        );
+        assert_eq!(
+            hex::encode(&parameters.handshake_secret),
+            hex::encode(&client_login_finish_result.handshake_secret)
         );
         assert_eq!(
             hex::encode(&parameters.KE3),
