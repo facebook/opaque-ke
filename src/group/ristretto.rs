@@ -15,12 +15,13 @@ use curve25519_dalek::{
 use generic_array::{typenum::U32, GenericArray};
 use rand::{CryptoRng, RngCore};
 use std::convert::TryInto;
+use subtle::ConstantTimeEq;
 
 /// The implementation of such a subgroup for Ristretto
 impl Group for RistrettoPoint {
     const SUITE_ID: usize = 0x0001;
 
-    // Implements the hash_to_ristretto255() function from
+    // Implements the `hash_to_ristretto255()` function from
     // https://www.ietf.org/archive/id/draft-irtf-cfrg-hash-to-curve-10.txt
     fn map_to_curve<H: Hash>(msg: &[u8], dst: &[u8]) -> Result<Self, ProtocolError> {
         let uniform_bytes = super::expand::expand_message_xmd::<H>(msg, dst, 64)?;
@@ -33,13 +34,17 @@ impl Group for RistrettoPoint {
         ))
     }
 
+    // Implements the `HashToScalar()` function from
+    // https://www.ietf.org/archive/id/draft-irtf-cfrg-voprf-07.html#section-4.1
     fn hash_to_scalar<H: Hash>(input: &[u8], dst: &[u8]) -> Result<Self::Scalar, ProtocolError> {
-        const LEN_IN_BYTES: usize = 64;
-        let uniform_bytes = super::expand::expand_message_xmd::<H>(input, dst, LEN_IN_BYTES)?;
-        let mut bits = [0u8; LEN_IN_BYTES];
-        bits.copy_from_slice(&uniform_bytes[..]);
+        let uniform_bytes = super::expand::expand_message_xmd::<H>(input, dst, 64)?;
 
-        Ok(Self::Scalar::from_bytes_mod_order_wide(&bits))
+        Ok(Scalar::from_bytes_mod_order_wide(
+            uniform_bytes
+                .as_slice()
+                .try_into()
+                .map_err(|_| InternalPakeError::HashToCurveError)?,
+        ))
     }
 
     type Scalar = Scalar;
@@ -47,9 +52,7 @@ impl Group for RistrettoPoint {
     fn from_scalar_slice(
         scalar_bits: &GenericArray<u8, Self::ScalarLen>,
     ) -> Result<Self::Scalar, InternalPakeError> {
-        let mut bits = [0u8; 32];
-        bits.copy_from_slice(scalar_bits);
-        Ok(Scalar::from_bytes_mod_order(bits))
+        Ok(Scalar::from_bytes_mod_order(*scalar_bits.as_ref()))
     }
     fn random_nonzero_scalar<R: RngCore + CryptoRng>(rng: &mut R) -> Self::Scalar {
         loop {
@@ -93,8 +96,7 @@ impl Group for RistrettoPoint {
     }
     // serialization of a group element
     fn to_arr(&self) -> GenericArray<u8, Self::ElemLen> {
-        let c = self.compress();
-        *GenericArray::from_slice(c.as_bytes())
+        self.compress().to_bytes().into()
     }
 
     fn base_point() -> Self {
@@ -102,8 +104,7 @@ impl Group for RistrettoPoint {
     }
 
     fn mult_by_slice(&self, scalar: &GenericArray<u8, Self::ScalarLen>) -> Self {
-        let arr: [u8; 32] = scalar.as_slice().try_into().expect("Wrong length");
-        self * Scalar::from_bits(arr)
+        self * Scalar::from_bits(*scalar.as_ref())
     }
 
     /// Returns if the group element is equal to the identity (1)
@@ -112,6 +113,6 @@ impl Group for RistrettoPoint {
     }
 
     fn ct_equal(&self, other: &Self) -> bool {
-        constant_time_eq::constant_time_eq(&self.to_arr(), &other.to_arr())
+        ConstantTimeEq::ct_eq(self, other).into()
     }
 }
