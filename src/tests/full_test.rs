@@ -29,6 +29,7 @@ use zeroize::Zeroize;
 
 struct RistrettoSha5123dhNoSlowHash;
 impl CipherSuite for RistrettoSha5123dhNoSlowHash {
+    type Ake = RistrettoPoint;
     type Group = RistrettoPoint;
     type KeyExchange = TripleDH;
     type Hash = sha2::Sha512;
@@ -280,11 +281,11 @@ fn generate_parameters<CS: CipherSuite>() -> TestVectorParameters {
     let mut rng = OsRng;
 
     // Inputs
-    let server_s_kp = KeyPair::<CS::Group>::generate_random(&mut rng);
-    let server_e_kp = KeyPair::<CS::Group>::generate_random(&mut rng);
-    let client_s_kp = KeyPair::<CS::Group>::generate_random(&mut rng);
-    let client_e_kp = KeyPair::<CS::Group>::generate_random(&mut rng);
-    let fake_kp = KeyPair::<CS::Group>::generate_random(&mut rng);
+    let server_s_kp = KeyPair::<CS::Ake>::generate_random(&mut rng);
+    let server_e_kp = KeyPair::<CS::Ake>::generate_random(&mut rng);
+    let client_s_kp = KeyPair::<CS::Ake>::generate_random(&mut rng);
+    let client_e_kp = KeyPair::<CS::Ake>::generate_random(&mut rng);
+    let fake_kp = KeyPair::<CS::Ake>::generate_random(&mut rng);
     let credential_identifier = b"credIdentifier";
     let id_u = b"idU";
     let id_s = b"idS";

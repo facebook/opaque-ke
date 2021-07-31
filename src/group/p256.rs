@@ -142,14 +142,6 @@ impl Group for ProjectivePoint {
         *GenericArray::from_slice(&bytes)
     }
 
-    fn base_point() -> Self {
-        Self::generator()
-    }
-
-    fn mult_by_slice(&self, scalar: &GenericArray<u8, Self::ScalarLen>) -> Self {
-        self * &Self::Scalar::from_bytes_reduced(scalar)
-    }
-
     fn is_identity(&self) -> bool {
         self == &Self::identity()
     }

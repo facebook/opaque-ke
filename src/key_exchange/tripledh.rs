@@ -5,12 +5,12 @@
 
 //! An implementation of the Triple Diffie-Hellman key exchange protocol
 use crate::{
+    ake::Ake,
     ciphersuite::CipherSuite,
     errors::{
         utils::{check_slice_size, check_slice_size_atleast},
         InternalPakeError, PakeError, ProtocolError,
     },
-    group::Group,
     hash::Hash,
     key_exchange::traits::{
         FromBytes, GenerateKe2Result, GenerateKe3Result, KeyExchange, ToBytes, ToBytesWithPointers,
@@ -43,17 +43,17 @@ static STR_OPAQUE: &[u8] = b"OPAQUE-";
 /// The Triple Diffie-Hellman key exchange implementation
 pub struct TripleDH;
 
-impl<D: Hash, G: Group> KeyExchange<D, G> for TripleDH {
-    type KE1State = Ke1State<G>;
+impl<D: Hash, A: Ake> KeyExchange<D, A> for TripleDH {
+    type KE1State = Ke1State<A>;
     type KE2State = Ke2State<<D as FixedOutput>::OutputSize>;
-    type KE1Message = Ke1Message<G>;
-    type KE2Message = Ke2Message<G, <D as FixedOutput>::OutputSize>;
+    type KE1Message = Ke1Message<A>;
+    type KE2Message = Ke2Message<A, <D as FixedOutput>::OutputSize>;
     type KE3Message = Ke3Message<<D as FixedOutput>::OutputSize>;
 
     fn generate_ke1<R: RngCore + CryptoRng>(
         rng: &mut R,
     ) -> Result<(Self::KE1State, Self::KE1Message), ProtocolError> {
-        let client_e_kp = KeyPair::<G>::generate_random(rng);
+        let client_e_kp = KeyPair::<A>::generate_random(rng);
         let client_nonce = generate_nonce::<R>(rng);
 
         let ke1_message = Ke1Message {
@@ -71,18 +71,18 @@ impl<D: Hash, G: Group> KeyExchange<D, G> for TripleDH {
     }
 
     #[allow(clippy::type_complexity)]
-    fn generate_ke2<R: RngCore + CryptoRng, S: SecretKey<G>>(
+    fn generate_ke2<R: RngCore + CryptoRng, S: SecretKey<A>>(
         rng: &mut R,
         serialized_credential_request: Vec<u8>,
         l2_bytes: Vec<u8>,
         ke1_message: Self::KE1Message,
-        client_s_pk: PublicKey<G>,
+        client_s_pk: PublicKey<A>,
         server_s_sk: S,
         id_u: Vec<u8>,
         id_s: Vec<u8>,
         context: Vec<u8>,
-    ) -> Result<GenerateKe2Result<Self, D, G>, ProtocolError<S::Error>> {
-        let server_e_kp = KeyPair::<G>::generate_random(rng);
+    ) -> Result<GenerateKe2Result<Self, D, A>, ProtocolError<S::Error>> {
+        let server_e_kp = KeyPair::<A>::generate_random(rng);
         let server_nonce = generate_nonce::<R>(rng);
 
         let mut transcript_hasher = D::new()
@@ -95,7 +95,7 @@ impl<D: Hash, G: Group> KeyExchange<D, G> for TripleDH {
             .chain(&server_nonce[..])
             .chain(&server_e_kp.public().to_arr());
 
-        let result = derive_3dh_keys::<D, G, S>(
+        let result = derive_3dh_keys::<D, A, S>(
             TripleDHComponents {
                 pk1: ke1_message.client_e_pk.clone(),
                 sk1: server_e_kp.private().clone(),
@@ -138,12 +138,12 @@ impl<D: Hash, G: Group> KeyExchange<D, G> for TripleDH {
         ke2_message: Self::KE2Message,
         ke1_state: &Self::KE1State,
         serialized_credential_request: &[u8],
-        server_s_pk: PublicKey<G>,
-        client_s_sk: PrivateKey<G>,
+        server_s_pk: PublicKey<A>,
+        client_s_sk: PrivateKey<A>,
         id_u: Vec<u8>,
         id_s: Vec<u8>,
         context: Vec<u8>,
-    ) -> Result<GenerateKe3Result<Self, D, G>, ProtocolError> {
+    ) -> Result<GenerateKe3Result<Self, D, A>, ProtocolError> {
         let mut transcript_hasher = D::new()
             .chain(STR_RFC)
             .chain(&serialize(&context, 2)?)
@@ -153,7 +153,7 @@ impl<D: Hash, G: Group> KeyExchange<D, G> for TripleDH {
             .chain(&l2_component[..])
             .chain(&ke2_message.to_bytes_without_info_or_mac());
 
-        let result = derive_3dh_keys::<D, G, PrivateKey<G>>(
+        let result = derive_3dh_keys::<D, A, PrivateKey<A>>(
             TripleDHComponents {
                 pk1: ke2_message.server_e_pk.clone(),
                 sk1: ke1_state.client_e_sk.clone(),
@@ -213,52 +213,54 @@ impl<D: Hash, G: Group> KeyExchange<D, G> for TripleDH {
 
     fn ke2_message_size() -> usize {
         NonceLen::to_usize()
-            + <G as Group>::ElemLen::to_usize()
+            + <A as Ake>::PkLen::to_usize()
             + <<D as FixedOutput>::OutputSize as Unsigned>::to_usize()
     }
 }
 
 /// The client state produced after the first key exchange message
 #[cfg_attr(feature = "serialize", derive(serde::Deserialize, serde::Serialize))]
-pub struct Ke1State<G: Group> {
-    client_e_sk: PrivateKey<G>,
+pub struct Ke1State<A: Ake> {
+    client_e_sk: PrivateKey<A>,
     client_nonce: GenericArray<u8, NonceLen>,
 }
 
 impl_clone_for!(
-    struct Ke1State<G: Group>,
+    struct Ke1State<A: Ake>,
     [client_e_sk, client_nonce],
 );
 impl_debug_eq_hash_for!(
-    struct Ke1State<G: Group>,
+    struct Ke1State<A: Ake>,
     [client_e_sk, client_nonce],
 );
 
 // This can't be derived because of the use of a generic parameter
-impl<G: Group> Zeroize for Ke1State<G> {
+impl<A: Ake> Zeroize for Ke1State<A> {
     fn zeroize(&mut self) {
         self.client_e_sk.zeroize();
         self.client_nonce.zeroize();
     }
 }
 
-impl<G: Group> Drop for Ke1State<G> {
+impl<A: Ake> Drop for Ke1State<A> {
     fn drop(&mut self) {
         self.zeroize();
     }
 }
 
 /// The first key exchange message
-#[derive(PartialEq, Eq, Debug, Hash, Clone)]
 #[cfg_attr(feature = "serialize", derive(serde::Deserialize, serde::Serialize))]
-pub struct Ke1Message<G: Group> {
+pub struct Ke1Message<A: Ake> {
     pub(crate) client_nonce: GenericArray<u8, NonceLen>,
-    pub(crate) client_e_pk: PublicKey<G>,
+    pub(crate) client_e_pk: PublicKey<A>,
 }
 
-impl<G: Group> FromBytes for Ke1State<G> {
+impl_debug_eq_hash_for!(struct Ke1Message<A: Ake>, [client_nonce, client_e_pk]);
+impl_clone_for!(struct Ke1Message<A: Ake>, [client_nonce, client_e_pk]);
+
+impl<A: Ake> FromBytes for Ke1State<A> {
     fn from_bytes<CS: CipherSuite>(bytes: &[u8]) -> Result<Self, PakeError> {
-        let key_len = <G as Group>::ElemLen::to_usize();
+        let key_len = <A as Ake>::PkLen::to_usize();
 
         let nonce_len = NonceLen::to_usize();
         let checked_bytes = check_slice_size_atleast(bytes, key_len + nonce_len, "ke1_state")?;
@@ -272,7 +274,7 @@ impl<G: Group> FromBytes for Ke1State<G> {
     }
 }
 
-impl<G: Group> ToBytesWithPointers for Ke1State<G> {
+impl<A: Ake> ToBytesWithPointers for Ke1State<A> {
     fn to_bytes(&self) -> Vec<u8> {
         let output: Vec<u8> = [&self.client_e_sk.to_arr(), &self.client_nonce[..]].concat();
         output
@@ -283,25 +285,25 @@ impl<G: Group> ToBytesWithPointers for Ke1State<G> {
         vec![
             (
                 self.client_e_sk.as_ptr(),
-                <PrivateKey<G> as SizedBytes>::Len::to_usize(),
+                <PrivateKey<A> as SizedBytes>::Len::to_usize(),
             ),
             (self.client_nonce.as_ptr(), NonceLen::to_usize()),
         ]
     }
 }
 
-impl<G: Group> ToBytes for Ke1Message<G> {
+impl<A: Ake> ToBytes for Ke1Message<A> {
     fn to_bytes(&self) -> Vec<u8> {
         [&self.client_nonce[..], &self.client_e_pk.to_arr()].concat()
     }
 }
 
-impl<G: Group> FromBytes for Ke1Message<G> {
+impl<A: Ake> FromBytes for Ke1Message<A> {
     fn from_bytes<CS: CipherSuite>(ke1_message_bytes: &[u8]) -> Result<Self, PakeError> {
         let nonce_len = NonceLen::to_usize();
         let checked_nonce = check_slice_size(
             ke1_message_bytes,
-            nonce_len + <G as Group>::ElemLen::to_usize(),
+            nonce_len + <A as Ake>::PkLen::to_usize(),
             "ke1_message nonce",
         )?;
 
@@ -357,13 +359,23 @@ impl<HashLen: ArrayLength<u8>> ToBytesWithPointers for Ke2State<HashLen> {
 }
 
 /// The second key exchange message
-#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+#[derive(Debug, Eq, Hash, PartialEq)]
 #[cfg_attr(feature = "serialize", derive(serde::Deserialize, serde::Serialize))]
 #[cfg_attr(feature = "serialize", serde(bound = ""))]
-pub struct Ke2Message<G: Group, HashLen: ArrayLength<u8>> {
+pub struct Ke2Message<A: Ake, HashLen: ArrayLength<u8>> {
     server_nonce: GenericArray<u8, NonceLen>,
-    server_e_pk: PublicKey<G>,
+    server_e_pk: PublicKey<A>,
     mac: GenericArray<u8, HashLen>,
+}
+
+impl<A: Ake, HashLen: ArrayLength<u8>> Clone for Ke2Message<A, HashLen> {
+    fn clone(&self) -> Self {
+        Self {
+            server_nonce: self.server_nonce,
+            server_e_pk: self.server_e_pk.clone(),
+            mac: self.mac.clone(),
+        }
+    }
 }
 
 impl<HashLen: ArrayLength<u8>> FromBytes for Ke2State<HashLen> {
@@ -381,21 +393,21 @@ impl<HashLen: ArrayLength<u8>> FromBytes for Ke2State<HashLen> {
     }
 }
 
-impl<G: Group, HashLen: ArrayLength<u8>> ToBytes for Ke2Message<G, HashLen> {
+impl<A: Ake, HashLen: ArrayLength<u8>> ToBytes for Ke2Message<A, HashLen> {
     fn to_bytes(&self) -> Vec<u8> {
         [&self.to_bytes_without_info_or_mac(), &self.mac[..]].concat()
     }
 }
 
-impl<G: Group, HashLen: ArrayLength<u8>> Ke2Message<G, HashLen> {
+impl<A: Ake, HashLen: ArrayLength<u8>> Ke2Message<A, HashLen> {
     fn to_bytes_without_info_or_mac(&self) -> Vec<u8> {
         [&self.server_nonce[..], &self.server_e_pk.to_arr()].concat()
     }
 }
 
-impl<G: Group, HashLen: ArrayLength<u8>> FromBytes for Ke2Message<G, HashLen> {
+impl<A: Ake, HashLen: ArrayLength<u8>> FromBytes for Ke2Message<A, HashLen> {
     fn from_bytes<CS: CipherSuite>(input: &[u8]) -> Result<Self, PakeError> {
-        let key_len = <G as Group>::ElemLen::to_usize();
+        let key_len = <A as Ake>::PkLen::to_usize();
         let nonce_len = NonceLen::to_usize();
         let checked_nonce = check_slice_size_atleast(input, nonce_len, "ke2_message nonce")?;
 
@@ -411,7 +423,7 @@ impl<G: Group, HashLen: ArrayLength<u8>> FromBytes for Ke2Message<G, HashLen> {
         )?;
 
         // Check the public key bytes
-        let server_e_pk = KeyPair::<CS::Group>::check_public_key(PublicKey::from_bytes(
+        let server_e_pk = KeyPair::<CS::Ake>::check_public_key(PublicKey::from_bytes(
             &unchecked_server_e_pk[..key_len],
         )?)?;
 
@@ -425,13 +437,13 @@ impl<G: Group, HashLen: ArrayLength<u8>> FromBytes for Ke2Message<G, HashLen> {
 
 #[allow(clippy::upper_case_acronyms)]
 // The triple of public and private components used in the 3DH computation
-struct TripleDHComponents<G: Group, S: SecretKey<G>> {
-    pk1: PublicKey<G>,
-    sk1: PrivateKey<G>,
-    pk2: PublicKey<G>,
+struct TripleDHComponents<A: Ake, S: SecretKey<A>> {
+    pk1: PublicKey<A>,
+    sk1: PrivateKey<A>,
+    pk2: PublicKey<A>,
     sk2: S,
-    pk3: PublicKey<G>,
-    sk3: PrivateKey<G>,
+    pk3: PublicKey<A>,
+    sk3: PrivateKey<A>,
 }
 
 // Consists of a session key, followed by two mac keys: (session_key, km2, km3)
@@ -478,8 +490,8 @@ impl<HashLen: ArrayLength<u8>> FromBytes for Ke3Message<HashLen> {
 
 // Internal function which takes the public and private components of the client and server keypairs, along
 // with some auxiliary metadata, to produce the session key and two MAC keys
-fn derive_3dh_keys<D: Hash, G: Group, S: SecretKey<G>>(
-    dh: TripleDHComponents<G, S>,
+fn derive_3dh_keys<D: Hash, A: Ake, S: SecretKey<A>>(
+    dh: TripleDHComponents<A, S>,
     hashed_derivation_transcript: &[u8],
 ) -> Result<TripleDHDerivationResult<D>, ProtocolError<S::Error>> {
     let ikm: Vec<u8> = [

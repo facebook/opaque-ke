@@ -7,7 +7,6 @@ use super::Group;
 use crate::errors::{InternalPakeError, ProtocolError};
 use crate::hash::Hash;
 use curve25519_dalek::{
-    constants::RISTRETTO_BASEPOINT_POINT,
     ristretto::{CompressedRistretto, RistrettoPoint},
     scalar::Scalar,
     traits::Identity,
@@ -97,14 +96,6 @@ impl Group for RistrettoPoint {
     // serialization of a group element
     fn to_arr(&self) -> GenericArray<u8, Self::ElemLen> {
         self.compress().to_bytes().into()
-    }
-
-    fn base_point() -> Self {
-        RISTRETTO_BASEPOINT_POINT
-    }
-
-    fn mult_by_slice(&self, scalar: &GenericArray<u8, Self::ScalarLen>) -> Self {
-        self * Scalar::from_bits(*scalar.as_ref())
     }
 
     /// Returns if the group element is equal to the identity (1)

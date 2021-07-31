@@ -4,9 +4,9 @@
 // LICENSE file in the root directory of this source tree.
 
 use crate::{
+    ake::Ake,
     ciphersuite::CipherSuite,
     errors::{PakeError, ProtocolError},
-    group::Group,
     hash::Hash,
     keypair::{PrivateKey, PublicKey, SecretKey},
 };
@@ -35,7 +35,7 @@ pub type GenerateKe3Result<K, D, G> = (
     generic_array::GenericArray<u8, <D as digest::Digest>::OutputSize>,
 );
 
-pub trait KeyExchange<D: Hash, G: Group> {
+pub trait KeyExchange<D: Hash, A: Ake> {
     type KE1State: FromBytes + ToBytesWithPointers + Zeroize + Clone;
     type KE2State: FromBytes + ToBytesWithPointers + Zeroize + Clone;
     type KE1Message: FromBytes + ToBytes + Clone;
@@ -47,17 +47,17 @@ pub trait KeyExchange<D: Hash, G: Group> {
     ) -> Result<(Self::KE1State, Self::KE1Message), ProtocolError>;
 
     #[allow(clippy::too_many_arguments, clippy::type_complexity)]
-    fn generate_ke2<R: RngCore + CryptoRng, S: SecretKey<G>>(
+    fn generate_ke2<R: RngCore + CryptoRng, S: SecretKey<A>>(
         rng: &mut R,
         l1_bytes: Vec<u8>,
         l2_bytes: Vec<u8>,
         ke1_message: Self::KE1Message,
-        client_s_pk: PublicKey<G>,
+        client_s_pk: PublicKey<A>,
         server_s_sk: S,
         id_u: Vec<u8>,
         id_s: Vec<u8>,
         context: Vec<u8>,
-    ) -> Result<GenerateKe2Result<Self, D, G>, ProtocolError<S::Error>>;
+    ) -> Result<GenerateKe2Result<Self, D, A>, ProtocolError<S::Error>>;
 
     #[allow(clippy::too_many_arguments, clippy::type_complexity)]
     fn generate_ke3(
@@ -65,12 +65,12 @@ pub trait KeyExchange<D: Hash, G: Group> {
         ke2_message: Self::KE2Message,
         ke1_state: &Self::KE1State,
         serialized_credential_request: &[u8],
-        server_s_pk: PublicKey<G>,
-        client_s_sk: PrivateKey<G>,
+        server_s_pk: PublicKey<A>,
+        client_s_sk: PrivateKey<A>,
         id_u: Vec<u8>,
         id_s: Vec<u8>,
         context: Vec<u8>,
-    ) -> Result<GenerateKe3Result<Self, D, G>, ProtocolError>;
+    ) -> Result<GenerateKe3Result<Self, D, A>, ProtocolError>;
 
     #[allow(clippy::type_complexity)]
     fn finish_ke(

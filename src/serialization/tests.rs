@@ -27,6 +27,7 @@ use sha2::Digest;
 
 struct Default;
 impl CipherSuite for Default {
+    type Ake = RistrettoPoint;
     type Group = RistrettoPoint;
     type KeyExchange = TripleDH;
     type Hash = sha2::Sha512;
@@ -54,11 +55,11 @@ fn random_ristretto_point() -> RistrettoPoint {
 fn client_registration_roundtrip() {
     let pw = b"hunter2";
     let mut rng = OsRng;
-    let sc = <RistrettoPoint as Group>::random_nonzero_scalar(&mut rng);
-    let elem = <RistrettoPoint as Group>::base_point() * sc;
+    let sc = <RistrettoPoint as crate::ake::Ake>::random_sk(&mut rng);
+    let elem = <RistrettoPoint as crate::ake::Ake>::public_key(&sc);
 
     // serialization order: scalar, password, group element
-    let bytes: Vec<u8> = [&elem.to_arr(), &sc.as_bytes()[..], &pw[..]].concat();
+    let bytes: Vec<u8> = [&elem.to_arr(), &sc, &pw[..]].concat();
     let reg = ClientRegistration::<Default>::deserialize(&bytes[..]).unwrap();
     let reg_bytes = reg.serialize();
     assert_eq!(reg_bytes, bytes);

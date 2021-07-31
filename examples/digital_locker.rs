@@ -44,6 +44,7 @@ use opaque_ke::{
 #[allow(dead_code)]
 struct Default;
 impl CipherSuite for Default {
+    type Ake = curve25519_dalek::ristretto::RistrettoPoint;
     type Group = curve25519_dalek::ristretto::RistrettoPoint;
     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
     type Hash = sha2::Sha512;

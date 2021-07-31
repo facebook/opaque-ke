@@ -63,12 +63,6 @@ pub trait Group: Copy + Sized + for<'a> Mul<&'a <Self as Group>::Scalar, Output 
     /// Serializes the `self` group element
     fn to_arr(&self) -> GenericArray<u8, Self::ElemLen>;
 
-    /// Get the base point for the group
-    fn base_point() -> Self;
-
-    /// Multiply the point by a scalar, represented as a slice
-    fn mult_by_slice(&self, scalar: &GenericArray<u8, Self::ScalarLen>) -> Self;
-
     /// Returns if the group element is equal to the identity (1)
     fn is_identity(&self) -> bool;
 

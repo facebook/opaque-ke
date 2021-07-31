@@ -31,13 +31,13 @@ const NONCE_LEN: usize = 32;
 fn build_inner_envelope_internal<CS: CipherSuite>(
     random_pwd: &[u8],
     nonce: &[u8],
-) -> Result<PublicKey<CS::Group>, ProtocolError> {
+) -> Result<PublicKey<CS::Ake>, ProtocolError> {
     let h = Hkdf::<CS::Hash>::new(None, random_pwd);
-    let mut keypair_seed = vec![0u8; <PrivateKey<CS::Group> as SizedBytes>::Len::to_usize()];
+    let mut keypair_seed = vec![0u8; <PrivateKey<CS::Ake> as SizedBytes>::Len::to_usize()];
     h.expand(&[nonce, STR_PRIVATE_KEY].concat(), &mut keypair_seed)
         .map_err(|_| InternalPakeError::HkdfError)?;
     let client_static_keypair =
-        KeyPair::<CS::Group>::from_private_key_slice(&CS::Group::scalar_as_bytes(
+        KeyPair::<CS::Ake>::from_private_key_slice(&CS::Group::scalar_as_bytes(
             CS::Group::hash_to_scalar::<CS::Hash>(&keypair_seed[..], STR_OPAQUE_HASH_TO_SCALAR)?,
         ))?;
 
@@ -47,13 +47,13 @@ fn build_inner_envelope_internal<CS: CipherSuite>(
 fn recover_keys_internal<CS: CipherSuite>(
     random_pwd: &[u8],
     nonce: &[u8],
-) -> Result<KeyPair<CS::Group>, ProtocolError> {
+) -> Result<KeyPair<CS::Ake>, ProtocolError> {
     let h = Hkdf::<CS::Hash>::new(None, random_pwd);
-    let mut keypair_seed = vec![0u8; <PrivateKey<CS::Group> as SizedBytes>::Len::to_usize()];
+    let mut keypair_seed = vec![0u8; <PrivateKey<CS::Ake> as SizedBytes>::Len::to_usize()];
     h.expand(&[nonce, STR_PRIVATE_KEY].concat(), &mut keypair_seed)
         .map_err(|_| InternalPakeError::HkdfError)?;
     let client_static_keypair =
-        KeyPair::<CS::Group>::from_private_key_slice(&CS::Group::scalar_as_bytes(
+        KeyPair::<CS::Ake>::from_private_key_slice(&CS::Group::scalar_as_bytes(
             CS::Group::hash_to_scalar::<CS::Hash>(&keypair_seed[..], STR_OPAQUE_HASH_TO_SCALAR)?,
         ))?;
 
@@ -110,7 +110,7 @@ impl_debug_eq_hash_for!(struct Envelope<CS: CipherSuite>, [mode, nonce, hmac]);
 // key. This key is also used to derive the export_key parameter, which is technically
 // unrelated to the envelope's encrypted and authenticated contents.
 pub(crate) struct OpenedEnvelope<CS: CipherSuite> {
-    pub(crate) client_static_keypair: KeyPair<CS::Group>,
+    pub(crate) client_static_keypair: KeyPair<CS::Ake>,
     pub(crate) export_key: GenericArray<u8, <CS::Hash as Digest>::OutputSize>,
     pub(crate) id_u: Vec<u8>,
     pub(crate) id_s: Vec<u8>,
@@ -134,13 +134,13 @@ type SealRawResult<CS> = (
 #[cfg(not(test))]
 type SealResult<CS> = (
     Envelope<CS>,
-    PublicKey<<CS as CipherSuite>::Group>,
+    PublicKey<<CS as CipherSuite>::Ake>,
     GenericArray<u8, <<CS as CipherSuite>::Hash as Digest>::OutputSize>,
 );
 #[cfg(test)]
 type SealResult<CS> = (
     Envelope<CS>,
-    PublicKey<<CS as CipherSuite>::Group>,
+    PublicKey<<CS as CipherSuite>::Ake>,
     GenericArray<u8, <<CS as CipherSuite>::Hash as Digest>::OutputSize>,
     Vec<u8>,
 );
