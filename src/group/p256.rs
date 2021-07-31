@@ -72,13 +72,9 @@ impl Group for ProjectivePoint {
         let uniform_bytes =
             super::expand::expand_message_xmd::<H>(msg, dst, 2 * crate::group::p256::L)?;
 
-        // extract points
-        let u0 = BigInt::from_bytes_be(Sign::Plus, &uniform_bytes[0..L]);
-        let u1 = BigInt::from_bytes_be(Sign::Plus, &uniform_bytes[L..L * 2]);
-
         // map to curve
-        let (q0x, q0y) = map_to_curve_simple_swu(&u0, &A, &B, &P, &Z);
-        let (q1x, q1y) = map_to_curve_simple_swu(&u1, &A, &B, &P, &Z);
+        let (q0x, q0y) = map_to_curve_simple_swu(&uniform_bytes[..L], &A, &B, &P, &Z);
+        let (q1x, q1y) = map_to_curve_simple_swu(&uniform_bytes[L..], &A, &B, &P, &Z);
 
         // convert to `p256` types
         let p0 = AffinePoint::from_encoded_point(&EncodedPoint::from_affine_coordinates(
@@ -94,12 +90,15 @@ impl Group for ProjectivePoint {
         Ok(p0 + p1)
     }
 
+    // Implements the `HashToScalar()` function from
+    // https://www.ietf.org/archive/id/draft-irtf-cfrg-voprf-07.html#section-4.3
     fn hash_to_scalar<H: Hash>(input: &[u8], dst: &[u8]) -> Result<Self::Scalar, ProtocolError> {
+        // https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-hash-to-curve-11#section-5.3
+        // `HashToScalar` is `hash_to_field`
         let uniform_bytes =
             super::expand::expand_message_xmd::<H>(input, dst, crate::group::p256::L)?;
-        #[allow(clippy::borrow_interior_mutable_const)]
         let mut bytes = BigInt::from_bytes_be(Sign::Plus, &uniform_bytes)
-            .mod_floor(&crate::group::p256::R)
+            .mod_floor(&crate::group::p256::N)
             .to_bytes_be()
             .1;
         bytes.resize(32, 0);
@@ -140,7 +139,7 @@ impl Group for ProjectivePoint {
     fn to_arr(&self) -> GenericArray<u8, Self::ElemLen> {
         let mut bytes = self.to_affine().to_encoded_point(true).as_bytes().to_vec();
         bytes.resize(33, 0);
-        GenericArray::clone_from_slice(&bytes)
+        *GenericArray::from_slice(&bytes)
     }
 
     fn base_point() -> Self {
@@ -163,7 +162,7 @@ impl Group for ProjectivePoint {
 /// <https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-hash-to-curve-11#appendix-F.2>
 #[allow(clippy::many_single_char_names)]
 fn map_to_curve_simple_swu<N: ArrayLength<u8>>(
-    u: &BigInt,
+    u: &[u8],
     a: &BigInt,
     b: &BigInt,
     p: &BigInt,
@@ -338,7 +337,7 @@ fn map_to_curve_simple_swu<N: ArrayLength<u8>>(
     let a = f.element(a);
     let b = f.element(b);
     let z = f.element(z);
-    let u = f.element(u);
+    let u = f.element(&BigInt::from_bytes_be(Sign::Plus, u));
 
     // Constants:
     // 1.  c1 = -B / A
@@ -496,8 +495,8 @@ mod tests {
             assert_eq!(BigInt::parse_bytes(tv.u0.as_bytes(), 16).unwrap(), u0);
             assert_eq!(BigInt::parse_bytes(tv.u1.as_bytes(), 16).unwrap(), u1);
 
-            let (q0x, q0y) = super::map_to_curve_simple_swu(&u0, &A, &B, &P, &Z);
-            let (q1x, q1y) = super::map_to_curve_simple_swu(&u1, &A, &B, &P, &Z);
+            let (q0x, q0y) = super::map_to_curve_simple_swu(&u0.to_bytes_be().1, &A, &B, &P, &Z);
+            let (q1x, q1y) = super::map_to_curve_simple_swu(&u1.to_bytes_be().1, &A, &B, &P, &Z);
 
             assert_eq!(tv.q0x, hex::encode(q0x));
             assert_eq!(tv.q0y, hex::encode(q0y));
