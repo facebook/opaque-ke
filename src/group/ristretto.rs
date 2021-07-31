@@ -12,11 +12,7 @@ use curve25519_dalek::{
     scalar::Scalar,
     traits::Identity,
 };
-use digest::Digest;
-use generic_array::{
-    typenum::{Unsigned, U32, U64},
-    GenericArray,
-};
+use generic_array::{typenum::U32, GenericArray};
 use rand::{CryptoRng, RngCore};
 use std::convert::TryInto;
 
@@ -27,13 +23,14 @@ impl Group for RistrettoPoint {
     // Implements the hash_to_ristretto255() function from
     // https://www.ietf.org/archive/id/draft-irtf-cfrg-hash-to-curve-10.txt
     fn map_to_curve<H: Hash>(msg: &[u8], dst: &[u8]) -> Result<Self, ProtocolError> {
-        let uniform_bytes = super::expand::expand_message_xmd::<H>(
-            msg,
-            dst,
-            <H as Digest>::OutputSize::to_usize(),
-        )?;
-        <Self as Group>::hash_to_curve(&GenericArray::clone_from_slice(&uniform_bytes[..]))
-            .map_err(ProtocolError::from)
+        let uniform_bytes = super::expand::expand_message_xmd::<H>(msg, dst, 64)?;
+
+        Ok(RistrettoPoint::from_uniform_bytes(
+            uniform_bytes
+                .as_slice()
+                .try_into()
+                .map_err(|_| InternalPakeError::HashToCurveError)?,
+        ))
     }
 
     fn hash_to_scalar<H: Hash>(input: &[u8], dst: &[u8]) -> Result<Self::Scalar, ProtocolError> {
@@ -98,19 +95,6 @@ impl Group for RistrettoPoint {
     fn to_arr(&self) -> GenericArray<u8, Self::ElemLen> {
         let c = self.compress();
         *GenericArray::from_slice(c.as_bytes())
-    }
-
-    type UniformBytesLen = U64;
-    fn hash_to_curve(
-        uniform_bytes: &GenericArray<u8, Self::UniformBytesLen>,
-    ) -> Result<Self, InternalPakeError> {
-        // https://caniuse.rs/features/array_gt_32_impls
-        let bits: [u8; 64] = {
-            let mut bytes = [0u8; 64];
-            bytes.copy_from_slice(uniform_bytes);
-            bytes
-        };
-        Ok(RistrettoPoint::from_uniform_bytes(&bits))
     }
 
     fn base_point() -> Self {

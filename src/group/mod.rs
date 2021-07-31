@@ -63,17 +63,6 @@ pub trait Group: Copy + Sized + for<'a> Mul<&'a <Self as Group>::Scalar, Output 
     /// Serializes the `self` group element
     fn to_arr(&self) -> GenericArray<u8, Self::ElemLen>;
 
-    /// Hashes points presumed to be uniformly random to the curve. The
-    /// impl is allowed to perform additional hashes if it needs to, but this
-    /// may not be necessary as this function is going to be called with the
-    /// output of a kdf.
-    type UniformBytesLen: ArrayLength<u8>;
-
-    /// Hashes a slice of pseudo-random bytes of the correct length to a curve point
-    fn hash_to_curve(
-        uniform_bytes: &GenericArray<u8, Self::UniformBytesLen>,
-    ) -> Result<Self, InternalPakeError>;
-
     /// Get the base point for the group
     fn base_point() -> Self;
 

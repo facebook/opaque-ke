@@ -11,7 +11,7 @@
 use super::Group;
 use crate::errors::{InternalPakeError, ProtocolError};
 use crate::hash::Hash;
-use generic_array::typenum::{U32, U33, U96};
+use generic_array::typenum::{U32, U33};
 use generic_array::{ArrayLength, GenericArray};
 use num_bigint::{BigInt, Sign};
 use num_integer::Integer;
@@ -62,6 +62,8 @@ pub const N: Lazy<BigInt> = Lazy::new(|| {
 impl Group for ProjectivePoint {
     const SUITE_ID: usize = 0x0003;
 
+    // Implements the `hash_to_curve()` function from
+    // https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-hash-to-curve-11#section-3
     fn map_to_curve<H: Hash>(msg: &[u8], dst: &[u8]) -> Result<Self, ProtocolError> {
         // https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-hash-to-curve-11#section-3
         // `hash_to_curve` calls `hash_to_field` with a `count` of `2`
@@ -70,8 +72,26 @@ impl Group for ProjectivePoint {
         let uniform_bytes =
             super::expand::expand_message_xmd::<H>(msg, dst, 2 * crate::group::p256::L)?;
 
-        <Self as Group>::hash_to_curve(&GenericArray::clone_from_slice(&uniform_bytes[..]))
-            .map_err(ProtocolError::from)
+        // extract points
+        let u0 = BigInt::from_bytes_be(Sign::Plus, &uniform_bytes[0..L]);
+        let u1 = BigInt::from_bytes_be(Sign::Plus, &uniform_bytes[L..L * 2]);
+
+        // map to curve
+        let (q0x, q0y) = map_to_curve_simple_swu(&u0, &A, &B, &P, &Z);
+        let (q1x, q1y) = map_to_curve_simple_swu(&u1, &A, &B, &P, &Z);
+
+        // convert to `p256` types
+        let p0 = AffinePoint::from_encoded_point(&EncodedPoint::from_affine_coordinates(
+            &q0x, &q0y, false,
+        ))
+        .ok_or(InternalPakeError::PointError)?
+        .to_curve();
+        let p1 = AffinePoint::from_encoded_point(&EncodedPoint::from_affine_coordinates(
+            &q1x, &q1y, false,
+        ))
+        .ok_or(InternalPakeError::PointError)?;
+
+        Ok(p0 + p1)
     }
 
     fn hash_to_scalar<H: Hash>(input: &[u8], dst: &[u8]) -> Result<Self::Scalar, ProtocolError> {
@@ -92,7 +112,6 @@ impl Group for ProjectivePoint {
     type ElemLen = U33;
     type Scalar = p256_::Scalar;
     type ScalarLen = U32;
-    type UniformBytesLen = U96;
 
     fn from_scalar_slice(
         scalar_bits: &GenericArray<u8, Self::ScalarLen>,
@@ -122,31 +141,6 @@ impl Group for ProjectivePoint {
         let mut bytes = self.to_affine().to_encoded_point(true).as_bytes().to_vec();
         bytes.resize(33, 0);
         GenericArray::clone_from_slice(&bytes)
-    }
-
-    fn hash_to_curve(
-        uniform_bytes: &GenericArray<u8, Self::UniformBytesLen>,
-    ) -> Result<Self, InternalPakeError> {
-        // extract points
-        let u0 = BigInt::from_bytes_be(Sign::Plus, &uniform_bytes[0..L]);
-        let u1 = BigInt::from_bytes_be(Sign::Plus, &uniform_bytes[L..L * 2]);
-
-        // map to curve
-        let (q0x, q0y) = map_to_curve_simple_swu(&u0, &A, &B, &P, &Z);
-        let (q1x, q1y) = map_to_curve_simple_swu(&u1, &A, &B, &P, &Z);
-
-        // convert to `p256` types
-        let p0 = AffinePoint::from_encoded_point(&EncodedPoint::from_affine_coordinates(
-            &q0x, &q0y, false,
-        ))
-        .ok_or(InternalPakeError::PointError)?
-        .to_curve();
-        let p1 = AffinePoint::from_encoded_point(&EncodedPoint::from_affine_coordinates(
-            &q1x, &q1y, false,
-        ))
-        .ok_or(InternalPakeError::PointError)?;
-
-        Ok(p0 + p1)
     }
 
     fn base_point() -> Self {
