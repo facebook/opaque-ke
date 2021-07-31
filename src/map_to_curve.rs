@@ -77,11 +77,14 @@ impl GroupWithMapToCurve for p256_::ProjectivePoint {
 
         let uniform_bytes = expand_message_xmd::<H>(input, dst, crate::group::p256::L)?;
         #[allow(clippy::borrow_interior_mutable_const)]
-        let bytes =
-            BigInt::from_bytes_be(Sign::Plus, &uniform_bytes).mod_floor(&crate::group::p256::R);
+        let mut bytes = BigInt::from_bytes_be(Sign::Plus, &uniform_bytes)
+            .mod_floor(&crate::group::p256::R)
+            .to_bytes_be()
+            .1;
+        bytes.resize(32, 0);
 
         Ok(p256_::Scalar::from_bytes_reduced(GenericArray::from_slice(
-            &bytes.to_bytes_be().1,
+            &bytes,
         )))
     }
 }
