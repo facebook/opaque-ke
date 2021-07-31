@@ -6,14 +6,14 @@
 //! Defines the Group trait to specify the underlying prime order group used in
 //! OPAQUE's OPRF
 
+mod expand;
 #[cfg(feature = "p256")]
 pub(crate) mod p256;
 mod ristretto;
 
-use crate::errors::InternalPakeError;
-
+use crate::errors::{InternalPakeError, ProtocolError};
+use crate::hash::Hash;
 use generic_array::{ArrayLength, GenericArray};
-
 use rand::{CryptoRng, RngCore};
 use std::ops::Mul;
 use zeroize::Zeroize;
@@ -21,6 +21,24 @@ use zeroize::Zeroize;
 /// A prime-order subgroup of a base field (EC, prime-order field ...). This
 /// subgroup is noted additively — as in the draft RFC — in this trait.
 pub trait Group: Copy + Sized + for<'a> Mul<&'a <Self as Group>::Scalar, Output = Self> {
+    /// The ciphersuite identifier as dictated by
+    /// <https://www.ietf.org/archive/id/draft-irtf-cfrg-voprf-05.txt>
+    const SUITE_ID: usize;
+
+    /// transforms a password and domain separation tag (DST) into a curve point
+    fn map_to_curve<H: Hash>(msg: &[u8], dst: &[u8]) -> Result<Self, ProtocolError>;
+
+    /// Hashes a slice of pseudo-random bytes to a scalar
+    fn hash_to_scalar<H: Hash>(input: &[u8], dst: &[u8]) -> Result<Self::Scalar, ProtocolError>;
+
+    /// Generates the contextString parameter as defined in
+    /// <https://www.ietf.org/archive/id/draft-irtf-cfrg-voprf-05.txt>
+    fn get_context_string(mode: u8) -> Result<Vec<u8>, ProtocolError> {
+        use crate::serialization::i2osp;
+
+        Ok([i2osp(mode as usize, 1)?, i2osp(Self::SUITE_ID, 2)?].concat())
+    }
+
     /// The type of base field scalars
     type Scalar: Zeroize + Copy;
     /// The byte length necessary to represent scalars

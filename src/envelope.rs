@@ -9,7 +9,6 @@ use crate::{
     group::Group,
     hash::Hash,
     keypair::{KeyPair, PrivateKey, PublicKey},
-    map_to_curve::GroupWithMapToCurve,
     opaque::{bytestrings_from_identifiers, Identifiers},
 };
 use digest::Digest;

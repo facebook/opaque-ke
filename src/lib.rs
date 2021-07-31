@@ -832,8 +832,6 @@ pub mod hash;
 
 pub mod group;
 
-pub mod map_to_curve;
-
 pub mod key_exchange;
 pub mod keypair;
 

@@ -3,26 +3,48 @@
 // This source code is licensed under the MIT license found in the
 // LICENSE file in the root directory of this source tree.
 
-use crate::errors::InternalPakeError;
-
+use super::Group;
+use crate::errors::{InternalPakeError, ProtocolError};
+use crate::hash::Hash;
 use curve25519_dalek::{
     constants::RISTRETTO_BASEPOINT_POINT,
     ristretto::{CompressedRistretto, RistrettoPoint},
     scalar::Scalar,
     traits::Identity,
 };
+use digest::Digest;
 use generic_array::{
-    typenum::{U32, U64},
+    typenum::{Unsigned, U32, U64},
     GenericArray,
 };
-use std::convert::TryInto;
-
 use rand::{CryptoRng, RngCore};
-
-use super::Group;
+use std::convert::TryInto;
 
 /// The implementation of such a subgroup for Ristretto
 impl Group for RistrettoPoint {
+    const SUITE_ID: usize = 0x0001;
+
+    // Implements the hash_to_ristretto255() function from
+    // https://www.ietf.org/archive/id/draft-irtf-cfrg-hash-to-curve-10.txt
+    fn map_to_curve<H: Hash>(msg: &[u8], dst: &[u8]) -> Result<Self, ProtocolError> {
+        let uniform_bytes = super::expand::expand_message_xmd::<H>(
+            msg,
+            dst,
+            <H as Digest>::OutputSize::to_usize(),
+        )?;
+        <Self as Group>::hash_to_curve(&GenericArray::clone_from_slice(&uniform_bytes[..]))
+            .map_err(ProtocolError::from)
+    }
+
+    fn hash_to_scalar<H: Hash>(input: &[u8], dst: &[u8]) -> Result<Self::Scalar, ProtocolError> {
+        const LEN_IN_BYTES: usize = 64;
+        let uniform_bytes = super::expand::expand_message_xmd::<H>(input, dst, LEN_IN_BYTES)?;
+        let mut bits = [0u8; LEN_IN_BYTES];
+        bits.copy_from_slice(&uniform_bytes[..]);
+
+        Ok(Self::Scalar::from_bytes_mod_order_wide(&bits))
+    }
+
     type Scalar = Scalar;
     type ScalarLen = U32;
     fn from_scalar_slice(

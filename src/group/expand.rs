@@ -3,91 +3,11 @@
 // This source code is licensed under the MIT license found in the
 // LICENSE file in the root directory of this source tree.
 
-//! Defines the GroupWithMapToCurve trait to specify how to map a password to a
-//! curve point
-
 use crate::errors::{InternalPakeError, ProtocolError};
-use crate::group::Group;
 use crate::hash::Hash;
 use crate::serialization::i2osp;
-use curve25519_dalek::ristretto::RistrettoPoint;
 use digest::{BlockInput, Digest};
 use generic_array::typenum::Unsigned;
-use generic_array::GenericArray;
-
-/// A subtrait of Group specifying how to hash a password into a point
-pub trait GroupWithMapToCurve: Group {
-    /// The ciphersuite identifier as dictated by
-    /// <https://www.ietf.org/archive/id/draft-irtf-cfrg-voprf-05.txt>
-    const SUITE_ID: usize;
-
-    /// transforms a password and domain separation tag (DST) into a curve point
-    fn map_to_curve<H: Hash>(msg: &[u8], dst: &[u8]) -> Result<Self, ProtocolError>;
-
-    /// Hashes a slice of pseudo-random bytes to a scalar
-    fn hash_to_scalar<H: Hash>(input: &[u8], dst: &[u8]) -> Result<Self::Scalar, ProtocolError>;
-
-    /// Generates the contextString parameter as defined in
-    /// <https://www.ietf.org/archive/id/draft-irtf-cfrg-voprf-05.txt>
-    fn get_context_string(mode: u8) -> Result<Vec<u8>, ProtocolError> {
-        Ok([i2osp(mode as usize, 1)?, i2osp(Self::SUITE_ID, 2)?].concat())
-    }
-}
-
-impl GroupWithMapToCurve for RistrettoPoint {
-    const SUITE_ID: usize = 0x0001;
-
-    // Implements the hash_to_ristretto255() function from
-    // https://www.ietf.org/archive/id/draft-irtf-cfrg-hash-to-curve-10.txt
-    fn map_to_curve<H: Hash>(msg: &[u8], dst: &[u8]) -> Result<Self, ProtocolError> {
-        let uniform_bytes =
-            expand_message_xmd::<H>(msg, dst, <H as Digest>::OutputSize::to_usize())?;
-        <Self as Group>::hash_to_curve(&GenericArray::clone_from_slice(&uniform_bytes[..]))
-            .map_err(ProtocolError::from)
-    }
-
-    fn hash_to_scalar<H: Hash>(input: &[u8], dst: &[u8]) -> Result<Self::Scalar, ProtocolError> {
-        const LEN_IN_BYTES: usize = 64;
-        let uniform_bytes = expand_message_xmd::<H>(input, dst, LEN_IN_BYTES)?;
-        let mut bits = [0u8; LEN_IN_BYTES];
-        bits.copy_from_slice(&uniform_bytes[..]);
-
-        Ok(Self::Scalar::from_bytes_mod_order_wide(&bits))
-    }
-}
-
-#[cfg(feature = "p256")]
-impl GroupWithMapToCurve for p256_::ProjectivePoint {
-    const SUITE_ID: usize = 0x0003;
-
-    fn map_to_curve<H: Hash>(msg: &[u8], dst: &[u8]) -> Result<Self, ProtocolError> {
-        // https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-hash-to-curve-11#section-3
-        // `hash_to_curve` calls `hash_to_field` with a `count` of `2`
-        // https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-hash-to-curve-11#section-5.3
-        // `hash_to_field` calls `expand_message` with a `len_in_bytes` of `count * L`
-        let uniform_bytes = expand_message_xmd::<H>(msg, dst, 2 * crate::group::p256::L)?;
-
-        <Self as Group>::hash_to_curve(&GenericArray::clone_from_slice(&uniform_bytes[..]))
-            .map_err(ProtocolError::from)
-    }
-
-    fn hash_to_scalar<H: Hash>(input: &[u8], dst: &[u8]) -> Result<Self::Scalar, ProtocolError> {
-        use num_bigint::{BigInt, Sign};
-        use num_integer::Integer;
-
-        let uniform_bytes = expand_message_xmd::<H>(input, dst, crate::group::p256::L)?;
-        #[allow(clippy::borrow_interior_mutable_const)]
-        let mut bytes = BigInt::from_bytes_be(Sign::Plus, &uniform_bytes)
-            .mod_floor(&crate::group::p256::R)
-            .to_bytes_be()
-            .1;
-        bytes.resize(32, 0);
-
-        Ok(p256_::Scalar::from_bytes_reduced(GenericArray::from_slice(
-            &bytes,
-        )))
-    }
-}
 
 // Computes ceil(x / y)
 fn div_ceil(x: usize, y: usize) -> usize {

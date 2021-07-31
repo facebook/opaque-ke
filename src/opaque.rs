@@ -13,7 +13,6 @@ use crate::{
     hash::Hash,
     key_exchange::traits::{FromBytes, KeyExchange, ToBytesWithPointers},
     keypair::{KeyPair, PrivateKey, PublicKey, SecretKey},
-    map_to_curve::GroupWithMapToCurve,
     oprf,
     serialization::{serialize, tokenize},
     slow_hash::SlowHash,
@@ -1011,7 +1010,7 @@ impl<CS: CipherSuite> Drop for ServerLogin<CS> {
 
 // Helper functions
 
-fn get_password_derived_key<G: GroupWithMapToCurve, SH: SlowHash<D>, D: Hash>(
+fn get_password_derived_key<G: Group, SH: SlowHash<D>, D: Hash>(
     token: &oprf::Token<G>,
     beta: G,
 ) -> Result<Vec<u8>, ProtocolError> {
@@ -1019,7 +1018,7 @@ fn get_password_derived_key<G: GroupWithMapToCurve, SH: SlowHash<D>, D: Hash>(
     SH::hash(oprf_output).map_err(ProtocolError::from)
 }
 
-fn oprf_key_from_seed<G: GroupWithMapToCurve, D: Hash>(
+fn oprf_key_from_seed<G: Group, D: Hash>(
     oprf_seed: &GenericArray<u8, D::OutputSize>,
     credential_identifier: &[u8],
 ) -> Result<G::Scalar, ProtocolError> {
