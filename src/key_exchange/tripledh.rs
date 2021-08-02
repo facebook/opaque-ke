@@ -283,10 +283,7 @@ impl<A: Ake> ToBytesWithPointers for Ke1State<A> {
     #[cfg(test)]
     fn as_byte_ptrs(&self) -> Vec<(*const u8, usize)> {
         vec![
-            (
-                self.client_e_sk.as_ptr(),
-                <PrivateKey<A> as SizedBytes>::Len::to_usize(),
-            ),
+            (self.client_e_sk.as_ptr(), A::SkLen::to_usize()),
             (self.client_nonce.as_ptr(), NonceLen::to_usize()),
         ]
     }

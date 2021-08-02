@@ -4,12 +4,11 @@
 // LICENSE file in the root directory of this source tree.
 
 use crate::{
-    ciphersuite::CipherSuite, errors::*, key_exchange::tripledh::TripleDH, keypair::PrivateKey,
-    opaque::*, slow_hash::NoOpHash, tests::mock_rng::CycleRng, *,
+    ake::Ake, ciphersuite::CipherSuite, errors::*, key_exchange::tripledh::TripleDH, opaque::*,
+    slow_hash::NoOpHash, tests::mock_rng::CycleRng, *,
 };
 use curve25519_dalek::ristretto::RistrettoPoint;
 use generic_array::typenum::Unsigned;
-use generic_bytes::SizedBytes;
 use serde_json::Value;
 
 // Tests
@@ -752,7 +751,7 @@ fn populate_test_vectors<CS: CipherSuite>(values: &Value) -> TestVectorParameter
         dummy_private_key: parse_default!(
             values,
             "client_private_key",
-            vec![0u8; <PrivateKey<CS::Ake> as SizedBytes>::Len::to_usize()]
+            vec![0u8; <CS::Ake as Ake>::SkLen::to_usize()]
         ),
         dummy_masking_key: parse_default!(values, "masking_key", vec![0u8; 64]),
         context: parse!(values, "Context"),

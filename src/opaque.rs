@@ -6,6 +6,7 @@
 //! Provides the main OPAQUE API
 
 use crate::{
+    ake::Ake,
     ciphersuite::CipherSuite,
     envelope::Envelope,
     errors::{utils::check_slice_size, InternalPakeError, PakeError, ProtocolError},
@@ -87,7 +88,7 @@ impl<CS: CipherSuite, S: SecretKey<CS::Ake>> ServerSetup<CS, S> {
     /// Deserialization from bytes
     pub fn deserialize(input: &[u8]) -> Result<Self, ProtocolError<S::Error>> {
         let seed_len = <CS::Hash as Digest>::OutputSize::to_usize();
-        let key_len = <PrivateKey<CS::Ake> as SizedBytes>::Len::to_usize();
+        let key_len = <CS::Ake as Ake>::SkLen::to_usize();
         let checked_slice = check_slice_size(input, seed_len + key_len + key_len, "server_setup")?;
 
         Ok(Self {

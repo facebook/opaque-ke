@@ -6,6 +6,7 @@
 //! Contains the messages used for OPAQUE
 
 use crate::{
+    ake::Ake,
     ciphersuite::CipherSuite,
     envelope::Envelope,
     errors::{
@@ -107,7 +108,7 @@ impl<CS: CipherSuite> RegistrationResponse<CS> {
     /// Deserialization from bytes
     pub fn deserialize(input: &[u8]) -> Result<Self, ProtocolError> {
         let elem_len = <CS::Group as Group>::ElemLen::to_usize();
-        let key_len = <PublicKey<CS::Ake> as SizedBytes>::Len::to_usize();
+        let key_len = <CS::Ake as Ake>::PkLen::to_usize();
         let checked_slice =
             check_slice_size(input, elem_len + key_len, "registration_response_bytes")?;
 
@@ -176,7 +177,7 @@ impl<CS: CipherSuite> RegistrationUpload<CS> {
 
     /// Deserialization from bytes
     pub fn deserialize(input: &[u8]) -> Result<Self, ProtocolError> {
-        let key_len = <PublicKey<CS::Ake> as SizedBytes>::Len::to_usize();
+        let key_len = <CS::Ake as Ake>::PkLen::to_usize();
         let hash_len = <CS::Hash as Digest>::OutputSize::to_usize();
         let checked_slice =
             check_slice_size_atleast(input, key_len + hash_len, "registration_upload_bytes")?;
@@ -327,7 +328,7 @@ impl<CS: CipherSuite> CredentialResponse<CS> {
     /// Deserialization from bytes
     pub fn deserialize(input: &[u8]) -> Result<Self, ProtocolError> {
         let elem_len = <CS::Group as Group>::ElemLen::to_usize();
-        let key_len = <PublicKey<CS::Ake> as SizedBytes>::Len::to_usize();
+        let key_len = <CS::Ake as Ake>::PkLen::to_usize();
         let nonce_len: usize = 32;
         let envelope_len = Envelope::<CS>::len();
         let masked_response_len = key_len + envelope_len;

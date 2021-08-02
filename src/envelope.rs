@@ -8,7 +8,7 @@ use crate::{
     errors::{utils::check_slice_size, InternalPakeError, PakeError, ProtocolError},
     group::Group,
     hash::Hash,
-    keypair::{KeyPair, PrivateKey, PublicKey},
+    keypair::{KeyPair, PublicKey},
     opaque::{bytestrings_from_identifiers, Identifiers},
 };
 use digest::Digest;
@@ -33,7 +33,7 @@ fn build_inner_envelope_internal<CS: CipherSuite>(
     nonce: &[u8],
 ) -> Result<PublicKey<CS::Ake>, ProtocolError> {
     let h = Hkdf::<CS::Hash>::new(None, random_pwd);
-    let mut keypair_seed = vec![0u8; <PrivateKey<CS::Ake> as SizedBytes>::Len::to_usize()];
+    let mut keypair_seed = vec![0u8; <CS::Ake as crate::ake::Ake>::SkLen::to_usize()];
     h.expand(&[nonce, STR_PRIVATE_KEY].concat(), &mut keypair_seed)
         .map_err(|_| InternalPakeError::HkdfError)?;
     let client_static_keypair =
@@ -49,7 +49,7 @@ fn recover_keys_internal<CS: CipherSuite>(
     nonce: &[u8],
 ) -> Result<KeyPair<CS::Ake>, ProtocolError> {
     let h = Hkdf::<CS::Hash>::new(None, random_pwd);
-    let mut keypair_seed = vec![0u8; <PrivateKey<CS::Ake> as SizedBytes>::Len::to_usize()];
+    let mut keypair_seed = vec![0u8; <CS::Ake as crate::ake::Ake>::SkLen::to_usize()];
     h.expand(&[nonce, STR_PRIVATE_KEY].concat(), &mut keypair_seed)
         .map_err(|_| InternalPakeError::HkdfError)?;
     let client_static_keypair =

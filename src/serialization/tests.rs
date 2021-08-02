@@ -12,7 +12,7 @@ use crate::{
         traits::{FromBytes, KeyExchange, ToBytes},
         tripledh::{NonceLen, TripleDH},
     },
-    keypair::{KeyPair, PublicKey},
+    keypair::KeyPair,
     serialization::{i2osp, os2ip, serialize},
     *,
 };
@@ -215,7 +215,7 @@ fn credential_response_roundtrip() {
 
     let mut masked_response = vec![
         0u8;
-        <PublicKey<RistrettoPoint> as SizedBytes>::Len::to_usize()
+        <RistrettoPoint as crate::ake::Ake>::PkLen::to_usize()
             + Envelope::<Default>::len()
     ];
     rng.fill_bytes(&mut masked_response);
