@@ -3,34 +3,56 @@
 // This source code is licensed under the MIT license found in the
 // LICENSE file in the root directory of this source tree.
 
-use crate::errors::InternalPakeError;
-
+use super::Group;
+use crate::errors::{InternalPakeError, ProtocolError};
+use crate::hash::Hash;
 use curve25519_dalek::{
     constants::RISTRETTO_BASEPOINT_POINT,
     ristretto::{CompressedRistretto, RistrettoPoint},
     scalar::Scalar,
     traits::Identity,
 };
-use generic_array::{
-    typenum::{U32, U64},
-    GenericArray,
-};
-use std::convert::TryInto;
-
+use generic_array::{typenum::U32, GenericArray};
 use rand::{CryptoRng, RngCore};
-
-use super::Group;
+use std::convert::TryInto;
+use subtle::ConstantTimeEq;
 
 /// The implementation of such a subgroup for Ristretto
 impl Group for RistrettoPoint {
+    const SUITE_ID: usize = 0x0001;
+
+    // Implements the `hash_to_ristretto255()` function from
+    // https://www.ietf.org/archive/id/draft-irtf-cfrg-hash-to-curve-10.txt
+    fn map_to_curve<H: Hash>(msg: &[u8], dst: &[u8]) -> Result<Self, ProtocolError> {
+        let uniform_bytes = super::expand::expand_message_xmd::<H>(msg, dst, 64)?;
+
+        Ok(RistrettoPoint::from_uniform_bytes(
+            uniform_bytes
+                .as_slice()
+                .try_into()
+                .map_err(|_| InternalPakeError::HashToCurveError)?,
+        ))
+    }
+
+    // Implements the `HashToScalar()` function from
+    // https://www.ietf.org/archive/id/draft-irtf-cfrg-voprf-07.html#section-4.1
+    fn hash_to_scalar<H: Hash>(input: &[u8], dst: &[u8]) -> Result<Self::Scalar, ProtocolError> {
+        let uniform_bytes = super::expand::expand_message_xmd::<H>(input, dst, 64)?;
+
+        Ok(Scalar::from_bytes_mod_order_wide(
+            uniform_bytes
+                .as_slice()
+                .try_into()
+                .map_err(|_| InternalPakeError::HashToCurveError)?,
+        ))
+    }
+
     type Scalar = Scalar;
     type ScalarLen = U32;
     fn from_scalar_slice(
         scalar_bits: &GenericArray<u8, Self::ScalarLen>,
     ) -> Result<Self::Scalar, InternalPakeError> {
-        let mut bits = [0u8; 32];
-        bits.copy_from_slice(scalar_bits);
-        Ok(Scalar::from_bytes_mod_order(bits))
+        Ok(Scalar::from_bytes_mod_order(*scalar_bits.as_ref()))
     }
     fn random_nonzero_scalar<R: RngCore + CryptoRng>(rng: &mut R) -> Self::Scalar {
         loop {
@@ -74,21 +96,7 @@ impl Group for RistrettoPoint {
     }
     // serialization of a group element
     fn to_arr(&self) -> GenericArray<u8, Self::ElemLen> {
-        let c = self.compress();
-        *GenericArray::from_slice(c.as_bytes())
-    }
-
-    type UniformBytesLen = U64;
-    fn hash_to_curve(
-        uniform_bytes: &GenericArray<u8, Self::UniformBytesLen>,
-    ) -> Result<Self, InternalPakeError> {
-        // https://caniuse.rs/features/array_gt_32_impls
-        let bits: [u8; 64] = {
-            let mut bytes = [0u8; 64];
-            bytes.copy_from_slice(uniform_bytes);
-            bytes
-        };
-        Ok(RistrettoPoint::from_uniform_bytes(&bits))
+        self.compress().to_bytes().into()
     }
 
     fn base_point() -> Self {
@@ -96,8 +104,7 @@ impl Group for RistrettoPoint {
     }
 
     fn mult_by_slice(&self, scalar: &GenericArray<u8, Self::ScalarLen>) -> Self {
-        let arr: [u8; 32] = scalar.as_slice().try_into().expect("Wrong length");
-        self * Scalar::from_bits(arr)
+        self * Scalar::from_bits(*scalar.as_ref())
     }
 
     /// Returns if the group element is equal to the identity (1)
@@ -106,6 +113,6 @@ impl Group for RistrettoPoint {
     }
 
     fn ct_equal(&self, other: &Self) -> bool {
-        constant_time_eq::constant_time_eq(&self.to_arr(), &other.to_arr())
+        ConstantTimeEq::ct_eq(self, other).into()
     }
 }

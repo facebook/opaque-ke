@@ -8,10 +8,10 @@
     clippy::declare_interior_mutable_const
 )]
 
-use std::ops::Mul;
-use std::str::FromStr;
-
-use generic_array::typenum::{U32, U33, U96};
+use super::Group;
+use crate::errors::{InternalPakeError, ProtocolError};
+use crate::hash::Hash;
+use generic_array::typenum::{U32, U33};
 use generic_array::{ArrayLength, GenericArray};
 use num_bigint::{BigInt, Sign};
 use num_integer::Integer;
@@ -24,11 +24,8 @@ use p256_::elliptic_curve::subtle::ConstantTimeEq;
 use p256_::elliptic_curve::Field;
 use p256_::{AffinePoint, EncodedPoint, ProjectivePoint};
 use rand::{CryptoRng, RngCore};
-use std::ops::{Add, Div, Neg, Sub};
-
-use crate::errors::InternalPakeError;
-
-use super::Group;
+use std::ops::{Add, Div, Mul, Neg, Sub};
+use std::str::FromStr;
 
 // https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-hash-to-curve-11#section-8.2
 // `p: 2^256 - 2^224 + 2^192 + 2^96 - 1`
@@ -54,7 +51,7 @@ pub const L: usize = 48;
 const Z: Lazy<BigInt> = Lazy::new(|| BigInt::from(-10));
 // https://nvlpubs.nist.gov/nistpubs/FIPS/NIST.FIPS.186-4.pdf#[{%22num%22:211,%22gen%22:0},{%22name%22:%22XYZ%22},70,700,0]
 // P-256 `n` is defined as `115792089210356248762697446949407573529996955224135760342 422259061068512044369`
-pub const R: Lazy<BigInt> = Lazy::new(|| {
+pub const N: Lazy<BigInt> = Lazy::new(|| {
     BigInt::from_str(
         "115792089210356248762697446949407573529996955224135760342422259061068512044369",
     )
@@ -63,10 +60,57 @@ pub const R: Lazy<BigInt> = Lazy::new(|| {
 
 #[cfg(feature = "p256")]
 impl Group for ProjectivePoint {
+    const SUITE_ID: usize = 0x0003;
+
+    // Implements the `hash_to_curve()` function from
+    // https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-hash-to-curve-11#section-3
+    fn map_to_curve<H: Hash>(msg: &[u8], dst: &[u8]) -> Result<Self, ProtocolError> {
+        // https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-hash-to-curve-11#section-3
+        // `hash_to_curve` calls `hash_to_field` with a `count` of `2`
+        // https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-hash-to-curve-11#section-5.3
+        // `hash_to_field` calls `expand_message` with a `len_in_bytes` of `count * L`
+        let uniform_bytes =
+            super::expand::expand_message_xmd::<H>(msg, dst, 2 * crate::group::p256::L)?;
+
+        // map to curve
+        let (q0x, q0y) = map_to_curve_simple_swu(&uniform_bytes[..L], &A, &B, &P, &Z);
+        let (q1x, q1y) = map_to_curve_simple_swu(&uniform_bytes[L..], &A, &B, &P, &Z);
+
+        // convert to `p256` types
+        let p0 = AffinePoint::from_encoded_point(&EncodedPoint::from_affine_coordinates(
+            &q0x, &q0y, false,
+        ))
+        .ok_or(InternalPakeError::PointError)?
+        .to_curve();
+        let p1 = AffinePoint::from_encoded_point(&EncodedPoint::from_affine_coordinates(
+            &q1x, &q1y, false,
+        ))
+        .ok_or(InternalPakeError::PointError)?;
+
+        Ok(p0 + p1)
+    }
+
+    // Implements the `HashToScalar()` function from
+    // https://www.ietf.org/archive/id/draft-irtf-cfrg-voprf-07.html#section-4.3
+    fn hash_to_scalar<H: Hash>(input: &[u8], dst: &[u8]) -> Result<Self::Scalar, ProtocolError> {
+        // https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-hash-to-curve-11#section-5.3
+        // `HashToScalar` is `hash_to_field`
+        let uniform_bytes =
+            super::expand::expand_message_xmd::<H>(input, dst, crate::group::p256::L)?;
+        let mut bytes = BigInt::from_bytes_be(Sign::Plus, &uniform_bytes)
+            .mod_floor(&crate::group::p256::N)
+            .to_bytes_be()
+            .1;
+        bytes.resize(32, 0);
+
+        Ok(p256_::Scalar::from_bytes_reduced(GenericArray::from_slice(
+            &bytes,
+        )))
+    }
+
     type ElemLen = U33;
     type Scalar = p256_::Scalar;
     type ScalarLen = U32;
-    type UniformBytesLen = U96;
 
     fn from_scalar_slice(
         scalar_bits: &GenericArray<u8, Self::ScalarLen>,
@@ -95,32 +139,7 @@ impl Group for ProjectivePoint {
     fn to_arr(&self) -> GenericArray<u8, Self::ElemLen> {
         let mut bytes = self.to_affine().to_encoded_point(true).as_bytes().to_vec();
         bytes.resize(33, 0);
-        GenericArray::clone_from_slice(&bytes)
-    }
-
-    fn hash_to_curve(
-        uniform_bytes: &GenericArray<u8, Self::UniformBytesLen>,
-    ) -> Result<Self, InternalPakeError> {
-        // extract points
-        let u0 = BigInt::from_bytes_be(Sign::Plus, &uniform_bytes[0..L]);
-        let u1 = BigInt::from_bytes_be(Sign::Plus, &uniform_bytes[L..L * 2]);
-
-        // map to curve
-        let (q0x, q0y) = map_to_curve_simple_swu(&u0, &A, &B, &P, &Z);
-        let (q1x, q1y) = map_to_curve_simple_swu(&u1, &A, &B, &P, &Z);
-
-        // convert to `p256` types
-        let p0 = AffinePoint::from_encoded_point(&EncodedPoint::from_affine_coordinates(
-            &q0x, &q0y, false,
-        ))
-        .ok_or(InternalPakeError::PointError)?
-        .to_curve();
-        let p1 = AffinePoint::from_encoded_point(&EncodedPoint::from_affine_coordinates(
-            &q1x, &q1y, false,
-        ))
-        .ok_or(InternalPakeError::PointError)?;
-
-        Ok(p0 + p1)
+        *GenericArray::from_slice(&bytes)
     }
 
     fn base_point() -> Self {
@@ -143,7 +162,7 @@ impl Group for ProjectivePoint {
 /// <https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-hash-to-curve-11#appendix-F.2>
 #[allow(clippy::many_single_char_names)]
 fn map_to_curve_simple_swu<N: ArrayLength<u8>>(
-    u: &BigInt,
+    u: &[u8],
     a: &BigInt,
     b: &BigInt,
     p: &BigInt,
@@ -318,7 +337,7 @@ fn map_to_curve_simple_swu<N: ArrayLength<u8>>(
     let a = f.element(a);
     let b = f.element(b);
     let z = f.element(z);
-    let u = f.element(u);
+    let u = f.element(&BigInt::from_bytes_be(Sign::Plus, u));
 
     // Constants:
     // 1.  c1 = -B / A
@@ -463,7 +482,7 @@ mod tests {
         let dst = "QUUX-V01-CS02-with-P256_XMD:SHA-256_SSWU_RO_";
 
         for tv in test_vectors {
-            let uniform_bytes = crate::map_to_curve::expand_message_xmd::<sha2::Sha256>(
+            let uniform_bytes = super::super::expand::expand_message_xmd::<sha2::Sha256>(
                 tv.msg.as_bytes(),
                 dst.as_bytes(),
                 96,
@@ -476,8 +495,8 @@ mod tests {
             assert_eq!(BigInt::parse_bytes(tv.u0.as_bytes(), 16).unwrap(), u0);
             assert_eq!(BigInt::parse_bytes(tv.u1.as_bytes(), 16).unwrap(), u1);
 
-            let (q0x, q0y) = super::map_to_curve_simple_swu(&u0, &A, &B, &P, &Z);
-            let (q1x, q1y) = super::map_to_curve_simple_swu(&u1, &A, &B, &P, &Z);
+            let (q0x, q0y) = super::map_to_curve_simple_swu(&u0.to_bytes_be().1, &A, &B, &P, &Z);
+            let (q1x, q1y) = super::map_to_curve_simple_swu(&u1.to_bytes_be().1, &A, &B, &P, &Z);
 
             assert_eq!(tv.q0x, hex::encode(q0x));
             assert_eq!(tv.q0y, hex::encode(q0y));

@@ -3,8 +3,8 @@
 // This source code is licensed under the MIT license found in the
 // LICENSE file in the root directory of this source tree.
 
+use crate::group::Group;
 use crate::hash::Hash;
-use crate::map_to_curve::GroupWithMapToCurve;
 use crate::tests::mock_rng::CycleRng;
 use crate::{errors::*, oprf};
 use curve25519_dalek::ristretto::RistrettoPoint;
@@ -106,7 +106,7 @@ fn tests() -> Result<(), ProtocolError> {
 }
 
 // Tests input -> blind, blinded_element
-fn test_blind<G: GroupWithMapToCurve, H: Hash>(tvs: &[&str]) -> Result<(), ProtocolError> {
+fn test_blind<G: Group, H: Hash>(tvs: &[&str]) -> Result<(), ProtocolError> {
     for tv in tvs {
         let parameters = populate_test_vectors(&serde_json::from_str(tv).unwrap());
         let mut rng = CycleRng::new(parameters.blind.to_vec());
@@ -123,7 +123,7 @@ fn test_blind<G: GroupWithMapToCurve, H: Hash>(tvs: &[&str]) -> Result<(), Proto
 }
 
 // Tests sksm, blinded_element -> evaluation_element
-fn test_evaluate<G: GroupWithMapToCurve>(tvs: &[&str]) -> Result<(), PakeError> {
+fn test_evaluate<G: Group>(tvs: &[&str]) -> Result<(), PakeError> {
     for tv in tvs {
         let parameters = populate_test_vectors(&serde_json::from_str(tv).unwrap());
         let evaluation_element = oprf::evaluate::<G>(
@@ -140,7 +140,7 @@ fn test_evaluate<G: GroupWithMapToCurve>(tvs: &[&str]) -> Result<(), PakeError> 
 }
 
 // Tests input, blind, evaluation_element -> output
-fn test_finalize<G: GroupWithMapToCurve, H: Hash>(tvs: &[&str]) -> Result<(), ProtocolError> {
+fn test_finalize<G: Group, H: Hash>(tvs: &[&str]) -> Result<(), ProtocolError> {
     for tv in tvs {
         let parameters = populate_test_vectors(&serde_json::from_str(tv).unwrap());
 

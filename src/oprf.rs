@@ -3,10 +3,7 @@
 // This source code is licensed under the MIT license found in the
 // LICENSE file in the root directory of this source tree.
 
-use crate::{
-    errors::ProtocolError, group::Group, hash::Hash, map_to_curve::GroupWithMapToCurve,
-    serialization::serialize,
-};
+use crate::{errors::ProtocolError, group::Group, hash::Hash, serialization::serialize};
 use digest::Digest;
 use generic_array::GenericArray;
 use rand::{CryptoRng, RngCore};
@@ -29,7 +26,7 @@ static MODE_BASE: u8 = 0x00;
 /// message is sent from the client (who holds the input) to the server (who holds the OPRF key).
 /// The client can also pass in an optional "pepper" string to be mixed in with the input through
 /// an HKDF computation.
-pub(crate) fn blind<R: RngCore + CryptoRng, G: GroupWithMapToCurve, H: Hash>(
+pub(crate) fn blind<R: RngCore + CryptoRng, G: Group, H: Hash>(
     input: &[u8],
     blinding_factor_rng: &mut R,
 ) -> Result<(Token<G>, G), ProtocolError> {
@@ -55,7 +52,7 @@ pub(crate) fn evaluate<G: Group>(point: G, oprf_key: &G::Scalar) -> G {
 
 /// Computes the third step for the multiplicative blinding version of DH-OPRF, in which
 /// the client unblinds the server's message.
-pub(crate) fn finalize<G: GroupWithMapToCurve, H: Hash>(
+pub(crate) fn finalize<G: Group, H: Hash>(
     input: &[u8],
     blind: &G::Scalar,
     evaluated_element: G,
@@ -64,7 +61,7 @@ pub(crate) fn finalize<G: GroupWithMapToCurve, H: Hash>(
     finalize_after_unblind::<G, H>(input, unblinded_element)
 }
 
-fn finalize_after_unblind<G: GroupWithMapToCurve, H: Hash>(
+fn finalize_after_unblind<G: Group, H: Hash>(
     input: &[u8],
     unblinded_element: G,
 ) -> Result<GenericArray<u8, <H as Digest>::OutputSize>, ProtocolError> {
@@ -85,7 +82,7 @@ fn finalize_after_unblind<G: GroupWithMapToCurve, H: Hash>(
 #[cfg(feature = "bench")]
 #[doc(hidden)]
 #[inline]
-pub fn blind_shim<R: RngCore + CryptoRng, G: GroupWithMapToCurve, H: Hash>(
+pub fn blind_shim<R: RngCore + CryptoRng, G: Group, H: Hash>(
     input: &[u8],
     blinding_factor_rng: &mut R,
 ) -> Result<(Token<G>, G), ProtocolError> {
@@ -102,7 +99,7 @@ pub fn evaluate_shim<G: Group>(point: G, oprf_key: &G::Scalar) -> G {
 #[cfg(feature = "bench")]
 #[doc(hidden)]
 #[inline]
-pub fn finalize_shim<G: GroupWithMapToCurve, H: Hash>(
+pub fn finalize_shim<G: Group, H: Hash>(
     token: &Token<G>,
     point: G,
 ) -> Result<GenericArray<u8, <H as Digest>::OutputSize>, ProtocolError> {
