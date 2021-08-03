@@ -18,6 +18,7 @@ use serde_json::Value;
 struct Ristretto255Sha512NoSlowHash;
 impl CipherSuite for Ristretto255Sha512NoSlowHash {
     type Group = RistrettoPoint;
+    type AkeGroup = RistrettoPoint;
     type KeyExchange = TripleDH;
     type Hash = sha2::Sha512;
     type SlowHash = NoOpHash;
@@ -28,6 +29,7 @@ struct P256Sha256NoSlowHash;
 #[cfg(feature = "p256")]
 impl CipherSuite for P256Sha256NoSlowHash {
     type Group = p256_::ProjectivePoint;
+    type AkeGroup = p256_::ProjectivePoint;
     type KeyExchange = TripleDH;
     type Hash = sha2::Sha256;
     type SlowHash = NoOpHash;

@@ -10,6 +10,7 @@ mod expand;
 #[cfg(feature = "p256")]
 pub(crate) mod p256;
 mod ristretto;
+mod x25519;
 
 use crate::errors::{InternalPakeError, ProtocolError};
 use crate::hash::Hash;

@@ -30,6 +30,7 @@ use zeroize::Zeroize;
 struct RistrettoSha5123dhNoSlowHash;
 impl CipherSuite for RistrettoSha5123dhNoSlowHash {
     type Group = RistrettoPoint;
+    type AkeGroup = RistrettoPoint;
     type KeyExchange = TripleDH;
     type Hash = sha2::Sha512;
     type SlowHash = NoOpHash;

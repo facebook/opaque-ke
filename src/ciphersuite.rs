@@ -11,6 +11,7 @@ use crate::{group::Group, hash::Hash, key_exchange::traits::KeyExchange, slow_ha
 /// * `Group`: a finite cyclic group along with a point representation, along
 ///   with an extension trait PasswordToCurve that allows some customization on
 ///   how to hash a password to a curve point. See `group::Group`.
+/// * `AkeGroup`: A `Group` used for the `KeyExchange`.
 /// * `KeyExchange`: The key exchange protocol to use in the login step
 /// * `Hash`: The main hashing function to use
 /// * `SlowHash`: A slow hashing function, typically used for password hashing
@@ -19,8 +20,10 @@ pub trait CipherSuite {
     /// an extension trait PasswordToCurve that allows some customization on
     /// how to hash a password to a curve point. See `group::Group`.
     type Group: Group;
+    /// A `Group` used for the `KeyExchange`.
+    type AkeGroup: Group;
     /// A key exchange protocol
-    type KeyExchange: KeyExchange<Self::Hash, Self::Group>;
+    type KeyExchange: KeyExchange<Self::Hash, Self::AkeGroup>;
     /// The main hash function use (for HKDF computations and hashing transcripts)
     type Hash: Hash;
     /// A slow hashing function, typically used for password hashing

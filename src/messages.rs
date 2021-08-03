@@ -79,7 +79,7 @@ pub struct RegistrationResponse<CS: CipherSuite> {
     /// The server's oprf output
     pub(crate) beta: CS::Group,
     /// Server's static public key
-    pub(crate) server_s_pk: PublicKey<CS::Group>,
+    pub(crate) server_s_pk: PublicKey<CS::AkeGroup>,
 }
 
 // Cannot be derived because it would require for CS to be Clone.
@@ -107,7 +107,7 @@ impl<CS: CipherSuite> RegistrationResponse<CS> {
     /// Deserialization from bytes
     pub fn deserialize(input: &[u8]) -> Result<Self, ProtocolError> {
         let elem_len = <CS::Group as Group>::ElemLen::to_usize();
-        let key_len = <PublicKey<CS::Group> as SizedBytes>::Len::to_usize();
+        let key_len = <PublicKey<CS::AkeGroup> as SizedBytes>::Len::to_usize();
         let checked_slice =
             check_slice_size(input, elem_len + key_len, "registration_response_bytes")?;
 
@@ -122,7 +122,7 @@ impl<CS: CipherSuite> RegistrationResponse<CS> {
         }
 
         // Ensure that public key is valid
-        let server_s_pk = KeyPair::<CS::Group>::check_public_key(PublicKey::from_bytes(
+        let server_s_pk = KeyPair::<CS::AkeGroup>::check_public_key(PublicKey::from_bytes(
             &checked_slice[elem_len..],
         )?)?;
 
@@ -151,7 +151,7 @@ pub struct RegistrationUpload<CS: CipherSuite> {
     /// The masking key used to mask the envelope
     pub(crate) masking_key: GenericArray<u8, <CS::Hash as Digest>::OutputSize>,
     /// The user's public key
-    pub(crate) client_s_pk: PublicKey<CS::Group>,
+    pub(crate) client_s_pk: PublicKey<CS::AkeGroup>,
 }
 
 impl_clone_for!(
@@ -176,7 +176,7 @@ impl<CS: CipherSuite> RegistrationUpload<CS> {
 
     /// Deserialization from bytes
     pub fn deserialize(input: &[u8]) -> Result<Self, ProtocolError> {
-        let key_len = <PublicKey<CS::Group> as SizedBytes>::Len::to_usize();
+        let key_len = <PublicKey<CS::AkeGroup> as SizedBytes>::Len::to_usize();
         let hash_len = <CS::Hash as Digest>::OutputSize::to_usize();
         let checked_slice =
             check_slice_size_atleast(input, key_len + hash_len, "registration_upload_bytes")?;
@@ -186,14 +186,14 @@ impl<CS: CipherSuite> RegistrationUpload<CS> {
             masking_key: GenericArray::clone_from_slice(
                 &checked_slice[key_len..key_len + hash_len],
             ),
-            client_s_pk: KeyPair::<CS::Group>::check_public_key(PublicKey::from_bytes(
+            client_s_pk: KeyPair::<CS::AkeGroup>::check_public_key(PublicKey::from_bytes(
                 &checked_slice[..key_len],
             )?)?,
         })
     }
 
     // Creates a dummy instance used for faking a [CredentialResponse]
-    pub(crate) fn dummy<R: RngCore + CryptoRng, S: SecretKey<CS::Group>>(
+    pub(crate) fn dummy<R: RngCore + CryptoRng, S: SecretKey<CS::AkeGroup>>(
         rng: &mut R,
         server_setup: &ServerSetup<CS, S>,
     ) -> Self {
@@ -214,7 +214,7 @@ impl_serialize_and_deserialize_for!(RegistrationUpload);
 pub struct CredentialRequest<CS: CipherSuite> {
     /// blinded password information
     pub(crate) alpha: CS::Group,
-    pub(crate) ke1_message: <CS::KeyExchange as KeyExchange<CS::Hash, CS::Group>>::KE1Message,
+    pub(crate) ke1_message: <CS::KeyExchange as KeyExchange<CS::Hash, CS::AkeGroup>>::KE1Message,
 }
 
 // Cannot be derived because it would require for CS to be Clone.
@@ -232,7 +232,7 @@ impl_debug_eq_hash_for!(
     [alpha, ke1_message],
     [
         CS::Group,
-        <CS::KeyExchange as KeyExchange<CS::Hash, CS::Group>>::KE1Message
+        <CS::KeyExchange as KeyExchange<CS::Hash, CS::AkeGroup>>::KE1Message
     ],
 );
 
@@ -259,7 +259,7 @@ impl<CS: CipherSuite> CredentialRequest<CS> {
         }
 
         let ke1_message =
-            <CS::KeyExchange as KeyExchange<CS::Hash, CS::Group>>::KE1Message::from_bytes::<CS>(
+            <CS::KeyExchange as KeyExchange<CS::Hash, CS::AkeGroup>>::KE1Message::from_bytes::<CS>(
                 &checked_slice[elem_len..],
             )?;
 
@@ -282,7 +282,7 @@ pub struct CredentialResponse<CS: CipherSuite> {
     pub(crate) beta: CS::Group,
     pub(crate) masking_nonce: Vec<u8>,
     pub(crate) masked_response: Vec<u8>,
-    pub(crate) ke2_message: <CS::KeyExchange as KeyExchange<CS::Hash, CS::Group>>::KE2Message,
+    pub(crate) ke2_message: <CS::KeyExchange as KeyExchange<CS::Hash, CS::AkeGroup>>::KE2Message,
 }
 
 // Cannot be derived because it would require for CS to be Clone.
@@ -302,7 +302,7 @@ impl_debug_eq_hash_for!(
     [beta, masking_nonce, masked_response, ke2_message],
     [
         CS::Group,
-        <CS::KeyExchange as KeyExchange<CS::Hash, CS::Group>>::KE2Message,
+        <CS::KeyExchange as KeyExchange<CS::Hash, CS::AkeGroup>>::KE2Message,
     ],
 );
 
@@ -327,7 +327,7 @@ impl<CS: CipherSuite> CredentialResponse<CS> {
     /// Deserialization from bytes
     pub fn deserialize(input: &[u8]) -> Result<Self, ProtocolError> {
         let elem_len = <CS::Group as Group>::ElemLen::to_usize();
-        let key_len = <PublicKey<CS::Group> as SizedBytes>::Len::to_usize();
+        let key_len = <PublicKey<CS::AkeGroup> as SizedBytes>::Len::to_usize();
         let nonce_len: usize = 32;
         let envelope_len = Envelope::<CS>::len();
         let masked_response_len = key_len + envelope_len;
@@ -355,7 +355,7 @@ impl<CS: CipherSuite> CredentialResponse<CS> {
             [elem_len + nonce_len..elem_len + nonce_len + masked_response_len]
             .to_vec();
         let ke2_message =
-            <CS::KeyExchange as KeyExchange<CS::Hash, CS::Group>>::KE2Message::from_bytes::<CS>(
+            <CS::KeyExchange as KeyExchange<CS::Hash, CS::AkeGroup>>::KE2Message::from_bytes::<CS>(
                 &checked_slice[elem_len + nonce_len + masked_response_len..],
             )?;
 
@@ -385,14 +385,14 @@ impl_serialize_and_deserialize_for!(CredentialResponse);
 /// The answer sent by the client to the server, upon reception of the
 /// sealed envelope
 pub struct CredentialFinalization<CS: CipherSuite> {
-    pub(crate) ke3_message: <CS::KeyExchange as KeyExchange<CS::Hash, CS::Group>>::KE3Message,
+    pub(crate) ke3_message: <CS::KeyExchange as KeyExchange<CS::Hash, CS::AkeGroup>>::KE3Message,
 }
 
 impl_clone_for!(struct CredentialFinalization<CS: CipherSuite>, [ke3_message]);
 impl_debug_eq_hash_for!(
     struct CredentialFinalization<CS: CipherSuite>,
     [ke3_message],
-    [<CS::KeyExchange as KeyExchange<CS::Hash, CS::Group>>::KE3Message],
+    [<CS::KeyExchange as KeyExchange<CS::Hash, CS::AkeGroup>>::KE3Message],
 );
 
 impl<CS: CipherSuite> CredentialFinalization<CS> {
@@ -404,7 +404,7 @@ impl<CS: CipherSuite> CredentialFinalization<CS> {
     /// Deserialization from bytes
     pub fn deserialize(input: &[u8]) -> Result<Self, ProtocolError> {
         let ke3_message =
-            <CS::KeyExchange as KeyExchange<CS::Hash, CS::Group>>::KE3Message::from_bytes::<CS>(
+            <CS::KeyExchange as KeyExchange<CS::Hash, CS::AkeGroup>>::KE3Message::from_bytes::<CS>(
                 input,
             )?;
         Ok(Self { ke3_message })
