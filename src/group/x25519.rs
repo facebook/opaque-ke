@@ -15,11 +15,11 @@ impl Group for MontgomeryPoint {
     const SUITE_ID: usize = 0xFFFF;
 
     fn map_to_curve<H: Hash>(_msg: &[u8], _dst: &[u8]) -> Result<Self, ProtocolError> {
-        unreachable!("this algorithm should only be used as the `AkeGroup`")
+        unreachable!("this algorithm should only be used as the `KeGroup`")
     }
 
     fn hash_to_scalar<H: Hash>(_input: &[u8], _dst: &[u8]) -> Result<Self::Scalar, ProtocolError> {
-        unreachable!("this algorithm should only be used as the `AkeGroup`")
+        unreachable!("this algorithm should only be used as the `KeGroup`")
     }
 
     type Scalar = Scalar;
@@ -57,7 +57,7 @@ impl Group for MontgomeryPoint {
         scalar.to_bytes().into()
     }
     fn scalar_invert(_scalar: &Self::Scalar) -> Self::Scalar {
-        unreachable!("this algorithm should only be used as the `AkeGroup`")
+        unreachable!("this algorithm should only be used as the `KeGroup`")
     }
 
     // The byte length necessary to represent group elements
@@ -82,11 +82,11 @@ impl Group for MontgomeryPoint {
 
     /// Returns if the group element is equal to the identity (1)
     fn is_identity(&self) -> bool {
-        unreachable!("this algorithm should only be used as the `AkeGroup`")
+        unreachable!("this algorithm should only be used as the `KeGroup`")
     }
 
     fn ct_equal(&self, _other: &Self) -> bool {
-        unreachable!("this algorithm should only be used as the `AkeGroup`")
+        unreachable!("this algorithm should only be used as the `KeGroup`")
     }
 }
 
@@ -104,8 +104,8 @@ fn test() -> Result<(), ProtocolError> {
 
     struct X25519Sha512NoSlowHash;
     impl CipherSuite for X25519Sha512NoSlowHash {
-        type Group = RistrettoPoint;
-        type AkeGroup = MontgomeryPoint;
+        type OprfGroup = RistrettoPoint;
+        type KeGroup = MontgomeryPoint;
         type KeyExchange = TripleDH;
         type Hash = sha2::Sha512;
         type SlowHash = NoOpHash;

@@ -17,8 +17,8 @@ use serde_json::Value;
 
 struct Ristretto255Sha512NoSlowHash;
 impl CipherSuite for Ristretto255Sha512NoSlowHash {
-    type Group = RistrettoPoint;
-    type AkeGroup = RistrettoPoint;
+    type OprfGroup = RistrettoPoint;
+    type KeGroup = RistrettoPoint;
     type KeyExchange = TripleDH;
     type Hash = sha2::Sha512;
     type SlowHash = NoOpHash;
@@ -28,8 +28,8 @@ impl CipherSuite for Ristretto255Sha512NoSlowHash {
 struct P256Sha256NoSlowHash;
 #[cfg(feature = "p256")]
 impl CipherSuite for P256Sha256NoSlowHash {
-    type Group = p256_::ProjectivePoint;
-    type AkeGroup = p256_::ProjectivePoint;
+    type OprfGroup = p256_::ProjectivePoint;
+    type KeGroup = p256_::ProjectivePoint;
     type KeyExchange = TripleDH;
     type Hash = sha2::Sha256;
     type SlowHash = NoOpHash;
@@ -752,7 +752,7 @@ fn populate_test_vectors<CS: CipherSuite>(values: &Value) -> TestVectorParameter
         dummy_private_key: parse_default!(
             values,
             "client_private_key",
-            vec![0u8; <PrivateKey<CS::Group> as SizedBytes>::Len::to_usize()]
+            vec![0u8; <PrivateKey<CS::OprfGroup> as SizedBytes>::Len::to_usize()]
         ),
         dummy_masking_key: parse_default!(values, "masking_key", vec![0u8; 64]),
         context: parse!(values, "Context"),

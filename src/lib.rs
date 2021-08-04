@@ -26,8 +26,8 @@
 //! use opaque_ke::CipherSuite;
 //! struct Default;
 //! impl CipherSuite for Default {
-//!     type Group = curve25519_dalek::ristretto::RistrettoPoint;
-//!     type AkeGroup = curve25519_dalek::ristretto::RistrettoPoint;
+//!     type OprfGroup = curve25519_dalek::ristretto::RistrettoPoint;
+//!     type KeGroup = curve25519_dalek::ristretto::RistrettoPoint;
 //!     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
 //!     type Hash = sha2::Sha512;
 //!     type SlowHash = opaque_ke::slow_hash::NoOpHash;
@@ -48,8 +48,8 @@
 //! # use opaque_ke::ServerSetup;
 //! # struct Default;
 //! # impl CipherSuite for Default {
-//! #     type Group = curve25519_dalek::ristretto::RistrettoPoint;
-//! #     type AkeGroup = curve25519_dalek::ristretto::RistrettoPoint;
+//! #     type OprfGroup = curve25519_dalek::ristretto::RistrettoPoint;
+//! #     type KeGroup = curve25519_dalek::ristretto::RistrettoPoint;
 //! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
 //! #     type Hash = sha2::Sha512;
 //! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
@@ -81,8 +81,8 @@
 //! # use opaque_ke::CipherSuite;
 //! # struct Default;
 //! # impl CipherSuite for Default {
-//! #     type Group = curve25519_dalek::ristretto::RistrettoPoint;
-//! #     type AkeGroup = curve25519_dalek::ristretto::RistrettoPoint;
+//! #     type OprfGroup = curve25519_dalek::ristretto::RistrettoPoint;
+//! #     type KeGroup = curve25519_dalek::ristretto::RistrettoPoint;
 //! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
 //! #     type Hash = sha2::Sha512;
 //! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
@@ -112,8 +112,8 @@
 //! # use opaque_ke::CipherSuite;
 //! # struct Default;
 //! # impl CipherSuite for Default {
-//! #     type Group = curve25519_dalek::ristretto::RistrettoPoint;
-//! #     type AkeGroup = curve25519_dalek::ristretto::RistrettoPoint;
+//! #     type OprfGroup = curve25519_dalek::ristretto::RistrettoPoint;
+//! #     type KeGroup = curve25519_dalek::ristretto::RistrettoPoint;
 //! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
 //! #     type Hash = sha2::Sha512;
 //! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
@@ -150,8 +150,8 @@
 //! # use opaque_ke::CipherSuite;
 //! # struct Default;
 //! # impl CipherSuite for Default {
-//! #     type Group = curve25519_dalek::ristretto::RistrettoPoint;
-//! #     type AkeGroup = curve25519_dalek::ristretto::RistrettoPoint;
+//! #     type OprfGroup = curve25519_dalek::ristretto::RistrettoPoint;
+//! #     type KeGroup = curve25519_dalek::ristretto::RistrettoPoint;
 //! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
 //! #     type Hash = sha2::Sha512;
 //! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
@@ -189,8 +189,8 @@
 //! # use opaque_ke::CipherSuite;
 //! # struct Default;
 //! # impl CipherSuite for Default {
-//! #     type Group = curve25519_dalek::ristretto::RistrettoPoint;
-//! #     type AkeGroup = curve25519_dalek::ristretto::RistrettoPoint;
+//! #     type OprfGroup = curve25519_dalek::ristretto::RistrettoPoint;
+//! #     type KeGroup = curve25519_dalek::ristretto::RistrettoPoint;
 //! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
 //! #     type Hash = sha2::Sha512;
 //! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
@@ -232,8 +232,8 @@
 //! # use opaque_ke::CipherSuite;
 //! # struct Default;
 //! # impl CipherSuite for Default {
-//! #     type Group = curve25519_dalek::ristretto::RistrettoPoint;
-//! #     type AkeGroup = curve25519_dalek::ristretto::RistrettoPoint;
+//! #     type OprfGroup = curve25519_dalek::ristretto::RistrettoPoint;
+//! #     type KeGroup = curve25519_dalek::ristretto::RistrettoPoint;
 //! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
 //! #     type Hash = sha2::Sha512;
 //! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
@@ -266,8 +266,8 @@
 //! # use opaque_ke::CipherSuite;
 //! # struct Default;
 //! # impl CipherSuite for Default {
-//! #     type Group = curve25519_dalek::ristretto::RistrettoPoint;
-//! #     type AkeGroup = curve25519_dalek::ristretto::RistrettoPoint;
+//! #     type OprfGroup = curve25519_dalek::ristretto::RistrettoPoint;
+//! #     type KeGroup = curve25519_dalek::ristretto::RistrettoPoint;
 //! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
 //! #     type Hash = sha2::Sha512;
 //! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
@@ -320,8 +320,8 @@
 //! # use opaque_ke::CipherSuite;
 //! # struct Default;
 //! # impl CipherSuite for Default {
-//! #     type Group = curve25519_dalek::ristretto::RistrettoPoint;
-//! #     type AkeGroup = curve25519_dalek::ristretto::RistrettoPoint;
+//! #     type OprfGroup = curve25519_dalek::ristretto::RistrettoPoint;
+//! #     type KeGroup = curve25519_dalek::ristretto::RistrettoPoint;
 //! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
 //! #     type Hash = sha2::Sha512;
 //! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
@@ -366,8 +366,8 @@
 //! # use opaque_ke::CipherSuite;
 //! # struct Default;
 //! # impl CipherSuite for Default {
-//! #     type Group = curve25519_dalek::ristretto::RistrettoPoint;
-//! #     type AkeGroup = curve25519_dalek::ristretto::RistrettoPoint;
+//! #     type OprfGroup = curve25519_dalek::ristretto::RistrettoPoint;
+//! #     type KeGroup = curve25519_dalek::ristretto::RistrettoPoint;
 //! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
 //! #     type Hash = sha2::Sha512;
 //! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
@@ -442,8 +442,8 @@
 //! # use opaque_ke::CipherSuite;
 //! # struct Default;
 //! # impl CipherSuite for Default {
-//! #     type Group = curve25519_dalek::ristretto::RistrettoPoint;
-//! #     type AkeGroup = curve25519_dalek::ristretto::RistrettoPoint;
+//! #     type OprfGroup = curve25519_dalek::ristretto::RistrettoPoint;
+//! #     type KeGroup = curve25519_dalek::ristretto::RistrettoPoint;
 //! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
 //! #     type Hash = sha2::Sha512;
 //! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
@@ -520,8 +520,8 @@
 //! # use opaque_ke::CipherSuite;
 //! # struct Default;
 //! # impl CipherSuite for Default {
-//! #     type Group = curve25519_dalek::ristretto::RistrettoPoint;
-//! #     type AkeGroup = curve25519_dalek::ristretto::RistrettoPoint;
+//! #     type OprfGroup = curve25519_dalek::ristretto::RistrettoPoint;
+//! #     type KeGroup = curve25519_dalek::ristretto::RistrettoPoint;
 //! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
 //! #     type Hash = sha2::Sha512;
 //! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
@@ -586,8 +586,8 @@
 //! # use opaque_ke::CipherSuite;
 //! # struct Default;
 //! # impl CipherSuite for Default {
-//! #     type Group = curve25519_dalek::ristretto::RistrettoPoint;
-//! #     type AkeGroup = curve25519_dalek::ristretto::RistrettoPoint;
+//! #     type OprfGroup = curve25519_dalek::ristretto::RistrettoPoint;
+//! #     type KeGroup = curve25519_dalek::ristretto::RistrettoPoint;
 //! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
 //! #     type Hash = sha2::Sha512;
 //! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
@@ -624,8 +624,8 @@
 //! # use opaque_ke::CipherSuite;
 //! # struct Default;
 //! # impl CipherSuite for Default {
-//! #     type Group = curve25519_dalek::ristretto::RistrettoPoint;
-//! #     type AkeGroup = curve25519_dalek::ristretto::RistrettoPoint;
+//! #     type OprfGroup = curve25519_dalek::ristretto::RistrettoPoint;
+//! #     type KeGroup = curve25519_dalek::ristretto::RistrettoPoint;
 //! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
 //! #     type Hash = sha2::Sha512;
 //! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
@@ -674,8 +674,8 @@
 //! # use opaque_ke::CipherSuite;
 //! # struct Default;
 //! # impl CipherSuite for Default {
-//! #     type Group = curve25519_dalek::ristretto::RistrettoPoint;
-//! #     type AkeGroup = curve25519_dalek::ristretto::RistrettoPoint;
+//! #     type OprfGroup = curve25519_dalek::ristretto::RistrettoPoint;
+//! #     type KeGroup = curve25519_dalek::ristretto::RistrettoPoint;
 //! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
 //! #     type Hash = sha2::Sha512;
 //! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
@@ -752,8 +752,8 @@
 //! # use zeroize::Zeroize;
 //! # struct Default;
 //! # impl CipherSuite for Default {
-//! #     type Group = RistrettoPoint;
-//! #     type AkeGroup = curve25519_dalek::ristretto::RistrettoPoint;
+//! #     type OprfGroup = RistrettoPoint;
+//! #     type KeGroup = curve25519_dalek::ristretto::RistrettoPoint;
 //! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
 //! #     type Hash = sha2::Sha512;
 //! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;

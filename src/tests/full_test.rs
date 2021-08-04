@@ -29,8 +29,8 @@ use zeroize::Zeroize;
 
 struct RistrettoSha5123dhNoSlowHash;
 impl CipherSuite for RistrettoSha5123dhNoSlowHash {
-    type Group = RistrettoPoint;
-    type AkeGroup = RistrettoPoint;
+    type OprfGroup = RistrettoPoint;
+    type KeGroup = RistrettoPoint;
     type KeyExchange = TripleDH;
     type Hash = sha2::Sha512;
     type SlowHash = NoOpHash;
@@ -281,11 +281,11 @@ fn generate_parameters<CS: CipherSuite>() -> TestVectorParameters {
     let mut rng = OsRng;
 
     // Inputs
-    let server_s_kp = KeyPair::<CS::Group>::generate_random(&mut rng);
-    let server_e_kp = KeyPair::<CS::Group>::generate_random(&mut rng);
-    let client_s_kp = KeyPair::<CS::Group>::generate_random(&mut rng);
-    let client_e_kp = KeyPair::<CS::Group>::generate_random(&mut rng);
-    let fake_kp = KeyPair::<CS::Group>::generate_random(&mut rng);
+    let server_s_kp = KeyPair::<CS::OprfGroup>::generate_random(&mut rng);
+    let server_e_kp = KeyPair::<CS::OprfGroup>::generate_random(&mut rng);
+    let client_s_kp = KeyPair::<CS::OprfGroup>::generate_random(&mut rng);
+    let client_e_kp = KeyPair::<CS::OprfGroup>::generate_random(&mut rng);
+    let fake_kp = KeyPair::<CS::OprfGroup>::generate_random(&mut rng);
     let credential_identifier = b"credIdentifier";
     let id_u = b"idU";
     let id_s = b"idS";
@@ -308,14 +308,14 @@ fn generate_parameters<CS: CipherSuite>() -> TestVectorParameters {
     )
     .unwrap();
 
-    let blinding_factor = CS::Group::random_nonzero_scalar(&mut rng);
-    let blinding_factor_bytes = CS::Group::scalar_as_bytes(blinding_factor);
+    let blinding_factor = CS::OprfGroup::random_nonzero_scalar(&mut rng);
+    let blinding_factor_bytes = CS::OprfGroup::scalar_as_bytes(blinding_factor);
 
     let mut blinding_factor_registration_rng = CycleRng::new(blinding_factor_bytes.to_vec());
     let client_registration_start_result =
         ClientRegistration::<CS>::start(&mut blinding_factor_registration_rng, password).unwrap();
     let blinding_factor_bytes_returned =
-        CS::Group::scalar_as_bytes(client_registration_start_result.state.token.blind);
+        CS::OprfGroup::scalar_as_bytes(client_registration_start_result.state.token.blind);
     assert_eq!(
         hex::encode(&blinding_factor_bytes),
         hex::encode(&blinding_factor_bytes_returned)

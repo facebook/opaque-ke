@@ -27,8 +27,8 @@ use sha2::Digest;
 
 struct Default;
 impl CipherSuite for Default {
-    type Group = RistrettoPoint;
-    type AkeGroup = RistrettoPoint;
+    type OprfGroup = RistrettoPoint;
+    type KeGroup = RistrettoPoint;
     type KeyExchange = TripleDH;
     type Hash = sha2::Sha512;
     type SlowHash = crate::slow_hash::NoOpHash;
@@ -79,7 +79,7 @@ fn server_registration_roundtrip() {
                                                                            // mock_envelope_bytes.extend_from_slice(&ciphertext); // ciphertext which is an encrypted private key
     mock_envelope_bytes.extend_from_slice(&[0; MAC_SIZE]); // length-MAC_SIZE hmac
 
-    let mock_client_kp = KeyPair::<<Default as CipherSuite>::Group>::generate_random(&mut rng);
+    let mock_client_kp = KeyPair::<<Default as CipherSuite>::OprfGroup>::generate_random(&mut rng);
     // serialization order: oprf_key, public key, envelope
     let mut bytes = Vec::<u8>::new();
     bytes.extend_from_slice(&mock_client_kp.public().to_arr());
@@ -119,7 +119,7 @@ fn registration_response_roundtrip() {
     let pt = random_ristretto_point();
     let beta_bytes = pt.to_arr();
     let mut rng = OsRng;
-    let skp = KeyPair::<<Default as CipherSuite>::Group>::generate_random(&mut rng);
+    let skp = KeyPair::<<Default as CipherSuite>::OprfGroup>::generate_random(&mut rng);
     let pubkey_bytes = skp.public().to_arr();
 
     let mut input = Vec::new();
@@ -145,7 +145,7 @@ fn registration_response_roundtrip() {
 #[test]
 fn registration_upload_roundtrip() {
     let mut rng = OsRng;
-    let skp = KeyPair::<<Default as CipherSuite>::Group>::generate_random(&mut rng);
+    let skp = KeyPair::<<Default as CipherSuite>::OprfGroup>::generate_random(&mut rng);
     let pubkey_bytes = skp.public().to_arr();
 
     let mut key = [0u8; 32];
@@ -177,7 +177,7 @@ fn credential_request_roundtrip() {
     let alpha = random_ristretto_point();
     let alpha_bytes = alpha.to_arr().to_vec();
 
-    let client_e_kp = KeyPair::<<Default as CipherSuite>::Group>::generate_random(&mut rng);
+    let client_e_kp = KeyPair::<<Default as CipherSuite>::OprfGroup>::generate_random(&mut rng);
     let mut client_nonce = vec![0u8; NonceLen::to_usize()];
     rng.fill_bytes(&mut client_nonce);
 
@@ -220,7 +220,7 @@ fn credential_response_roundtrip() {
     ];
     rng.fill_bytes(&mut masked_response);
 
-    let server_e_kp = KeyPair::<<Default as CipherSuite>::Group>::generate_random(&mut rng);
+    let server_e_kp = KeyPair::<<Default as CipherSuite>::OprfGroup>::generate_random(&mut rng);
     let mut mac = [0u8; MAC_SIZE];
     rng.fill_bytes(&mut mac);
     let mut server_nonce = vec![0u8; NonceLen::to_usize()];
@@ -275,7 +275,7 @@ fn client_login_roundtrip() {
     let mut rng = OsRng;
     let sc = <RistrettoPoint as Group>::random_nonzero_scalar(&mut rng);
 
-    let client_e_kp = KeyPair::<<Default as CipherSuite>::Group>::generate_random(&mut rng);
+    let client_e_kp = KeyPair::<<Default as CipherSuite>::OprfGroup>::generate_random(&mut rng);
     let mut client_nonce = vec![0u8; NonceLen::to_usize()];
     rng.fill_bytes(&mut client_nonce);
 
@@ -299,7 +299,7 @@ fn client_login_roundtrip() {
 fn ke1_message_roundtrip() {
     let mut rng = OsRng;
 
-    let client_e_kp = KeyPair::<<Default as CipherSuite>::Group>::generate_random(&mut rng);
+    let client_e_kp = KeyPair::<<Default as CipherSuite>::OprfGroup>::generate_random(&mut rng);
     let mut client_nonce = vec![0u8; NonceLen::to_usize()];
     rng.fill_bytes(&mut client_nonce);
 
@@ -316,7 +316,7 @@ fn ke1_message_roundtrip() {
 fn ke2_message_roundtrip() {
     let mut rng = OsRng;
 
-    let server_e_kp = KeyPair::<<Default as CipherSuite>::Group>::generate_random(&mut rng);
+    let server_e_kp = KeyPair::<<Default as CipherSuite>::OprfGroup>::generate_random(&mut rng);
     let mut mac = [0u8; MAC_SIZE];
     rng.fill_bytes(&mut mac);
     let mut server_nonce = vec![0u8; NonceLen::to_usize()];

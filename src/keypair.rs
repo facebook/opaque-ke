@@ -462,8 +462,8 @@ mod tests {
         struct Default;
 
         impl CipherSuite for Default {
-            type Group = RistrettoPoint;
-            type AkeGroup = RistrettoPoint;
+            type OprfGroup = RistrettoPoint;
+            type KeGroup = RistrettoPoint;
             type KeyExchange = crate::key_exchange::tripledh::TripleDH;
             type Hash = sha2::Sha512;
             type SlowHash = crate::slow_hash::NoOpHash;
