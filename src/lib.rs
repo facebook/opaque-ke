@@ -16,7 +16,9 @@
 //!
 //! OPAQUE is a protocol between a client and a server. They must first agree on a collection of primitives
 //! to be kept consistent throughout protocol execution. These include:
-//! * a finite cyclic group along with a point representation,
+//! * a finite cyclic group along with a point representation
+//!   * for the OPRF and
+//!   * for the key exchange
 //! * a key exchange protocol,
 //! * a hashing function, and
 //! * a slow hashing function.
