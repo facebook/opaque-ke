@@ -411,7 +411,7 @@ impl<G: Group, HashLen: ArrayLength<u8>> FromBytes for Ke2Message<G, HashLen> {
         )?;
 
         // Check the public key bytes
-        let server_e_pk = KeyPair::<CS::Group>::check_public_key(PublicKey::from_bytes(
+        let server_e_pk = KeyPair::<CS::OprfGroup>::check_public_key(PublicKey::from_bytes(
             &unchecked_server_e_pk[..key_len],
         )?)?;
 
