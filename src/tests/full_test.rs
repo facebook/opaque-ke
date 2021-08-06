@@ -5,6 +5,17 @@
 
 #![allow(unsafe_code)]
 
+#[cfg(feature = "alloc")]
+use alloc::{
+    string::{String, ToString},
+    vec::Vec,
+};
+#[cfg(feature = "std")]
+use std::{
+    string::{String, ToString},
+    vec::Vec,
+};
+
 use crate::{
     ciphersuite::CipherSuite,
     errors::*,

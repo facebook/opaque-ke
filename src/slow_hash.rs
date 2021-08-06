@@ -5,6 +5,11 @@
 
 //! Trait specifying a slow hashing function
 
+#[cfg(feature = "alloc")]
+use alloc::vec::Vec;
+#[cfg(feature = "std")]
+use std::vec::Vec;
+
 use crate::{errors::InternalPakeError, hash::Hash};
 use digest::Digest;
 #[cfg(feature = "slow-hash")]

@@ -5,6 +5,11 @@
 
 //! Provides the main OPAQUE API
 
+#[cfg(feature = "alloc")]
+use alloc::vec::Vec;
+#[cfg(feature = "std")]
+use std::vec::Vec;
+
 use crate::{
     ciphersuite::CipherSuite,
     envelope::Envelope,
@@ -19,12 +24,12 @@ use crate::{
     CredentialFinalization, CredentialRequest, CredentialResponse, RegistrationRequest,
     RegistrationResponse, RegistrationUpload,
 };
+use core::marker::PhantomData;
 use digest::Digest;
 use generic_array::{typenum::Unsigned, GenericArray};
 use generic_bytes::SizedBytes;
 use hkdf::Hkdf;
 use rand::{CryptoRng, RngCore};
-use std::marker::PhantomData;
 use zeroize::Zeroize;
 
 const STR_CREDENTIAL_RESPONSE_PAD: &[u8] = b"CredentialResponsePad";

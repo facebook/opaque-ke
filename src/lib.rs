@@ -803,15 +803,33 @@
 //!
 //! - The `bench` feature is used only for running performance benchmarks for this implementation.
 //!
+//! - The `alloc` feature can be enabled as an alternative to `std` (which is enabled by default). This
+//! can be used for supporting WebAssembly targets.
+//!
 
 #![cfg_attr(not(feature = "bench"), deny(missing_docs))]
 #![deny(unsafe_code)]
+#![no_std]
 
 #[cfg(not(any(feature = "u64_backend", feature = "u32_backend",)))]
 compile_error!(
     "no dalek arithmetic backend cargo feature enabled! \
      please enable one of: u64_backend, u32_backend"
 );
+
+#[cfg(not(any(feature = "std", feature = "alloc")))]
+compile_error!("Either feature \"std\" or \"alloc\" must be enabled for this crate.");
+
+#[cfg(all(feature = "alloc", feature = "std"))]
+compile_error!("This crate does not support features \"alloc\" and \"std\" simultaneously.");
+
+#[cfg(feature = "alloc")]
+#[macro_use]
+extern crate alloc;
+
+#[cfg(any(feature = "std", test))]
+#[macro_use]
+extern crate std;
 
 // Error types
 pub mod errors;

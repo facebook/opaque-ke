@@ -39,7 +39,7 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: test
-          args: --no-default-features --features ${{ matrix.backend_feature }}
+          args: --no-default-features --features std, ${{ matrix.backend_feature }}
 
   cross-test:
     name: Test on ${{ matrix.target }} (using cross)
@@ -60,7 +60,7 @@ jobs:
       - run: cargo install cross
       # Note: just use `cross` as you would `cargo`, but always
       # pass the `--target=${{ matrix.target }}` arg. (Yes, really).
-      - run: cross test --verbose --target=${{ matrix.target }} --no-default-features --features ${{ matrix.backend_feature }}
+      - run: cross test --verbose --target=${{ matrix.target }} --no-default-features --features std, ${{ matrix.backend_feature }}
 
 
   slow-hash-test:
@@ -76,7 +76,7 @@ jobs:
     steps:
       - uses: actions/checkout@v2
       - uses: hecrj/setup-rust-action@v1
-      - run: cargo test --verbose --features slow-hash --no-default-features --features ${{ matrix.backend_feature }}
+      - run: cargo test --verbose --features slow-hash --no-default-features --features std, ${{ matrix.backend_feature }}
 
   serde-test:
     name: Test on ${{ matrix.target }} with serde support
@@ -91,8 +91,33 @@ jobs:
     steps:
       - uses: actions/checkout@v2
       - uses: hecrj/setup-rust-action@v1
-      - run: cargo test --verbose --features serialize --no-default-features --features ${{ matrix.backend_feature }}
+      - run: cargo test --verbose --features serialize --no-default-features --features std, ${{ matrix.backend_feature }}
 
+  no-std:
+    name: no-std
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        toolchain:
+          - stable
+          - 1.51.0
+        target:
+          - wasm32-unknown-unknown
+    steps:
+      - uses: actions/checkout@v2
+      - name: install rust
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: ${{ matrix.toolchain }}
+          override: true
+      - run: rustup target add wasm32-unknown-unknown
+      - name: Build
+        uses: actions-rs/cargo@v1
+        with:
+          command: build
+          args: --verbose --no-default-features --features alloc --target ${{ matrix.target }}
 
   simple-login-test:
     runs-on: ubuntu-latest

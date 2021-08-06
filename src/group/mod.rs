@@ -11,11 +11,16 @@ mod expand;
 pub(crate) mod p256;
 mod ristretto;
 
+#[cfg(feature = "alloc")]
+use alloc::vec::Vec;
+#[cfg(feature = "std")]
+use std::vec::Vec;
+
 use crate::errors::{InternalPakeError, ProtocolError};
 use crate::hash::Hash;
+use core::ops::Mul;
 use generic_array::{ArrayLength, GenericArray};
 use rand::{CryptoRng, RngCore};
-use std::ops::Mul;
 use zeroize::Zeroize;
 
 /// A prime-order subgroup of a base field (EC, prime-order field ...). This

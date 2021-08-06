@@ -5,6 +5,11 @@
 
 //! Contains the messages used for OPAQUE
 
+#[cfg(feature = "alloc")]
+use alloc::vec::Vec;
+#[cfg(feature = "std")]
+use std::vec::Vec;
+
 use crate::{
     ciphersuite::CipherSuite,
     envelope::Envelope,

@@ -10,7 +10,9 @@ edition = "2018"
 readme = "README.md"
 
 [features]
-default = ["u64_backend", "serialize"]
+alloc = []
+std = []
+default = ["u64_backend", "serialize", "std"]
 slow-hash = ["argon2"]
 p256 = ["num-bigint", "num-integer", "num-traits", "once_cell", "p256_"]
 bench = []

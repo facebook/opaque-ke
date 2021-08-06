@@ -3,6 +3,11 @@
 // This source code is licensed under the MIT license found in the
 // LICENSE file in the root directory of this source tree.
 
+#[cfg(feature = "alloc")]
+use alloc::{string::ToString, vec::Vec};
+#[cfg(feature = "std")]
+use std::{string::ToString, vec::Vec};
+
 use crate::group::Group;
 use crate::hash::Hash;
 use crate::tests::mock_rng::CycleRng;

@@ -3,6 +3,11 @@
 // This source code is licensed under the MIT license found in the
 // LICENSE file in the root directory of this source tree.
 
+#[cfg(feature = "alloc")]
+use alloc::vec::Vec;
+#[cfg(feature = "std")]
+use std::vec::Vec;
+
 use crate::errors::{InternalPakeError, ProtocolError};
 use crate::hash::Hash;
 use crate::serialization::i2osp;
@@ -66,6 +71,7 @@ pub fn expand_message_xmd<H: Hash>(
 
 #[cfg(test)]
 mod tests {
+    use super::*;
 
     struct Params {
         msg: &'static str,

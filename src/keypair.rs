@@ -7,8 +7,15 @@
 
 #![allow(unsafe_code)]
 
+#[cfg(feature = "alloc")]
+use alloc::{borrow::ToOwned, vec::Vec};
+#[cfg(feature = "std")]
+use std::{borrow::ToOwned, vec::Vec};
+
 use crate::errors::{InternalPakeError, ProtocolError};
 use crate::group::Group;
+use core::fmt::Debug;
+use core::ops::Deref;
 #[cfg(test)]
 use generic_array::typenum::Unsigned;
 use generic_array::{ArrayLength, GenericArray};
@@ -18,8 +25,6 @@ use proptest::prelude::*;
 #[cfg(test)]
 use rand::{rngs::StdRng, SeedableRng};
 use rand::{CryptoRng, RngCore};
-use std::fmt::Debug;
-use std::ops::Deref;
 use zeroize::Zeroize;
 
 /// Convenience extension trait of SizedBytes
@@ -57,7 +62,7 @@ impl<G: Group, S: SecretKey<G>> Clone for KeyPair<G, S> {
 }
 
 impl<G: Group, S: SecretKey<G> + Debug> Debug for KeyPair<G, S> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.debug_struct("KeyPair")
             .field("pk", &self.pk)
             .field("sk", &self.sk)
@@ -73,8 +78,8 @@ impl<G: Group, S: SecretKey<G> + PartialEq> PartialEq for KeyPair<G, S> {
 
 impl<G: Group, S: SecretKey<G> + Eq> Eq for KeyPair<G, S> {}
 
-impl<G: Group, S: SecretKey<G> + std::hash::Hash> std::hash::Hash for KeyPair<G, S> {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+impl<G: Group, S: SecretKey<G> + core::hash::Hash> core::hash::Hash for KeyPair<G, S> {
+    fn hash<H: core::hash::Hasher>(&self, state: &mut H) {
         self.pk.hash(state);
         self.sk.hash(state);
     }
@@ -179,7 +184,7 @@ impl<L: ArrayLength<u8>> Clone for Key<L> {
 }
 
 impl<L: ArrayLength<u8>> Debug for Key<L> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.debug_tuple("Key").field(&self.0).finish()
     }
 }
@@ -192,8 +197,8 @@ impl<L: ArrayLength<u8>> PartialEq for Key<L> {
     }
 }
 
-impl<L: ArrayLength<u8>> std::hash::Hash for Key<L> {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+impl<L: ArrayLength<u8>> core::hash::Hash for Key<L> {
+    fn hash<H: core::hash::Hasher>(&self, state: &mut H) {
         self.0.hash(state);
     }
 }
@@ -297,7 +302,7 @@ pub trait SecretKey<G: Group>: Clone + Sized + Zeroize {
 }
 
 impl<G: Group> SecretKey<G> for PrivateKey<G> {
-    type Error = std::convert::Infallible;
+    type Error = core::convert::Infallible;
 
     fn diffie_hellman(&self, pk: PublicKey<G>) -> Result<Vec<u8>, InternalPakeError> {
         let pk_data = GenericArray::<u8, G::ElemLen>::from_slice(&pk.0[..]);
@@ -373,10 +378,10 @@ impl<G: Group> SizedBytes for PublicKey<G> {
 mod tests {
     use super::*;
     use crate::errors::*;
+    use core::slice::from_raw_parts;
     use curve25519_dalek::ristretto::RistrettoPoint;
     use generic_array::typenum::Unsigned;
     use rand::rngs::OsRng;
-    use std::slice::from_raw_parts;
 
     #[test]
     fn test_zeroize_key() -> Result<(), ProtocolError> {
@@ -423,15 +428,15 @@ mod tests {
         fn test_ristretto_pub_from_priv(kp in KeyPair::<RistrettoPoint>::uniform_keypair_strategy()) {
             let pk = kp.public();
             let sk = kp.private();
-            prop_assert_eq!(&sk.public_key()?, pk);
+            prop_assert_eq!(&sk.public_key().unwrap(), pk);
         }
 
         #[test]
         fn test_ristretto_dh(kp1 in KeyPair::<RistrettoPoint>::uniform_keypair_strategy(),
                           kp2 in KeyPair::<RistrettoPoint>::uniform_keypair_strategy()) {
 
-            let dh1 = kp2.private().diffie_hellman(kp1.public().clone())?;
-            let dh2 = kp1.private().diffie_hellman(kp2.public().clone())?;
+            let dh1 = kp2.private().diffie_hellman(kp1.public().clone()).unwrap();
+            let dh2 = kp1.private().diffie_hellman(kp2.public().clone()).unwrap();
 
             prop_assert_eq!(dh1, dh2);
         }
@@ -440,7 +445,7 @@ mod tests {
         fn test_private_key_slice(kp in KeyPair::<RistrettoPoint>::uniform_keypair_strategy()) {
             let sk_bytes = kp.private().to_vec();
 
-            let kp2 = KeyPair::<RistrettoPoint>::from_private_key_slice(&sk_bytes)?;
+            let kp2 = KeyPair::<RistrettoPoint>::from_private_key_slice(&sk_bytes).unwrap();
             let kp2_private_bytes = kp2.private().to_vec();
 
             prop_assert_eq!(sk_bytes, kp2_private_bytes);
@@ -472,7 +477,7 @@ mod tests {
         struct RemoteKey(PrivateKey<RistrettoPoint>);
 
         impl SecretKey<RistrettoPoint> for RemoteKey {
-            type Error = std::convert::Infallible;
+            type Error = core::convert::Infallible;
 
             fn diffie_hellman(
                 &self,
@@ -501,27 +506,29 @@ mod tests {
         let sk = RistrettoPoint::random_nonzero_scalar(&mut OsRng);
         let sk_bytes = RistrettoPoint::scalar_as_bytes(sk);
         let sk = RemoteKey(PrivateKey::from_arr(&sk_bytes).unwrap());
-        let keypair = KeyPair::from_private_key(sk)?;
+        let keypair = KeyPair::from_private_key(sk).unwrap();
 
         let server_setup = ServerSetup::<Default, RemoteKey>::new_with_key(&mut OsRng, keypair);
 
         let ClientRegistrationStartResult {
             message,
             state: client,
-        } = ClientRegistration::<Default>::start(&mut OsRng, PASSWORD.as_bytes())?;
+        } = ClientRegistration::<Default>::start(&mut OsRng, PASSWORD.as_bytes()).unwrap();
         let ServerRegistrationStartResult { message, .. } =
-            ServerRegistration::start(&server_setup, message, &[])?;
-        let ClientRegistrationFinishResult { message, .. } = client.finish(
-            &mut OsRng,
-            message,
-            ClientRegistrationFinishParameters::Default,
-        )?;
+            ServerRegistration::start(&server_setup, message, &[]).unwrap();
+        let ClientRegistrationFinishResult { message, .. } = client
+            .finish(
+                &mut OsRng,
+                message,
+                ClientRegistrationFinishParameters::Default,
+            )
+            .unwrap();
         let file = ServerRegistration::finish(message);
 
         let ClientLoginStartResult {
             message,
             state: client,
-        } = ClientLogin::<Default>::start(&mut OsRng, PASSWORD.as_bytes())?;
+        } = ClientLogin::<Default>::start(&mut OsRng, PASSWORD.as_bytes()).unwrap();
         let ServerLoginStartResult {
             message,
             state: server,
@@ -533,10 +540,12 @@ mod tests {
             message,
             &[],
             ServerLoginStartParameters::default(),
-        )?;
-        let ClientLoginFinishResult { message, .. } =
-            client.finish(message, ClientLoginFinishParameters::Default)?;
-        server.finish(message)?;
+        )
+        .unwrap();
+        let ClientLoginFinishResult { message, .. } = client
+            .finish(message, ClientLoginFinishParameters::Default)
+            .unwrap();
+        server.finish(message).unwrap();
 
         Ok(())
     }

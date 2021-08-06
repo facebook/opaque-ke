@@ -3,6 +3,11 @@
 // This source code is licensed under the MIT license found in the
 // LICENSE file in the root directory of this source tree.
 
+#[cfg(feature = "alloc")]
+use alloc::vec::Vec;
+#[cfg(feature = "std")]
+use std::vec::Vec;
+
 use crate::{errors::ProtocolError, group::Group, hash::Hash, serialization::serialize};
 use digest::Digest;
 use generic_array::GenericArray;

@@ -3,6 +3,17 @@
 // This source code is licensed under the MIT license found in the
 // LICENSE file in the root directory of this source tree.
 
+#[cfg(feature = "alloc")]
+use alloc::{
+    string::{String, ToString},
+    vec::Vec,
+};
+#[cfg(feature = "std")]
+use std::{
+    string::{String, ToString},
+    vec::Vec,
+};
+
 use crate::{
     ciphersuite::CipherSuite, errors::*, key_exchange::tripledh::TripleDH, keypair::PrivateKey,
     opaque::*, slow_hash::NoOpHash, tests::mock_rng::CycleRng, *,

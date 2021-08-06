@@ -11,6 +11,7 @@
 use super::Group;
 use crate::errors::{InternalPakeError, ProtocolError};
 use crate::hash::Hash;
+use alloc::{string::ToString, vec::Vec};
 use generic_array::typenum::{U32, U33};
 use generic_array::{ArrayLength, GenericArray};
 use num_bigint::{BigInt, Sign};

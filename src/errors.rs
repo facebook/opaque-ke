@@ -4,14 +4,11 @@
 // LICENSE file in the root directory of this source tree.
 
 //! A list of error types which are produced during an execution of the protocol
-use std::convert::Infallible;
-use std::error::Error;
-use std::fmt::Debug;
-
-use displaydoc::Display;
+use core::convert::Infallible;
+use core::fmt::{Debug, Display};
 
 /// Represents an error in the manipulation of internal cryptographic data
-#[derive(Clone, Display, Eq, Hash, PartialEq)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub enum InternalPakeError<T = Infallible> {
     /// Custom [`SecretKey`](crate::keypair::SecretKey) error type
     Custom(T),
@@ -60,8 +57,8 @@ pub enum InternalPakeError<T = Infallible> {
     UnexpectedEnvelopeContentsError,
 }
 
-impl<T: Debug> Debug for InternalPakeError<T> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl<T: Debug + Display> Display for InternalPakeError<T> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {
             Self::Custom(custom) => f.debug_tuple("InvalidByteSequence").field(custom).finish(),
             Self::InvalidByteSequence => f.debug_tuple("InvalidByteSequence").finish(),
@@ -98,8 +95,6 @@ impl<T: Debug> Debug for InternalPakeError<T> {
     }
 }
 
-impl<T: Error> Error for InternalPakeError<T> {}
-
 impl InternalPakeError {
     /// Convert `InternalPakeError<Infallible>` into `InternalPakeError<T>
     pub fn into_custom<T>(self) -> InternalPakeError<T> {
@@ -135,7 +130,7 @@ impl InternalPakeError {
 }
 
 /// Represents an error in password checking
-#[derive(Clone, Display, Eq, Hash, PartialEq)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub enum PakeError<T = Infallible> {
     /** This error results from an internal error during PRF construction
 
@@ -156,8 +151,8 @@ pub enum PakeError<T = Infallible> {
     IdentityGroupElementError,
 }
 
-impl<T: Debug> Debug for PakeError<T> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl<T: Debug + Display> Display for PakeError<T> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {
             Self::CryptoError(internal_pake_error) => f
                 .debug_tuple("CryptoError")
@@ -176,8 +171,6 @@ impl<T: Debug> Debug for PakeError<T> {
         }
     }
 }
-
-impl<T: Error> Error for PakeError<T> {}
 
 // This is meant to express future(ly) non-trivial ways of converting the
 // internal error into a PakeError
@@ -207,7 +200,7 @@ impl PakeError {
 }
 
 /// Represents an error in protocol handling
-#[derive(Clone, Display, Eq, Hash, PartialEq)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub enum ProtocolError<T = Infallible> {
     /** This error results from an error during password verification
 
@@ -229,8 +222,8 @@ pub enum ProtocolError<T = Infallible> {
     ReflectedValueError,
 }
 
-impl<T: Debug> Debug for ProtocolError<T> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl<T: Debug + Display> Display for ProtocolError<T> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {
             Self::VerificationError(pake_error) => f
                 .debug_tuple("VerificationError")
@@ -246,8 +239,6 @@ impl<T: Debug> Debug for ProtocolError<T> {
         }
     }
 }
-
-impl<T: Error> Error for ProtocolError<T> {}
 
 // This is meant to express future(ly) non-trivial ways of converting the
 // Pake error into a ProtocolError
@@ -268,8 +259,8 @@ impl<T> From<InternalPakeError<T>> for ProtocolError<T> {
 // See https://github.com/rust-lang/rust/issues/64715 and remove this when
 // merged, and https://github.com/dtolnay/thiserror/issues/62 for why this
 // comes up in our doc tests.
-impl<T> From<::std::convert::Infallible> for ProtocolError<T> {
-    fn from(_: ::std::convert::Infallible) -> Self {
+impl<T> From<::core::convert::Infallible> for ProtocolError<T> {
+    fn from(_: ::core::convert::Infallible) -> Self {
         unreachable!()
     }
 }
