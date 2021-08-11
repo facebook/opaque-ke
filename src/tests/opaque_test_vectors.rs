@@ -7,6 +7,9 @@ use crate::{
     ciphersuite::CipherSuite, errors::*, key_exchange::tripledh::TripleDH, keypair::PrivateKey,
     opaque::*, slow_hash::NoOpHash, tests::mock_rng::CycleRng, *,
 };
+use alloc::string::ToString;
+use alloc::vec::Vec;
+use alloc::{format, vec};
 use curve25519_dalek::ristretto::RistrettoPoint;
 use generic_array::typenum::Unsigned;
 use generic_bytes::SizedBytes;
@@ -711,7 +714,7 @@ macro_rules! rfc_to_params {
     };
 }
 
-fn rfc_to_json(input: &str) -> String {
+fn rfc_to_json(input: &str) -> alloc::string::String {
     let mut json = vec![];
     for line in input.lines() {
         // If line contains colon, then

@@ -16,6 +16,10 @@ use crate::{
     serialization::{i2osp, os2ip, serialize},
     *,
 };
+#[cfg(test)]
+use alloc::vec;
+#[cfg(test)]
+use alloc::vec::Vec;
 
 use curve25519_dalek::{ristretto::RistrettoPoint, traits::Identity};
 use generic_array::typenum::Unsigned;
@@ -351,8 +355,8 @@ fn ke3_message_roundtrip() {
 proptest! {
 
 #[test]
-fn test_i2osp_os2ip(bytes in vec(any::<u8>(), 0..std::mem::size_of::<usize>())) {
-    assert_eq!(i2osp(os2ip(&bytes)?, bytes.len())?, bytes);
+fn test_i2osp_os2ip(bytes in vec(any::<u8>(), 0..core::mem::size_of::<usize>())) {
+    assert_eq!(i2osp(os2ip(&bytes).unwrap(), bytes.len()).unwrap(), bytes);
 }
 
 #[test]

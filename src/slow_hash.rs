@@ -6,6 +6,7 @@
 //! Trait specifying a slow hashing function
 
 use crate::{errors::InternalPakeError, hash::Hash};
+use alloc::vec::Vec;
 use digest::Digest;
 #[cfg(feature = "slow-hash")]
 use generic_array::typenum::Unsigned;
@@ -36,7 +37,7 @@ impl<D: Hash> SlowHash<D> for argon2::Argon2<'_> {
         input: GenericArray<u8, <D as Digest>::OutputSize>,
     ) -> Result<Vec<u8>, InternalPakeError> {
         let params = argon2::Argon2::default();
-        let mut output = vec![0u8; <D as Digest>::OutputSize::to_usize()];
+        let mut output = alloc::vec![0u8; <D as Digest>::OutputSize::to_usize()];
         params
             .hash_password_into(
                 argon2::Algorithm::Argon2id,

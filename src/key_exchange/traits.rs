@@ -10,6 +10,7 @@ use crate::{
     hash::Hash,
     keypair::{PrivateKey, PublicKey, SecretKey},
 };
+use alloc::vec::Vec;
 use rand::{CryptoRng, RngCore};
 use zeroize::Zeroize;
 

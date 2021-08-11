@@ -14,9 +14,9 @@ mod x25519;
 
 use crate::errors::{InternalPakeError, ProtocolError};
 use crate::hash::Hash;
+use core::ops::Mul;
 use generic_array::{ArrayLength, GenericArray};
 use rand::{CryptoRng, RngCore};
-use std::ops::Mul;
 use zeroize::Zeroize;
 
 /// A prime-order subgroup of a base field (EC, prime-order field ...). This
@@ -34,7 +34,7 @@ pub trait Group: Copy + Sized + for<'a> Mul<&'a <Self as Group>::Scalar, Output 
 
     /// Generates the contextString parameter as defined in
     /// <https://www.ietf.org/archive/id/draft-irtf-cfrg-voprf-05.txt>
-    fn get_context_string(mode: u8) -> Result<Vec<u8>, ProtocolError> {
+    fn get_context_string(mode: u8) -> Result<alloc::vec::Vec<u8>, ProtocolError> {
         use crate::serialization::i2osp;
 
         Ok([i2osp(mode as usize, 1)?, i2osp(Self::SUITE_ID, 2)?].concat())

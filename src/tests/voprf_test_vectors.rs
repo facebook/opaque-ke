@@ -7,6 +7,8 @@ use crate::group::Group;
 use crate::hash::Hash;
 use crate::tests::mock_rng::CycleRng;
 use crate::{errors::*, oprf};
+use alloc::string::ToString;
+use alloc::vec::Vec;
 use curve25519_dalek::ristretto::RistrettoPoint;
 use generic_array::GenericArray;
 use serde_json::Value;

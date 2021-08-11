@@ -19,12 +19,14 @@ use crate::{
     CredentialFinalization, CredentialRequest, CredentialResponse, RegistrationRequest,
     RegistrationResponse, RegistrationUpload,
 };
+use alloc::vec;
+use alloc::vec::Vec;
+use core::marker::PhantomData;
 use digest::Digest;
 use generic_array::{typenum::Unsigned, GenericArray};
 use generic_bytes::SizedBytes;
 use hkdf::Hkdf;
 use rand::{CryptoRng, RngCore};
-use std::marker::PhantomData;
 use zeroize::Zeroize;
 
 const STR_CREDENTIAL_RESPONSE_PAD: &[u8] = b"CredentialResponsePad";

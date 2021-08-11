@@ -6,6 +6,7 @@
 use super::Group;
 use crate::errors::{InternalPakeError, ProtocolError};
 use crate::hash::Hash;
+use core::convert::TryInto;
 use curve25519_dalek::{
     constants::RISTRETTO_BASEPOINT_POINT,
     ristretto::{CompressedRistretto, RistrettoPoint},
@@ -14,7 +15,6 @@ use curve25519_dalek::{
 };
 use generic_array::{typenum::U32, GenericArray};
 use rand::{CryptoRng, RngCore};
-use std::convert::TryInto;
 use subtle::ConstantTimeEq;
 
 /// The implementation of such a subgroup for Ristretto

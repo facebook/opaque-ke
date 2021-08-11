@@ -11,7 +11,7 @@ use rand::{CryptoRng, RngCore};
 /// Used to store the OPRF input and blinding factor
 #[cfg_attr(feature = "serialize", derive(serde::Deserialize, serde::Serialize))]
 pub struct Token<Grp: Group> {
-    pub(crate) data: Vec<u8>,
+    pub(crate) data: alloc::vec::Vec<u8>,
     pub(crate) blind: Grp::Scalar,
 }
 
@@ -154,7 +154,7 @@ mod tests {
     #[test]
     fn oprf_inversion_unsalted() {
         let mut rng = OsRng;
-        let mut input = vec![0u8; 64];
+        let mut input = alloc::vec![0u8; 64];
         rng.fill_bytes(&mut input);
         let (token, alpha) = blind::<_, RistrettoPoint, sha2::Sha512>(&input, &mut rng).unwrap();
         let res =
