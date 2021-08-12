@@ -122,7 +122,7 @@ impl<D: Hash, G: Group> KeyExchange<D, G> for TripleDH {
         transcript_hasher.update(&serialize(&ciphertext, 2)?);
 
         let mut mac_hasher =
-            Hmac::<D>::new_varkey(&km2).map_err(|_| InternalPakeError::HmacError)?;
+            Hmac::<D>::new_from_slice(&km2).map_err(|_| InternalPakeError::HmacError)?;
         mac_hasher.update(&transcript_hasher.clone().finalize());
         let mac = mac_hasher.finalize().into_bytes();
 
@@ -178,7 +178,7 @@ impl<D: Hash, G: Group> KeyExchange<D, G> for TripleDH {
         transcript_hasher.update(&serialize(&ke2_message.e_info[..], 2)?);
 
         let mut server_mac =
-            Hmac::<D>::new_varkey(&km2).map_err(|_| InternalPakeError::HmacError)?;
+            Hmac::<D>::new_from_slice(&km2).map_err(|_| InternalPakeError::HmacError)?;
         server_mac.update(&transcript_hasher.clone().finalize());
 
         if server_mac.verify(&ke2_message.mac).is_err() {
@@ -190,7 +190,7 @@ impl<D: Hash, G: Group> KeyExchange<D, G> for TripleDH {
         transcript_hasher.update(ke2_message.mac.to_vec());
 
         let mut client_mac =
-            Hmac::<D>::new_varkey(&km3).map_err(|_| InternalPakeError::HmacError)?;
+            Hmac::<D>::new_from_slice(&km3).map_err(|_| InternalPakeError::HmacError)?;
         client_mac.update(&transcript_hasher.finalize());
 
         // Compute decryption of e_info
@@ -219,7 +219,7 @@ impl<D: Hash, G: Group> KeyExchange<D, G> for TripleDH {
         ke2_state: &Self::KE2State,
     ) -> Result<Vec<u8>, ProtocolError> {
         let mut client_mac =
-            Hmac::<D>::new_varkey(&ke2_state.km3).map_err(|_| InternalPakeError::HmacError)?;
+            Hmac::<D>::new_from_slice(&ke2_state.km3).map_err(|_| InternalPakeError::HmacError)?;
         client_mac.update(&ke2_state.hashed_transcript);
 
         if client_mac.verify(&ke3_message.mac).is_err() {
@@ -312,7 +312,7 @@ impl TryFrom<&[u8]> for Ke1Message {
         Ok(Self {
             client_nonce: GenericArray::clone_from_slice(&checked_nonce[..nonce_len]),
             info,
-            client_e_pk: Key::from_bytes(&checked_client_e_pk)?,
+            client_e_pk: Key::from_bytes(checked_client_e_pk)?,
         })
     }
 }
@@ -419,7 +419,7 @@ impl<HashLen: ArrayLength<u8>> TryFrom<&[u8]> for Ke2Message<HashLen> {
             server_nonce: GenericArray::clone_from_slice(&checked_nonce[..nonce_len]),
             server_e_pk: Key::from_bytes(&checked_server_e_pk[..KEY_LEN])?,
             e_info,
-            mac: GenericArray::clone_from_slice(&checked_mac),
+            mac: GenericArray::clone_from_slice(checked_mac),
         })
     }
 }
@@ -459,10 +459,10 @@ impl<HashLen: ArrayLength<u8>> TryFrom<&[u8]> for Ke3Message<HashLen> {
     type Error = PakeError;
 
     fn try_from(bytes: &[u8]) -> Result<Self, Self::Error> {
-        let checked_bytes = check_slice_size(&bytes, HashLen::to_usize(), "ke3_message")?;
+        let checked_bytes = check_slice_size(bytes, HashLen::to_usize(), "ke3_message")?;
 
         Ok(Self {
-            mac: GenericArray::clone_from_slice(&checked_bytes),
+            mac: GenericArray::clone_from_slice(checked_bytes),
         })
     }
 }
@@ -485,30 +485,30 @@ fn derive_3dh_keys<D: Hash, G: Group>(
     let extracted_ikm = Hkdf::<D>::new(None, &ikm);
     let handshake_secret = derive_secrets::<D>(
         &extracted_ikm,
-        &STR_HANDSHAKE_SECRET,
-        &hashed_derivation_transcript,
+        STR_HANDSHAKE_SECRET,
+        hashed_derivation_transcript,
     )?;
     let session_key = derive_secrets::<D>(
         &extracted_ikm,
-        &STR_SESSION_SECRET,
-        &hashed_derivation_transcript,
+        STR_SESSION_SECRET,
+        hashed_derivation_transcript,
     )?;
 
     let km2 = hkdf_expand_label::<D>(
         &handshake_secret,
-        &STR_SERVER_MAC,
+        STR_SERVER_MAC,
         b"",
         <D as Digest>::OutputSize::to_usize(),
     )?;
     let ke2 = hkdf_expand_label::<D>(
         &handshake_secret,
-        &STR_HANDSHAKE_ENC,
+        STR_HANDSHAKE_ENC,
         b"",
         <D as Digest>::OutputSize::to_usize(),
     )?;
     let km3 = hkdf_expand_label::<D>(
         &handshake_secret,
-        &STR_CLIENT_MAC,
+        STR_CLIENT_MAC,
         b"",
         <D as Digest>::OutputSize::to_usize(),
     )?;
@@ -545,11 +545,11 @@ fn hkdf_expand_label_extracted<D: Hash>(
     hkdf_label.extend_from_slice(&length_u16.to_be_bytes());
 
     let mut opaque_label: Vec<u8> = Vec::new();
-    opaque_label.extend_from_slice(&STR_OPAQUE);
-    opaque_label.extend_from_slice(&label);
+    opaque_label.extend_from_slice(STR_OPAQUE);
+    opaque_label.extend_from_slice(label);
     hkdf_label.extend_from_slice(&serialize(&opaque_label, 1)?);
 
-    hkdf_label.extend_from_slice(&serialize(&context, 1)?);
+    hkdf_label.extend_from_slice(&serialize(context, 1)?);
 
     hkdf.expand(&hkdf_label, &mut okm)
         .map_err(|_| InternalPakeError::HkdfError)?;
@@ -564,7 +564,7 @@ fn derive_secrets<D: Hash>(
     hkdf_expand_label_extracted::<D>(
         hkdf,
         label,
-        &hashed_derivation_transcript,
+        hashed_derivation_transcript,
         <D as Digest>::OutputSize::to_usize(),
     )
 }

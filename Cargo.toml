@@ -1,6 +1,6 @@
 [package]
 name = "opaque-ke"
-version = "1.0.0"
+version = "1.1.0-pre.1"
 repository = "https://github.com/novifinancial/opaque-ke"
 keywords = ["cryptography", "crypto", "opaque", "passwords", "authentication"]
 description = "An implementation of the OPAQUE password-authenticated key exchange protocol"
@@ -17,31 +17,31 @@ u64_backend = ["curve25519-dalek/u64_backend"]
 u32_backend = ["curve25519-dalek/u32_backend"]
 
 [dependencies]
-constant_time_eq = "0.1.5"
-curve25519-dalek = { version = "3.0.0", default-features = false, features = ["std"] }
-digest = "0.9.0"
-displaydoc = "0.1.7"
-generic-array = "0.14.4"
-generic-bytes = { version = "0.1.0" }
-hkdf = "0.10.0"
-hmac = "0.10.1"
+constant_time_eq = "0.1"
+curve25519-dalek = { version = "3", default-features = false, features = ["std"] }
+digest = "0.9"
+displaydoc = "0.1"
+generic-array = "0.14"
+generic-bytes = { version = "0.1" }
+hkdf = "0.11"
+hmac = "0.11"
 rand = "0.8"
-scrypt = { version = "0.5.0", optional = true }
-subtle = { version = "2.3.0", default-features = false }
-thiserror = "1.0.22"
-zeroize = { version = "1.1.1", features = ["zeroize_derive"] }
+scrypt = { version = "0.5", optional = true }
+subtle = { version = "2.3", default-features = false }
+thiserror = "1"
+zeroize = { version = "1", features = ["zeroize_derive"] }
 
 [dev-dependencies]
-anyhow = "1.0.35"
-base64 = "0.13.0"
-chacha20poly1305 = "0.7.1"
-criterion = "0.3.3"
-hex = "0.4.2"
-lazy_static = "1.4.0"
-serde_json = "1.0.60"
-sha2 = "0.9.2"
-proptest = "0.10.1"
-rustyline = "6.3.0"
+anyhow = "1"
+base64 = "0.13"
+chacha20poly1305 = "0.8"
+criterion = "0.3"
+hex = "0.4"
+lazy_static = "1"
+serde_json = "1"
+sha2 = "0.9"
+proptest = "1"
+rustyline = "8"
 
 [[bench]]
 name = "oprf"
