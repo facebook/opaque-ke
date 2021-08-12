@@ -9,9 +9,9 @@ use crate::{
     hash::Hash,
     keypair::Key,
 };
+use alloc::vec::Vec;
+use core::convert::TryFrom;
 use rand::{CryptoRng, RngCore};
-
-use std::convert::TryFrom;
 use zeroize::Zeroize;
 
 pub trait KeyExchange<D: Hash, G: Group> {

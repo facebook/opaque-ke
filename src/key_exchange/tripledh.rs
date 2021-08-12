@@ -15,6 +15,8 @@ use crate::{
     keypair::{Key, KeyPair, SizedBytesExt},
     serialization::{serialize, tokenize},
 };
+use alloc::vec::Vec;
+use core::convert::TryFrom;
 use digest::{Digest, FixedOutput};
 use generic_array::{
     typenum::{Unsigned, U32},
@@ -24,7 +26,6 @@ use generic_bytes::SizedBytes;
 use hkdf::Hkdf;
 use hmac::{Hmac, Mac, NewMac};
 use rand::{CryptoRng, RngCore};
-use std::convert::TryFrom;
 use zeroize::Zeroize;
 
 const KEY_LEN: usize = 32;
@@ -110,7 +111,7 @@ impl<D: Hash, G: Group> KeyExchange<D, G> for TripleDH {
 
         // Compute encryption of e_info
         let h = Hkdf::<D>::from_prk(&ke2).map_err(|_| InternalPakeError::HkdfError)?;
-        let mut encryption_pad = vec![0u8; e_info.len()];
+        let mut encryption_pad = alloc::vec![0u8; e_info.len()];
         h.expand(STR_ENCRYPTION_PAD, &mut encryption_pad)
             .map_err(|_| InternalPakeError::HkdfError)?;
         let ciphertext: Vec<u8> = encryption_pad
@@ -195,7 +196,7 @@ impl<D: Hash, G: Group> KeyExchange<D, G> for TripleDH {
 
         // Compute decryption of e_info
         let h = Hkdf::<D>::from_prk(&ke2).map_err(|_| InternalPakeError::HkdfError)?;
-        let mut encryption_pad = vec![0u8; ke2_message.e_info.len()];
+        let mut encryption_pad = alloc::vec![0u8; ke2_message.e_info.len()];
         h.expand(STR_ENCRYPTION_PAD, &mut encryption_pad)
             .map_err(|_| InternalPakeError::HkdfError)?;
         let plaintext: Vec<u8> = encryption_pad
@@ -276,7 +277,7 @@ impl ToBytesWithPointers for Ke1State {
 
     #[cfg(test)]
     fn as_byte_ptrs(&self) -> Vec<(*const u8, usize)> {
-        vec![
+        alloc::vec![
             (
                 self.client_e_sk.as_ptr(),
                 <Key as SizedBytes>::Len::to_usize(),
@@ -350,7 +351,7 @@ impl<HashLen: ArrayLength<u8>> ToBytesWithPointers for Ke2State<HashLen> {
 
     #[cfg(test)]
     fn as_byte_ptrs(&self) -> Vec<(*const u8, usize)> {
-        vec![
+        alloc::vec![
             (self.km3.as_ptr(), HashLen::to_usize()),
             (self.hashed_transcript.as_ptr(), HashLen::to_usize()),
             (self.session_key.as_ptr(), HashLen::to_usize()),
@@ -537,7 +538,7 @@ fn hkdf_expand_label_extracted<D: Hash>(
     context: &[u8],
     length: usize,
 ) -> Result<Vec<u8>, ProtocolError> {
-    let mut okm = vec![0u8; length];
+    let mut okm = alloc::vec![0u8; length];
 
     let mut hkdf_label: Vec<u8> = Vec::new();
 
@@ -571,7 +572,7 @@ fn derive_secrets<D: Hash>(
 
 // Generate a random nonce up to NonceLen::to_usize() bytes.
 fn generate_nonce<R: RngCore + CryptoRng>(rng: &mut R) -> GenericArray<u8, NonceLen> {
-    let mut nonce_bytes = vec![0u8; NonceLen::to_usize()];
+    let mut nonce_bytes = alloc::vec![0u8; NonceLen::to_usize()];
     rng.fill_bytes(&mut nonce_bytes);
     GenericArray::clone_from_slice(&nonce_bytes)
 }

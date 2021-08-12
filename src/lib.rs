@@ -702,12 +702,15 @@
 
 #![cfg_attr(not(feature = "bench"), deny(missing_docs))]
 #![deny(unsafe_code)]
+#![cfg_attr(not(feature = "std"), no_std)]
 
 #[cfg(not(any(feature = "u64_backend", feature = "u32_backend",)))]
 compile_error!(
     "no dalek arithmetic backend cargo feature enabled! \
      please enable one of: u64_backend, u32_backend"
 );
+
+extern crate alloc;
 
 // Error types
 pub mod errors;

@@ -8,6 +8,7 @@
 
 use crate::errors::InternalPakeError;
 
+use core::convert::TryInto;
 use curve25519_dalek::{
     constants::RISTRETTO_BASEPOINT_POINT,
     ristretto::{CompressedRistretto, RistrettoPoint},
@@ -18,10 +19,9 @@ use generic_array::{
     typenum::{U32, U64},
     ArrayLength, GenericArray,
 };
-use std::convert::TryInto;
 
+use core::ops::Mul;
 use rand::{CryptoRng, RngCore};
-use std::ops::Mul;
 use zeroize::Zeroize;
 
 /// A prime-order subgroup of a base field (EC, prime-order field ...). This

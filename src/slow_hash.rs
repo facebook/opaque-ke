@@ -6,6 +6,7 @@
 //! Trait specifying a slow hashing function
 
 use crate::{errors::InternalPakeError, hash::Hash};
+use alloc::vec::Vec;
 use digest::Digest;
 #[cfg(feature = "slow-hash")]
 use generic_array::typenum::Unsigned;
@@ -45,7 +46,7 @@ impl<D: Hash> SlowHash<D> for scrypt::ScryptParams {
         let params =
             scrypt::ScryptParams::new(DEFAULT_SCRYPT_LOG_N, DEFAULT_SCRYPT_R, DEFAULT_SCRYPT_P)
                 .map_err(|_| InternalPakeError::SlowHashError)?;
-        let mut output = vec![0u8; <D as Digest>::OutputSize::to_usize()];
+        let mut output = alloc::vec![0u8; <D as Digest>::OutputSize::to_usize()];
         scrypt::scrypt(&input, &[], &params, &mut output)
             .map_err(|_| InternalPakeError::SlowHashError)?;
         Ok(output)

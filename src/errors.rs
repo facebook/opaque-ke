@@ -5,10 +5,12 @@
 
 //! A list of error types which are produced during an execution of the protocol
 use displaydoc::Display;
-use thiserror::Error;
+
+#[cfg(feature = "std")]
+use std::error::Error;
 
 /// Represents an error in the manipulation of internal cryptographic data
-#[derive(Debug, Display, Error)]
+#[derive(Debug, Display)]
 pub enum InternalPakeError {
     /// Deserializing from a byte sequence failed
     InvalidByteSequence,
@@ -55,8 +57,11 @@ pub enum InternalPakeError {
     UnexpectedEnvelopeContentsError,
 }
 
+#[cfg(feature = "std")]
+impl Error for InternalPakeError {}
+
 /// Represents an error in password checking
-#[derive(Debug, Display, Error)]
+#[derive(Debug, Display)]
 pub enum PakeError {
     /// This error results from an internal error during PRF construction
     ///
@@ -85,8 +90,11 @@ impl From<InternalPakeError> for PakeError {
     }
 }
 
+#[cfg(feature = "std")]
+impl Error for PakeError {}
+
 /// Represents an error in protocol handling
-#[derive(Debug, Display, Error)]
+#[derive(Debug, Display)]
 pub enum ProtocolError {
     /// This error results from an error during password verification
     ///
@@ -105,6 +113,9 @@ pub enum ProtocolError {
     /// reflected the OPRF value (beta == alpha)
     ReflectedValueError,
 }
+
+#[cfg(feature = "std")]
+impl Error for ProtocolError {}
 
 // This is meant to express future(ly) non-trivial ways of converting the
 // Pake error into a ProtocolError
@@ -125,8 +136,8 @@ impl From<InternalPakeError> for ProtocolError {
 // See https://github.com/rust-lang/rust/issues/64715 and remove this when
 // merged, and https://github.com/dtolnay/thiserror/issues/62 for why this
 // comes up in our doc tests.
-impl From<::std::convert::Infallible> for ProtocolError {
-    fn from(_: ::std::convert::Infallible) -> Self {
+impl From<::core::convert::Infallible> for ProtocolError {
+    fn from(_: ::core::convert::Infallible) -> Self {
         unreachable!()
     }
 }
