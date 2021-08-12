@@ -5,10 +5,10 @@
 
 macro_rules! impl_debug_eq_hash_for {
     (struct $name:ident$(<$($gen:ident$(: $bound:tt)?),+$(,)?>)?, [$field1:ident$(, $field2:ident)*$(,)?]$(, )?$([$($type:ty),+$(,)?]$(,)?)?) => {
-        impl$(<$($gen$(: $bound)?),+>)? std::fmt::Debug for $name$(<$($gen),+>)?
-        $(where $($type: std::fmt::Debug,)+)?
+        impl$(<$($gen$(: $bound)?),+>)? core::fmt::Debug for $name$(<$($gen),+>)?
+        $(where $($type: core::fmt::Debug,)+)?
         {
-            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
                 f.debug_struct("$name")
                 .field("$field1", &self.$field1)
                 $(.field("$field2", &self.$field2))*
@@ -29,20 +29,20 @@ macro_rules! impl_debug_eq_hash_for {
             }
         }
 
-        impl$(<$($gen$(: $bound)?),+>)? std::hash::Hash for $name$(<$($gen),+>)?
-        $(where $($type: std::hash::Hash,)+)?
+        impl$(<$($gen$(: $bound)?),+>)? core::hash::Hash for $name$(<$($gen),+>)?
+        $(where $($type: core::hash::Hash,)+)?
         {
-            fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-                std::hash::Hash::hash(&self.$field1, state);
-                $(std::hash::Hash::hash(&self.$field2, state);)*
+            fn hash<H: core::hash::Hasher>(&self, state: &mut H) {
+                core::hash::Hash::hash(&self.$field1, state);
+                $(core::hash::Hash::hash(&self.$field2, state);)*
             }
         }
     };
     (tuple $name:ident$(<$($gen:ident$(: $bound:tt)?),+$(,)?>)?, [$field1:tt$(, $field2:tt)*$(,)?]$(, )?$([$($type:ty),+$(,)?]$(,)?)?) => {
-        impl$(<$($gen$(: $bound)?),+>)? std::fmt::Debug for $name$(<$($gen),+>)?
-        $(where $($type: std::fmt::Debug,)+)?
+        impl$(<$($gen$(: $bound)?),+>)? core::fmt::Debug for $name$(<$($gen),+>)?
+        $(where $($type: core::fmt::Debug,)+)?
         {
-            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
                 f.debug_tuple("$name")
                 .field(&self.$field1)
                 $(.field(&self.$field2))*
@@ -63,12 +63,12 @@ macro_rules! impl_debug_eq_hash_for {
             }
         }
 
-        impl$(<$($gen$(: $bound)?),+>)? std::hash::Hash for $name$(<$($gen),+>)?
-        $(where $($type: std::hash::Hash,)+)?
+        impl$(<$($gen$(: $bound)?),+>)? core::hash::Hash for $name$(<$($gen),+>)?
+        $(where $($type: core::hash::Hash,)+)?
         {
-            fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-                std::hash::Hash::hash(&self.$field1, state);
-                $(std::hash::Hash::hash(&self.$field2, state);)*
+            fn hash<H: core::hash::Hasher>(&self, state: &mut H) {
+                core::hash::Hash::hash(&self.$field1, state);
+                $(core::hash::Hash::hash(&self.$field2, state);)*
             }
         }
     };

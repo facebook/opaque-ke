@@ -11,6 +11,8 @@
 use super::Group;
 use crate::errors::{InternalPakeError, ProtocolError};
 use crate::hash::Hash;
+use core::ops::{Add, Div, Mul, Neg, Sub};
+use core::str::FromStr;
 use generic_array::typenum::{U32, U33};
 use generic_array::{ArrayLength, GenericArray};
 use num_bigint::{BigInt, Sign};
@@ -24,8 +26,6 @@ use p256_::elliptic_curve::subtle::ConstantTimeEq;
 use p256_::elliptic_curve::Field;
 use p256_::{AffinePoint, EncodedPoint, ProjectivePoint};
 use rand::{CryptoRng, RngCore};
-use std::ops::{Add, Div, Mul, Neg, Sub};
-use std::str::FromStr;
 
 // https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-hash-to-curve-11#section-8.2
 // `p: 2^256 - 2^224 + 2^192 + 2^96 - 1`
@@ -411,7 +411,7 @@ mod tests {
     #[test]
     fn map_to_curve_simple_swu() {
         // Test vectors taken from https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-hash-to-curve-11#appendix-J.1.1
-        let test_vectors: Vec<Params> = vec![
+        let test_vectors = alloc::vec![
             Params {
                 msg: "",
                 px: "2c15230b26dbc6fc9a37051158c95b79656e17a1a920b11394ca91c44247d3e4",

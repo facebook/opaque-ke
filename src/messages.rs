@@ -17,6 +17,7 @@ use crate::{
     keypair::{KeyPair, PublicKey, SecretKey, SizedBytesExt},
     opaque::ServerSetup,
 };
+use alloc::vec::Vec;
 use digest::Digest;
 use generic_array::{typenum::Unsigned, GenericArray};
 use generic_bytes::SizedBytes;
@@ -197,7 +198,7 @@ impl<CS: CipherSuite> RegistrationUpload<CS> {
         rng: &mut R,
         server_setup: &ServerSetup<CS, S>,
     ) -> Self {
-        let mut masking_key = vec![0u8; <CS::Hash as Digest>::OutputSize::to_usize()];
+        let mut masking_key = alloc::vec![0u8; <CS::Hash as Digest>::OutputSize::to_usize()];
         rng.fill_bytes(&mut masking_key);
 
         Self {

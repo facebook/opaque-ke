@@ -18,6 +18,9 @@ use crate::{
     keypair::{KeyPair, PrivateKey, PublicKey, SecretKey, SizedBytesExt},
     serialization::serialize,
 };
+use alloc::vec;
+use alloc::vec::Vec;
+use core::convert::TryFrom;
 use digest::{Digest, FixedOutput};
 use generic_array::{
     typenum::{Unsigned, U32},
@@ -27,7 +30,6 @@ use generic_bytes::SizedBytes;
 use hkdf::Hkdf;
 use hmac::{Hmac, Mac, NewMac};
 use rand::{CryptoRng, RngCore};
-use std::convert::TryFrom;
 use zeroize::Zeroize;
 
 pub(crate) type NonceLen = U32;

@@ -11,13 +11,15 @@ use crate::{
     keypair::{KeyPair, PrivateKey, PublicKey},
     opaque::{bytestrings_from_identifiers, Identifiers},
 };
+use alloc::vec;
+use alloc::vec::Vec;
+use core::convert::TryFrom;
 use digest::Digest;
 use generic_array::{typenum::Unsigned, GenericArray};
 use generic_bytes::SizedBytes;
 use hkdf::Hkdf;
 use hmac::{Hmac, Mac, NewMac};
 use rand::{CryptoRng, RngCore};
-use std::convert::TryFrom;
 use zeroize::Zeroize;
 
 // Constant string used as salt for HKDF computation

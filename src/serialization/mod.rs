@@ -4,10 +4,11 @@
 // LICENSE file in the root directory of this source tree.
 
 use crate::errors::PakeError;
+use alloc::vec::Vec;
 
 // Corresponds to the I2OSP() function from RFC8017
-pub(crate) fn i2osp(input: usize, length: usize) -> Result<Vec<u8>, PakeError> {
-    let sizeof_usize = std::mem::size_of::<usize>();
+pub(crate) fn i2osp(input: usize, length: usize) -> Result<alloc::vec::Vec<u8>, PakeError> {
+    let sizeof_usize = core::mem::size_of::<usize>();
 
     // Check if input >= 256^length
     if (sizeof_usize as u32 - input.leading_zeros() / 8) > length as u32 {
@@ -18,7 +19,7 @@ pub(crate) fn i2osp(input: usize, length: usize) -> Result<Vec<u8>, PakeError> {
         return Ok((&input.to_be_bytes()[sizeof_usize - length..]).to_vec());
     }
 
-    let mut output = vec![0u8; length];
+    let mut output = alloc::vec![0u8; length];
     output.splice(
         length - sizeof_usize..length,
         input.to_be_bytes().iter().cloned(),
@@ -28,12 +29,12 @@ pub(crate) fn i2osp(input: usize, length: usize) -> Result<Vec<u8>, PakeError> {
 
 // Corresponds to the OS2IP() function from RFC8017
 pub(crate) fn os2ip(input: &[u8]) -> Result<usize, PakeError> {
-    if input.len() > std::mem::size_of::<usize>() {
+    if input.len() > core::mem::size_of::<usize>() {
         return Err(PakeError::SerializationError);
     }
 
-    let mut output_array = [0u8; std::mem::size_of::<usize>()];
-    output_array[std::mem::size_of::<usize>() - input.len()..].copy_from_slice(input);
+    let mut output_array = [0u8; core::mem::size_of::<usize>()];
+    output_array[core::mem::size_of::<usize>() - input.len()..].copy_from_slice(input);
     Ok(usize::from_be_bytes(output_array))
 }
 
@@ -45,7 +46,7 @@ pub(crate) fn serialize(input: &[u8], max_bytes: usize) -> Result<Vec<u8>, PakeE
 // Tokenizes an input of the format I2OSP(len(input), max_bytes) || input, outputting
 // (input, remainder)
 pub(crate) fn tokenize(input: &[u8], size_bytes: usize) -> Result<(Vec<u8>, Vec<u8>), PakeError> {
-    if size_bytes > std::mem::size_of::<usize>() || input.len() < size_bytes {
+    if size_bytes > core::mem::size_of::<usize>() || input.len() < size_bytes {
         return Err(PakeError::SerializationError);
     }
 
@@ -89,17 +90,17 @@ macro_rules! impl_serialize_and_deserialize_for {
                         .map_err(serde::de::Error::custom)
                 } else {
                     struct ByteVisitor<CS: CipherSuite> {
-                        marker: std::marker::PhantomData<CS>,
+                        marker: core::marker::PhantomData<CS>,
                     }
                     impl<'de, CS: CipherSuite> serde::de::Visitor<'de> for ByteVisitor<CS> {
                         type Value = $t<CS>;
                         fn expecting(
                             &self,
-                            formatter: &mut std::fmt::Formatter,
-                        ) -> std::fmt::Result {
-                            formatter.write_str(std::concat!(
+                            formatter: &mut core::fmt::Formatter,
+                        ) -> core::fmt::Result {
+                            formatter.write_str(core::concat!(
                                 "the byte representation of a ",
-                                std::stringify!($t)
+                                core::stringify!($t)
                             ))
                         }
 
@@ -110,16 +111,16 @@ macro_rules! impl_serialize_and_deserialize_for {
                             $t::<CS>::deserialize(value).map_err(|_| {
                                 serde::de::Error::invalid_value(
                                     serde::de::Unexpected::Bytes(value),
-                                    &std::concat!(
+                                    &core::concat!(
                                         "invalid byte sequence for ",
-                                        std::stringify!($t)
+                                        core::stringify!($t)
                                     ),
                                 )
                             })
                         }
                     }
                     deserializer.deserialize_bytes(ByteVisitor::<CS> {
-                        marker: std::marker::PhantomData,
+                        marker: core::marker::PhantomData,
                     })
                 }
             }

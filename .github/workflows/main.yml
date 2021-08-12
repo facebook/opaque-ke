@@ -41,6 +41,12 @@ jobs:
           command: test
           args: --no-default-features --features ${{ matrix.backend_feature }}
 
+      - name: Run cargo test with std
+        uses: actions-rs/cargo@v1
+        with:
+          command: test
+          args: --no-default-features --features std --features ${{ matrix.backend_feature }}
+
   cross-test:
     name: Test on ${{ matrix.target }} (using cross)
     runs-on: ubuntu-latest
@@ -61,10 +67,10 @@ jobs:
       # Note: just use `cross` as you would `cargo`, but always
       # pass the `--target=${{ matrix.target }}` arg. (Yes, really).
       - run: cross test --verbose --target=${{ matrix.target }} --no-default-features --features ${{ matrix.backend_feature }}
+      - run: cross test --verbose --target=${{ matrix.target }} --no-default-features --features std --features ${{ matrix.backend_feature }}
 
-
-  slow-hash-test:
-    name: Test on ${{ matrix.target }} with slow hash
+  feature-test:
+    name: Test on ${{ matrix.target }} with ${{ matrix.frontend_feature }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -73,26 +79,14 @@ jobs:
           - u64_backend
           - u32_backend
           - p256,u64_backend
+        frontend_feature:
+          - slow-hash
+          - serialize
     steps:
       - uses: actions/checkout@v2
       - uses: hecrj/setup-rust-action@v1
-      - run: cargo test --verbose --features slow-hash --no-default-features --features ${{ matrix.backend_feature }}
-
-  serde-test:
-    name: Test on ${{ matrix.target }} with serde support
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        backend_feature:
-          - u64_backend
-          - u32_backend
-          - p256,u64_backend
-    steps:
-      - uses: actions/checkout@v2
-      - uses: hecrj/setup-rust-action@v1
-      - run: cargo test --verbose --features serialize --no-default-features --features ${{ matrix.backend_feature }}
-
+      - run: cargo test --verbose --features ${{ matrix.frontend_feature }} --no-default-features --features ${{ matrix.backend_feature }}
+      - run: cargo test --verbose --features ${{ matrix.frontend_feature }},std --no-default-features --features ${{ matrix.backend_feature }}
 
   simple-login-test:
     runs-on: ubuntu-latest
@@ -141,6 +135,25 @@ jobs:
           components: rustfmt, clippy
       - name: Run expect (which then runs cargo run)
         run: expect -f scripts/digital_locker.exp
+
+  build-no-std:
+    name: Build with no-std on ${{ matrix.target }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          # for wasm
+          - wasm32-unknown-unknown
+        backend_feature:
+          - u64_backend
+          - u32_backend
+          - p256,u64_backend
+    steps:
+      - uses: actions/checkout@v2
+      - uses: hecrj/setup-rust-action@v1
+      - run: rustup target add ${{ matrix.target }}
+      - run: cargo build --verbose --target=${{ matrix.target }} --no-default-features --features ${{ matrix.backend_feature }}
 
   benches:
     name: cargo bench compilation

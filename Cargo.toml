@@ -3,6 +3,7 @@ name = "opaque-ke"
 version = "2.0.0-pre.1"
 repository = "https://github.com/novifinancial/opaque-ke"
 keywords = ["cryptography", "crypto", "opaque", "passwords", "authentication"]
+categories = ["no-std"]
 description = "An implementation of the OPAQUE password-authenticated key exchange protocol"
 authors = ["Kevin Lewi <klewi@fb.com>", "François Garillot <fga@fb.com>"]
 license = "MIT"
@@ -16,17 +17,19 @@ p256 = ["num-bigint", "num-integer", "num-traits", "once_cell", "p256_"]
 bench = []
 u64_backend = ["curve25519-dalek/u64_backend"]
 u32_backend = ["curve25519-dalek/u32_backend"]
+std = ["curve25519-dalek/std"]
 serialize = ["serde", "base64", "generic-array/serde", "curve25519-dalek/serde"]
 
 [dependencies]
 argon2 = { version = "0.2", optional = true }
 base64 = { version = "0.13", optional = true }
 constant_time_eq = "0.1"
-curve25519-dalek = { version = "3", default-features = false, features = ["std"] }
+curve25519-dalek = { version = "3", default-features = false }
 digest = "0.9"
 displaydoc = "0.2"
 generic-array = "0.14"
 generic-bytes = { version = "0.1" }
+getrandom = { version = "0.2", features = ["js"] }
 hkdf = "0.11"
 hmac = "0.11"
 num-bigint = { version = "0.4", optional = true }
@@ -34,14 +37,13 @@ num-integer = { version = "0.1", optional = true }
 num-traits = { version = "0.2", optional = true }
 once_cell = { version = "1", optional = true }
 p256_ = { package = "p256", version = "0.9", optional = true }
-rand = "0.8"
+rand = { version = "0.8", default-features = false }
 serde = { version = "1", features = ["derive"], optional = true }
 subtle = { version = "2.3", default-features = false }
 thiserror = "1"
 zeroize = { version = "1", features = ["zeroize_derive"] }
 
 [dev-dependencies]
-anyhow = "1"
 base64 = "0.13"
 bincode = "1"
 chacha20poly1305 = "0.8"

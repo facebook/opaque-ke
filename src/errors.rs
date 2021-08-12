@@ -4,9 +4,10 @@
 // LICENSE file in the root directory of this source tree.
 
 //! A list of error types which are produced during an execution of the protocol
-use std::convert::Infallible;
+use core::convert::Infallible;
+use core::fmt::Debug;
+#[cfg(feature = "std")]
 use std::error::Error;
-use std::fmt::Debug;
 
 use displaydoc::Display;
 
@@ -61,7 +62,7 @@ pub enum InternalPakeError<T = Infallible> {
 }
 
 impl<T: Debug> Debug for InternalPakeError<T> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {
             Self::Custom(custom) => f.debug_tuple("InvalidByteSequence").field(custom).finish(),
             Self::InvalidByteSequence => f.debug_tuple("InvalidByteSequence").finish(),
@@ -98,6 +99,7 @@ impl<T: Debug> Debug for InternalPakeError<T> {
     }
 }
 
+#[cfg(feature = "std")]
 impl<T: Error> Error for InternalPakeError<T> {}
 
 impl InternalPakeError {
@@ -157,7 +159,7 @@ pub enum PakeError<T = Infallible> {
 }
 
 impl<T: Debug> Debug for PakeError<T> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {
             Self::CryptoError(internal_pake_error) => f
                 .debug_tuple("CryptoError")
@@ -177,6 +179,7 @@ impl<T: Debug> Debug for PakeError<T> {
     }
 }
 
+#[cfg(feature = "std")]
 impl<T: Error> Error for PakeError<T> {}
 
 // This is meant to express future(ly) non-trivial ways of converting the
@@ -230,7 +233,7 @@ pub enum ProtocolError<T = Infallible> {
 }
 
 impl<T: Debug> Debug for ProtocolError<T> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {
             Self::VerificationError(pake_error) => f
                 .debug_tuple("VerificationError")
@@ -247,6 +250,7 @@ impl<T: Debug> Debug for ProtocolError<T> {
     }
 }
 
+#[cfg(feature = "std")]
 impl<T: Error> Error for ProtocolError<T> {}
 
 // This is meant to express future(ly) non-trivial ways of converting the
@@ -268,8 +272,8 @@ impl<T> From<InternalPakeError<T>> for ProtocolError<T> {
 // See https://github.com/rust-lang/rust/issues/64715 and remove this when
 // merged, and https://github.com/dtolnay/thiserror/issues/62 for why this
 // comes up in our doc tests.
-impl<T> From<::std::convert::Infallible> for ProtocolError<T> {
-    fn from(_: ::std::convert::Infallible) -> Self {
+impl<T> From<::core::convert::Infallible> for ProtocolError<T> {
+    fn from(_: ::core::convert::Infallible) -> Self {
         unreachable!()
     }
 }
