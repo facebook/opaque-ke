@@ -20,11 +20,12 @@ use crate::{
     CredentialFinalization, CredentialRequest, CredentialResponse, RegistrationRequest,
     RegistrationResponse, RegistrationUpload,
 };
+use alloc::vec::Vec;
+use core::{convert::TryFrom, marker::PhantomData};
 use digest::Digest;
 use generic_array::{typenum::Unsigned, GenericArray};
 use generic_bytes::SizedBytes;
 use rand::{CryptoRng, RngCore};
-use std::{convert::TryFrom, marker::PhantomData};
 use zeroize::Zeroize;
 
 // Registration
@@ -85,7 +86,7 @@ impl<CS: CipherSuite> ClientRegistration<CS> {
 
     #[cfg(test)]
     pub fn as_byte_ptrs(&self) -> Vec<(*const u8, usize)> {
-        vec![
+        alloc::vec![
             (self.token.data.as_ptr(), self.token.data.len()),
             /* cannot provide raw pointer to self.token.blind until this is exposed in curve25519_dalek::scalar::Scalar */
         ]
@@ -299,11 +300,11 @@ impl<CS: CipherSuite> ServerRegistration<CS> {
         [
             match &self.envelope {
                 Some(env) => env.as_byte_ptrs(),
-                None => vec![],
+                None => alloc::vec![],
             },
             match &self.client_s_pk {
-                Some(pk) => vec![(pk.as_ptr(), pk.len())],
-                None => vec![],
+                Some(pk) => alloc::vec![(pk.as_ptr(), pk.len())],
+                None => alloc::vec![],
             },
             /* cannot provide raw pointer to self.oprf_key until this is exposed in curve25519_dalek::scalar::Scalar */
         ].concat()
@@ -458,12 +459,12 @@ impl<CS: CipherSuite> ClientLogin<CS> {
     #[cfg(test)]
     pub fn as_byte_ptrs(&self) -> Vec<(*const u8, usize)> {
         [
-            vec![
+            alloc::vec![
                 (self.token.data.as_ptr(), self.token.data.len()),
                 /* cannot provide raw pointer to self.token.blind until this is exposed in curve25519_dalek::scalar::Scalar */
             ],
             self.ke1_state.as_byte_ptrs(),
-            vec![ (self.serialized_credential_request.as_ptr(), self.serialized_credential_request.len()) ],
+            alloc::vec![ (self.serialized_credential_request.as_ptr(), self.serialized_credential_request.len()) ],
         ].concat()
     }
 }

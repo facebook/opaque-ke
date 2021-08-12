@@ -8,20 +8,31 @@
 use crate::{
     ciphersuite::CipherSuite,
     errors::*,
-    group::Group,
-    key_exchange::tripledh::{NonceLen, TripleDH},
+    key_exchange::tripledh::TripleDH,
     keypair::{Key, SizedBytesExt},
     opaque::*,
     slow_hash::NoOpHash,
     tests::mock_rng::CycleRng,
     *,
 };
-use curve25519_dalek::{ristretto::RistrettoPoint, traits::Identity};
+
+#[cfg(feature = "std")]
+use crate::group::Group;
+#[cfg(feature = "std")]
+use crate::key_exchange::tripledh::NonceLen;
+#[cfg(feature = "std")]
 use generic_array::typenum::Unsigned;
+#[cfg(feature = "std")]
+use rand::RngCore;
+
+use alloc::string::ToString;
+use alloc::vec;
+use alloc::vec::Vec;
+use core::slice::from_raw_parts;
+use curve25519_dalek::{ristretto::RistrettoPoint, traits::Identity};
 use generic_bytes::SizedBytes;
-use rand::{rngs::OsRng, RngCore};
+use rand::rngs::OsRng;
 use serde_json::Value;
-use std::slice::from_raw_parts;
 use zeroize::Zeroize;
 
 // Tests
@@ -149,6 +160,7 @@ fn populate_test_vectors(values: &Value) -> TestVectorParameters {
     }
 }
 
+#[cfg(feature = "std")]
 fn stringify_test_vectors(p: &TestVectorParameters) -> String {
     let mut s = String::new();
     s.push_str("{\n");
@@ -265,6 +277,7 @@ fn stringify_test_vectors(p: &TestVectorParameters) -> String {
     s
 }
 
+#[cfg(feature = "std")]
 fn generate_parameters<CS: CipherSuite>() -> TestVectorParameters {
     let mut rng = OsRng;
 
@@ -443,6 +456,7 @@ fn generate_parameters<CS: CipherSuite>() -> TestVectorParameters {
     }
 }
 
+#[cfg(feature = "std")]
 #[test]
 fn generate_test_vectors() {
     let parameters = generate_parameters::<RistrettoSha5123dhNoSlowHash>();

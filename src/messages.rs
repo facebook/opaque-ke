@@ -16,9 +16,10 @@ use crate::{
     key_exchange::traits::{KeyExchange, ToBytes},
     keypair::{Key, KeyPair, SizedBytesExt},
 };
+use alloc::vec::Vec;
+use core::convert::TryFrom;
 use generic_array::{typenum::Unsigned, GenericArray};
 use generic_bytes::SizedBytes;
-use std::convert::TryFrom;
 
 // Messages
 // =========

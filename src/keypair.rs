@@ -9,18 +9,19 @@
 
 use crate::errors::InternalPakeError;
 use crate::group::Group;
+use alloc::vec::Vec;
+use core::fmt::Debug;
+use core::marker::PhantomData;
+use core::ops::Deref;
 #[cfg(test)]
 use generic_array::typenum::Unsigned;
 use generic_array::{typenum::U32, GenericArray};
 use generic_bytes::{SizedBytes, TryFromSizedBytesError};
-#[cfg(test)]
+#[cfg(all(test, feature = "std"))]
 use proptest::prelude::*;
-#[cfg(test)]
+#[cfg(all(test, feature = "std"))]
 use rand::{rngs::StdRng, SeedableRng};
 use rand::{CryptoRng, RngCore};
-use std::fmt::Debug;
-use std::marker::PhantomData;
-use std::ops::Deref;
 use zeroize::Zeroize;
 
 /// Convenience extension trait of SizedBytes
@@ -115,14 +116,14 @@ impl<G: Group> KeyPair<G> {
 
     #[cfg(test)]
     pub fn as_byte_ptrs(&self) -> Vec<(*const u8, usize)> {
-        vec![
+        alloc::vec![
             (self.pk.as_ptr(), <Key as SizedBytes>::Len::to_usize()),
             (self.sk.as_ptr(), <Key as SizedBytes>::Len::to_usize()),
         ]
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "std"))]
 impl<G: Group + Debug> KeyPair<G> {
     /// Test-only strategy returning a proptest Strategy based on
     /// generate_random
@@ -170,15 +171,15 @@ impl SizedBytes for Key {
 mod tests {
     use super::*;
     use crate::errors::*;
+    use core::slice::from_raw_parts;
     use curve25519_dalek::ristretto::RistrettoPoint;
     use generic_array::typenum::Unsigned;
     use rand::rngs::OsRng;
-    use std::slice::from_raw_parts;
 
     #[test]
     fn test_zeroize_key() -> Result<(), ProtocolError> {
         let key_len = <Key as SizedBytes>::Len::to_usize();
-        let mut key = Key(vec![1u8; key_len]);
+        let mut key = Key(alloc::vec![1u8; key_len]);
         let ptr = key.as_ptr();
 
         key.zeroize();
@@ -205,6 +206,7 @@ mod tests {
         Ok(())
     }
 
+    #[cfg(feature = "std")]
     proptest! {
         #[test]
         fn test_ristretto_check(kp in KeyPair::<RistrettoPoint>::uniform_keypair_strategy()) {

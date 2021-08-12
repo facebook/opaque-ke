@@ -13,6 +13,10 @@ use crate::{
     tests::mock_rng::CycleRng,
     *,
 };
+use alloc::string::String;
+use alloc::string::ToString;
+use alloc::vec::Vec;
+use alloc::{format, vec};
 use curve25519_dalek::ristretto::RistrettoPoint;
 use serde_json::Value;
 

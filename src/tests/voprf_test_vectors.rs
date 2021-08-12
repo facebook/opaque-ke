@@ -5,6 +5,8 @@
 
 use crate::tests::mock_rng::CycleRng;
 use crate::{errors::*, group::Group, oprf};
+use alloc::string::ToString;
+use alloc::vec::Vec;
 use curve25519_dalek::ristretto::RistrettoPoint;
 use generic_array::GenericArray;
 use serde_json::Value;

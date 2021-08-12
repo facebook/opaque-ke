@@ -10,6 +10,7 @@ use crate::errors::{InternalPakeError, ProtocolError};
 use crate::group::Group;
 use crate::hash::Hash;
 use crate::serialization::i2osp;
+use alloc::vec::Vec;
 use curve25519_dalek::ristretto::RistrettoPoint;
 use digest::{BlockInput, Digest};
 use generic_array::typenum::Unsigned;
@@ -78,7 +79,7 @@ pub(crate) fn expand_message_xmd<H: Hash>(
     let l_i_b_str = i2osp(len_in_bytes, 2)?;
     let msg_prime = [&z_pad, msg, &l_i_b_str, &i2osp(0, 1)?, &dst_prime].concat();
 
-    let mut b: Vec<Vec<u8>> = vec![H::digest(&msg_prime).to_vec()]; // b[0]
+    let mut b: Vec<Vec<u8>> = alloc::vec![H::digest(&msg_prime).to_vec()]; // b[0]
 
     let mut h = H::new();
     h.update(&b[0]);
@@ -112,7 +113,7 @@ mod tests {
     #[test]
     fn test_expand_message_xmd() {
         // Test vectors taken from Section K.1 of https://www.ietf.org/archive/id/draft-irtf-cfrg-hash-to-curve-10.txt
-        let test_vectors: Vec<Params> = vec![
+        let test_vectors: alloc::vec::Vec<Params> = alloc::vec![
             Params {
                 msg: "",
                 len_in_bytes: 0x20,
