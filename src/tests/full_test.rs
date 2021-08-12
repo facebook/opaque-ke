@@ -741,8 +741,8 @@ fn test_zeroize_client_registration_start() -> Result<(), ProtocolError> {
         )?;
 
     let mut state = client_registration_start_result.state;
-    let ptrs = state.as_byte_ptrs();
     state.zeroize();
+    let ptrs = state.as_byte_ptrs();
 
     for (ptr, len) in ptrs {
         let bytes = unsafe { from_raw_parts(ptr, len) };
@@ -770,8 +770,8 @@ fn test_zeroize_server_registration_start() -> Result<(), ProtocolError> {
         )?;
 
     let mut state = server_registration_start_result.state;
-    let ptrs = state.as_byte_ptrs();
     state.zeroize();
+    let ptrs = state.as_byte_ptrs();
 
     for (ptr, len) in ptrs {
         let bytes = unsafe { from_raw_parts(ptr, len) };
@@ -804,8 +804,8 @@ fn test_zeroize_client_registration_finish() -> Result<(), ProtocolError> {
     )?;
 
     let mut state = client_registration_finish_result.state;
-    let ptrs = state.as_byte_ptrs();
     state.zeroize();
+    let ptrs = state.as_byte_ptrs();
 
     for (ptr, len) in ptrs {
         let bytes = unsafe { from_raw_parts(ptr, len) };
@@ -841,8 +841,8 @@ fn test_zeroize_server_registration_finish() -> Result<(), ProtocolError> {
         .finish(client_registration_finish_result.message)?;
 
     let mut state = p_file;
-    let ptrs = state.as_byte_ptrs();
     state.zeroize();
+    let ptrs = state.as_byte_ptrs();
 
     for (ptr, len) in ptrs {
         let bytes = unsafe { from_raw_parts(ptr, len) };
@@ -862,8 +862,8 @@ fn test_zeroize_client_login_start() -> Result<(), ProtocolError> {
     )?;
 
     let mut state = client_login_start_result.state;
-    let ptrs = state.as_byte_ptrs();
     state.zeroize();
+    let ptrs = state.as_byte_ptrs();
 
     for (ptr, len) in ptrs {
         let bytes = unsafe { from_raw_parts(ptr, len) };
@@ -911,8 +911,8 @@ fn test_zeroize_server_login_start() -> Result<(), ProtocolError> {
     )?;
 
     let mut state = server_login_start_result.state;
-    let ptrs = state.as_byte_ptrs();
     state.zeroize();
+    let ptrs = state.as_byte_ptrs();
 
     for (ptr, len) in ptrs {
         let bytes = unsafe { from_raw_parts(ptr, len) };
@@ -964,8 +964,8 @@ fn test_zeroize_client_login_finish() -> Result<(), ProtocolError> {
     )?;
 
     let mut state = client_login_finish_result.state;
-    let ptrs = state.as_byte_ptrs();
     state.zeroize();
+    let ptrs = state.as_byte_ptrs();
 
     for (ptr, len) in ptrs {
         let bytes = unsafe { from_raw_parts(ptr, len) };
@@ -1020,8 +1020,8 @@ fn test_zeroize_server_login_finish() -> Result<(), ProtocolError> {
         .finish(client_login_finish_result.message)?;
 
     let mut state = server_login_finish_result.state;
-    let ptrs = state.as_byte_ptrs();
     state.zeroize();
+    let ptrs = state.as_byte_ptrs();
 
     for (ptr, len) in ptrs {
         let bytes = unsafe { from_raw_parts(ptr, len) };

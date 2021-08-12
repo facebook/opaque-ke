@@ -22,8 +22,12 @@ Installation
 Add the following line to the dependencies of your `Cargo.toml`:
 
 ```
-opaque-ke = "1.0.0"
+opaque-ke = "1.0"
 ```
+
+### Minimum Supported Rust Version
+
+Rust **1.51** or higher.
 
 Resources
 ---------
