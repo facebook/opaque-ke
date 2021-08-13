@@ -31,8 +31,8 @@ pub fn expand_message_xmd<H: Hash>(
     dst: &[u8],
     len_in_bytes: usize,
 ) -> Result<Vec<u8>, ProtocolError> {
-    let b_in_bytes = <H as Digest>::OutputSize::to_usize();
-    let r_in_bytes = <H as BlockInput>::BlockSize::to_usize();
+    let b_in_bytes = <H as Digest>::OutputSize::USIZE;
+    let r_in_bytes = <H as BlockInput>::BlockSize::USIZE;
 
     let ell = div_ceil(len_in_bytes, b_in_bytes);
     if ell > 255 {

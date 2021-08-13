@@ -9,6 +9,7 @@ authors = ["Kevin Lewi <klewi@fb.com>", "François Garillot <fga@fb.com>"]
 license = "MIT"
 edition = "2018"
 readme = "README.md"
+resolver = "2"
 
 [features]
 default = ["u64_backend", "serialize"]
@@ -17,31 +18,32 @@ p256 = ["num-bigint", "num-integer", "num-traits", "once_cell", "p256_"]
 bench = []
 u64_backend = ["curve25519-dalek/u64_backend"]
 u32_backend = ["curve25519-dalek/u32_backend"]
-std = ["curve25519-dalek/std"]
+std = ["curve25519-dalek/std", "getrandom", "rand/std", "rand/std_rng", "num-bigint/std", "num-integer/std", "num-traits/std"]
 serialize = ["serde", "base64", "generic-array/serde", "curve25519-dalek/serde"]
 
 [dependencies]
-argon2 = { version = "0.2", optional = true }
-base64 = { version = "0.13", optional = true }
+argon2 = { version = "0.2", default-features = false, optional = true }
+base64 = { version = "0.13", default-features = false, features = ["alloc"], optional = true }
 constant_time_eq = "0.1"
 curve25519-dalek = { version = "3", default-features = false }
 digest = "0.9"
-displaydoc = "0.2"
+displaydoc = { version = "0.2", default-features = false }
 generic-array = "0.14"
-generic-bytes = { version = "0.1" }
-getrandom = { version = "0.2", features = ["js"] }
+getrandom = { version = "0.2", optional = true }
 hkdf = "0.11"
 hmac = "0.11"
-num-bigint = { version = "0.4", optional = true }
-num-integer = { version = "0.1", optional = true }
-num-traits = { version = "0.2", optional = true }
-once_cell = { version = "1", optional = true }
-p256_ = { package = "p256", version = "0.9", optional = true }
+num-bigint = { version = "0.4", default-features = false, optional = true }
+num-integer = { version = "0.1", default-features = false, optional = true }
+num-traits = { version = "0.2", default-features = false, optional = true }
+once_cell = { version = "1", default-features = false, optional = true }
+p256_ = { package = "p256", version = "0.9", default-features = false, features = ["arithmetic", "zeroize"], optional = true }
 rand = { version = "0.8", default-features = false }
-serde = { version = "1", features = ["derive"], optional = true }
+serde = { version = "1", default-features = false, features = ["alloc", "derive"], optional = true }
 subtle = { version = "2.3", default-features = false }
-thiserror = "1"
 zeroize = { version = "1", features = ["zeroize_derive"] }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+getrandom = { version = "0.2", features = ["js"], optional = true }
 
 [dev-dependencies]
 base64 = "0.13"
@@ -50,6 +52,7 @@ chacha20poly1305 = "0.8"
 criterion = "0.3"
 hex = "0.4"
 lazy_static = "1"
+opaque-ke = { path = "", default-features = false, features = ["std"] }
 serde_json = "1"
 sha2 = "0.9"
 proptest = "1"

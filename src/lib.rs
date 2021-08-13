@@ -748,7 +748,6 @@
 //! ```
 //! # use curve25519_dalek::ristretto::RistrettoPoint;
 //! # use generic_array::{GenericArray, typenum::U32};
-//! # use generic_bytes::SizedBytes;
 //! # use opaque_ke::{CipherSuite, errors::{InternalPakeError}, keypair::{KeyPair, PrivateKey, PublicKey, SecretKey}, ServerSetup};
 //! # use rand::rngs::OsRng;
 //! # use zeroize::Zeroize;
@@ -781,8 +780,7 @@
 //!     fn public_key(
 //!         &self
 //!     ) -> Result<PublicKey<RistrettoPoint>, InternalPakeError<Self::Error>> {
-//!         let pk = YourRemoteKey::public_key(self).map_err(InternalPakeError::Custom)?;
-//!         PublicKey::from_arr(&pk).map_err(InternalPakeError::from)
+//!         YourRemoteKey::public_key(self).map(PublicKey::from_arr).map_err(InternalPakeError::Custom)
 //!     }
 //!
 //!     fn serialize(&self) -> Vec<u8> {
@@ -796,7 +794,7 @@
 //!     }
 //! }
 //!
-//! # let remote_key = YourRemoteKey(PrivateKey::from_arr(&GenericArray::default()).unwrap());
+//! # let remote_key = YourRemoteKey(PrivateKey::from_arr(GenericArray::default()));
 //! let keypair = KeyPair::from_private_key(remote_key).unwrap();
 //! let server_setup = ServerSetup::<Default, YourRemoteKey>::new_with_key(&mut OsRng, keypair);
 //! ```

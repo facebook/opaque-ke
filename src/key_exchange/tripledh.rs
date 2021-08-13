@@ -15,7 +15,7 @@ use crate::{
     key_exchange::traits::{
         FromBytes, GenerateKe2Result, GenerateKe3Result, KeyExchange, ToBytes, ToBytesWithPointers,
     },
-    keypair::{KeyPair, PrivateKey, PublicKey, SecretKey, SizedBytesExt},
+    keypair::{KeyPair, PrivateKey, PublicKey, SecretKey},
     serialization::serialize,
 };
 use alloc::vec;
@@ -26,7 +26,6 @@ use generic_array::{
     typenum::{Unsigned, U32},
     ArrayLength, GenericArray,
 };
-use generic_bytes::SizedBytes;
 use hkdf::Hkdf;
 use hmac::{Hmac, Mac, NewMac};
 use rand::{CryptoRng, RngCore};
@@ -214,9 +213,7 @@ impl<D: Hash, G: Group> KeyExchange<D, G> for TripleDH {
     }
 
     fn ke2_message_size() -> usize {
-        NonceLen::to_usize()
-            + <G as Group>::ElemLen::to_usize()
-            + <<D as FixedOutput>::OutputSize as Unsigned>::to_usize()
+        NonceLen::USIZE + <G as Group>::ElemLen::USIZE + <D as FixedOutput>::OutputSize::USIZE
     }
 }
 
@@ -260,9 +257,9 @@ pub struct Ke1Message<G: Group> {
 
 impl<G: Group> FromBytes for Ke1State<G> {
     fn from_bytes<CS: CipherSuite>(bytes: &[u8]) -> Result<Self, PakeError> {
-        let key_len = <G as Group>::ElemLen::to_usize();
+        let key_len = <G as Group>::ElemLen::USIZE;
 
-        let nonce_len = NonceLen::to_usize();
+        let nonce_len = NonceLen::USIZE;
         let checked_bytes = check_slice_size_atleast(bytes, key_len + nonce_len, "ke1_state")?;
 
         Ok(Self {
@@ -283,11 +280,8 @@ impl<G: Group> ToBytesWithPointers for Ke1State<G> {
     #[cfg(test)]
     fn as_byte_ptrs(&self) -> Vec<(*const u8, usize)> {
         vec![
-            (
-                self.client_e_sk.as_ptr(),
-                <PrivateKey<G> as SizedBytes>::Len::to_usize(),
-            ),
-            (self.client_nonce.as_ptr(), NonceLen::to_usize()),
+            (self.client_e_sk.as_ptr(), G::ScalarLen::USIZE),
+            (self.client_nonce.as_ptr(), NonceLen::USIZE),
         ]
     }
 }
@@ -300,10 +294,10 @@ impl<G: Group> ToBytes for Ke1Message<G> {
 
 impl<G: Group> FromBytes for Ke1Message<G> {
     fn from_bytes<CS: CipherSuite>(ke1_message_bytes: &[u8]) -> Result<Self, PakeError> {
-        let nonce_len = NonceLen::to_usize();
+        let nonce_len = NonceLen::USIZE;
         let checked_nonce = check_slice_size(
             ke1_message_bytes,
-            nonce_len + <G as Group>::ElemLen::to_usize(),
+            nonce_len + <G as Group>::ElemLen::USIZE,
             "ke1_message nonce",
         )?;
 
@@ -351,9 +345,9 @@ impl<HashLen: ArrayLength<u8>> ToBytesWithPointers for Ke2State<HashLen> {
     #[cfg(test)]
     fn as_byte_ptrs(&self) -> Vec<(*const u8, usize)> {
         vec![
-            (self.km3.as_ptr(), HashLen::to_usize()),
-            (self.hashed_transcript.as_ptr(), HashLen::to_usize()),
-            (self.session_key.as_ptr(), HashLen::to_usize()),
+            (self.km3.as_ptr(), HashLen::USIZE),
+            (self.hashed_transcript.as_ptr(), HashLen::USIZE),
+            (self.session_key.as_ptr(), HashLen::USIZE),
         ]
     }
 }
@@ -370,7 +364,7 @@ pub struct Ke2Message<G: Group, HashLen: ArrayLength<u8>> {
 
 impl<HashLen: ArrayLength<u8>> FromBytes for Ke2State<HashLen> {
     fn from_bytes<CS: CipherSuite>(input: &[u8]) -> Result<Self, PakeError> {
-        let hash_len = HashLen::to_usize();
+        let hash_len = HashLen::USIZE;
         let checked_bytes = check_slice_size(input, 3 * hash_len, "ke2_state")?;
 
         Ok(Self {
@@ -397,8 +391,8 @@ impl<G: Group, HashLen: ArrayLength<u8>> Ke2Message<G, HashLen> {
 
 impl<G: Group, HashLen: ArrayLength<u8>> FromBytes for Ke2Message<G, HashLen> {
     fn from_bytes<CS: CipherSuite>(input: &[u8]) -> Result<Self, PakeError> {
-        let key_len = <G as Group>::ElemLen::to_usize();
-        let nonce_len = NonceLen::to_usize();
+        let key_len = <G as Group>::ElemLen::USIZE;
+        let nonce_len = NonceLen::USIZE;
         let checked_nonce = check_slice_size_atleast(input, nonce_len, "ke2_message nonce")?;
 
         let unchecked_server_e_pk = check_slice_size_atleast(
@@ -408,7 +402,7 @@ impl<G: Group, HashLen: ArrayLength<u8>> FromBytes for Ke2Message<G, HashLen> {
         )?;
         let checked_mac = check_slice_size(
             &unchecked_server_e_pk[key_len..],
-            HashLen::to_usize(),
+            HashLen::USIZE,
             "ke1_message mac",
         )?;
 
@@ -468,7 +462,7 @@ impl<HashLen: ArrayLength<u8>> ToBytes for Ke3Message<HashLen> {
 
 impl<HashLen: ArrayLength<u8>> FromBytes for Ke3Message<HashLen> {
     fn from_bytes<CS: CipherSuite>(bytes: &[u8]) -> Result<Self, PakeError> {
-        let checked_bytes = check_slice_size(bytes, HashLen::to_usize(), "ke3_message")?;
+        let checked_bytes = check_slice_size(bytes, HashLen::USIZE, "ke3_message")?;
 
         Ok(Self {
             mac: GenericArray::clone_from_slice(checked_bytes),
@@ -513,14 +507,14 @@ fn derive_3dh_keys<D: Hash, G: Group, S: SecretKey<G>>(
         &handshake_secret,
         STR_SERVER_MAC,
         b"",
-        <D as Digest>::OutputSize::to_usize(),
+        <D as Digest>::OutputSize::USIZE,
     )
     .map_err(ProtocolError::into_custom)?;
     let km3 = hkdf_expand_label::<D>(
         &handshake_secret,
         STR_CLIENT_MAC,
         b"",
-        <D as Digest>::OutputSize::to_usize(),
+        <D as Digest>::OutputSize::USIZE,
     )
     .map_err(ProtocolError::into_custom)?;
 
@@ -577,13 +571,13 @@ fn derive_secrets<D: Hash>(
         hkdf,
         label,
         hashed_derivation_transcript,
-        <D as Digest>::OutputSize::to_usize(),
+        <D as Digest>::OutputSize::USIZE,
     )
 }
 
-// Generate a random nonce up to NonceLen::to_usize() bytes.
+// Generate a random nonce up to NonceLen::USIZE bytes.
 fn generate_nonce<R: RngCore + CryptoRng>(rng: &mut R) -> GenericArray<u8, NonceLen> {
-    let mut nonce_bytes = vec![0u8; NonceLen::to_usize()];
+    let mut nonce_bytes = vec![0u8; NonceLen::USIZE];
     rng.fill_bytes(&mut nonce_bytes);
     GenericArray::clone_from_slice(&nonce_bytes)
 }

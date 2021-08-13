@@ -8,7 +8,7 @@ use crate::{
     errors::{utils::check_slice_size, InternalPakeError, PakeError, ProtocolError},
     group::Group,
     hash::Hash,
-    keypair::{KeyPair, PrivateKey, PublicKey},
+    keypair::{KeyPair, PublicKey},
     opaque::{bytestrings_from_identifiers, Identifiers},
 };
 use alloc::vec;
@@ -16,7 +16,6 @@ use alloc::vec::Vec;
 use core::convert::TryFrom;
 use digest::Digest;
 use generic_array::{typenum::Unsigned, GenericArray};
-use generic_bytes::SizedBytes;
 use hkdf::Hkdf;
 use hmac::{Hmac, Mac, NewMac};
 use rand::{CryptoRng, RngCore};
@@ -35,7 +34,7 @@ fn build_inner_envelope_internal<CS: CipherSuite>(
     nonce: &[u8],
 ) -> Result<PublicKey<CS::KeGroup>, ProtocolError> {
     let h = Hkdf::<CS::Hash>::new(None, random_pwd);
-    let mut keypair_seed = vec![0u8; <PrivateKey<CS::KeGroup> as SizedBytes>::Len::to_usize()];
+    let mut keypair_seed = vec![0u8; <CS::KeGroup as Group>::ScalarLen::USIZE];
     h.expand(&[nonce, STR_PRIVATE_KEY].concat(), &mut keypair_seed)
         .map_err(|_| InternalPakeError::HkdfError)?;
     let client_static_keypair = KeyPair::<CS::KeGroup>::from_private_key_slice(
@@ -53,7 +52,7 @@ fn recover_keys_internal<CS: CipherSuite>(
     nonce: &[u8],
 ) -> Result<KeyPair<CS::KeGroup>, ProtocolError> {
     let h = Hkdf::<CS::Hash>::new(None, random_pwd);
-    let mut keypair_seed = vec![0u8; <PrivateKey<CS::KeGroup> as SizedBytes>::Len::to_usize()];
+    let mut keypair_seed = vec![0u8; <CS::KeGroup as Group>::ScalarLen::USIZE];
     h.expand(&[nonce, STR_PRIVATE_KEY].concat(), &mut keypair_seed)
         .map_err(|_| InternalPakeError::HkdfError)?;
     let client_static_keypair = KeyPair::<CS::KeGroup>::from_private_key_slice(
@@ -153,15 +152,15 @@ type SealResult<CS> = (
 
 impl<CS: CipherSuite> Envelope<CS> {
     fn hmac_key_size() -> usize {
-        <CS::Hash as Digest>::OutputSize::to_usize()
+        <CS::Hash as Digest>::OutputSize::USIZE
     }
 
     fn export_key_size() -> usize {
-        <CS::Hash as Digest>::OutputSize::to_usize()
+        <CS::Hash as Digest>::OutputSize::USIZE
     }
 
     pub(crate) fn len() -> usize {
-        <CS::Hash as Digest>::OutputSize::to_usize() + NONCE_LEN
+        <CS::Hash as Digest>::OutputSize::USIZE + NONCE_LEN
     }
 
     pub(crate) fn serialize(&self) -> Vec<u8> {
@@ -201,7 +200,7 @@ impl<CS: CipherSuite> Envelope<CS> {
             nonce: vec![0u8; NONCE_LEN],
             hmac: GenericArray::clone_from_slice(&vec![
                 0u8;
-                <CS::Hash as Digest>::OutputSize::to_usize()
+                <CS::Hash as Digest>::OutputSize::USIZE
             ]),
         }
     }

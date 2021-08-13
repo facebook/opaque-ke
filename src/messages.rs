@@ -14,13 +14,12 @@ use crate::{
     },
     group::Group,
     key_exchange::traits::{FromBytes, KeyExchange, ToBytes},
-    keypair::{KeyPair, PublicKey, SecretKey, SizedBytesExt},
+    keypair::{KeyPair, PublicKey, SecretKey},
     opaque::ServerSetup,
 };
 use alloc::vec::Vec;
 use digest::Digest;
 use generic_array::{typenum::Unsigned, GenericArray};
-use generic_bytes::SizedBytes;
 use rand::{CryptoRng, RngCore};
 
 // Messages
@@ -57,7 +56,7 @@ impl<CS: CipherSuite> RegistrationRequest<CS> {
 
     /// Deserialization from bytes
     pub fn deserialize(input: &[u8]) -> Result<Self, ProtocolError> {
-        let elem_len = <CS::OprfGroup as Group>::ElemLen::to_usize();
+        let elem_len = <CS::OprfGroup as Group>::ElemLen::USIZE;
         let checked_slice = check_slice_size(input, elem_len, "first_message_bytes")?;
         // Check that the message is actually containing an element of the
         // correct subgroup
@@ -107,8 +106,8 @@ impl<CS: CipherSuite> RegistrationResponse<CS> {
 
     /// Deserialization from bytes
     pub fn deserialize(input: &[u8]) -> Result<Self, ProtocolError> {
-        let elem_len = <CS::OprfGroup as Group>::ElemLen::to_usize();
-        let key_len = <PublicKey<CS::KeGroup> as SizedBytes>::Len::to_usize();
+        let elem_len = <CS::OprfGroup as Group>::ElemLen::USIZE;
+        let key_len = <CS::KeGroup as Group>::ElemLen::USIZE;
         let checked_slice =
             check_slice_size(input, elem_len + key_len, "registration_response_bytes")?;
 
@@ -177,8 +176,8 @@ impl<CS: CipherSuite> RegistrationUpload<CS> {
 
     /// Deserialization from bytes
     pub fn deserialize(input: &[u8]) -> Result<Self, ProtocolError> {
-        let key_len = <PublicKey<CS::KeGroup> as SizedBytes>::Len::to_usize();
-        let hash_len = <CS::Hash as Digest>::OutputSize::to_usize();
+        let key_len = <CS::KeGroup as Group>::ElemLen::USIZE;
+        let hash_len = <CS::Hash as Digest>::OutputSize::USIZE;
         let checked_slice =
             check_slice_size_atleast(input, key_len + hash_len, "registration_upload_bytes")?;
         let envelope = Envelope::<CS>::deserialize(&checked_slice[key_len + hash_len..])?;
@@ -198,7 +197,7 @@ impl<CS: CipherSuite> RegistrationUpload<CS> {
         rng: &mut R,
         server_setup: &ServerSetup<CS, S>,
     ) -> Self {
-        let mut masking_key = alloc::vec![0u8; <CS::Hash as Digest>::OutputSize::to_usize()];
+        let mut masking_key = alloc::vec![0u8; <CS::Hash as Digest>::OutputSize::USIZE];
         rng.fill_bytes(&mut masking_key);
 
         Self {
@@ -245,7 +244,7 @@ impl<CS: CipherSuite> CredentialRequest<CS> {
 
     /// Deserialization from bytes
     pub fn deserialize(input: &[u8]) -> Result<Self, ProtocolError> {
-        let elem_len = <CS::OprfGroup as Group>::ElemLen::to_usize();
+        let elem_len = <CS::OprfGroup as Group>::ElemLen::USIZE;
 
         let checked_slice = check_slice_size_atleast(input, elem_len, "login_first_message_bytes")?;
 
@@ -327,8 +326,8 @@ impl<CS: CipherSuite> CredentialResponse<CS> {
 
     /// Deserialization from bytes
     pub fn deserialize(input: &[u8]) -> Result<Self, ProtocolError> {
-        let elem_len = <CS::OprfGroup as Group>::ElemLen::to_usize();
-        let key_len = <PublicKey<CS::KeGroup> as SizedBytes>::Len::to_usize();
+        let elem_len = <CS::OprfGroup as Group>::ElemLen::USIZE;
+        let key_len = <CS::KeGroup as Group>::ElemLen::USIZE;
         let nonce_len: usize = 32;
         let envelope_len = Envelope::<CS>::len();
         let masked_response_len = key_len + envelope_len;

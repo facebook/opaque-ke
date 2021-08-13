@@ -296,24 +296,6 @@ impl ProtocolError {
     }
 }
 
-impl<T> From<generic_bytes::TryFromSizedBytesError> for InternalPakeError<T> {
-    fn from(_: generic_bytes::TryFromSizedBytesError) -> Self {
-        InternalPakeError::InvalidByteSequence
-    }
-}
-
-impl<T> From<generic_bytes::TryFromSizedBytesError> for PakeError<T> {
-    fn from(e: generic_bytes::TryFromSizedBytesError) -> Self {
-        PakeError::CryptoError(e.into())
-    }
-}
-
-impl<T> From<generic_bytes::TryFromSizedBytesError> for ProtocolError<T> {
-    fn from(e: generic_bytes::TryFromSizedBytesError) -> Self {
-        PakeError::CryptoError(e.into()).into()
-    }
-}
-
 pub(crate) mod utils {
     use super::*;
 
