@@ -14,7 +14,6 @@ use alloc::vec;
 use alloc::vec::Vec;
 use core::slice::from_raw_parts;
 use curve25519_dalek::{ristretto::RistrettoPoint, traits::Identity};
-use generic_bytes::SizedBytes;
 use rand::rngs::OsRng;
 use serde_json::Value;
 use zeroize::Zeroize;
@@ -149,7 +148,6 @@ fn populate_test_vectors(values: &Value) -> TestVectorParameters {
     }
 }
 
-#[cfg(feature = "std")]
 fn stringify_test_vectors(p: &TestVectorParameters) -> alloc::string::String {
     let mut s = alloc::string::String::new();
     s.push_str("{\n");
@@ -273,7 +271,6 @@ fn stringify_test_vectors(p: &TestVectorParameters) -> alloc::string::String {
     s
 }
 
-#[cfg(feature = "std")]
 fn generate_parameters<CS: CipherSuite>() -> TestVectorParameters {
     use crate::{group::Group, key_exchange::tripledh::NonceLen, keypair::KeyPair};
     use generic_array::typenum::Unsigned;
@@ -298,9 +295,9 @@ fn generate_parameters<CS: CipherSuite>() -> TestVectorParameters {
     rng.fill_bytes(&mut masking_nonce);
     let mut envelope_nonce = [0u8; 32];
     rng.fill_bytes(&mut envelope_nonce);
-    let mut client_nonce = vec![0u8; NonceLen::to_usize()];
+    let mut client_nonce = vec![0u8; NonceLen::USIZE];
     rng.fill_bytes(&mut client_nonce);
-    let mut server_nonce = vec![0u8; NonceLen::to_usize()];
+    let mut server_nonce = vec![0u8; NonceLen::USIZE];
     rng.fill_bytes(&mut server_nonce);
 
     let fake_sk: Vec<u8> = fake_kp.private().to_vec();
@@ -448,7 +445,6 @@ fn generate_parameters<CS: CipherSuite>() -> TestVectorParameters {
     }
 }
 
-#[cfg(feature = "std")]
 #[test]
 fn generate_test_vectors() {
     let parameters = generate_parameters::<RistrettoSha5123dhNoSlowHash>();

@@ -37,7 +37,7 @@ impl<D: Hash> SlowHash<D> for argon2::Argon2<'_> {
         input: GenericArray<u8, <D as Digest>::OutputSize>,
     ) -> Result<Vec<u8>, InternalPakeError> {
         let params = argon2::Argon2::default();
-        let mut output = alloc::vec![0u8; <D as Digest>::OutputSize::to_usize()];
+        let mut output = alloc::vec![0u8; <D as Digest>::OutputSize::USIZE];
         params
             .hash_password_into(
                 argon2::Algorithm::Argon2id,

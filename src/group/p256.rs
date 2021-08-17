@@ -18,7 +18,7 @@ use generic_array::{ArrayLength, GenericArray};
 use num_bigint::{BigInt, Sign};
 use num_integer::Integer;
 use num_traits::{One, ToPrimitive};
-use once_cell::sync::Lazy;
+use once_cell::unsync::Lazy;
 use p256_::elliptic_curve::group::prime::PrimeCurveAffine;
 use p256_::elliptic_curve::group::GroupEncoding;
 use p256_::elliptic_curve::sec1::{FromEncodedPoint, ToEncodedPoint};
@@ -27,50 +27,41 @@ use p256_::elliptic_curve::Field;
 use p256_::{AffinePoint, EncodedPoint, ProjectivePoint};
 use rand::{CryptoRng, RngCore};
 
-// https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-hash-to-curve-11#section-8.2
-// `p: 2^256 - 2^224 + 2^192 + 2^96 - 1`
-const P: Lazy<BigInt> = Lazy::new(|| {
-    BigInt::from_str(
-        "115792089210356248762697446949407573530086143415290314195533631308867097853951",
-    )
-    .unwrap()
-});
-// `A: -3`
-const A: Lazy<BigInt> = Lazy::new(|| BigInt::from(-3));
-// `B: 0x5ac635d8aa3a93e7b3ebbd55769886bc651d06b0cc53b0f63bce3c3e27d2604b`
-const B: Lazy<BigInt> = Lazy::new(|| {
-    BigInt::parse_bytes(
-        b"5ac635d8aa3a93e7b3ebbd55769886bc651d06b0cc53b0f63bce3c3e27d2604b",
-        16,
-    )
-    .unwrap()
-});
 // `L: 48`
 pub const L: usize = 48;
-// `Z: -10`
-const Z: Lazy<BigInt> = Lazy::new(|| BigInt::from(-10));
-// https://nvlpubs.nist.gov/nistpubs/FIPS/NIST.FIPS.186-4.pdf#[{%22num%22:211,%22gen%22:0},{%22name%22:%22XYZ%22},70,700,0]
-// P-256 `n` is defined as `115792089210356248762697446949407573529996955224135760342 422259061068512044369`
-pub const N: Lazy<BigInt> = Lazy::new(|| {
-    BigInt::from_str(
-        "115792089210356248762697446949407573529996955224135760342422259061068512044369",
-    )
-    .unwrap()
-});
 
-#[cfg(feature = "p256")]
 impl Group for ProjectivePoint {
     const SUITE_ID: usize = 0x0003;
 
     // Implements the `hash_to_curve()` function from
     // https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-hash-to-curve-11#section-3
     fn map_to_curve<H: Hash>(msg: &[u8], dst: &[u8]) -> Result<Self, ProtocolError> {
+        // https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-hash-to-curve-11#section-8.2
+        // `p: 2^256 - 2^224 + 2^192 + 2^96 - 1`
+        const P: Lazy<BigInt> = Lazy::new(|| {
+            BigInt::from_str(
+                "115792089210356248762697446949407573530086143415290314195533631308867097853951",
+            )
+            .unwrap()
+        });
+        // `A: -3`
+        const A: Lazy<BigInt> = Lazy::new(|| BigInt::from(-3));
+        // `B: 0x5ac635d8aa3a93e7b3ebbd55769886bc651d06b0cc53b0f63bce3c3e27d2604b`
+        const B: Lazy<BigInt> = Lazy::new(|| {
+            BigInt::parse_bytes(
+                b"5ac635d8aa3a93e7b3ebbd55769886bc651d06b0cc53b0f63bce3c3e27d2604b",
+                16,
+            )
+            .unwrap()
+        });
+        // `Z: -10`
+        const Z: Lazy<BigInt> = Lazy::new(|| BigInt::from(-10));
+
         // https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-hash-to-curve-11#section-3
         // `hash_to_curve` calls `hash_to_field` with a `count` of `2`
         // https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-hash-to-curve-11#section-5.3
         // `hash_to_field` calls `expand_message` with a `len_in_bytes` of `count * L`
-        let uniform_bytes =
-            super::expand::expand_message_xmd::<H>(msg, dst, 2 * crate::group::p256::L)?;
+        let uniform_bytes = super::expand::expand_message_xmd::<H>(msg, dst, 2 * L)?;
 
         // map to curve
         let (q0x, q0y) = map_to_curve_simple_swu(&uniform_bytes[..L], &A, &B, &P, &Z);
@@ -93,12 +84,20 @@ impl Group for ProjectivePoint {
     // Implements the `HashToScalar()` function from
     // https://www.ietf.org/archive/id/draft-irtf-cfrg-voprf-07.html#section-4.3
     fn hash_to_scalar<H: Hash>(input: &[u8], dst: &[u8]) -> Result<Self::Scalar, ProtocolError> {
+        // https://nvlpubs.nist.gov/nistpubs/FIPS/NIST.FIPS.186-4.pdf#[{%22num%22:211,%22gen%22:0},{%22name%22:%22XYZ%22},70,700,0]
+        // P-256 `n` is defined as `115792089210356248762697446949407573529996955224135760342 422259061068512044369`
+        const N: once_cell::unsync::Lazy<BigInt> = once_cell::unsync::Lazy::new(|| {
+            BigInt::from_str(
+                "115792089210356248762697446949407573529996955224135760342422259061068512044369",
+            )
+            .unwrap()
+        });
+
         // https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-hash-to-curve-11#section-5.3
         // `HashToScalar` is `hash_to_field`
-        let uniform_bytes =
-            super::expand::expand_message_xmd::<H>(input, dst, crate::group::p256::L)?;
+        let uniform_bytes = super::expand::expand_message_xmd::<H>(input, dst, L)?;
         let mut bytes = BigInt::from_bytes_be(Sign::Plus, &uniform_bytes)
-            .mod_floor(&crate::group::p256::N)
+            .mod_floor(&N)
             .to_bytes_be()
             .1;
         bytes.resize(32, 0);
@@ -410,6 +409,22 @@ mod tests {
 
     #[test]
     fn map_to_curve_simple_swu() {
+        const P: Lazy<BigInt> = Lazy::new(|| {
+            BigInt::from_str(
+                "115792089210356248762697446949407573530086143415290314195533631308867097853951",
+            )
+            .unwrap()
+        });
+        const A: Lazy<BigInt> = Lazy::new(|| BigInt::from(-3));
+        const B: Lazy<BigInt> = Lazy::new(|| {
+            BigInt::parse_bytes(
+                b"5ac635d8aa3a93e7b3ebbd55769886bc651d06b0cc53b0f63bce3c3e27d2604b",
+                16,
+            )
+            .unwrap()
+        });
+        const Z: Lazy<BigInt> = Lazy::new(|| BigInt::from(-10));
+
         // Test vectors taken from https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-hash-to-curve-11#appendix-J.1.1
         let test_vectors = alloc::vec![
             Params {

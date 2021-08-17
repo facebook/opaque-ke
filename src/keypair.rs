@@ -9,31 +9,13 @@
 
 use crate::errors::{InternalPakeError, ProtocolError};
 use crate::group::Group;
-use alloc::borrow::ToOwned;
 use alloc::vec::Vec;
 use core::fmt::Debug;
 use core::ops::Deref;
-#[cfg(test)]
 use generic_array::typenum::Unsigned;
 use generic_array::{ArrayLength, GenericArray};
-use generic_bytes::{SizedBytes, TryFromSizedBytesError};
-#[cfg(all(test, feature = "std"))]
-use proptest::prelude::*;
-#[cfg(all(test, feature = "std"))]
-use rand::{rngs::StdRng, SeedableRng};
 use rand::{CryptoRng, RngCore};
 use zeroize::Zeroize;
-
-/// Convenience extension trait of SizedBytes
-pub trait SizedBytesExt: SizedBytes {
-    /// Convert from bytes
-    fn from_bytes(bytes: &[u8]) -> Result<Self, TryFromSizedBytesError> {
-        <Self as SizedBytes>::from_arr(GenericArray::from_slice(bytes))
-    }
-}
-
-// blanket implementation
-impl<T> SizedBytesExt for T where T: SizedBytes {}
 
 /// A Keypair trait with public-private verification
 #[cfg_attr(
@@ -142,17 +124,20 @@ impl<G: Group> KeyPair<G> {
     #[cfg(test)]
     pub fn as_byte_ptrs(&self) -> Vec<(*const u8, usize)> {
         alloc::vec![
-            (self.pk.as_ptr(), G::ElemLen::to_usize()),
-            (self.sk.as_ptr(), G::ScalarLen::to_usize()),
+            (self.pk.as_ptr(), G::ElemLen::USIZE),
+            (self.sk.as_ptr(), G::ScalarLen::USIZE),
         ]
     }
 }
 
-#[cfg(all(test, feature = "std"))]
+#[cfg(test)]
 impl<G: Group + Debug> KeyPair<G> {
     /// Test-only strategy returning a proptest Strategy based on
     /// generate_random
-    fn uniform_keypair_strategy() -> BoxedStrategy<Self> {
+    fn uniform_keypair_strategy() -> proptest::prelude::BoxedStrategy<Self> {
+        use proptest::prelude::*;
+        use rand::{rngs::StdRng, SeedableRng};
+
         // The no_shrink is because keypairs should be fixed -- shrinking would cause a different
         // keypair to be generated, which appears to not be very useful.
         any::<[u8; 32]>()
@@ -223,13 +208,9 @@ impl<L: ArrayLength<u8>> Deref for Key<L> {
 
 // Don't make it implement SizedBytes so that it's not constructible outside of this module.
 impl<L: ArrayLength<u8>> Key<L> {
-    fn to_arr(&self) -> GenericArray<u8, L> {
-        GenericArray::clone_from_slice(&self.0[..])
-    }
-
-    #[allow(clippy::unnecessary_wraps)]
-    fn from_arr(key_bytes: &GenericArray<u8, L>) -> Result<Self, TryFromSizedBytesError> {
-        Ok(Key(key_bytes.to_owned()))
+    /// Convert to bytes
+    pub fn to_arr(&self) -> GenericArray<u8, L> {
+        self.0.clone()
     }
 }
 
@@ -268,15 +249,19 @@ impl<G: Group> Deref for PrivateKey<G> {
     }
 }
 
-impl<G: Group> SizedBytes for PrivateKey<G> {
-    type Len = G::ScalarLen;
-
-    fn to_arr(&self) -> GenericArray<u8, Self::Len> {
-        self.0.to_arr()
+impl<G: Group> PrivateKey<G> {
+    /// Convert from bytes
+    pub fn from_arr(key_bytes: GenericArray<u8, G::ScalarLen>) -> Self {
+        PrivateKey(Key(key_bytes))
     }
 
-    fn from_arr(key_bytes: &GenericArray<u8, Self::Len>) -> Result<Self, TryFromSizedBytesError> {
-        Ok(PrivateKey(Key::from_arr(key_bytes)?))
+    /// Convert from slice
+    pub fn from_bytes(key_bytes: &[u8]) -> Result<Self, InternalPakeError> {
+        if key_bytes.len() == G::ScalarLen::USIZE {
+            Ok(Self::from_arr(GenericArray::from_slice(key_bytes).clone()))
+        } else {
+            Err(InternalPakeError::InvalidByteSequence)
+        }
     }
 }
 
@@ -359,15 +344,19 @@ impl<G: Group> Deref for PublicKey<G> {
     }
 }
 
-impl<G: Group> SizedBytes for PublicKey<G> {
-    type Len = G::ElemLen;
-
-    fn to_arr(&self) -> GenericArray<u8, Self::Len> {
-        self.0.to_arr()
+impl<G: Group> PublicKey<G> {
+    /// Convert from bytes
+    pub fn from_arr(key_bytes: GenericArray<u8, G::ElemLen>) -> Self {
+        Self(Key(key_bytes))
     }
 
-    fn from_arr(key_bytes: &GenericArray<u8, Self::Len>) -> Result<Self, TryFromSizedBytesError> {
-        Ok(PublicKey(Key::from_arr(key_bytes)?))
+    /// Convert from slice
+    pub fn from_bytes(key_bytes: &[u8]) -> Result<Self, InternalPakeError> {
+        if key_bytes.len() == G::ElemLen::USIZE {
+            Ok(Self::from_arr(GenericArray::from_slice(key_bytes).clone()))
+        } else {
+            Err(InternalPakeError::InvalidByteSequence)
+        }
     }
 }
 
@@ -378,11 +367,12 @@ mod tests {
     use core::slice::from_raw_parts;
     use curve25519_dalek::ristretto::RistrettoPoint;
     use generic_array::typenum::Unsigned;
+    use proptest::prelude::*;
     use rand::rngs::OsRng;
 
     #[test]
     fn test_zeroize_key() -> Result<(), ProtocolError> {
-        let key_len = <RistrettoPoint as Group>::ElemLen::to_usize();
+        let key_len = <RistrettoPoint as Group>::ElemLen::USIZE;
         let mut key = Key::<<RistrettoPoint as Group>::ElemLen>(GenericArray::clone_from_slice(
             &alloc::vec![
                 1u8;
@@ -415,7 +405,6 @@ mod tests {
         Ok(())
     }
 
-    #[cfg(feature = "std")]
     proptest! {
         #[test]
         fn test_ristretto_check(kp in KeyPair::<RistrettoPoint>::uniform_keypair_strategy()) {
@@ -505,7 +494,7 @@ mod tests {
 
         let sk = RistrettoPoint::random_nonzero_scalar(&mut OsRng);
         let sk_bytes = RistrettoPoint::scalar_as_bytes(sk);
-        let sk = RemoteKey(PrivateKey::from_arr(&sk_bytes).unwrap());
+        let sk = RemoteKey(PrivateKey::from_arr(sk_bytes));
         let keypair = KeyPair::from_private_key(sk).unwrap();
 
         let server_setup = ServerSetup::<Default, RemoteKey>::new_with_key(&mut OsRng, keypair);

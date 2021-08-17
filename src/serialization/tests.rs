@@ -12,7 +12,7 @@ use crate::{
         traits::{FromBytes, KeyExchange, ToBytes},
         tripledh::{NonceLen, TripleDH},
     },
-    keypair::{KeyPair, PublicKey},
+    keypair::KeyPair,
     serialization::{i2osp, os2ip, serialize},
     *,
 };
@@ -23,7 +23,6 @@ use alloc::vec::Vec;
 
 use curve25519_dalek::{ristretto::RistrettoPoint, traits::Identity};
 use generic_array::typenum::Unsigned;
-use generic_bytes::SizedBytes;
 use proptest::{collection::vec, prelude::*};
 use rand::{rngs::OsRng, RngCore};
 
@@ -79,8 +78,8 @@ fn server_registration_roundtrip() {
 
     // Construct a mock envelope
     let mut mock_envelope_bytes = Vec::new();
-    mock_envelope_bytes.extend_from_slice(&vec![0; NonceLen::to_usize()]); // empty nonce
-                                                                           // mock_envelope_bytes.extend_from_slice(&ciphertext); // ciphertext which is an encrypted private key
+    mock_envelope_bytes.extend_from_slice(&vec![0; NonceLen::USIZE]); // empty nonce
+                                                                      // mock_envelope_bytes.extend_from_slice(&ciphertext); // ciphertext which is an encrypted private key
     mock_envelope_bytes.extend_from_slice(&[0; MAC_SIZE]); // length-MAC_SIZE hmac
 
     let mock_client_kp = KeyPair::<<Default as CipherSuite>::OprfGroup>::generate_random(&mut rng);
@@ -157,7 +156,7 @@ fn registration_upload_roundtrip() {
     let mut nonce = [0u8; 32];
     rng.fill_bytes(&mut nonce);
 
-    let mut masking_key = vec![0u8; <sha2::Sha512 as Digest>::OutputSize::to_usize()];
+    let mut masking_key = vec![0u8; <sha2::Sha512 as Digest>::OutputSize::USIZE];
     rng.fill_bytes(&mut masking_key);
 
     let (envelope, _, _) =
@@ -182,7 +181,7 @@ fn credential_request_roundtrip() {
     let alpha_bytes = alpha.to_arr().to_vec();
 
     let client_e_kp = KeyPair::<<Default as CipherSuite>::OprfGroup>::generate_random(&mut rng);
-    let mut client_nonce = vec![0u8; NonceLen::to_usize()];
+    let mut client_nonce = vec![0u8; NonceLen::USIZE];
     rng.fill_bytes(&mut client_nonce);
 
     let ke1m: Vec<u8> = [&client_nonce[..], &client_e_kp.public()].concat();
@@ -217,17 +216,14 @@ fn credential_response_roundtrip() {
     let mut masking_nonce = vec![0u8; 32];
     rng.fill_bytes(&mut masking_nonce);
 
-    let mut masked_response = vec![
-        0u8;
-        <PublicKey<RistrettoPoint> as SizedBytes>::Len::to_usize()
-            + Envelope::<Default>::len()
-    ];
+    let mut masked_response =
+        vec![0u8; <RistrettoPoint as Group>::ElemLen::USIZE + Envelope::<Default>::len()];
     rng.fill_bytes(&mut masked_response);
 
     let server_e_kp = KeyPair::<<Default as CipherSuite>::OprfGroup>::generate_random(&mut rng);
     let mut mac = [0u8; MAC_SIZE];
     rng.fill_bytes(&mut mac);
-    let mut server_nonce = vec![0u8; NonceLen::to_usize()];
+    let mut server_nonce = vec![0u8; NonceLen::USIZE];
     rng.fill_bytes(&mut server_nonce);
 
     let ke2m: Vec<u8> = [&server_nonce[..], &server_e_kp.public(), &mac[..]].concat();
@@ -280,7 +276,7 @@ fn client_login_roundtrip() {
     let sc = <RistrettoPoint as Group>::random_nonzero_scalar(&mut rng);
 
     let client_e_kp = KeyPair::<<Default as CipherSuite>::OprfGroup>::generate_random(&mut rng);
-    let mut client_nonce = vec![0u8; NonceLen::to_usize()];
+    let mut client_nonce = vec![0u8; NonceLen::USIZE];
     rng.fill_bytes(&mut client_nonce);
 
     let serialized_credential_request = b"serialized credential_request".to_vec();
@@ -304,7 +300,7 @@ fn ke1_message_roundtrip() {
     let mut rng = OsRng;
 
     let client_e_kp = KeyPair::<<Default as CipherSuite>::OprfGroup>::generate_random(&mut rng);
-    let mut client_nonce = vec![0u8; NonceLen::to_usize()];
+    let mut client_nonce = vec![0u8; NonceLen::USIZE];
     rng.fill_bytes(&mut client_nonce);
 
     let ke1m: Vec<u8> = [&client_nonce[..], &client_e_kp.public()].concat();
@@ -323,7 +319,7 @@ fn ke2_message_roundtrip() {
     let server_e_kp = KeyPair::<<Default as CipherSuite>::OprfGroup>::generate_random(&mut rng);
     let mut mac = [0u8; MAC_SIZE];
     rng.fill_bytes(&mut mac);
-    let mut server_nonce = vec![0u8; NonceLen::to_usize()];
+    let mut server_nonce = vec![0u8; NonceLen::USIZE];
     rng.fill_bytes(&mut server_nonce);
 
     let ke2m: Vec<u8> = [&server_nonce[..], &server_e_kp.public(), &mac[..]].concat();
