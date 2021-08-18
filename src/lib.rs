@@ -35,7 +35,7 @@
 //!     type SlowHash = opaque_ke::slow_hash::NoOpHash;
 //! }
 //! ```
-//! See [examples/simple_login.rs](https://github.com/novifinancial/opaque-ke/blob/master/examples/simple_login.rs)
+//! See [examples/simple_login.rs](https://github.com/novifinancial/opaque-ke/blob/main/examples/simple_login.rs)
 //! for a working example of a simple password-based login using OPAQUE.
 //!
 //! Note that our choice of slow hashing function in this example, `NoOpHash`, is selected only to ensure
@@ -508,7 +508,7 @@
 //! know the password the client uses during registration and login can recover this secret, as it is never exposed to the server. As a result, the export key
 //! can be used (separately from the OPAQUE protocol) to provide confidentiality and integrity to other data which only the client should be able to process.
 //! For instance, if the server is expected to maintain any client-side secrets which require a password to access, then this export key can be used to encrypt
-//! these secrets so that they remain hidden from the server (see [examples/digital_locker.rs](https://github.com/novifinancial/opaque-ke/blob/master/examples/digital_locker.rs)
+//! these secrets so that they remain hidden from the server (see [examples/digital_locker.rs](https://github.com/novifinancial/opaque-ke/blob/main/examples/digital_locker.rs)
 //! for a working example).
 //!
 //! You can access the export key from the `export_key` field of [ClientRegistrationFinishResult] and [ClientLoginFinishResult].
