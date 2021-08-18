@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.1.0 (August 18, 2021)
+
+* Updated dependencies and bumped MSRV to 1.51
+* Added no_std support
+
 ## 1.0.0 (July 19, 2021)
 
 * Branched from v0.5.0
