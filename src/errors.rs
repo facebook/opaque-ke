@@ -13,7 +13,7 @@ use displaydoc::Display;
 
 /// Represents an error in the manipulation of internal cryptographic data
 #[derive(Clone, Display, Eq, Hash, PartialEq)]
-pub enum InternalPakeError<T = Infallible> {
+pub enum InternalError<T = Infallible> {
     /// Custom [`SecretKey`](crate::keypair::SecretKey) error type
     Custom(T),
     /// Deserializing from a byte sequence failed
@@ -29,10 +29,6 @@ pub enum InternalPakeError<T = Infallible> {
     },
     /// Could not decompress point.
     PointError,
-    /// Key belongs to a small subgroup!
-    SubGroupError,
-    /// hashing to a key failed
-    HashingFailure,
     /// Computing the hash-to-curve function failed
     HashToCurveError,
     /// Computing HKDF failed while deriving subkeys
@@ -41,27 +37,17 @@ pub enum InternalPakeError<T = Infallible> {
     HmacError,
     /// Computing the slow hashing function failed
     SlowHashError,
-    /** This error occurs when the envelope seal fails
-    Constructing the envelope seal failed. */
-    SealError,
-    /** This error occurs when the envelope seal open fails
-    Opening the envelope seal failed. */
-    SealOpenError,
     /** This error occurs when the envelope seal open hmac check fails
     HMAC check in seal open failed. */
     SealOpenHmacError,
-    /** This error occurs when the envelope cannot be constructed properly
-    based on the credentials that were specified to be required. */
-    InvalidEnvelopeStructureError,
     /** This error occurs when attempting to open an envelope of the wrong
     type (base mode, custom identifier) */
     IncompatibleEnvelopeModeError,
-    /** This error occurs when the envelope is opened and deserialization
-    fails */
-    UnexpectedEnvelopeContentsError,
+    /// This error occurs when the inner envelope is malformed
+    InvalidInnerEnvelopeError,
 }
 
-impl<T: Debug> Debug for InternalPakeError<T> {
+impl<T: Debug> Debug for InternalError<T> {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {
             Self::Custom(custom) => f.debug_tuple("InvalidByteSequence").field(custom).finish(),
@@ -77,134 +63,45 @@ impl<T: Debug> Debug for InternalPakeError<T> {
                 .field("actual_len", actual_len)
                 .finish(),
             Self::PointError => f.debug_tuple("PointError").finish(),
-            Self::SubGroupError => f.debug_tuple("SubGroupError").finish(),
-            Self::HashingFailure => f.debug_tuple("HashingFailure").finish(),
             Self::HashToCurveError => f.debug_tuple("HashToCurveError").finish(),
             Self::HkdfError => f.debug_tuple("HkdfError").finish(),
             Self::HmacError => f.debug_tuple("HmacError").finish(),
             Self::SlowHashError => f.debug_tuple("SlowHashError").finish(),
-            Self::SealError => f.debug_tuple("SealError").finish(),
-            Self::SealOpenError => f.debug_tuple("SealOpenError").finish(),
             Self::SealOpenHmacError => f.debug_tuple("SealOpenHmacError").finish(),
-            Self::InvalidEnvelopeStructureError => {
-                f.debug_tuple("InvalidEnvelopeStructureError").finish()
-            }
             Self::IncompatibleEnvelopeModeError => {
                 f.debug_tuple("IncompatibleEnvelopeModeError").finish()
             }
-            Self::UnexpectedEnvelopeContentsError => {
-                f.debug_tuple("UnexpectedEnvelopeContentsError").finish()
-            }
+            Self::InvalidInnerEnvelopeError => f.debug_tuple("InvalidInnerEnvelopeError").finish(),
         }
     }
 }
 
 #[cfg(feature = "std")]
-impl<T: Error> Error for InternalPakeError<T> {}
+impl<T: Error> Error for InternalError<T> {}
 
-impl InternalPakeError {
-    /// Convert `InternalPakeError<Infallible>` into `InternalPakeError<T>
-    pub fn into_custom<T>(self) -> InternalPakeError<T> {
+impl InternalError {
+    /// Convert `InternalError<Infallible>` into `InternalError<T>
+    pub fn into_custom<T>(self) -> InternalError<T> {
         match self {
             Self::Custom(_) => unreachable!(),
-            Self::InvalidByteSequence => InternalPakeError::InvalidByteSequence,
+            Self::InvalidByteSequence => InternalError::InvalidByteSequence,
             Self::SizeError {
                 name,
                 len,
                 actual_len,
-            } => InternalPakeError::SizeError {
+            } => InternalError::SizeError {
                 name,
                 len,
                 actual_len,
             },
-            Self::PointError => InternalPakeError::PointError,
-            Self::SubGroupError => InternalPakeError::SubGroupError,
-            Self::HashingFailure => InternalPakeError::HashingFailure,
-            Self::HashToCurveError => InternalPakeError::HashToCurveError,
-            Self::HkdfError => InternalPakeError::HkdfError,
-            Self::HmacError => InternalPakeError::HmacError,
-            Self::SlowHashError => InternalPakeError::SlowHashError,
-            Self::SealError => InternalPakeError::SealError,
-            Self::SealOpenError => InternalPakeError::SealOpenError,
-            Self::SealOpenHmacError => InternalPakeError::SealOpenHmacError,
-            Self::InvalidEnvelopeStructureError => InternalPakeError::InvalidEnvelopeStructureError,
-            Self::IncompatibleEnvelopeModeError => InternalPakeError::IncompatibleEnvelopeModeError,
-            Self::UnexpectedEnvelopeContentsError => {
-                InternalPakeError::UnexpectedEnvelopeContentsError
-            }
-        }
-    }
-}
-
-/// Represents an error in password checking
-#[derive(Clone, Display, Eq, Hash, PartialEq)]
-pub enum PakeError<T = Infallible> {
-    /** This error results from an internal error during PRF construction
-
-    Internal error during PRF verification: {0} */
-    CryptoError(InternalPakeError<T>),
-    /** This error occurs when the server object that is being called finish() on is malformed
-    Incomplete set of keys passed into finish() function */
-    IncompleteKeysError,
-    /// The provided server public key doesn't match the sealed one
-    IncompatibleServerStaticPublicKeyError,
-    /// Error in key exchange protocol when attempting to validate MACs
-    KeyExchangeMacValidationError,
-    /// Error in validating credentials
-    InvalidLoginError,
-    /// Error with serializing / deserializing protocol messages
-    SerializationError,
-    /// Identity group element was encountered during deserialization, which is invalid
-    IdentityGroupElementError,
-}
-
-impl<T: Debug> Debug for PakeError<T> {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        match self {
-            Self::CryptoError(internal_pake_error) => f
-                .debug_tuple("CryptoError")
-                .field(internal_pake_error)
-                .finish(),
-            Self::IncompleteKeysError => f.debug_tuple("IncompleteKeysError").finish(),
-            Self::IncompatibleServerStaticPublicKeyError => f
-                .debug_tuple("IncompatibleServerStaticPublicKeyError")
-                .finish(),
-            Self::KeyExchangeMacValidationError => {
-                f.debug_tuple("KeyExchangeMacValidationError").finish()
-            }
-            Self::InvalidLoginError => f.debug_tuple("InvalidLoginError").finish(),
-            Self::SerializationError => f.debug_tuple("SerializationError").finish(),
-            Self::IdentityGroupElementError => f.debug_tuple("IdentityGroupElementError").finish(),
-        }
-    }
-}
-
-#[cfg(feature = "std")]
-impl<T: Error> Error for PakeError<T> {}
-
-// This is meant to express future(ly) non-trivial ways of converting the
-// internal error into a PakeError
-impl<T> From<InternalPakeError<T>> for PakeError<T> {
-    fn from(e: InternalPakeError<T>) -> PakeError<T> {
-        PakeError::CryptoError(e)
-    }
-}
-
-impl PakeError {
-    /// Convert `PakeError<Infallible>` into `PakeError<T>
-    pub fn into_custom<T>(self) -> PakeError<T> {
-        match self {
-            Self::CryptoError(internal_pake_error) => {
-                PakeError::CryptoError(internal_pake_error.into_custom())
-            }
-            Self::IncompleteKeysError => PakeError::IncompleteKeysError,
-            Self::IncompatibleServerStaticPublicKeyError => {
-                PakeError::IncompatibleServerStaticPublicKeyError
-            }
-            Self::KeyExchangeMacValidationError => PakeError::KeyExchangeMacValidationError,
-            Self::InvalidLoginError => PakeError::InvalidLoginError,
-            Self::SerializationError => PakeError::SerializationError,
-            Self::IdentityGroupElementError => PakeError::IdentityGroupElementError,
+            Self::PointError => InternalError::PointError,
+            Self::HashToCurveError => InternalError::HashToCurveError,
+            Self::HkdfError => InternalError::HkdfError,
+            Self::HmacError => InternalError::HmacError,
+            Self::SlowHashError => InternalError::SlowHashError,
+            Self::SealOpenHmacError => InternalError::SealOpenHmacError,
+            Self::IncompatibleEnvelopeModeError => InternalError::IncompatibleEnvelopeModeError,
+            Self::InvalidInnerEnvelopeError => InternalError::InvalidInnerEnvelopeError,
         }
     }
 }
@@ -212,40 +109,29 @@ impl PakeError {
 /// Represents an error in protocol handling
 #[derive(Clone, Display, Eq, Hash, PartialEq)]
 pub enum ProtocolError<T = Infallible> {
-    /** This error results from an error during password verification
-
-    Internal error during password verification: {0} */
-    VerificationError(PakeError<T>),
-    /// This error occurs when the inner envelope is malformed
-    InvalidInnerEnvelopeError,
-    /** This error occurs when the server answer cannot be handled
-    Server response cannot be handled. */
-    ServerError,
-    /** This error occurs when the server specifies an envelope credentials
-    format that is invalid */
-    ServerInvalidEnvelopeCredentialsFormatError,
-    /** This error occurs when the client request cannot be handled
-    Client request cannot be handled. */
-    ClientError,
+    /// Internal error encountered
+    LibraryError(InternalError<T>),
+    /// Error in validating credentials
+    InvalidLoginError,
+    /// Error with serializing / deserializing protocol messages
+    SerializationError,
     /** This error occurs when the client detects that the server has
     reflected the OPRF value (beta == alpha) */
     ReflectedValueError,
+    /// Identity group element was encountered during deserialization, which is invalid
+    IdentityGroupElementError,
 }
 
 impl<T: Debug> Debug for ProtocolError<T> {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {
-            Self::VerificationError(pake_error) => f
-                .debug_tuple("VerificationError")
-                .field(pake_error)
-                .finish(),
-            Self::InvalidInnerEnvelopeError => f.debug_tuple("InvalidInnerEnvelopeError").finish(),
-            Self::ServerError => f.debug_tuple("ServerError").finish(),
-            Self::ServerInvalidEnvelopeCredentialsFormatError => f
-                .debug_tuple("ServerInvalidEnvelopeCredentialsFormatError")
-                .finish(),
-            Self::ClientError => f.debug_tuple("ClientError").finish(),
+            Self::LibraryError(pake_error) => {
+                f.debug_tuple("LibraryError").field(pake_error).finish()
+            }
+            Self::InvalidLoginError => f.debug_tuple("InvalidLoginError").finish(),
+            Self::SerializationError => f.debug_tuple("SerializationError").finish(),
             Self::ReflectedValueError => f.debug_tuple("ReflectedValueError").finish(),
+            Self::IdentityGroupElementError => f.debug_tuple("IdentityGroupElementError").finish(),
         }
     }
 }
@@ -254,18 +140,10 @@ impl<T: Debug> Debug for ProtocolError<T> {
 impl<T: Error> Error for ProtocolError<T> {}
 
 // This is meant to express future(ly) non-trivial ways of converting the
-// Pake error into a ProtocolError
-impl<T> From<PakeError<T>> for ProtocolError<T> {
-    fn from(e: PakeError<T>) -> ProtocolError<T> {
-        ProtocolError::VerificationError(e)
-    }
-}
-
-// This is meant to express future(ly) non-trivial ways of converting the
 // internal error into a ProtocolError
-impl<T> From<InternalPakeError<T>> for ProtocolError<T> {
-    fn from(e: InternalPakeError<T>) -> ProtocolError<T> {
-        ProtocolError::VerificationError(e.into())
+impl<T> From<InternalError<T>> for ProtocolError<T> {
+    fn from(e: InternalError<T>) -> ProtocolError<T> {
+        Self::LibraryError(e)
     }
 }
 
@@ -282,16 +160,13 @@ impl ProtocolError {
     /// Convert `ProtocolError<Infallible>` into `ProtocolError<T>
     pub fn into_custom<T>(self) -> ProtocolError<T> {
         match self {
-            Self::VerificationError(pake_error) => {
-                ProtocolError::VerificationError(pake_error.into_custom())
+            Self::LibraryError(internal_error) => {
+                ProtocolError::LibraryError(internal_error.into_custom())
             }
-            Self::InvalidInnerEnvelopeError => ProtocolError::InvalidInnerEnvelopeError,
-            Self::ServerError => ProtocolError::ServerError,
-            Self::ServerInvalidEnvelopeCredentialsFormatError => {
-                ProtocolError::ServerInvalidEnvelopeCredentialsFormatError
-            }
-            Self::ClientError => ProtocolError::ClientError,
+            Self::InvalidLoginError => ProtocolError::InvalidLoginError,
+            Self::SerializationError => ProtocolError::SerializationError,
             Self::ReflectedValueError => ProtocolError::ReflectedValueError,
+            Self::IdentityGroupElementError => ProtocolError::IdentityGroupElementError,
         }
     }
 }
@@ -303,9 +178,9 @@ pub(crate) mod utils {
         slice: &'a [u8],
         expected_len: usize,
         arg_name: &'static str,
-    ) -> Result<&'a [u8], InternalPakeError<T>> {
+    ) -> Result<&'a [u8], InternalError<T>> {
         if slice.len() != expected_len {
-            return Err(InternalPakeError::SizeError {
+            return Err(InternalError::SizeError {
                 name: arg_name,
                 len: expected_len,
                 actual_len: slice.len(),
@@ -318,9 +193,9 @@ pub(crate) mod utils {
         slice: &'a [u8],
         expected_len: usize,
         arg_name: &'static str,
-    ) -> Result<&'a [u8], InternalPakeError> {
+    ) -> Result<&'a [u8], InternalError> {
         if slice.len() < expected_len {
-            return Err(InternalPakeError::SizeError {
+            return Err(InternalError::SizeError {
                 name: arg_name,
                 len: expected_len,
                 actual_len: slice.len(),

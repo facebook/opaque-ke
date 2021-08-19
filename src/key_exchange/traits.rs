@@ -5,7 +5,7 @@
 
 use crate::{
     ciphersuite::CipherSuite,
-    errors::{PakeError, ProtocolError},
+    errors::ProtocolError,
     group::Group,
     hash::Hash,
     keypair::{PrivateKey, PublicKey, SecretKey},
@@ -83,7 +83,7 @@ pub trait KeyExchange<D: Hash, G: Group> {
 }
 
 pub trait FromBytes: Sized {
-    fn from_bytes<CS: CipherSuite>(input: &[u8]) -> Result<Self, PakeError>;
+    fn from_bytes<CS: CipherSuite>(input: &[u8]) -> Result<Self, ProtocolError>;
 }
 
 pub trait ToBytes {

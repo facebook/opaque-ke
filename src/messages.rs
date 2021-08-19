@@ -10,7 +10,7 @@ use crate::{
     envelope::Envelope,
     errors::{
         utils::{check_slice_size, check_slice_size_atleast},
-        PakeError, ProtocolError,
+        ProtocolError,
     },
     group::Group,
     key_exchange::traits::{FromBytes, KeyExchange, ToBytes},
@@ -65,7 +65,7 @@ impl<CS: CipherSuite> RegistrationRequest<CS> {
 
         // Throw an error if the identity group element is encountered
         if alpha.is_identity() {
-            return Err(PakeError::IdentityGroupElementError.into());
+            return Err(ProtocolError::IdentityGroupElementError);
         }
         Ok(Self { alpha })
     }
@@ -118,7 +118,7 @@ impl<CS: CipherSuite> RegistrationResponse<CS> {
 
         // Throw an error if the identity group element is encountered
         if beta.is_identity() {
-            return Err(PakeError::IdentityGroupElementError.into());
+            return Err(ProtocolError::IdentityGroupElementError);
         }
 
         // Ensure that public key is valid
@@ -255,7 +255,7 @@ impl<CS: CipherSuite> CredentialRequest<CS> {
 
         // Throw an error if the identity group element is encountered
         if alpha.is_identity() {
-            return Err(PakeError::IdentityGroupElementError.into());
+            return Err(ProtocolError::IdentityGroupElementError);
         }
 
         let ke1_message =
@@ -347,7 +347,7 @@ impl<CS: CipherSuite> CredentialResponse<CS> {
 
         // Throw an error if the identity group element is encountered
         if beta.is_identity() {
-            return Err(PakeError::IdentityGroupElementError.into());
+            return Err(ProtocolError::IdentityGroupElementError);
         }
 
         let masking_nonce = checked_slice[elem_len..elem_len + nonce_len].to_vec();

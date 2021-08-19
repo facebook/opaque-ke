@@ -8,7 +8,7 @@
 use crate::{
     ciphersuite::CipherSuite,
     envelope::Envelope,
-    errors::{utils::check_slice_size, InternalPakeError, PakeError, ProtocolError},
+    errors::{utils::check_slice_size, InternalError, ProtocolError},
     group::Group,
     hash::Hash,
     key_exchange::traits::{FromBytes, KeyExchange, ToBytesWithPointers},
@@ -152,7 +152,7 @@ impl<CS: CipherSuite> ClientRegistration<CS> {
         let scalar_len = <CS::OprfGroup as Group>::ScalarLen::USIZE;
         let min_expected_len = elem_len + scalar_len;
         let checked_slice = (if input.len() <= min_expected_len {
-            Err(InternalPakeError::SizeError {
+            Err(InternalError::SizeError {
                 name: "client_registration_bytes",
                 len: min_expected_len,
                 actual_len: input.len(),
@@ -333,7 +333,7 @@ impl<CS: CipherSuite> ClientRegistration<CS> {
         let (randomized_pwd, h) = Hkdf::<CS::Hash>::extract(None, &password_derived_key);
         let mut masking_key = vec![0u8; <CS::Hash as Digest>::OutputSize::USIZE];
         h.expand(STR_MASKING_KEY, &mut masking_key)
-            .map_err(|_| InternalPakeError::HkdfError)?;
+            .map_err(|_| InternalError::HkdfError)?;
 
         let result =
             Envelope::<CS>::seal(rng, &password_derived_key, &r2.server_s_pk, optional_ids)?;
@@ -491,7 +491,7 @@ impl<CS: CipherSuite> ClientLogin<CS> {
     pub fn deserialize(input: &[u8]) -> Result<Self, ProtocolError> {
         let scalar_len = <CS::OprfGroup as Group>::ScalarLen::USIZE;
         let checked_slice = (if input.len() <= scalar_len {
-            Err(InternalPakeError::SizeError {
+            Err(InternalError::SizeError {
                 name: "client_login_bytes",
                 len: scalar_len,
                 actual_len: input.len(),
@@ -665,7 +665,7 @@ impl<CS: CipherSuite> ClientLogin<CS> {
         let h = Hkdf::<CS::Hash>::new(None, &password_derived_key);
         let mut masking_key = vec![0u8; <CS::Hash as Digest>::OutputSize::USIZE];
         h.expand(STR_MASKING_KEY, &mut masking_key)
-            .map_err(|_| InternalPakeError::HkdfError)?;
+            .map_err(|_| InternalError::HkdfError)?;
 
         let (server_s_pk, envelope) = unmask_response::<CS>(
             &masking_key,
@@ -673,10 +673,7 @@ impl<CS: CipherSuite> ClientLogin<CS> {
             &credential_response.masked_response,
         )
         .map_err(|e| match e {
-            ProtocolError::InvalidInnerEnvelopeError => PakeError::InvalidLoginError.into(),
-            ProtocolError::VerificationError(PakeError::SerializationError) => {
-                PakeError::InvalidLoginError.into()
-            }
+            ProtocolError::SerializationError => ProtocolError::InvalidLoginError,
             err => err,
         })?;
         let server_s_pk_bytes = server_s_pk.to_arr().to_vec();
@@ -684,9 +681,9 @@ impl<CS: CipherSuite> ClientLogin<CS> {
         let opened_envelope = &envelope
             .open(&password_derived_key, &server_s_pk_bytes, &optional_ids)
             .map_err(|e| match e {
-                ProtocolError::VerificationError(PakeError::CryptoError(
-                    InternalPakeError::SealOpenHmacError,
-                )) => ProtocolError::VerificationError(PakeError::InvalidLoginError),
+                ProtocolError::LibraryError(InternalError::SealOpenHmacError) => {
+                    ProtocolError::InvalidLoginError
+                }
                 err => err,
             })?;
 
@@ -930,13 +927,7 @@ impl<CS: CipherSuite> ServerLogin<CS> {
         let session_key = <CS::KeyExchange as KeyExchange<CS::Hash, CS::KeGroup>>::finish_ke(
             message.ke3_message,
             &self.ke2_state,
-        )
-        .map_err(|e| match e {
-            ProtocolError::VerificationError(PakeError::KeyExchangeMacValidationError) => {
-                ProtocolError::VerificationError(PakeError::InvalidLoginError)
-            }
-            err => err,
-        })?;
+        )?;
 
         Ok(ServerLoginFinishResult {
             session_key,
@@ -1030,9 +1021,9 @@ fn oprf_key_from_seed<G: Group, D: Hash>(
 ) -> Result<G::Scalar, ProtocolError> {
     let mut ikm = vec![0u8; G::ScalarLen::USIZE];
     Hkdf::<D>::from_prk(oprf_seed)
-        .map_err(|_| InternalPakeError::HkdfError)?
+        .map_err(|_| InternalError::HkdfError)?
         .expand(&[credential_identifier, STR_OPRF_KEY].concat(), &mut ikm)
-        .map_err(|_| InternalPakeError::HkdfError)?;
+        .map_err(|_| InternalError::HkdfError)?;
     G::hash_to_scalar::<D>(&ikm[..], STR_OPAQUE_DERIVE_KEY_PAIR)
 }
 
@@ -1044,12 +1035,12 @@ fn mask_response<CS: CipherSuite>(
 ) -> Result<Vec<u8>, ProtocolError> {
     let mut xor_pad = vec![0u8; <CS::KeGroup as Group>::ElemLen::USIZE + Envelope::<CS>::len()];
     Hkdf::<CS::Hash>::from_prk(masking_key)
-        .map_err(|_| InternalPakeError::HkdfError)?
+        .map_err(|_| InternalError::HkdfError)?
         .expand(
             &[masking_nonce, STR_CREDENTIAL_RESPONSE_PAD].concat(),
             &mut xor_pad,
         )
-        .map_err(|_| InternalPakeError::HkdfError)?;
+        .map_err(|_| InternalError::HkdfError)?;
 
     let plaintext = [&server_s_pk.to_arr()[..], &envelope.serialize()].concat();
 
@@ -1067,12 +1058,12 @@ fn unmask_response<CS: CipherSuite>(
 ) -> Result<(PublicKey<CS::KeGroup>, Envelope<CS>), ProtocolError> {
     let mut xor_pad = vec![0u8; <CS::KeGroup as Group>::ElemLen::USIZE + Envelope::<CS>::len()];
     Hkdf::<CS::Hash>::from_prk(masking_key)
-        .map_err(|_| InternalPakeError::HkdfError)?
+        .map_err(|_| InternalError::HkdfError)?
         .expand(
             &[masking_nonce, STR_CREDENTIAL_RESPONSE_PAD].concat(),
             &mut xor_pad,
         )
-        .map_err(|_| InternalPakeError::HkdfError)?;
+        .map_err(|_| InternalError::HkdfError)?;
     let plaintext: Vec<u8> = xor_pad
         .iter()
         .zip(masked_response.iter())
@@ -1084,7 +1075,7 @@ fn unmask_response<CS: CipherSuite>(
 
     // Ensure that public key is valid
     let server_s_pk = KeyPair::<CS::KeGroup>::check_public_key(unchecked_server_s_pk)
-        .map_err(|_| ProtocolError::VerificationError(PakeError::SerializationError))?;
+        .map_err(|_| ProtocolError::SerializationError)?;
 
     Ok((server_s_pk, envelope))
 }

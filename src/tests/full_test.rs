@@ -763,7 +763,7 @@ fn test_complete_flow(
         );
     } else {
         assert!(match client_login_result {
-            Err(ProtocolError::VerificationError(PakeError::InvalidLoginError)) => true,
+            Err(ProtocolError::InvalidLoginError) => true,
             _ => false,
         });
     }

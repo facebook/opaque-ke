@@ -111,7 +111,7 @@ fn registration_request_roundtrip() {
 
     assert!(
         match RegistrationRequest::<Default>::deserialize(identity_bytes.as_slice()) {
-            Err(ProtocolError::VerificationError(PakeError::IdentityGroupElementError)) => true,
+            Err(ProtocolError::IdentityGroupElementError) => true,
             _ => false,
         }
     );
@@ -140,7 +140,7 @@ fn registration_response_roundtrip() {
     assert!(match RegistrationResponse::<Default>::deserialize(
         &[identity_bytes, pubkey_bytes.to_vec()].concat()
     ) {
-        Err(ProtocolError::VerificationError(PakeError::IdentityGroupElementError)) => true,
+        Err(ProtocolError::IdentityGroupElementError) => true,
         _ => false,
     });
 }
@@ -201,7 +201,7 @@ fn credential_request_roundtrip() {
     assert!(match CredentialRequest::<Default>::deserialize(
         &[identity_bytes, ke1m.to_vec()].concat()
     ) {
-        Err(ProtocolError::VerificationError(PakeError::IdentityGroupElementError)) => true,
+        Err(ProtocolError::IdentityGroupElementError) => true,
         _ => false,
     });
 }
@@ -251,7 +251,7 @@ fn credential_response_roundtrip() {
         ]
         .concat()
     ) {
-        Err(ProtocolError::VerificationError(PakeError::IdentityGroupElementError)) => true,
+        Err(ProtocolError::IdentityGroupElementError) => true,
         _ => false,
     });
 }

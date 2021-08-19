@@ -4,7 +4,7 @@
 // LICENSE file in the root directory of this source tree.
 
 use super::Group;
-use crate::errors::{InternalPakeError, ProtocolError};
+use crate::errors::{InternalError, ProtocolError};
 use crate::hash::Hash;
 use core::convert::TryInto;
 use curve25519_dalek::{
@@ -30,7 +30,7 @@ impl Group for RistrettoPoint {
             uniform_bytes
                 .as_slice()
                 .try_into()
-                .map_err(|_| InternalPakeError::HashToCurveError)?,
+                .map_err(|_| InternalError::HashToCurveError)?,
         ))
     }
 
@@ -43,7 +43,7 @@ impl Group for RistrettoPoint {
             uniform_bytes
                 .as_slice()
                 .try_into()
-                .map_err(|_| InternalPakeError::HashToCurveError)?,
+                .map_err(|_| InternalError::HashToCurveError)?,
         ))
     }
 
@@ -51,7 +51,7 @@ impl Group for RistrettoPoint {
     type ScalarLen = U32;
     fn from_scalar_slice(
         scalar_bits: &GenericArray<u8, Self::ScalarLen>,
-    ) -> Result<Self::Scalar, InternalPakeError> {
+    ) -> Result<Self::Scalar, InternalError> {
         Ok(Scalar::from_bytes_mod_order(*scalar_bits.as_ref()))
     }
     fn random_nonzero_scalar<R: RngCore + CryptoRng>(rng: &mut R) -> Self::Scalar {
@@ -89,10 +89,10 @@ impl Group for RistrettoPoint {
     type ElemLen = U32;
     fn from_element_slice(
         element_bits: &GenericArray<u8, Self::ElemLen>,
-    ) -> Result<Self, InternalPakeError> {
+    ) -> Result<Self, InternalError> {
         CompressedRistretto::from_slice(element_bits)
             .decompress()
-            .ok_or(InternalPakeError::PointError)
+            .ok_or(InternalError::PointError)
     }
     // serialization of a group element
     fn to_arr(&self) -> GenericArray<u8, Self::ElemLen> {

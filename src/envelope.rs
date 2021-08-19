@@ -5,7 +5,7 @@
 
 use crate::{
     ciphersuite::CipherSuite,
-    errors::{utils::check_slice_size, InternalPakeError, PakeError, ProtocolError},
+    errors::{utils::check_slice_size, InternalError, ProtocolError},
     group::Group,
     hash::Hash,
     keypair::{KeyPair, PublicKey},
@@ -36,7 +36,7 @@ fn build_inner_envelope_internal<CS: CipherSuite>(
     let h = Hkdf::<CS::Hash>::new(None, random_pwd);
     let mut keypair_seed = vec![0u8; <CS::KeGroup as Group>::ScalarLen::USIZE];
     h.expand(&[nonce, STR_PRIVATE_KEY].concat(), &mut keypair_seed)
-        .map_err(|_| InternalPakeError::HkdfError)?;
+        .map_err(|_| InternalError::HkdfError)?;
     let client_static_keypair = KeyPair::<CS::KeGroup>::from_private_key_slice(
         &CS::OprfGroup::scalar_as_bytes(CS::OprfGroup::hash_to_scalar::<CS::Hash>(
             &keypair_seed[..],
@@ -54,7 +54,7 @@ fn recover_keys_internal<CS: CipherSuite>(
     let h = Hkdf::<CS::Hash>::new(None, random_pwd);
     let mut keypair_seed = vec![0u8; <CS::KeGroup as Group>::ScalarLen::USIZE];
     h.expand(&[nonce, STR_PRIVATE_KEY].concat(), &mut keypair_seed)
-        .map_err(|_| InternalPakeError::HkdfError)?;
+        .map_err(|_| InternalError::HkdfError)?;
     let client_static_keypair = KeyPair::<CS::KeGroup>::from_private_key_slice(
         &CS::OprfGroup::scalar_as_bytes(CS::OprfGroup::hash_to_scalar::<CS::Hash>(
             &keypair_seed[..],
@@ -73,11 +73,11 @@ pub(crate) enum InnerEnvelopeMode {
 }
 
 impl TryFrom<u8> for InnerEnvelopeMode {
-    type Error = PakeError;
+    type Error = ProtocolError;
     fn try_from(x: u8) -> Result<Self, Self::Error> {
         match x {
             1 => Ok(InnerEnvelopeMode::Internal),
-            _ => Err(PakeError::SerializationError),
+            _ => Err(ProtocolError::SerializationError),
         }
     }
 }
@@ -170,15 +170,13 @@ impl<CS: CipherSuite> Envelope<CS> {
         let mode = InnerEnvelopeMode::Internal; // Better way to hard-code this?
 
         if bytes.len() < NONCE_LEN {
-            return Err(ProtocolError::VerificationError(
-                PakeError::SerializationError,
-            ));
+            return Err(ProtocolError::SerializationError);
         }
         let nonce = bytes[..NONCE_LEN].to_vec();
 
         let remainder = match mode {
             InnerEnvelopeMode::Zero => {
-                return Err(InternalPakeError::IncompatibleEnvelopeModeError.into())
+                return Err(InternalError::IncompatibleEnvelopeModeError.into())
             }
             InnerEnvelopeMode::Internal => bytes[NONCE_LEN..].to_vec(),
         };
@@ -242,18 +240,18 @@ impl<CS: CipherSuite> Envelope<CS> {
         nonce: &[u8],
         aad: &[u8],
         mode: InnerEnvelopeMode,
-    ) -> Result<SealRawResult<CS>, InternalPakeError> {
+    ) -> Result<SealRawResult<CS>, InternalError> {
         let h = Hkdf::<CS::Hash>::new(None, key);
         let mut hmac_key = vec![0u8; Self::hmac_key_size()];
         let mut export_key = vec![0u8; Self::export_key_size()];
 
         h.expand(&[nonce, STR_AUTH_KEY].concat(), &mut hmac_key)
-            .map_err(|_| InternalPakeError::HkdfError)?;
+            .map_err(|_| InternalError::HkdfError)?;
         h.expand(&[nonce, STR_EXPORT_KEY].concat(), &mut export_key)
-            .map_err(|_| InternalPakeError::HkdfError)?;
+            .map_err(|_| InternalError::HkdfError)?;
 
-        let mut hmac = Hmac::<CS::Hash>::new_from_slice(&hmac_key)
-            .map_err(|_| InternalPakeError::HmacError)?;
+        let mut hmac =
+            Hmac::<CS::Hash>::new_from_slice(&hmac_key).map_err(|_| InternalError::HmacError)?;
         hmac.update(nonce);
         hmac.update(aad);
 
@@ -279,7 +277,7 @@ impl<CS: CipherSuite> Envelope<CS> {
     ) -> Result<OpenedEnvelope<CS>, ProtocolError> {
         let client_static_keypair = match self.mode {
             InnerEnvelopeMode::Zero => {
-                return Err(InternalPakeError::IncompatibleEnvelopeModeError.into())
+                return Err(InternalError::IncompatibleEnvelopeModeError.into())
             }
             InnerEnvelopeMode::Internal => recover_keys_internal::<CS>(key, &self.nonce)?,
         };
@@ -307,22 +305,22 @@ impl<CS: CipherSuite> Envelope<CS> {
         &self,
         key: &[u8],
         aad: &[u8],
-    ) -> Result<OpenedInnerEnvelope<CS::Hash>, InternalPakeError> {
+    ) -> Result<OpenedInnerEnvelope<CS::Hash>, InternalError> {
         let h = Hkdf::<CS::Hash>::new(None, key);
         let mut hmac_key = vec![0u8; Self::hmac_key_size()];
         let mut export_key = vec![0u8; Self::export_key_size()];
 
         h.expand(&[&self.nonce, STR_AUTH_KEY].concat(), &mut hmac_key)
-            .map_err(|_| InternalPakeError::HkdfError)?;
+            .map_err(|_| InternalError::HkdfError)?;
         h.expand(&[&self.nonce, STR_EXPORT_KEY].concat(), &mut export_key)
-            .map_err(|_| InternalPakeError::HkdfError)?;
+            .map_err(|_| InternalError::HkdfError)?;
 
-        let mut hmac = Hmac::<CS::Hash>::new_from_slice(&hmac_key)
-            .map_err(|_| InternalPakeError::HmacError)?;
+        let mut hmac =
+            Hmac::<CS::Hash>::new_from_slice(&hmac_key).map_err(|_| InternalError::HmacError)?;
         hmac.update(&self.nonce);
         hmac.update(aad);
         if hmac.verify(&self.hmac).is_err() {
-            return Err(InternalPakeError::SealOpenHmacError);
+            return Err(InternalError::SealOpenHmacError);
         }
 
         Ok(OpenedInnerEnvelope {

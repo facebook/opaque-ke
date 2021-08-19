@@ -9,7 +9,7 @@
 )]
 
 use super::Group;
-use crate::errors::{InternalPakeError, ProtocolError};
+use crate::errors::{InternalError, ProtocolError};
 use crate::hash::Hash;
 use core::ops::{Add, Div, Mul, Neg, Sub};
 use core::str::FromStr;
@@ -71,12 +71,12 @@ impl Group for ProjectivePoint {
         let p0 = AffinePoint::from_encoded_point(&EncodedPoint::from_affine_coordinates(
             &q0x, &q0y, false,
         ))
-        .ok_or(InternalPakeError::PointError)?
+        .ok_or(InternalError::PointError)?
         .to_curve();
         let p1 = AffinePoint::from_encoded_point(&EncodedPoint::from_affine_coordinates(
             &q1x, &q1y, false,
         ))
-        .ok_or(InternalPakeError::PointError)?;
+        .ok_or(InternalError::PointError)?;
 
         Ok(p0 + p1)
     }
@@ -113,7 +113,7 @@ impl Group for ProjectivePoint {
 
     fn from_scalar_slice(
         scalar_bits: &GenericArray<u8, Self::ScalarLen>,
-    ) -> Result<Self::Scalar, InternalPakeError> {
+    ) -> Result<Self::Scalar, InternalError> {
         Ok(Self::Scalar::from_bytes_reduced(scalar_bits))
     }
 
@@ -131,8 +131,8 @@ impl Group for ProjectivePoint {
 
     fn from_element_slice(
         element_bits: &GenericArray<u8, Self::ElemLen>,
-    ) -> Result<Self, InternalPakeError> {
-        Option::from(Self::from_bytes(element_bits)).ok_or(InternalPakeError::PointError)
+    ) -> Result<Self, InternalError> {
+        Option::from(Self::from_bytes(element_bits)).ok_or(InternalError::PointError)
     }
 
     fn to_arr(&self) -> GenericArray<u8, Self::ElemLen> {

@@ -4,7 +4,7 @@
 // LICENSE file in the root directory of this source tree.
 
 use super::Group;
-use crate::errors::{InternalPakeError, ProtocolError};
+use crate::errors::{InternalError, ProtocolError};
 use crate::hash::Hash;
 use curve25519_dalek::{constants::X25519_BASEPOINT, montgomery::MontgomeryPoint, scalar::Scalar};
 use generic_array::{typenum::U32, GenericArray};
@@ -26,7 +26,7 @@ impl Group for MontgomeryPoint {
     type ScalarLen = U32;
     fn from_scalar_slice(
         scalar_bits: &GenericArray<u8, Self::ScalarLen>,
-    ) -> Result<Self::Scalar, InternalPakeError> {
+    ) -> Result<Self::Scalar, InternalError> {
         Ok(Scalar::from_bytes_mod_order(*scalar_bits.as_ref()))
     }
     fn random_nonzero_scalar<R: RngCore + CryptoRng>(rng: &mut R) -> Self::Scalar {
@@ -64,7 +64,7 @@ impl Group for MontgomeryPoint {
     type ElemLen = U32;
     fn from_element_slice(
         element_bits: &GenericArray<u8, Self::ElemLen>,
-    ) -> Result<Self, InternalPakeError> {
+    ) -> Result<Self, InternalError> {
         Ok(Self(*element_bits.as_ref()))
     }
     // serialization of a group element
@@ -93,8 +93,8 @@ impl Group for MontgomeryPoint {
 #[test]
 fn test() -> Result<(), ProtocolError> {
     use crate::{
-        errors::PakeError, key_exchange::tripledh::TripleDH, slow_hash::NoOpHash, CipherSuite,
-        ClientLogin, ClientLoginFinishParameters, ClientLoginFinishResult, ClientLoginStartResult,
+        key_exchange::tripledh::TripleDH, slow_hash::NoOpHash, CipherSuite, ClientLogin,
+        ClientLoginFinishParameters, ClientLoginFinishResult, ClientLoginStartResult,
         ClientRegistration, ClientRegistrationFinishParameters, ClientRegistrationFinishResult,
         ClientRegistrationStartResult, ServerLogin, ServerLoginStartParameters,
         ServerLoginStartResult, ServerRegistration, ServerSetup,
@@ -173,9 +173,7 @@ fn test() -> Result<(), ProtocolError> {
 
     assert!(matches!(
         client.finish(message, ClientLoginFinishParameters::Default),
-        Err(ProtocolError::VerificationError(
-            PakeError::InvalidLoginError
-        ))
+        Err(ProtocolError::InvalidLoginError)
     ));
 
     Ok(())
