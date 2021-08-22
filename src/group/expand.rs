@@ -3,7 +3,7 @@
 // This source code is licensed under the MIT license found in the
 // LICENSE file in the root directory of this source tree.
 
-use crate::errors::{InternalPakeError, ProtocolError};
+use crate::errors::{InternalError, ProtocolError};
 use crate::hash::Hash;
 use crate::serialization::i2osp;
 use alloc::vec::Vec;
@@ -16,9 +16,9 @@ fn div_ceil(x: usize, y: usize) -> usize {
     x / y + additive
 }
 
-fn xor(x: &[u8], y: &[u8]) -> Result<Vec<u8>, InternalPakeError> {
+fn xor(x: &[u8], y: &[u8]) -> Result<Vec<u8>, InternalError> {
     if x.len() != y.len() {
-        return Err(InternalPakeError::HashToCurveError);
+        return Err(InternalError::HashToCurveError);
     }
 
     Ok(x.iter().zip(y).map(|(&x1, &x2)| x1 ^ x2).collect())
@@ -36,7 +36,7 @@ pub fn expand_message_xmd<H: Hash>(
 
     let ell = div_ceil(len_in_bytes, b_in_bytes);
     if ell > 255 {
-        return Err(InternalPakeError::HashToCurveError.into());
+        return Err(InternalError::HashToCurveError.into());
     }
     let dst_prime = [dst, &i2osp(dst.len(), 1)?].concat();
     let z_pad = i2osp(0, r_in_bytes)?;

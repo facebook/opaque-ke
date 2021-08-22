@@ -12,7 +12,7 @@ pub(crate) mod p256;
 mod ristretto;
 mod x25519;
 
-use crate::errors::{InternalPakeError, ProtocolError};
+use crate::errors::{InternalError, ProtocolError};
 use crate::hash::Hash;
 use core::ops::Mul;
 use generic_array::{ArrayLength, GenericArray};
@@ -47,7 +47,7 @@ pub trait Group: Copy + Sized + for<'a> Mul<&'a <Self as Group>::Scalar, Output 
     /// Return a scalar from its fixed-length bytes representation
     fn from_scalar_slice(
         scalar_bits: &GenericArray<u8, Self::ScalarLen>,
-    ) -> Result<Self::Scalar, InternalPakeError>;
+    ) -> Result<Self::Scalar, InternalError>;
     /// picks a scalar at random
     fn random_nonzero_scalar<R: RngCore + CryptoRng>(rng: &mut R) -> Self::Scalar;
     /// Serializes a scalar to bytes
@@ -60,7 +60,7 @@ pub trait Group: Copy + Sized + for<'a> Mul<&'a <Self as Group>::Scalar, Output 
     /// Return an element from its fixed-length bytes representation
     fn from_element_slice(
         element_bits: &GenericArray<u8, Self::ElemLen>,
-    ) -> Result<Self, InternalPakeError>;
+    ) -> Result<Self, InternalError>;
     /// Serializes the `self` group element
     fn to_arr(&self) -> GenericArray<u8, Self::ElemLen>;
 

@@ -125,7 +125,7 @@ fn test_blind<G: Group, H: Hash>(tvs: &[&str]) -> Result<(), ProtocolError> {
 }
 
 // Tests sksm, blinded_element -> evaluation_element
-fn test_evaluate<G: Group>(tvs: &[&str]) -> Result<(), PakeError> {
+fn test_evaluate<G: Group>(tvs: &[&str]) -> Result<(), ProtocolError> {
     for tv in tvs {
         let parameters = populate_test_vectors(&serde_json::from_str(tv).unwrap());
         let evaluation_element = oprf::evaluate::<G>(

@@ -7,7 +7,7 @@
 
 #![allow(unsafe_code)]
 
-use crate::errors::{InternalPakeError, ProtocolError};
+use crate::errors::{InternalError, ProtocolError};
 use crate::group::Group;
 use alloc::vec::Vec;
 use core::fmt::Debug;
@@ -93,7 +93,7 @@ impl<G: Group, S: SecretKey<G>> KeyPair<G, S> {
     /// material provided through the network which fits the key
     /// representation (i.e. can be mapped to a curve point), but presents
     /// some risk - e.g. small subgroup check
-    pub(crate) fn check_public_key(key: PublicKey<G>) -> Result<PublicKey<G>, InternalPakeError> {
+    pub(crate) fn check_public_key(key: PublicKey<G>) -> Result<PublicKey<G>, InternalError> {
         G::from_element_slice(GenericArray::from_slice(&key.0)).map(|_| key)
     }
 
@@ -256,44 +256,44 @@ impl<G: Group> PrivateKey<G> {
     }
 
     /// Convert from slice
-    pub fn from_bytes(key_bytes: &[u8]) -> Result<Self, InternalPakeError> {
+    pub fn from_bytes(key_bytes: &[u8]) -> Result<Self, InternalError> {
         if key_bytes.len() == G::ScalarLen::USIZE {
             Ok(Self::from_arr(GenericArray::from_slice(key_bytes).clone()))
         } else {
-            Err(InternalPakeError::InvalidByteSequence)
+            Err(InternalError::InvalidByteSequence)
         }
     }
 }
 
 /// A trait specifying the requirements for a private key container
 pub trait SecretKey<G: Group>: Clone + Sized + Zeroize {
-    /// Custom error type that can be passed down to `InternalPakeError::Custom`
+    /// Custom error type that can be passed down to `InternalError::Custom`
     type Error;
 
     /// Diffie-Hellman key exchange implementation
-    fn diffie_hellman(&self, pk: PublicKey<G>) -> Result<Vec<u8>, InternalPakeError<Self::Error>>;
+    fn diffie_hellman(&self, pk: PublicKey<G>) -> Result<Vec<u8>, InternalError<Self::Error>>;
 
     /// Returns public key from private key
-    fn public_key(&self) -> Result<PublicKey<G>, InternalPakeError<Self::Error>>;
+    fn public_key(&self) -> Result<PublicKey<G>, InternalError<Self::Error>>;
 
     /// Serialization into bytes
     fn serialize(&self) -> Vec<u8>;
 
     /// Deserialization from bytes
-    fn deserialize(input: &[u8]) -> Result<Self, InternalPakeError<Self::Error>>;
+    fn deserialize(input: &[u8]) -> Result<Self, InternalError<Self::Error>>;
 }
 
 impl<G: Group> SecretKey<G> for PrivateKey<G> {
     type Error = core::convert::Infallible;
 
-    fn diffie_hellman(&self, pk: PublicKey<G>) -> Result<Vec<u8>, InternalPakeError> {
+    fn diffie_hellman(&self, pk: PublicKey<G>) -> Result<Vec<u8>, InternalError> {
         let pk_data = GenericArray::<u8, G::ElemLen>::from_slice(&pk.0[..]);
         let point = G::from_element_slice(pk_data)?;
         let secret_data = GenericArray::<u8, G::ScalarLen>::from_slice(&self.0[..]);
         Ok(G::mult_by_slice(&point, secret_data).to_arr().to_vec())
     }
 
-    fn public_key(&self) -> Result<PublicKey<G>, InternalPakeError> {
+    fn public_key(&self) -> Result<PublicKey<G>, InternalError> {
         let bytes_data = GenericArray::<u8, G::ScalarLen>::from_slice(&self.0[..]);
         Ok(PublicKey(Key(G::base_point()
             .mult_by_slice(bytes_data)
@@ -304,8 +304,8 @@ impl<G: Group> SecretKey<G> for PrivateKey<G> {
         self.to_vec()
     }
 
-    fn deserialize(input: &[u8]) -> Result<Self, InternalPakeError> {
-        PrivateKey::from_bytes(input).map_err(InternalPakeError::from)
+    fn deserialize(input: &[u8]) -> Result<Self, InternalError> {
+        PrivateKey::from_bytes(input).map_err(InternalError::from)
     }
 }
 
@@ -351,11 +351,11 @@ impl<G: Group> PublicKey<G> {
     }
 
     /// Convert from slice
-    pub fn from_bytes(key_bytes: &[u8]) -> Result<Self, InternalPakeError> {
+    pub fn from_bytes(key_bytes: &[u8]) -> Result<Self, InternalError> {
         if key_bytes.len() == G::ElemLen::USIZE {
             Ok(Self::from_arr(GenericArray::from_slice(key_bytes).clone()))
         } else {
-            Err(InternalPakeError::InvalidByteSequence)
+            Err(InternalError::InvalidByteSequence)
         }
     }
 }
@@ -471,13 +471,11 @@ mod tests {
             fn diffie_hellman(
                 &self,
                 pk: PublicKey<RistrettoPoint>,
-            ) -> Result<Vec<u8>, InternalPakeError<Self::Error>> {
+            ) -> Result<Vec<u8>, InternalError<Self::Error>> {
                 self.0.diffie_hellman(pk)
             }
 
-            fn public_key(
-                &self,
-            ) -> Result<PublicKey<RistrettoPoint>, InternalPakeError<Self::Error>> {
+            fn public_key(&self) -> Result<PublicKey<RistrettoPoint>, InternalError<Self::Error>> {
                 self.0.public_key()
             }
 
@@ -485,7 +483,7 @@ mod tests {
                 self.0.serialize()
             }
 
-            fn deserialize(input: &[u8]) -> Result<Self, InternalPakeError<Self::Error>> {
+            fn deserialize(input: &[u8]) -> Result<Self, InternalError<Self::Error>> {
                 PrivateKey::deserialize(input).map(Self)
             }
         }

@@ -8,7 +8,7 @@ use crate::{
     ciphersuite::CipherSuite,
     errors::{
         utils::{check_slice_size, check_slice_size_atleast},
-        InternalPakeError, PakeError, ProtocolError,
+        InternalError, ProtocolError,
     },
     group::Group,
     hash::Hash,
@@ -88,7 +88,7 @@ impl<D: Hash, G: Group> KeyExchange<D, G> for TripleDH {
 
         let mut transcript_hasher = D::new()
             .chain(STR_RFC)
-            .chain(&serialize(&context, 2).map_err(PakeError::into_custom)?)
+            .chain(&serialize(&context, 2).map_err(ProtocolError::into_custom)?)
             .chain(&id_u)
             .chain(&serialized_credential_request[..])
             .chain(&id_s)
@@ -109,7 +109,7 @@ impl<D: Hash, G: Group> KeyExchange<D, G> for TripleDH {
         )?;
 
         let mut mac_hasher =
-            Hmac::<D>::new_from_slice(&result.1).map_err(|_| InternalPakeError::HmacError)?;
+            Hmac::<D>::new_from_slice(&result.1).map_err(|_| InternalError::HmacError)?;
         mac_hasher.update(&transcript_hasher.clone().finalize());
         let mac = mac_hasher.finalize().into_bytes();
 
@@ -167,19 +167,17 @@ impl<D: Hash, G: Group> KeyExchange<D, G> for TripleDH {
         )?;
 
         let mut server_mac =
-            Hmac::<D>::new_from_slice(&result.1).map_err(|_| InternalPakeError::HmacError)?;
+            Hmac::<D>::new_from_slice(&result.1).map_err(|_| InternalError::HmacError)?;
         server_mac.update(&transcript_hasher.clone().finalize());
 
         if server_mac.verify(&ke2_message.mac).is_err() {
-            return Err(ProtocolError::VerificationError(
-                PakeError::KeyExchangeMacValidationError,
-            ));
+            return Err(ProtocolError::InvalidLoginError);
         }
 
         transcript_hasher.update(ke2_message.mac.to_vec());
 
         let mut client_mac =
-            Hmac::<D>::new_from_slice(&result.2).map_err(|_| InternalPakeError::HmacError)?;
+            Hmac::<D>::new_from_slice(&result.2).map_err(|_| InternalError::HmacError)?;
         client_mac.update(&transcript_hasher.finalize());
 
         Ok((
@@ -200,13 +198,11 @@ impl<D: Hash, G: Group> KeyExchange<D, G> for TripleDH {
         ke2_state: &Self::KE2State,
     ) -> Result<Vec<u8>, ProtocolError> {
         let mut client_mac =
-            Hmac::<D>::new_from_slice(&ke2_state.km3).map_err(|_| InternalPakeError::HmacError)?;
+            Hmac::<D>::new_from_slice(&ke2_state.km3).map_err(|_| InternalError::HmacError)?;
         client_mac.update(&ke2_state.hashed_transcript);
 
         if client_mac.verify(&ke3_message.mac).is_err() {
-            return Err(ProtocolError::VerificationError(
-                PakeError::KeyExchangeMacValidationError,
-            ));
+            return Err(ProtocolError::InvalidLoginError);
         }
 
         Ok(ke2_state.session_key.to_vec())
@@ -256,7 +252,7 @@ pub struct Ke1Message<G: Group> {
 }
 
 impl<G: Group> FromBytes for Ke1State<G> {
-    fn from_bytes<CS: CipherSuite>(bytes: &[u8]) -> Result<Self, PakeError> {
+    fn from_bytes<CS: CipherSuite>(bytes: &[u8]) -> Result<Self, ProtocolError> {
         let key_len = <G as Group>::ElemLen::USIZE;
 
         let nonce_len = NonceLen::USIZE;
@@ -293,7 +289,7 @@ impl<G: Group> ToBytes for Ke1Message<G> {
 }
 
 impl<G: Group> FromBytes for Ke1Message<G> {
-    fn from_bytes<CS: CipherSuite>(ke1_message_bytes: &[u8]) -> Result<Self, PakeError> {
+    fn from_bytes<CS: CipherSuite>(ke1_message_bytes: &[u8]) -> Result<Self, ProtocolError> {
         let nonce_len = NonceLen::USIZE;
         let checked_nonce = check_slice_size(
             ke1_message_bytes,
@@ -363,7 +359,7 @@ pub struct Ke2Message<G: Group, HashLen: ArrayLength<u8>> {
 }
 
 impl<HashLen: ArrayLength<u8>> FromBytes for Ke2State<HashLen> {
-    fn from_bytes<CS: CipherSuite>(input: &[u8]) -> Result<Self, PakeError> {
+    fn from_bytes<CS: CipherSuite>(input: &[u8]) -> Result<Self, ProtocolError> {
         let hash_len = HashLen::USIZE;
         let checked_bytes = check_slice_size(input, 3 * hash_len, "ke2_state")?;
 
@@ -390,7 +386,7 @@ impl<G: Group, HashLen: ArrayLength<u8>> Ke2Message<G, HashLen> {
 }
 
 impl<G: Group, HashLen: ArrayLength<u8>> FromBytes for Ke2Message<G, HashLen> {
-    fn from_bytes<CS: CipherSuite>(input: &[u8]) -> Result<Self, PakeError> {
+    fn from_bytes<CS: CipherSuite>(input: &[u8]) -> Result<Self, ProtocolError> {
         let key_len = <G as Group>::ElemLen::USIZE;
         let nonce_len = NonceLen::USIZE;
         let checked_nonce = check_slice_size_atleast(input, nonce_len, "ke2_message nonce")?;
@@ -461,7 +457,7 @@ impl<HashLen: ArrayLength<u8>> ToBytes for Ke3Message<HashLen> {
 }
 
 impl<HashLen: ArrayLength<u8>> FromBytes for Ke3Message<HashLen> {
-    fn from_bytes<CS: CipherSuite>(bytes: &[u8]) -> Result<Self, PakeError> {
+    fn from_bytes<CS: CipherSuite>(bytes: &[u8]) -> Result<Self, ProtocolError> {
         let checked_bytes = check_slice_size(bytes, HashLen::USIZE, "ke3_message")?;
 
         Ok(Self {
@@ -481,11 +477,11 @@ fn derive_3dh_keys<D: Hash, G: Group, S: SecretKey<G>>(
     let ikm: Vec<u8> = [
         &dh.sk1
             .diffie_hellman(dh.pk1)
-            .map_err(InternalPakeError::into_custom)?[..],
+            .map_err(InternalError::into_custom)?[..],
         &dh.sk2.diffie_hellman(dh.pk2)?[..],
         &dh.sk3
             .diffie_hellman(dh.pk3)
-            .map_err(InternalPakeError::into_custom)?[..],
+            .map_err(InternalError::into_custom)?[..],
     ]
     .concat();
 
@@ -533,7 +529,7 @@ fn hkdf_expand_label<D: Hash>(
     context: &[u8],
     length: usize,
 ) -> Result<Vec<u8>, ProtocolError> {
-    let h = Hkdf::<D>::from_prk(secret).map_err(|_| InternalPakeError::HkdfError)?;
+    let h = Hkdf::<D>::from_prk(secret).map_err(|_| InternalError::HkdfError)?;
     hkdf_expand_label_extracted(&h, label, context, length)
 }
 
@@ -547,7 +543,7 @@ fn hkdf_expand_label_extracted<D: Hash>(
 
     let mut hkdf_label: Vec<u8> = Vec::new();
 
-    let length_u16: u16 = u16::try_from(length).map_err(|_| PakeError::SerializationError)?;
+    let length_u16: u16 = u16::try_from(length).map_err(|_| ProtocolError::SerializationError)?;
     hkdf_label.extend_from_slice(&length_u16.to_be_bytes());
 
     let mut opaque_label: Vec<u8> = Vec::new();
@@ -558,7 +554,7 @@ fn hkdf_expand_label_extracted<D: Hash>(
     hkdf_label.extend_from_slice(&serialize(context, 1)?);
 
     hkdf.expand(&hkdf_label, &mut okm)
-        .map_err(|_| InternalPakeError::HkdfError)?;
+        .map_err(|_| InternalError::HkdfError)?;
     Ok(okm)
 }
 

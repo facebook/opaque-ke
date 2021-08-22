@@ -748,7 +748,7 @@
 //! ```
 //! # use curve25519_dalek::ristretto::RistrettoPoint;
 //! # use generic_array::{GenericArray, typenum::U32};
-//! # use opaque_ke::{CipherSuite, errors::{InternalPakeError}, keypair::{KeyPair, PrivateKey, PublicKey, SecretKey}, ServerSetup};
+//! # use opaque_ke::{CipherSuite, errors::{InternalError}, keypair::{KeyPair, PrivateKey, PublicKey, SecretKey}, ServerSetup};
 //! # use rand::rngs::OsRng;
 //! # use zeroize::Zeroize;
 //! # struct Default;
@@ -773,14 +773,14 @@
 //!     fn diffie_hellman(
 //!         &self,
 //!         pk: PublicKey<RistrettoPoint>,
-//!     ) -> Result<Vec<u8>, InternalPakeError<Self::Error>> {
-//!         YourRemoteKey::diffie_hellman(self, &pk.to_arr()).map_err(InternalPakeError::Custom)
+//!     ) -> Result<Vec<u8>, InternalError<Self::Error>> {
+//!         YourRemoteKey::diffie_hellman(self, &pk.to_arr()).map_err(InternalError::Custom)
 //!     }
 //!
 //!     fn public_key(
 //!         &self
-//!     ) -> Result<PublicKey<RistrettoPoint>, InternalPakeError<Self::Error>> {
-//!         YourRemoteKey::public_key(self).map(PublicKey::from_arr).map_err(InternalPakeError::Custom)
+//!     ) -> Result<PublicKey<RistrettoPoint>, InternalError<Self::Error>> {
+//!         YourRemoteKey::public_key(self).map(PublicKey::from_arr).map_err(InternalError::Custom)
 //!     }
 //!
 //!     fn serialize(&self) -> Vec<u8> {
@@ -788,7 +788,7 @@
 //!         todo!()
 //!     }
 //!
-//!     fn deserialize(input: &[u8]) -> Result<Self, InternalPakeError<Self::Error>> {
+//!     fn deserialize(input: &[u8]) -> Result<Self, InternalError<Self::Error>> {
 //!         // if you use serde and the "serialize" crate feature, you won't need this
 //!         todo!()
 //!     }
