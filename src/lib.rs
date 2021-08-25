@@ -411,7 +411,7 @@
 //! ```
 //! If the protocol completes successfully, then the server obtains a `server_login_finish_result.session_key` which is guaranteed to
 //! match `client_login_finish_result.session_key` (see the [Session Key](#session-key) section).
-//! Otherwise, on failure, the [ServerLogin::finish] algorithm outputs the error [InvalidLoginError](errors::PakeError::InvalidLoginError).
+//! Otherwise, on failure, the [ServerLogin::finish] algorithm outputs the error [InvalidLoginError](errors::ProtocolError::InvalidLoginError).
 //!
 //! # Advanced Usage
 //!
