@@ -25,7 +25,7 @@ use zeroize::Zeroize;
 const STR_AUTH_KEY: &[u8] = b"AuthKey";
 const STR_EXPORT_KEY: &[u8] = b"ExportKey";
 const STR_PRIVATE_KEY: &[u8] = b"PrivateKey";
-const STR_OPAQUE_HASH_TO_SCALAR: &[u8] = b"OPAQUE-HashToScalar";
+const STR_OPAQUE_DERIVE_AUTH_KEY_PAIR: &[u8] = b"OPAQUE-DeriveAuthKeyPair";
 
 const NONCE_LEN: usize = 32;
 
@@ -40,7 +40,7 @@ fn build_inner_envelope_internal<CS: CipherSuite>(
     let client_static_keypair = KeyPair::<CS::KeGroup>::from_private_key_slice(
         &CS::OprfGroup::scalar_as_bytes(CS::OprfGroup::hash_to_scalar::<CS::Hash>(
             &keypair_seed[..],
-            STR_OPAQUE_HASH_TO_SCALAR,
+            STR_OPAQUE_DERIVE_AUTH_KEY_PAIR,
         )?),
     )?;
 
@@ -58,7 +58,7 @@ fn recover_keys_internal<CS: CipherSuite>(
     let client_static_keypair = KeyPair::<CS::KeGroup>::from_private_key_slice(
         &CS::OprfGroup::scalar_as_bytes(CS::OprfGroup::hash_to_scalar::<CS::Hash>(
             &keypair_seed[..],
-            STR_OPAQUE_HASH_TO_SCALAR,
+            STR_OPAQUE_DERIVE_AUTH_KEY_PAIR,
         )?),
     )?;
 
