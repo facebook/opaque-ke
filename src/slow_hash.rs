@@ -16,7 +16,7 @@ use generic_array::GenericArray;
 pub trait SlowHash<D: Hash>: Default {
     /// Computes the slow hashing function
     fn hash(
-        self,
+        &self,
         input: GenericArray<u8, <D as Digest>::OutputSize>,
     ) -> Result<Vec<u8>, InternalError>;
 }
@@ -27,7 +27,7 @@ pub struct NoOpHash;
 
 impl<D: Hash> SlowHash<D> for NoOpHash {
     fn hash(
-        self,
+        &self,
         input: GenericArray<u8, <D as Digest>::OutputSize>,
     ) -> Result<Vec<u8>, InternalError> {
         Ok(input.to_vec())
@@ -37,7 +37,7 @@ impl<D: Hash> SlowHash<D> for NoOpHash {
 #[cfg(feature = "slow-hash")]
 impl<D: Hash> SlowHash<D> for argon2::Argon2<'_> {
     fn hash(
-        self,
+        &self,
         input: GenericArray<u8, <D as Digest>::OutputSize>,
     ) -> Result<Vec<u8>, InternalError> {
         let mut output = alloc::vec![0u8; <D as Digest>::OutputSize::USIZE];
