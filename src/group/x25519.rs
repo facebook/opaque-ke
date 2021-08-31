@@ -127,7 +127,7 @@ fn test() -> Result<(), ProtocolError> {
     } = client.finish(
         &mut OsRng,
         message,
-        ClientRegistrationFinishParameters::Default,
+        ClientRegistrationFinishParameters::default(),
     )?;
     let server_registration = ServerRegistration::finish(message);
 
@@ -152,7 +152,7 @@ fn test() -> Result<(), ProtocolError> {
         session_key: client_session_key,
         export_key: login_export_key,
         ..
-    } = client.finish(message, ClientLoginFinishParameters::Default)?;
+    } = client.finish(message, ClientLoginFinishParameters::default())?;
     let server_session_key = server.finish(message)?.session_key;
 
     assert_eq!(register_export_key, login_export_key);
@@ -172,7 +172,7 @@ fn test() -> Result<(), ProtocolError> {
     )?;
 
     assert!(matches!(
-        client.finish(message, ClientLoginFinishParameters::Default),
+        client.finish(message, ClientLoginFinishParameters::default()),
         Err(ProtocolError::InvalidLoginError)
     ));
 

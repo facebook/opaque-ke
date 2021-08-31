@@ -347,8 +347,12 @@ fn generate_parameters<CS: CipherSuite>() -> TestVectorParameters {
         .finish(
             &mut finish_registration_rng,
             server_registration_start_result.message,
-            ClientRegistrationFinishParameters::WithIdentifiers(
-                Identifiers::ClientAndServerIdentifiers(id_u.to_vec(), id_s.to_vec()),
+            ClientRegistrationFinishParameters::new(
+                Some(Identifiers::ClientAndServerIdentifiers(
+                    id_u.to_vec(),
+                    id_s.to_vec(),
+                )),
+                None,
             ),
         )
         .unwrap();
@@ -402,9 +406,13 @@ fn generate_parameters<CS: CipherSuite>() -> TestVectorParameters {
         .state
         .finish(
             server_login_start_result.message,
-            ClientLoginFinishParameters::WithContextAndIdentifiers(
-                context.to_vec(),
-                Identifiers::ClientAndServerIdentifiers(id_u.to_vec(), id_s.to_vec()),
+            ClientLoginFinishParameters::new(
+                Some(context.to_vec()),
+                Some(Identifiers::ClientAndServerIdentifiers(
+                    id_u.to_vec(),
+                    id_s.to_vec(),
+                )),
+                None,
             ),
         )
         .unwrap();
@@ -544,8 +552,12 @@ fn test_registration_upload() -> Result<(), ProtocolError> {
     .finish(
         &mut finish_registration_rng,
         RegistrationResponse::deserialize(&parameters.registration_response[..])?,
-        ClientRegistrationFinishParameters::WithIdentifiers(
-            Identifiers::ClientAndServerIdentifiers(parameters.id_u, parameters.id_s),
+        ClientRegistrationFinishParameters::new(
+            Some(Identifiers::ClientAndServerIdentifiers(
+                parameters.id_u,
+                parameters.id_s,
+            )),
+            None,
         ),
     )?;
 
@@ -662,9 +674,13 @@ fn test_credential_finalization() -> Result<(), ProtocolError> {
         CredentialResponse::<RistrettoSha5123dhNoSlowHash>::deserialize(
             &parameters.credential_response[..],
         )?,
-        ClientLoginFinishParameters::WithContextAndIdentifiers(
-            parameters.context,
-            Identifiers::ClientAndServerIdentifiers(parameters.id_u, parameters.id_s),
+        ClientLoginFinishParameters::new(
+            Some(parameters.context),
+            Some(Identifiers::ClientAndServerIdentifiers(
+                parameters.id_u,
+                parameters.id_s,
+            )),
+            None,
         ),
     )?;
 

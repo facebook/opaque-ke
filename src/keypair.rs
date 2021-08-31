@@ -507,7 +507,7 @@ mod tests {
             .finish(
                 &mut OsRng,
                 message,
-                ClientRegistrationFinishParameters::Default,
+                ClientRegistrationFinishParameters::default(),
             )
             .unwrap();
         let file = ServerRegistration::finish(message);
@@ -530,7 +530,7 @@ mod tests {
         )
         .unwrap();
         let ClientLoginFinishResult { message, .. } = client
-            .finish(message, ClientLoginFinishParameters::Default)
+            .finish(message, ClientLoginFinishParameters::default())
             .unwrap();
         server.finish(message).unwrap();
     }

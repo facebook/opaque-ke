@@ -881,8 +881,8 @@ fn test_registration_upload<CS: CipherSuite>(tvs: &[&str]) -> Result<(), Protoco
             &mut finish_registration_rng,
             RegistrationResponse::deserialize(&parameters.registration_response[..]).unwrap(),
             match parse_identifiers(parameters.client_identity, parameters.server_identity) {
-                None => ClientRegistrationFinishParameters::Default,
-                Some(ids) => ClientRegistrationFinishParameters::WithIdentifiers(ids),
+                None => ClientRegistrationFinishParameters::default(),
+                Some(ids) => ClientRegistrationFinishParameters::new(Some(ids), None),
             },
         )?;
 
@@ -998,9 +998,9 @@ fn test_ke3<CS: CipherSuite>(tvs: &[&str]) -> Result<(), ProtocolError> {
         let client_login_finish_result = client_login_start_result.state.finish(
             CredentialResponse::<CS>::deserialize(&parameters.KE2[..])?,
             match parse_identifiers(parameters.client_identity, parameters.server_identity) {
-                None => ClientLoginFinishParameters::WithContext(parameters.context),
+                None => ClientLoginFinishParameters::new(Some(parameters.context), None, None),
                 Some(ids) => {
-                    ClientLoginFinishParameters::WithContextAndIdentifiers(parameters.context, ids)
+                    ClientLoginFinishParameters::new(Some(parameters.context), Some(ids), None)
                 }
             },
         )?;
