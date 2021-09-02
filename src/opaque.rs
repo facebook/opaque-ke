@@ -221,17 +221,26 @@ pub(crate) fn bytestrings_from_identifiers(
 }
 
 /// Optional parameters for client registration finish
-#[derive(Clone, Default)]
-pub struct ClientRegistrationFinishParameters<'h, H> {
+#[derive(Clone)]
+pub struct ClientRegistrationFinishParameters<'h, CS: CipherSuite> {
     /// Specifying the identifiers idU and idS
     pub identifiers: Option<Identifiers>,
     /// Specifying a configuration for the slow hash
-    pub slow_hash: Option<&'h H>,
+    pub slow_hash: Option<&'h CS::SlowHash>,
 }
 
-impl<'h, H> ClientRegistrationFinishParameters<'h, H> {
+impl<'h, CS: CipherSuite> Default for ClientRegistrationFinishParameters<'h, CS> {
+    fn default() -> Self {
+        Self {
+            identifiers: None,
+            slow_hash: None,
+        }
+    }
+}
+
+impl<'h, CS: CipherSuite> ClientRegistrationFinishParameters<'h, CS> {
     /// Create a new [`ClientRegistrationFinishParameters`]
-    pub const fn new(identifiers: Option<Identifiers>, slow_hash: Option<&'h H>) -> Self {
+    pub fn new(identifiers: Option<Identifiers>, slow_hash: Option<&'h CS::SlowHash>) -> Self {
         Self {
             identifiers,
             slow_hash,
@@ -316,18 +325,15 @@ impl<CS: CipherSuite> ClientRegistration<CS> {
         self,
         rng: &mut R,
         r2: RegistrationResponse<CS>,
-        params: ClientRegistrationFinishParameters<CS::SlowHash>,
+        params: ClientRegistrationFinishParameters<CS>,
     ) -> Result<ClientRegistrationFinishResult<CS>, ProtocolError> {
         // Check for reflected value from server and halt if detected
         if self.alpha.ct_equal(&r2.beta) {
             return Err(ProtocolError::ReflectedValueError);
         }
 
-        let password_derived_key = get_password_derived_key::<CS::OprfGroup, CS::SlowHash, CS::Hash>(
-            &self.token,
-            r2.beta,
-            params.slow_hash,
-        )?;
+        let password_derived_key =
+            get_password_derived_key::<CS>(&self.token, r2.beta, params.slow_hash)?;
 
         #[cfg_attr(not(test), allow(unused_variables))]
         let (randomized_pwd, h) = Hkdf::<CS::Hash>::extract(None, &password_derived_key);
@@ -556,22 +562,32 @@ impl<CS: CipherSuite> Clone for ClientLoginStartResult<CS> {
 }
 
 /// Optional parameters for client login finish
-#[derive(Clone, Default)]
-pub struct ClientLoginFinishParameters<'h, H> {
+#[derive(Clone)]
+pub struct ClientLoginFinishParameters<'h, CS: CipherSuite> {
     /// Specifying a context field that the server must agree on
     pub context: Option<Vec<u8>>,
     /// Specifying a user identifier and server identifier that will be matched against the server
     pub identifiers: Option<Identifiers>,
     /// Specifying a configuration for the slow hash
-    pub slow_hash: Option<&'h H>,
+    pub slow_hash: Option<&'h CS::SlowHash>,
 }
 
-impl<'h, H> ClientLoginFinishParameters<'h, H> {
+impl<'h, CS: CipherSuite> Default for ClientLoginFinishParameters<'h, CS> {
+    fn default() -> Self {
+        Self {
+            context: None,
+            identifiers: None,
+            slow_hash: None,
+        }
+    }
+}
+
+impl<'h, CS: CipherSuite> ClientLoginFinishParameters<'h, CS> {
     /// Create a new [`ClientLoginFinishParameters`]
-    pub const fn new(
+    pub fn new(
         context: Option<Vec<u8>>,
         identifiers: Option<Identifiers>,
-        slow_hash: Option<&'h H>,
+        slow_hash: Option<&'h CS::SlowHash>,
     ) -> Self {
         Self {
             context,
@@ -648,7 +664,7 @@ impl<CS: CipherSuite> ClientLogin<CS> {
     pub fn finish(
         self,
         credential_response: CredentialResponse<CS>,
-        params: ClientLoginFinishParameters<CS::SlowHash>,
+        params: ClientLoginFinishParameters<CS>,
     ) -> Result<ClientLoginFinishResult<CS>, ProtocolError> {
         // Check if beta value from server is equal to alpha value from client
         let credential_request =
@@ -657,7 +673,7 @@ impl<CS: CipherSuite> ClientLogin<CS> {
             return Err(ProtocolError::ReflectedValueError);
         }
 
-        let password_derived_key = get_password_derived_key::<CS::OprfGroup, CS::SlowHash, CS::Hash>(
+        let password_derived_key = get_password_derived_key::<CS>(
             &self.token,
             credential_response.beta,
             params.slow_hash,
@@ -1012,17 +1028,17 @@ impl<CS: CipherSuite> Drop for ServerLogin<CS> {
 
 // Helper functions
 
-fn get_password_derived_key<G: Group, SH: SlowHash<D>, D: Hash>(
-    token: &oprf::Token<G>,
-    beta: G,
-    slow_hash: Option<&SH>,
+fn get_password_derived_key<CS: CipherSuite>(
+    token: &oprf::Token<CS::OprfGroup>,
+    beta: CS::OprfGroup,
+    slow_hash: Option<&CS::SlowHash>,
 ) -> Result<Vec<u8>, ProtocolError> {
-    let oprf_output = oprf::finalize::<G, D>(&token.data, &token.blind, beta)?;
+    let oprf_output = oprf::finalize::<CS::OprfGroup, CS::Hash>(&token.data, &token.blind, beta)?;
 
     if let Some(slow_hash) = slow_hash {
         slow_hash.hash(oprf_output)
     } else {
-        SH::default().hash(oprf_output)
+        CS::SlowHash::default().hash(oprf_output)
     }
     .map_err(ProtocolError::from)
 }
