@@ -578,7 +578,7 @@
 //!
 //! But, for applications that wish to cryptographically bind these identities to
 //! the registered password file as well as the session key output by the login phase, these custom identifiers can be specified through
-//! [ClientRegistrationFinishParameters::WithIdentifiers] in [Client Registration Finish](#client-registration-finish):
+//! [ClientRegistrationFinishParameters] in [Client Registration Finish](#client-registration-finish):
 //! ```
 //! # use opaque_ke::{
 //! #   errors::ProtocolError,
@@ -606,11 +606,12 @@
 //! let client_registration_finish_result = client_registration_start_result.state.finish(
 //!     &mut client_rng,
 //!     server_registration_start_result.message,
-//!     ClientRegistrationFinishParameters::WithIdentifiers(
-//!         Identifiers::ClientAndServerIdentifiers(
+//!     ClientRegistrationFinishParameters::new(
+//!         Some(Identifiers::ClientAndServerIdentifiers(
 //!             b"Alice_the_Cryptographer".to_vec(),
 //!             b"Facebook".to_vec(),
-//!         ),
+//!         )),
+//!         None,
 //!     ),
 //! )?;
 //! # Ok::<(), ProtocolError>(())
@@ -641,7 +642,7 @@
 //! # let mut server_rng = OsRng;
 //! # let server_setup = ServerSetup::<Default>::new(&mut server_rng);
 //! # let server_registration_start_result = ServerRegistration::<Default>::start(&server_setup, client_registration_start_result.message, b"alice@example.com")?;
-//! # let client_registration_finish_result = client_registration_start_result.state.finish(&mut client_rng, server_registration_start_result.message, ClientRegistrationFinishParameters::WithIdentifiers(Identifiers::ClientAndServerIdentifiers(b"Alice_the_Cryptographer".to_vec(), b"Facebook".to_vec())))?;
+//! # let client_registration_finish_result = client_registration_start_result.state.finish(&mut client_rng, server_registration_start_result.message, ClientRegistrationFinishParameters::new(Some(Identifiers::ClientAndServerIdentifiers(b"Alice_the_Cryptographer".to_vec(), b"Facebook".to_vec())), None))?;
 //! # let password_file_bytes = ServerRegistration::<Default>::finish(client_registration_finish_result.message).serialize();
 //! # let client_login_start_result = ClientLogin::<Default>::start(
 //! #   &mut client_rng,
@@ -666,7 +667,7 @@
 //! # Ok::<(), ProtocolError>(())
 //! ```
 //!
-//! as well as [ClientLoginFinishParameters::WithIdentifiers] in [Client Login Finish](#client-login-finish):
+//! as well as [ClientLoginFinishParameters] in [Client Login Finish](#client-login-finish):
 //! ```
 //! # use opaque_ke::{
 //! #   errors::ProtocolError,
@@ -691,7 +692,7 @@
 //! # let mut server_rng = OsRng;
 //! # let server_setup = ServerSetup::<Default>::new(&mut server_rng);
 //! # let server_registration_start_result = ServerRegistration::<Default>::start(&server_setup, client_registration_start_result.message, b"alice@example.com")?;
-//! # let client_registration_finish_result = client_registration_start_result.state.finish(&mut client_rng, server_registration_start_result.message, ClientRegistrationFinishParameters::WithIdentifiers(Identifiers::ClientAndServerIdentifiers(b"Alice_the_Cryptographer".to_vec(), b"Facebook".to_vec())))?;
+//! # let client_registration_finish_result = client_registration_start_result.state.finish(&mut client_rng, server_registration_start_result.message, ClientRegistrationFinishParameters::new(Some(Identifiers::ClientAndServerIdentifiers(b"Alice_the_Cryptographer".to_vec(), b"Facebook".to_vec())), None))?;
 //! # let password_file_bytes = ServerRegistration::<Default>::finish(client_registration_finish_result.message).serialize();
 //! # let client_login_start_result = ClientLogin::<Default>::start(
 //! #     &mut client_rng,
@@ -705,11 +706,13 @@
 //! #     ServerLogin::start(&mut server_rng, &server_setup, Some(password_file), client_login_start_result.message, b"alice@example.com", ServerLoginStartParameters::WithIdentifiers(Identifiers::ClientAndServerIdentifiers(b"Alice_the_Cryptographer".to_vec(), b"Facebook".to_vec())))?;
 //! let client_login_finish_result = client_login_start_result.state.finish(
 //!     server_login_start_result.message,
-//!     ClientLoginFinishParameters::WithIdentifiers(
-//!         Identifiers::ClientAndServerIdentifiers(
+//!     ClientLoginFinishParameters::new(
+//!         None,
+//!         Some(Identifiers::ClientAndServerIdentifiers(
 //!             b"Alice_the_Cryptographer".to_vec(),
 //!             b"Facebook".to_vec(),
-//!         ),
+//!         )),
+//!         None,
 //!     ),
 //! )?;
 //!
@@ -727,7 +730,7 @@
 //! so as to bind the integrity of application-specific data or configuration parameters to the security of the key exchange.
 //! During the login phase, the client and server can specify this context using:
 //! - The second login message, where the server can populate [ServerLoginStartParameters::WithContext], and
-//! - The third login message, where the client can populate [ClientLoginFinishParameters::WithContext].
+//! - The third login message, where the client can populate [ClientLoginFinishParameters].
 //!
 //! For both of these messages, the `WithContextAndIdentifiers` variant can be used to specify these fields in addition to
 //! [custom identifiers](#custom-identifiers), with the ordering of the fields as
@@ -780,7 +783,8 @@
 //!     fn public_key(
 //!         &self
 //!     ) -> Result<PublicKey<RistrettoPoint>, InternalError<Self::Error>> {
-//!         YourRemoteKey::public_key(self).map(PublicKey::from_arr).map_err(InternalError::Custom)
+//!         YourRemoteKey::public_key(self).map(PublicKey::from_arr)
+//!             .map_err(InternalError::Custom)
 //!     }
 //!
 //!     fn serialize(&self) -> Vec<u8> {

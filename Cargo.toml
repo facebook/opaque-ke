@@ -22,7 +22,7 @@ std = ["curve25519-dalek/std", "getrandom", "rand/std", "rand/std_rng", "num-big
 serialize = ["serde", "base64", "generic-array/serde", "curve25519-dalek/serde"]
 
 [dependencies]
-argon2 = { version = "0.2", default-features = false, optional = true }
+argon2 = { version = "0.3", default-features = false, features = ["alloc"], optional = true }
 base64 = { version = "0.13", default-features = false, features = ["alloc"], optional = true }
 constant_time_eq = "0.1"
 curve25519-dalek = { version = "3", default-features = false }
