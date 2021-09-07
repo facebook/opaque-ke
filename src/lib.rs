@@ -8,6 +8,20 @@
 //! Note: This implementation is in sync with [draft-irtf-cfrg-opaque-03](https://www.ietf.org/archive/id/draft-irtf-cfrg-opaque-03.html),
 //! but this specification is subject to change, until the final version published by the IETF.
 //!
+//! ### ⚠️ Warning!
+//!
+//! This library does not provide any mitigations against client enumeration attacks, where an adversary
+//! attempts to learn about whether or not a client has registered using OPAQUE with a server. The latest version of
+//! the OPAQUE CFRG draft ([draft-irtf-cfrg-opaque-06](https://www.ietf.org/archive/id/draft-irtf-cfrg-opaque-06.html))
+//! supports mitigations against client enumeration, but the version that this implementation is synced to does not.
+//!
+//! Therefore, consumers of this library should either:
+//! * Ensure that client enumeration attacks are mitigated through other means in any applications that use
+//! this library as a login mechanism, or
+//! * Consider switching to a future version of this implementation that implements
+//! [draft-irtf-cfrg-opaque-06](https://www.ietf.org/archive/id/draft-irtf-cfrg-opaque-06.html) which handles
+//! client enumeration attacks.
+//!
 //! # Overview
 //!
 //! OPAQUE is a protocol between a client and a server. They must first agree on a collection of primitives
