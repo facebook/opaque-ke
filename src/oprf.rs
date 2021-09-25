@@ -76,7 +76,7 @@ fn finalize_after_unblind<G: Group, H: Hash>(
 }
 
 ////////////////////////
-// Benchmarking shims //
+// Benchmarking Shims //
 ////////////////////////
 
 #[cfg(feature = "bench")]

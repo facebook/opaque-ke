@@ -257,7 +257,7 @@ fn credential_response_roundtrip() {
 }
 
 #[test]
-fn login_third_message_roundtrip() {
+fn credential_finalization_roundtrip() {
     let mut rng = OsRng;
     let mut mac = [0u8; MAC_SIZE];
     rng.fill_bytes(&mut mac);

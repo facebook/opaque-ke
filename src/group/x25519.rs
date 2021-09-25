@@ -29,6 +29,7 @@ impl Group for MontgomeryPoint {
     ) -> Result<Self::Scalar, InternalError> {
         Ok(Scalar::from_bytes_mod_order(*scalar_bits.as_ref()))
     }
+
     fn random_nonzero_scalar<R: RngCore + CryptoRng>(rng: &mut R) -> Self::Scalar {
         loop {
             let scalar = {
@@ -53,9 +54,11 @@ impl Group for MontgomeryPoint {
             }
         }
     }
+
     fn scalar_as_bytes(scalar: Self::Scalar) -> GenericArray<u8, Self::ScalarLen> {
         scalar.to_bytes().into()
     }
+
     fn scalar_invert(_scalar: &Self::Scalar) -> Self::Scalar {
         unreachable!("this algorithm should only be used as the `KeGroup`")
     }
@@ -67,6 +70,7 @@ impl Group for MontgomeryPoint {
     ) -> Result<Self, InternalError> {
         Ok(Self(*element_bits.as_ref()))
     }
+
     // serialization of a group element
     fn to_arr(&self) -> GenericArray<u8, Self::ElemLen> {
         self.to_bytes().into()
