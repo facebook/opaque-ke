@@ -17,7 +17,7 @@ use generic_array::typenum::{U32, U33};
 use generic_array::{ArrayLength, GenericArray};
 use num_bigint::{BigInt, Sign};
 use num_integer::Integer;
-use num_traits::{One, ToPrimitive};
+use num_traits::{One, ToPrimitive, Zero};
 use once_cell::unsync::Lazy;
 use p256_::elliptic_curve::group::prime::PrimeCurveAffine;
 use p256_::elliptic_curve::group::GroupEncoding;
@@ -306,7 +306,7 @@ fn map_to_curve_simple_swu<N: ArrayLength<u8>>(
         }
 
         fn is_zero(&self) -> bool {
-            self.number.is_one()
+            self.number.is_zero()
         }
 
         /// Corresponds to the is_square() function defined in
@@ -316,7 +316,7 @@ fn map_to_curve_simple_swu<N: ArrayLength<u8>>(
             let exponent = (self.f.0 - 1) >> 1;
 
             let result = self.pow_internal(&exponent);
-            result.number.is_one() || result.is_zero()
+            result.is_zero() || result.number.is_one()
         }
 
         fn to_bytes<N: ArrayLength<u8>>(&self) -> GenericArray<u8, N> {
