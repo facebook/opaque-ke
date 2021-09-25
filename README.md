@@ -47,7 +47,8 @@ To learn more about contributing to this project, [see this document](./CONTRIBU
 #### Acknowledgments
 
 Special thanks go to Hugo Krawczyk and Chris Wood for helping to clarify discrepancies and making suggestions for improving
-this implementation.
+this implementation. Additional credit goes to @daxpedda for adding no_std support, p256 support, and making other general
+improvements to the library.
 
 
 License

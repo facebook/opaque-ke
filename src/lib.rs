@@ -843,27 +843,20 @@ pub mod errors;
 mod impls;
 #[macro_use]
 mod serialization;
-
-// High-level API
-mod opaque;
-
-mod messages;
-
 pub mod ciphersuite;
 mod envelope;
-pub mod hash;
-
 pub mod group;
-
+pub mod hash;
 pub mod key_exchange;
 pub mod keypair;
+mod messages;
+mod opaque;
+pub mod slow_hash;
 
 #[cfg(feature = "bench")]
 pub mod oprf;
 #[cfg(not(feature = "bench"))]
 mod oprf;
-
-pub mod slow_hash;
 
 #[cfg(test)]
 mod tests;
