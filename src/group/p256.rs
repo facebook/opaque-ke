@@ -26,6 +26,7 @@ use p256_::elliptic_curve::subtle::ConstantTimeEq;
 use p256_::elliptic_curve::Field;
 use p256_::{AffinePoint, EncodedPoint, ProjectivePoint};
 use rand::{CryptoRng, RngCore};
+use subtle::{Choice, ConditionallySelectable};
 
 // `L: 48`
 pub const L: usize = 48;
@@ -332,10 +333,27 @@ fn map_to_curve_simple_swu<N: ArrayLength<u8>>(
     }
 
     fn cmov<'a>(x: &FieldElement<'a>, y: &FieldElement<'a>, b: bool) -> FieldElement<'a> {
-        if b {
-            y.clone()
-        } else {
-            x.clone()
+        let f = x.f;
+
+        let x_bytes = x.number.to_signed_bytes_le();
+        let mut x = [0; 256];
+        x[..x_bytes.len()].copy_from_slice(&x_bytes);
+
+        let y_bytes = y.number.to_signed_bytes_le();
+        let mut y = [0; 256];
+        y[..y_bytes.len()].copy_from_slice(&y_bytes);
+
+        let mut bytes = [0; 256];
+
+        let choice = Choice::from(u8::from(b));
+
+        for ((byte, x), y) in bytes.iter_mut().zip(x).zip(y) {
+            *byte = u8::conditional_select(&x, &y, choice);
+        }
+
+        FieldElement {
+            f,
+            number: BigInt::from_signed_bytes_le(&bytes),
         }
     }
 
