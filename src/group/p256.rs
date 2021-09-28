@@ -336,14 +336,14 @@ fn map_to_curve_simple_swu<N: ArrayLength<u8>>(
         let f = x.f;
 
         let x_bytes = x.number.to_signed_bytes_le();
-        let mut x = [0; 256];
+        let mut x = [0; 33];
         x[..x_bytes.len()].copy_from_slice(&x_bytes);
 
         let y_bytes = y.number.to_signed_bytes_le();
-        let mut y = [0; 256];
+        let mut y = [0; 33];
         y[..y_bytes.len()].copy_from_slice(&y_bytes);
 
-        let mut bytes = [0; 256];
+        let mut bytes = [0; 33];
 
         let choice = Choice::from(u8::from(b));
 
