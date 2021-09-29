@@ -3,6 +3,9 @@
 // This source code is licensed under the MIT license found in the
 // LICENSE file in the root directory of this source tree.
 
+// Note: This group implementation of p256 is experimental for now,
+// until hash-to-curve or crypto-bigint are fully supported.
+
 #![allow(
     clippy::borrow_interior_mutable_const,
     clippy::declare_interior_mutable_const
@@ -332,6 +335,9 @@ fn map_to_curve_simple_swu<N: ArrayLength<u8>>(
         }
     }
 
+    // This needs to be made constant-time, which will be supported after
+    // crypto-bigint is no longer experimental. See
+    // https://github.com/novifinancial/opaque-ke/issues/239 for more context.
     fn cmov<'a>(x: &FieldElement<'a>, y: &FieldElement<'a>, b: bool) -> FieldElement<'a> {
         let f = x.f;
 

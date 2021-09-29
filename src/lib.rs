@@ -819,7 +819,8 @@
 //! [curve25519-dalek](https://doc.dalek.rs/curve25519_dalek/index.html#backends-and-features) and allow for selecting
 //! the corresponding backend for the curve arithmetic used. The `u64_backend` feature is included as the default.
 //!
-//! - The `p256` feature enables the use of `p256::ProjectivePoint` as a `Group` for `CipherSuite`.
+//! - The `p256` feature enables the use of `p256::ProjectivePoint` as a `Group` for `CipherSuite`. Note that this
+//! is currently an experimental feature ⚠️, and is not yet ready for production use.
 //!
 //! - The `bench` feature is used only for running performance benchmarks for this implementation.
 //!
