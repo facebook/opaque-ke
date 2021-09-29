@@ -14,7 +14,7 @@
 use super::Group;
 use crate::errors::{InternalError, ProtocolError};
 use crate::hash::Hash;
-use core::ops::{Add, Div, Mul, Neg, Sub};
+use core::ops::{Add, Div, Mul, Neg};
 use core::str::FromStr;
 use generic_array::typenum::{U32, U33};
 use generic_array::{ArrayLength, GenericArray};
@@ -217,14 +217,6 @@ fn map_to_curve_simple_swu<N: ArrayLength<u8>>(
 
         fn add(self, rhs: Self) -> Self::Output {
             self.f.element(&(&self.number + &rhs.number))
-        }
-    }
-
-    impl<'a> Sub for &FieldElement<'a> {
-        type Output = FieldElement<'a>;
-
-        fn sub(self, rhs: Self) -> Self::Output {
-            self.f.element(&(&self.number - &rhs.number))
         }
     }
 
