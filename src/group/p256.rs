@@ -341,11 +341,11 @@ fn map_to_curve_simple_swu<N: ArrayLength<u8>>(
     fn cmov<'a>(x: &FieldElement<'a>, y: &FieldElement<'a>, b: bool) -> FieldElement<'a> {
         let f = x.f;
 
-        let (x_sign, x_bytes) = x.number.to_bytes_le();
+        let x_bytes = x.number.to_bytes_le().1;
         let mut x = [0; 32];
         x[..x_bytes.len()].copy_from_slice(&x_bytes);
 
-        let (y_sign, y_bytes) = y.number.to_bytes_le();
+        let y_bytes = y.number.to_bytes_le().1;
         let mut y = [0; 32];
         y[..y_bytes.len()].copy_from_slice(&y_bytes);
 
@@ -353,19 +353,13 @@ fn map_to_curve_simple_swu<N: ArrayLength<u8>>(
 
         let choice = Choice::from(u8::from(b));
 
-        let sign = if u8::conditional_select(&0, &1, choice) == 0 {
-            x_sign
-        } else {
-            y_sign
-        };
-
         for ((byte, x), y) in bytes.iter_mut().zip(x).zip(y) {
             *byte = u8::conditional_select(&x, &y, choice);
         }
 
         FieldElement {
             f,
-            number: BigInt::from_bytes_le(sign, &bytes),
+            number: BigInt::from_bytes_le(Sign::Plus, &bytes),
         }
     }
 
