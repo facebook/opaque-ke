@@ -164,6 +164,10 @@ impl Group for ProjectivePoint {
 
 /// Corresponds to the map_to_curve_simple_swu() function defined in
 /// <https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-hash-to-curve-11#appendix-F.2>
+// `cmov`, `mod_floor` and `modpow` needs to be made constant-time, which
+// will be supported after crypto-bigint is no longer experimental. See
+// https://github.com/novifinancial/opaque-ke/issues/239 for more context.
+
 #[allow(clippy::many_single_char_names)]
 fn map_to_curve_simple_swu<N: ArrayLength<u8>>(
     u: &[u8],
@@ -327,9 +331,6 @@ fn map_to_curve_simple_swu<N: ArrayLength<u8>>(
         }
     }
 
-    // This needs to be made constant-time, which will be supported after
-    // crypto-bigint is no longer experimental. See
-    // https://github.com/novifinancial/opaque-ke/issues/239 for more context.
     fn cmov<'a>(x: &FieldElement<'a>, y: &FieldElement<'a>, b: bool) -> FieldElement<'a> {
         let f = x.f;
 
