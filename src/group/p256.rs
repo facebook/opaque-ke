@@ -320,7 +320,10 @@ fn map_to_curve_simple_swu<N: ArrayLength<u8>>(
         }
 
         fn to_bytes<N: ArrayLength<u8>>(&self) -> GenericArray<u8, N> {
-            GenericArray::clone_from_slice(&self.number.mod_floor(self.f.0).to_bytes_be().1)
+            let bytes = self.number.mod_floor(self.f.0).to_bytes_be().1;
+            let mut result = GenericArray::default();
+            result[N::USIZE - bytes.len()..].copy_from_slice(&bytes);
+            result
         }
     }
 
