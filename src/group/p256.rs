@@ -194,11 +194,6 @@ fn map_to_curve_simple_swu<N: ArrayLength<u8>>(
         fn one(&'a self) -> FieldElement<'a> {
             self.element(&BigInt::one())
         }
-
-        /// See <https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-hash-to-curve-11#section-4>
-        fn inv0(&'a self, number: &FieldElement<'a>) -> FieldElement<'a> {
-            number.pow_internal(&(self.0 - 2))
-        }
     }
 
     /// Finite field arithmetic
@@ -277,7 +272,7 @@ fn map_to_curve_simple_swu<N: ArrayLength<u8>>(
 
         #[allow(clippy::suspicious_arithmetic_impl)]
         fn div(self, rhs: &Self) -> Self::Output {
-            self * rhs.f.inv0(rhs)
+            self * rhs.inv0()
         }
     }
 
@@ -307,6 +302,11 @@ fn map_to_curve_simple_swu<N: ArrayLength<u8>>(
         /// <https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-hash-to-curve-11#section-4.1>
         fn sgn0(&self) -> i32 {
             (&self.number % 2_usize).to_i32().unwrap()
+        }
+
+        /// See <https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-hash-to-curve-11#section-4>
+        fn inv0(&self) -> Self {
+            self.pow_internal(&(self.f.0 - 2))
         }
 
         fn is_zero(&self) -> bool {
@@ -376,7 +376,7 @@ fn map_to_curve_simple_swu<N: ArrayLength<u8>>(
     // 3.   x1 = tv1 + tv2
     let mut x1 = &tv1 + &tv2;
     // 4.   x1 = inv0(x1)
-    x1 = f.inv0(&x1);
+    x1 = x1.inv0();
     // 5.   e1 = x1 == 0
     let e1 = x1.is_zero();
     // 6.   x1 = x1 + 1
