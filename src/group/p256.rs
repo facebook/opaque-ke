@@ -346,7 +346,7 @@ fn map_to_curve_simple_swu<N: ArrayLength<u8>>(
 
         let choice = Choice::from(u8::from(b));
 
-        for ((byte, x), y) in bytes.iter_mut().zip(x).zip(y) {
+        for ((byte, x), y) in bytes.iter_mut().zip(&x).zip(&y) {
             *byte = u8::conditional_select(&x, &y, choice);
         }
 
