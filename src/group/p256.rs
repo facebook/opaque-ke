@@ -86,7 +86,7 @@ impl Group for ProjectivePoint {
     fn hash_to_scalar<H: Hash>(input: &[u8], dst: &[u8]) -> Result<Self::Scalar, ProtocolError> {
         // https://nvlpubs.nist.gov/nistpubs/FIPS/NIST.FIPS.186-4.pdf#[{%22num%22:211,%22gen%22:0},{%22name%22:%22XYZ%22},70,700,0]
         // P-256 `n` is defined as `115792089210356248762697446949407573529996955224135760342 422259061068512044369`
-        const N: once_cell::unsync::Lazy<BigInt> = once_cell::unsync::Lazy::new(|| {
+        const N: Lazy<BigInt> = Lazy::new(|| {
             BigInt::from_str(
                 "115792089210356248762697446949407573529996955224135760342422259061068512044369",
             )
@@ -96,15 +96,14 @@ impl Group for ProjectivePoint {
         // https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-hash-to-curve-11#section-5.3
         // `HashToScalar` is `hash_to_field`
         let uniform_bytes = super::expand::expand_message_xmd::<H>(input, dst, L)?;
-        let mut bytes = BigInt::from_bytes_be(Sign::Plus, &uniform_bytes)
+        let bytes = BigInt::from_bytes_be(Sign::Plus, &uniform_bytes)
             .mod_floor(&N)
             .to_bytes_be()
             .1;
-        bytes.resize(32, 0);
+        let mut result = GenericArray::default();
+        result[..bytes.len()].copy_from_slice(&bytes);
 
-        Ok(p256_::Scalar::from_bytes_reduced(GenericArray::from_slice(
-            &bytes,
-        )))
+        Ok(p256_::Scalar::from_bytes_reduced(&result))
     }
 
     type ElemLen = U33;
@@ -136,9 +135,11 @@ impl Group for ProjectivePoint {
     }
 
     fn to_arr(&self) -> GenericArray<u8, Self::ElemLen> {
-        let mut bytes = self.to_affine().to_encoded_point(true).as_bytes().to_vec();
-        bytes.resize(33, 0);
-        *GenericArray::from_slice(&bytes)
+        let bytes = self.to_affine().to_encoded_point(true);
+        let bytes = bytes.as_bytes();
+        let mut result = GenericArray::default();
+        result[..bytes.len()].copy_from_slice(bytes);
+        result
     }
 
     fn base_point() -> Self {
@@ -287,7 +288,10 @@ fn map_to_curve_simple_swu<N: ArrayLength<u8>>(
 
         fn pow_internal(&self, exponent: &BigInt) -> Self {
             let exponent = exponent.mod_floor(&(self.f.0 - 1));
-            self.f.element(&self.number.modpow(&exponent, self.f.0))
+            Self {
+                number: self.number.modpow(&exponent, self.f.0),
+                f: self.f,
+            }
         }
 
         /// Corresponds to the sqrt_3mod4() function defined in
@@ -320,7 +324,10 @@ fn map_to_curve_simple_swu<N: ArrayLength<u8>>(
         }
 
         fn to_bytes<N: ArrayLength<u8>>(&self) -> GenericArray<u8, N> {
-            GenericArray::clone_from_slice(&self.number.mod_floor(self.f.0).to_bytes_be().1)
+            let bytes = self.number.to_bytes_be().1;
+            let mut result = GenericArray::default();
+            result[N::USIZE - bytes.len()..].copy_from_slice(&bytes);
+            result
         }
     }
 
