@@ -37,23 +37,26 @@ pub enum InternalPakeError {
     HmacError,
     /// Computing the slow hashing function failed
     SlowHashError,
-    /// This error occurs when the envelope seal fails
     /// Constructing the envelope seal failed.
     SealError,
-    /// This error occurs when the envelope seal open fails
     /// Opening the envelope seal failed.
     SealOpenError,
-    /// This error occurs when the envelope seal open hmac check fails
     /// HMAC check in seal open failed.
     SealOpenHmacError,
-    /// This error occurs when the envelope cannot be constructed properly
-    /// based on the credentials that were specified to be required.
+    /**
+     * This error occurs when the envelope cannot be constructed properly
+     * based on the credentials that were specified to be required.
+     */
     InvalidEnvelopeStructureError,
-    /// This error occurs when attempting to open an envelope of the wrong
-    /// type (base mode, custom identifier)
+    /**
+     * This error occurs when attempting to open an envelope of the wrong
+     * type (base mode, custom identifier)
+     */
     IncompatibleEnvelopeModeError,
-    /// This error occurs when the envelope is opened and deserialization
-    /// fails
+    /**
+     * This error occurs when the envelope is opened and deserialization
+     * fails
+     */
     UnexpectedEnvelopeContentsError,
 }
 
@@ -63,11 +66,8 @@ impl Error for InternalPakeError {}
 /// Represents an error in password checking
 #[derive(Debug, Display)]
 pub enum PakeError {
-    /// This error results from an internal error during PRF construction
-    ///
     /// Internal error during PRF verification: {0}
     CryptoError(InternalPakeError),
-    /// This error occurs when the server object that is being called finish() on is malformed
     /// Incomplete set of keys passed into finish() function
     IncompleteKeysError,
     /// The provided server public key doesn't match the sealed one
@@ -96,21 +96,21 @@ impl Error for PakeError {}
 /// Represents an error in protocol handling
 #[derive(Debug, Display)]
 pub enum ProtocolError {
-    /// This error results from an error during password verification
-    ///
     /// Internal error during password verification: {0}
     VerificationError(PakeError),
-    /// This error occurs when the server answer cannot be handled
     /// Server response cannot be handled.
     ServerError,
-    /// This error occurs when the server specifies an envelope credentials
-    /// format that is invalid
+    /**
+     * This error occurs when the server specifies an envelope credentials
+     * format that is invalid
+     */
     ServerInvalidEnvelopeCredentialsFormatError,
-    /// This error occurs when the client request cannot be handled
     /// Client request cannot be handled.
     ClientError,
-    /// This error occurs when the client detects that the server has
-    /// reflected the OPRF value (beta == alpha)
+    /**
+     * This error occurs when the client detects that the server has
+     * reflected the OPRF value (beta == alpha)
+     */
     ReflectedValueError,
 }
 
@@ -139,24 +139,6 @@ impl From<InternalPakeError> for ProtocolError {
 impl From<::core::convert::Infallible> for ProtocolError {
     fn from(_: ::core::convert::Infallible) -> Self {
         unreachable!()
-    }
-}
-
-impl From<generic_bytes::TryFromSizedBytesError> for InternalPakeError {
-    fn from(_: generic_bytes::TryFromSizedBytesError) -> Self {
-        InternalPakeError::InvalidByteSequence
-    }
-}
-
-impl From<generic_bytes::TryFromSizedBytesError> for PakeError {
-    fn from(e: generic_bytes::TryFromSizedBytesError) -> Self {
-        PakeError::CryptoError(e.into())
-    }
-}
-
-impl From<generic_bytes::TryFromSizedBytesError> for ProtocolError {
-    fn from(e: generic_bytes::TryFromSizedBytesError) -> Self {
-        PakeError::CryptoError(e.into()).into()
     }
 }
 

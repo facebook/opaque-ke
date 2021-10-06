@@ -12,7 +12,7 @@ use crate::{
     group::Group,
     hash::Hash,
     key_exchange::traits::{KeyExchange, ToBytesWithPointers},
-    keypair::{Key, KeyPair, SizedBytesExt},
+    keypair::{Key, KeyPair},
     map_to_curve::GroupWithMapToCurve,
     oprf,
     serialization::{serialize, tokenize},
@@ -24,7 +24,6 @@ use alloc::vec::Vec;
 use core::{convert::TryFrom, marker::PhantomData};
 use digest::Digest;
 use generic_array::{typenum::Unsigned, GenericArray};
-use generic_bytes::SizedBytes;
 use rand::{CryptoRng, RngCore};
 use zeroize::Zeroize;
 
@@ -275,7 +274,7 @@ impl<CS: CipherSuite> ServerRegistration<CS> {
         }
 
         // Need to do this check manually because envelope is variable-size
-        let key_len = <Key as SizedBytes>::Len::to_usize();
+        let key_len = Key::LEN;
 
         let checked_bytes =
             check_slice_size_atleast(input, scalar_len + key_len, "server_registration_bytes")?;

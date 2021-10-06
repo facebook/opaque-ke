@@ -14,7 +14,6 @@ use alloc::vec::Vec;
 use core::convert::TryFrom;
 use digest::Digest;
 use generic_array::{typenum::Unsigned, GenericArray};
-use generic_bytes::SizedBytes;
 use hkdf::Hkdf;
 use hmac::{Hmac, Mac, NewMac};
 use rand::{CryptoRng, RngCore};
@@ -27,11 +26,20 @@ const STR_EXPORT_KEY: &[u8] = b"ExportKey";
 
 const NONCE_LEN: usize = 32;
 
-#[derive(Clone, Copy, PartialEq, Zeroize)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq, Zeroize)]
 #[zeroize(drop)]
 pub(crate) enum InnerEnvelopeMode {
     Base = 1,
     CustomIdentifier = 2,
+}
+
+impl InnerEnvelopeMode {
+    fn to_u8(&self) -> u8 {
+        match &self {
+            InnerEnvelopeMode::Base => 1,
+            InnerEnvelopeMode::CustomIdentifier => 2,
+        }
+    }
 }
 
 impl TryFrom<u8> for InnerEnvelopeMode {
@@ -55,7 +63,7 @@ pub(crate) struct InnerEnvelope {
 
 impl InnerEnvelope {
     pub(crate) fn serialize(&self) -> Vec<u8> {
-        [&[self.mode as u8], &self.nonce[..], &self.ciphertext[..]].concat()
+        [&[self.mode.to_u8()], &self.nonce[..], &self.ciphertext[..]].concat()
     }
 
     pub(crate) fn deserialize(input: &[u8]) -> Result<(Self, Vec<u8>), ProtocolError> {
@@ -66,7 +74,7 @@ impl InnerEnvelope {
         }
         let mode = InnerEnvelopeMode::try_from(input[0])?;
 
-        let key_len = <Key as SizedBytes>::Len::to_usize();
+        let key_len = Key::LEN;
 
         let bytes = &input[1..];
         if bytes.len() < NONCE_LEN + key_len {
@@ -126,15 +134,15 @@ pub(crate) struct OpenedInnerEnvelope<D: Hash> {
 
 impl<D: Hash> Envelope<D> {
     fn hmac_key_size() -> usize {
-        <D as Digest>::OutputSize::to_usize()
+        <D as Digest>::OutputSize::USIZE
     }
 
     fn export_key_size() -> usize {
-        <D as Digest>::OutputSize::to_usize()
+        <D as Digest>::OutputSize::USIZE
     }
 
     pub(crate) fn get_mode(&self) -> InnerEnvelopeMode {
-        self.inner_envelope.mode
+        self.inner_envelope.mode.clone()
     }
 
     /// The format of the output is:
@@ -250,7 +258,7 @@ impl<D: Hash> Envelope<D> {
         let aad = construct_aad(server_s_pk, optional_ids)?;
         let opened = self.open_raw(key, &aad)?;
 
-        if opened.plaintext.len() != <Key as SizedBytes>::Len::to_usize() {
+        if opened.plaintext.len() != Key::LEN {
             // Plaintext should consist of a single key
             return Err(InternalPakeError::UnexpectedEnvelopeContentsError.into());
         }

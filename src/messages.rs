@@ -14,12 +14,11 @@ use crate::{
     },
     group::Group,
     key_exchange::traits::{KeyExchange, ToBytes},
-    keypair::{Key, KeyPair, SizedBytesExt},
+    keypair::{Key, KeyPair},
 };
 use alloc::vec::Vec;
 use core::convert::TryFrom;
 use generic_array::{typenum::Unsigned, GenericArray};
-use generic_bytes::SizedBytes;
 
 // Messages
 // =========
@@ -86,7 +85,7 @@ impl<CS: CipherSuite> RegistrationResponse<CS> {
     /// Deserialization from bytes
     pub fn deserialize(input: &[u8]) -> Result<Self, ProtocolError> {
         let elem_len = <CS::Group as Group>::ElemLen::to_usize();
-        let key_len = <Key as SizedBytes>::Len::to_usize();
+        let key_len = Key::LEN;
         let checked_slice =
             check_slice_size(input, elem_len + key_len, "registration_response_bytes")?;
 
@@ -143,7 +142,7 @@ impl<CS: CipherSuite> RegistrationUpload<CS> {
 
     /// Deserialization from bytes
     pub fn deserialize(input: &[u8]) -> Result<Self, ProtocolError> {
-        let key_len = <Key as SizedBytes>::Len::to_usize();
+        let key_len = Key::LEN;
 
         let checked_slice = check_slice_size_atleast(input, key_len, "registration_upload_bytes")?;
 
@@ -246,7 +245,7 @@ impl<CS: CipherSuite> CredentialResponse<CS> {
     /// Deserialization from bytes
     pub fn deserialize(input: &[u8]) -> Result<Self, ProtocolError> {
         let elem_len = <CS::Group as Group>::ElemLen::to_usize();
-        let key_len = <Key as SizedBytes>::Len::to_usize();
+        let key_len = Key::LEN;
         let checked_slice =
             check_slice_size_atleast(input, elem_len + key_len, "login_second_message_bytes")?;
 
