@@ -1,6 +1,6 @@
 [package]
 name = "opaque-ke"
-version = "1.1.0"
+version = "1.2.0"
 repository = "https://github.com/novifinancial/opaque-ke"
 keywords = ["cryptography", "crypto", "opaque", "passwords", "authentication"]
 categories = ["no-std"]
