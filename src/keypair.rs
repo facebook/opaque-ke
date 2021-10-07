@@ -7,33 +7,14 @@
 
 #![allow(unsafe_code)]
 
-use crate::errors::InternalPakeError;
+use crate::errors::{InternalPakeError, PakeError};
 use crate::group::Group;
 use alloc::vec::Vec;
 use core::fmt::Debug;
 use core::marker::PhantomData;
-use core::ops::Deref;
-#[cfg(test)]
-use generic_array::typenum::Unsigned;
 use generic_array::{typenum::U32, GenericArray};
-use generic_bytes::{SizedBytes, TryFromSizedBytesError};
-#[cfg(all(test, feature = "std"))]
-use proptest::prelude::*;
-#[cfg(all(test, feature = "std"))]
-use rand::{rngs::StdRng, SeedableRng};
 use rand::{CryptoRng, RngCore};
 use zeroize::Zeroize;
-
-/// Convenience extension trait of SizedBytes
-pub trait SizedBytesExt: SizedBytes {
-    /// Convert from bytes
-    fn from_bytes(bytes: &[u8]) -> Result<Self, TryFromSizedBytesError> {
-        <Self as SizedBytes>::from_arr(GenericArray::from_slice(bytes))
-    }
-}
-
-// blanket implementation
-impl<T> SizedBytesExt for T where T: SizedBytes {}
 
 /// A Keypair trait with public-private verification
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -105,7 +86,7 @@ impl<G: Group> KeyPair<G> {
 
     /// Obtains a KeyPair from a slice representing the private key
     pub fn from_private_key_slice(input: &[u8]) -> Result<Self, InternalPakeError> {
-        let sk = Key::from_arr(GenericArray::from_slice(input))?;
+        let sk = Key(input.to_vec());
         let pk = Self::public_from_private(&sk);
         Ok(Self {
             pk,
@@ -117,17 +98,20 @@ impl<G: Group> KeyPair<G> {
     #[cfg(test)]
     pub fn as_byte_ptrs(&self) -> Vec<(*const u8, usize)> {
         alloc::vec![
-            (self.pk.as_ptr(), <Key as SizedBytes>::Len::to_usize()),
-            (self.sk.as_ptr(), <Key as SizedBytes>::Len::to_usize()),
+            (self.pk.0.as_ptr(), Key::LEN),
+            (self.sk.0.as_ptr(), Key::LEN),
         ]
     }
 }
 
-#[cfg(all(test, feature = "std"))]
+#[cfg(test)]
 impl<G: Group + Debug> KeyPair<G> {
     /// Test-only strategy returning a proptest Strategy based on
     /// generate_random
-    fn uniform_keypair_strategy() -> BoxedStrategy<Self> {
+    fn uniform_keypair_strategy() -> proptest::prelude::BoxedStrategy<Self> {
+        use proptest::prelude::*;
+        use rand::{rngs::StdRng, SeedableRng};
+
         // The no_shrink is because keypairs should be fixed -- shrinking would cause a different
         // keypair to be generated, which appears to not be very useful.
         any::<[u8; 32]>()
@@ -147,7 +131,7 @@ impl<G: Group + Debug> KeyPair<G> {
 #[repr(transparent)]
 pub struct Key(Vec<u8>);
 
-impl Deref for Key {
+impl core::ops::Deref for Key {
     type Target = Vec<u8>;
 
     fn deref(&self) -> &Self::Target {
@@ -155,15 +139,22 @@ impl Deref for Key {
     }
 }
 
-impl SizedBytes for Key {
-    type Len = U32;
+impl Key {
+    pub(crate) const LEN: usize = 32;
 
-    fn to_arr(&self) -> GenericArray<u8, Self::Len> {
-        GenericArray::clone_from_slice(&self.0[..])
+    /// Convert to bytes
+    pub fn to_arr(&self) -> GenericArray<u8, U32> {
+        GenericArray::clone_from_slice(&self.0)
     }
 
-    fn from_arr(key_bytes: &GenericArray<u8, Self::Len>) -> Result<Self, TryFromSizedBytesError> {
-        Ok(Key(key_bytes.to_vec()))
+    /// Convert from bytes
+    pub fn from_bytes(input: &[u8]) -> Result<Self, PakeError> {
+        if input.len() != Self::LEN {
+            return Err(PakeError::SerializationError);
+        }
+        Ok(Self(
+            GenericArray::<u8, U32>::clone_from_slice(input).to_vec(),
+        ))
     }
 }
 
@@ -173,14 +164,14 @@ mod tests {
     use crate::errors::*;
     use core::slice::from_raw_parts;
     use curve25519_dalek::ristretto::RistrettoPoint;
-    use generic_array::typenum::Unsigned;
+    use proptest::prelude::*;
     use rand::rngs::OsRng;
 
     #[test]
     fn test_zeroize_key() -> Result<(), ProtocolError> {
-        let key_len = <Key as SizedBytes>::Len::to_usize();
+        let key_len = Key::LEN;
         let mut key = Key(alloc::vec![1u8; key_len]);
-        let ptr = key.as_ptr();
+        let ptr = key.0.as_ptr();
 
         key.zeroize();
 
@@ -233,10 +224,10 @@ mod tests {
 
         #[test]
         fn test_private_key_slice(kp in KeyPair::<RistrettoPoint>::uniform_keypair_strategy()) {
-            let sk_bytes = kp.private().to_vec();
+            let sk_bytes = kp.private().0.clone();
 
             let kp2 = KeyPair::<RistrettoPoint>::from_private_key_slice(&sk_bytes)?;
-            let kp2_private_bytes = kp2.private().to_vec();
+            let kp2_private_bytes = kp2.private().0.clone();
 
             prop_assert_eq!(sk_bytes, kp2_private_bytes);
         }

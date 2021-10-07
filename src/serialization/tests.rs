@@ -24,7 +24,6 @@ use alloc::vec::Vec;
 
 use curve25519_dalek::{ristretto::RistrettoPoint, traits::Identity};
 use generic_array::typenum::Unsigned;
-use generic_bytes::SizedBytes;
 use proptest::{collection::vec, prelude::*};
 use rand::{rngs::OsRng, RngCore};
 

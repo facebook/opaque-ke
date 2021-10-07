@@ -137,14 +137,18 @@ jobs:
         target:
           # for wasm
           - wasm32-unknown-unknown
+          # for any no_std target
+          - thumbv6m-none-eabi
         backend_feature:
           - u64_backend
           - u32_backend
+        frontend_feature:
+          - slow-hash
     steps:
       - uses: actions/checkout@v2
       - uses: hecrj/setup-rust-action@v1
       - run: rustup target add ${{ matrix.target }}
-      - run: cargo build --verbose --target=${{ matrix.target }} --no-default-features --features ${{ matrix.backend_feature }}
+      - run: cargo build --verbose --target=${{ matrix.target }} --no-default-features --features ${{ matrix.frontend_feature }} --features ${{ matrix.backend_feature }}
 
   benches:
     name: cargo bench compilation

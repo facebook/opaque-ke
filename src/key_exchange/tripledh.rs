@@ -12,7 +12,7 @@ use crate::{
     group::Group,
     hash::Hash,
     key_exchange::traits::{KeyExchange, ToBytes, ToBytesWithPointers},
-    keypair::{Key, KeyPair, SizedBytesExt},
+    keypair::{Key, KeyPair},
     serialization::{serialize, tokenize},
 };
 use alloc::vec::Vec;
@@ -22,7 +22,6 @@ use generic_array::{
     typenum::{Unsigned, U32},
     ArrayLength, GenericArray,
 };
-use generic_bytes::SizedBytes;
 use hkdf::Hkdf;
 use hmac::{Hmac, Mac, NewMac};
 use rand::{CryptoRng, RngCore};
@@ -278,10 +277,7 @@ impl ToBytesWithPointers for Ke1State {
     #[cfg(test)]
     fn as_byte_ptrs(&self) -> Vec<(*const u8, usize)> {
         alloc::vec![
-            (
-                self.client_e_sk.as_ptr(),
-                <Key as SizedBytes>::Len::to_usize(),
-            ),
+            (self.client_e_sk.as_ptr(), Key::LEN,),
             (self.client_nonce.as_ptr(), NonceLen::to_usize()),
         ]
     }

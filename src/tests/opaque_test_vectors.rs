@@ -4,14 +4,8 @@
 // LICENSE file in the root directory of this source tree.
 
 use crate::{
-    ciphersuite::CipherSuite,
-    errors::*,
-    key_exchange::tripledh::TripleDH,
-    keypair::{Key, SizedBytesExt},
-    opaque::*,
-    slow_hash::NoOpHash,
-    tests::mock_rng::CycleRng,
-    *,
+    ciphersuite::CipherSuite, errors::*, key_exchange::tripledh::TripleDH, keypair::Key, opaque::*,
+    slow_hash::NoOpHash, tests::mock_rng::CycleRng, *,
 };
 use alloc::string::String;
 use alloc::string::ToString;

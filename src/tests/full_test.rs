@@ -6,14 +6,8 @@
 #![allow(unsafe_code)]
 
 use crate::{
-    ciphersuite::CipherSuite,
-    errors::*,
-    key_exchange::tripledh::TripleDH,
-    keypair::{Key, SizedBytesExt},
-    opaque::*,
-    slow_hash::NoOpHash,
-    tests::mock_rng::CycleRng,
-    *,
+    ciphersuite::CipherSuite, errors::*, key_exchange::tripledh::TripleDH, keypair::Key, opaque::*,
+    slow_hash::NoOpHash, tests::mock_rng::CycleRng, *,
 };
 
 #[cfg(feature = "std")]
@@ -30,7 +24,6 @@ use alloc::vec;
 use alloc::vec::Vec;
 use core::slice::from_raw_parts;
 use curve25519_dalek::{ristretto::RistrettoPoint, traits::Identity};
-use generic_bytes::SizedBytes;
 use rand::rngs::OsRng;
 use serde_json::Value;
 use zeroize::Zeroize;
