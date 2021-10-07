@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.2.0 (October 7, 2021)
+
+* Added explicit support for the thumbv6m-none-eabi target (no-std)
+
 ## 1.1.0 (August 18, 2021)
 
 * Updated dependencies and bumped MSRV to 1.51
