@@ -10,7 +10,6 @@ use crate::{
         utils::{check_slice_size, check_slice_size_atleast},
         InternalError, ProtocolError,
     },
-    group::Group,
     hash::Hash,
     key_exchange::traits::{
         FromBytes, GenerateKe2Result, GenerateKe3Result, KeyExchange, ToBytes, ToBytesWithPointers,
@@ -29,6 +28,7 @@ use generic_array::{
 use hkdf::Hkdf;
 use hmac::{Hmac, Mac, NewMac};
 use rand::{CryptoRng, RngCore};
+use voprf::group::Group;
 use zeroize::Zeroize;
 
 ///////////////
@@ -120,7 +120,7 @@ impl<D: Hash, G: Group> KeyExchange<D, G> for TripleDH {
     fn generate_ke1<R: RngCore + CryptoRng>(
         rng: &mut R,
     ) -> Result<(Self::KE1State, Self::KE1Message), ProtocolError> {
-        let client_e_kp = KeyPair::<G>::generate_random(rng);
+        let client_e_kp = KeyPair::<G>::generate_random(rng)?;
         let client_nonce = generate_nonce::<R>(rng);
 
         let ke1_message = Ke1Message {
@@ -149,7 +149,8 @@ impl<D: Hash, G: Group> KeyExchange<D, G> for TripleDH {
         id_s: Vec<u8>,
         context: Vec<u8>,
     ) -> Result<GenerateKe2Result<Self, D, G>, ProtocolError<S::Error>> {
-        let server_e_kp = KeyPair::<G>::generate_random(rng);
+        let server_e_kp =
+            KeyPair::<G>::generate_random(rng).map_err(|_| InternalError::InvalidKeypairError)?;
         let server_nonce = generate_nonce::<R>(rng);
 
         let mut transcript_hasher = D::new()
@@ -453,10 +454,10 @@ impl<G: Group> ToBytesWithPointers for Ke1State<G> {
     }
 
     #[cfg(test)]
-    fn as_byte_ptrs(&self) -> Vec<(*const u8, usize)> {
+    fn as_ptrs(&self) -> Vec<Vec<u8>> {
         vec![
-            (self.client_e_sk.as_ptr(), G::ScalarLen::USIZE),
-            (self.client_nonce.as_ptr(), NonceLen::USIZE),
+            self.client_e_sk.to_arr().to_vec(),
+            self.client_nonce.to_vec(),
         ]
     }
 }
@@ -509,11 +510,11 @@ impl<HashLen: ArrayLength<u8>> ToBytesWithPointers for Ke2State<HashLen> {
     }
 
     #[cfg(test)]
-    fn as_byte_ptrs(&self) -> Vec<(*const u8, usize)> {
+    fn as_ptrs(&self) -> Vec<Vec<u8>> {
         vec![
-            (self.km3.as_ptr(), HashLen::USIZE),
-            (self.hashed_transcript.as_ptr(), HashLen::USIZE),
-            (self.session_key.as_ptr(), HashLen::USIZE),
+            self.km3.to_vec(),
+            self.hashed_transcript.to_vec(),
+            self.session_key.to_vec(),
         ]
     }
 }

@@ -8,13 +8,13 @@
 #![allow(unsafe_code)]
 
 use crate::errors::{InternalError, ProtocolError};
-use crate::group::Group;
 use alloc::vec::Vec;
 use core::fmt::Debug;
 use core::ops::Deref;
 use generic_array::typenum::Unsigned;
 use generic_array::{ArrayLength, GenericArray};
 use rand::{CryptoRng, RngCore};
+use voprf::group::Group;
 use zeroize::Zeroize;
 
 /// A Keypair trait with public-private verification
@@ -94,7 +94,9 @@ impl<G: Group, S: SecretKey<G>> KeyPair<G, S> {
     /// representation (i.e. can be mapped to a curve point), but presents
     /// some risk - e.g. small subgroup check
     pub(crate) fn check_public_key(key: PublicKey<G>) -> Result<PublicKey<G>, InternalError> {
-        G::from_element_slice(GenericArray::from_slice(&key.0)).map(|_| key)
+        G::from_element_slice(GenericArray::from_slice(&key.0))
+            .map(|_| key)
+            .map_err(|err| err.into())
     }
 
     /// Obtains a KeyPair from a slice representing the private key
@@ -111,14 +113,35 @@ impl<G: Group, S: SecretKey<G>> KeyPair<G, S> {
 
 impl<G: Group> KeyPair<G> {
     /// Generating a random key pair given a cryptographic rng
-    pub(crate) fn generate_random<R: RngCore + CryptoRng>(rng: &mut R) -> Self {
-        let sk = G::random_nonzero_scalar(rng);
+    pub(crate) fn generate_random<R: RngCore + CryptoRng>(
+        rng: &mut R,
+    ) -> Result<Self, InternalError> {
+        let sk = {
+            #[cfg(not(test))]
+            let scalar = G::random_nonzero_scalar(rng);
+
+            #[cfg(test)]
+            let scalar = loop {
+                use subtle::ConstantTimeEq;
+                let mut scalar_bytes = vec![0u8; G::ScalarLen::USIZE];
+                rng.fill_bytes(&mut scalar_bytes);
+                let value =
+                    G::from_scalar_slice_unchecked(&GenericArray::clone_from_slice(&scalar_bytes))?;
+                match value.ct_eq(&G::scalar_zero()).into() {
+                    false => break value,
+                    true => (),
+                }
+            };
+
+            scalar
+        };
+
         let sk_bytes = G::scalar_as_bytes(sk);
-        let pk = G::base_point().mult_by_slice(&sk_bytes);
-        Self {
+        let pk = G::base_point() * &sk;
+        Ok(Self {
             pk: PublicKey(Key(pk.to_arr())),
             sk: PrivateKey(Key(sk_bytes)),
-        }
+        })
     }
 
     #[cfg(test)]
@@ -143,7 +166,7 @@ impl<G: Group + Debug> KeyPair<G> {
         any::<[u8; 32]>()
             .prop_filter_map("valid random keypair", |seed| {
                 let mut rng = StdRng::from_seed(seed);
-                Some(Self::generate_random(&mut rng))
+                Some(Self::generate_random(&mut rng).unwrap())
             })
             .no_shrink()
             .boxed()
@@ -290,13 +313,14 @@ impl<G: Group> SecretKey<G> for PrivateKey<G> {
         let pk_data = GenericArray::<u8, G::ElemLen>::from_slice(&pk.0[..]);
         let point = G::from_element_slice(pk_data)?;
         let secret_data = GenericArray::<u8, G::ScalarLen>::from_slice(&self.0[..]);
-        Ok(G::mult_by_slice(&point, secret_data).to_arr().to_vec())
+        let result = point * &G::from_scalar_slice(secret_data)?;
+        Ok(result.to_arr().to_vec())
     }
 
     fn public_key(&self) -> Result<PublicKey<G>, InternalError> {
         let bytes_data = GenericArray::<u8, G::ScalarLen>::from_slice(&self.0[..]);
-        Ok(PublicKey(Key(G::base_point()
-            .mult_by_slice(bytes_data)
+        Ok(PublicKey(Key((G::base_point()
+            * &G::from_scalar_slice(bytes_data)?)
             .to_arr())))
     }
 
@@ -392,7 +416,7 @@ mod tests {
     #[test]
     fn test_zeroize_keypair() -> Result<(), ProtocolError> {
         let mut rng = OsRng;
-        let mut keypair = KeyPair::<RistrettoPoint>::generate_random(&mut rng);
+        let mut keypair = KeyPair::<RistrettoPoint>::generate_random(&mut rng)?;
         let ptrs = keypair.as_byte_ptrs();
 
         keypair.zeroize();
@@ -495,7 +519,8 @@ mod tests {
         let sk = RemoteKey(PrivateKey::from_arr(sk_bytes));
         let keypair = KeyPair::from_private_key(sk).unwrap();
 
-        let server_setup = ServerSetup::<Default, RemoteKey>::new_with_key(&mut OsRng, keypair);
+        let server_setup =
+            ServerSetup::<Default, RemoteKey>::new_with_key(&mut OsRng, keypair).unwrap();
 
         let ClientRegistrationStartResult {
             message,

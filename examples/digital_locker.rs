@@ -90,7 +90,10 @@ fn register_locker(
     let mut client_rng = OsRng;
     let client_registration_start_result =
         ClientRegistration::<Default>::start(&mut client_rng, password.as_bytes()).unwrap();
-    let registration_request_bytes = client_registration_start_result.message.serialize();
+    let registration_request_bytes = client_registration_start_result
+        .message
+        .serialize()
+        .unwrap();
 
     // Client sends registration_request_bytes to server
     let server_registration_start_result = ServerRegistration::<Default>::start(
@@ -99,7 +102,10 @@ fn register_locker(
         &locker_id.to_be_bytes(),
     )
     .unwrap();
-    let registration_response_bytes = server_registration_start_result.message.serialize();
+    let registration_response_bytes = server_registration_start_result
+        .message
+        .serialize()
+        .unwrap();
 
     // Server sends registration_response_bytes to client
 
@@ -111,7 +117,10 @@ fn register_locker(
             ClientRegistrationFinishParameters::default(),
         )
         .unwrap();
-    let message_bytes = client_finish_registration_result.message.serialize();
+    let message_bytes = client_finish_registration_result
+        .message
+        .serialize()
+        .unwrap();
 
     // Client encrypts secret message using export key
     let ciphertext = encrypt(
@@ -127,7 +136,7 @@ fn register_locker(
 
     Locker {
         contents: ciphertext,
-        password_file: password_file.serialize(),
+        password_file: password_file.serialize().unwrap(),
     }
 }
 
@@ -141,7 +150,7 @@ fn open_locker(
     let mut client_rng = OsRng;
     let client_login_start_result =
         ClientLogin::<Default>::start(&mut client_rng, password.as_bytes()).unwrap();
-    let credential_request_bytes = client_login_start_result.message.serialize();
+    let credential_request_bytes = client_login_start_result.message.serialize().unwrap();
 
     // Client sends credential_request_bytes to server
 
@@ -157,7 +166,7 @@ fn open_locker(
         ServerLoginStartParameters::default(),
     )
     .unwrap();
-    let credential_response_bytes = server_login_start_result.message.serialize();
+    let credential_response_bytes = server_login_start_result.message.serialize().unwrap();
 
     // Server sends credential_response_bytes to client
 
@@ -171,7 +180,7 @@ fn open_locker(
         return Err(String::from("Incorrect password, please try again."));
     }
     let client_login_finish_result = result.unwrap();
-    let credential_finalization_bytes = client_login_finish_result.message.serialize();
+    let credential_finalization_bytes = client_login_finish_result.message.serialize().unwrap();
 
     // Client sends credential_finalization_bytes to server
 
@@ -197,7 +206,7 @@ fn open_locker(
 
 fn main() {
     let mut rng = OsRng;
-    let server_setup = ServerSetup::<Default>::new(&mut rng);
+    let server_setup = ServerSetup::<Default>::new(&mut rng).unwrap();
 
     let mut rl = Editor::<()>::new();
     let mut registered_lockers: Vec<Locker> = vec![];

@@ -11,6 +11,7 @@ use alloc::{string::ToString, vec, vec::Vec};
 use json::JsonValue;
 
 #[allow(non_snake_case)]
+#[derive(Debug)]
 pub struct OpaqueTestVectorParameters {
     pub dummy_private_key: Vec<u8>,
     pub dummy_masking_key: Vec<u8>,
@@ -66,6 +67,19 @@ macro_rules! parse_default {
     };
 }
 
+/// If no entry is found, default to filling a random buffer of a specified size
+macro_rules! parse_default_random {
+    ( $v:ident, $s:expr, $size:expr ) => {
+        parse_default!($v, $s, {
+            use rand::{rngs::OsRng, RngCore};
+            let mut rng = OsRng;
+            let mut v = vec![0u8; $size];
+            rng.fill_bytes(&mut v);
+            v
+        })
+    };
+}
+
 fn decode(values: &JsonValue, key: &str) -> Option<Vec<u8>> {
     values[key]
         .as_str()
@@ -74,8 +88,8 @@ fn decode(values: &JsonValue, key: &str) -> Option<Vec<u8>> {
 
 fn populate_test_vectors(values: &JsonValue) -> OpaqueTestVectorParameters {
     OpaqueTestVectorParameters {
-        dummy_private_key: parse_default!(values, "client_private_key", vec![0u8; 32]),
-        dummy_masking_key: parse_default!(values, "masking_key", vec![0u8; 64]),
+        dummy_private_key: parse_default_random!(values, "client_private_key", 32),
+        dummy_masking_key: parse_default_random!(values, "masking_key", 64),
         context: parse!(values, "Context"),
         client_private_key: decode(values, "client_private_key"),
         client_keyshare: parse!(values, "client_keyshare"),
@@ -121,7 +135,7 @@ fn get_password_file_bytes<CS: CipherSuite>(
         RegistrationUpload::deserialize(&parameters.registration_upload[..]).unwrap(),
     );
 
-    Ok(password_file.serialize())
+    password_file.serialize()
 }
 
 fn parse_identifiers(
@@ -141,9 +155,15 @@ fn parse_identifiers(
 
 macro_rules! json_to_test_vectors {
     ( $v:ident, $vector_type:expr, $cs:expr, ) => {
-        $v[$vector_type][$cs]
+        $v[$vector_type]
             .members()
-            .map(|x| populate_test_vectors(&x))
+            .filter_map(|x| {
+                if x.has_key($cs) {
+                    Some(populate_test_vectors(&x[$cs]))
+                } else {
+                    None
+                }
+            })
             .collect::<Vec<OpaqueTestVectorParameters>>()
     };
 }
@@ -153,16 +173,13 @@ fn tests() -> Result<(), ProtocolError> {
     let rfc = json::parse(super::parser::rfc_to_json(super::opaque_vectors::VECTORS).as_str())
         .expect("Could not parse json");
 
-    let ristretto_real_tvs = json_to_test_vectors!(
-        rfc,
-        String::from("Real"),
-        String::from("ristretto255, SHA512"),
-    );
-    let ristretto_fake_tvs = json_to_test_vectors!(
-        rfc,
-        String::from("Fake"),
-        String::from("ristretto255, SHA512"),
-    );
+    let ristretto_real_tvs = json_to_test_vectors!(rfc, "Real", "ristretto255, SHA512",);
+
+    let ristretto_fake_tvs = json_to_test_vectors!(rfc, "Fake", "ristretto255, SHA512",);
+
+    if ristretto_real_tvs.len() == 0 || ristretto_fake_tvs.len() == 0 {
+        panic!("Parsing error");
+    }
 
     struct Ristretto255Sha512NoSlowHash;
     impl CipherSuite for Ristretto255Sha512NoSlowHash {
@@ -184,16 +201,14 @@ fn tests() -> Result<(), ProtocolError> {
 
     #[cfg(feature = "p256")]
     {
-        let p256_real_tvs = json_to_test_vectors!(
-            rfc,
-            String::from("Real"),
-            String::from("P256_XMD:SHA-256_SSWU_RO_, SHA256"),
-        );
-        let p256_fake_tvs = json_to_test_vectors!(
-            rfc,
-            String::from("Fake"),
-            String::from("P256_XMD:SHA-256_SSWU_RO_, SHA256"),
-        );
+        let p256_real_tvs =
+            json_to_test_vectors!(rfc, "Real", "P256_XMD:SHA-256_SSWU_RO_, SHA256",);
+        let p256_fake_tvs =
+            json_to_test_vectors!(rfc, "Fake", "P256_XMD:SHA-256_SSWU_RO_, SHA256",);
+
+        if p256_real_tvs.len() == 0 || p256_fake_tvs.len() == 0 {
+            panic!("Parsing error");
+        }
 
         struct P256Sha256NoSlowHash;
         impl CipherSuite for P256Sha256NoSlowHash {
@@ -226,7 +241,7 @@ fn test_registration_request<CS: CipherSuite>(
             ClientRegistration::<CS>::start(&mut rng, &parameters.password)?;
         assert_eq!(
             hex::encode(&parameters.registration_request),
-            hex::encode(client_registration_start_result.message.serialize())
+            hex::encode(client_registration_start_result.message.serialize()?)
         );
     }
     Ok(())
@@ -255,7 +270,7 @@ fn test_registration_response<CS: CipherSuite>(
         );
         assert_eq!(
             hex::encode(&parameters.registration_response),
-            hex::encode(server_registration_start_result.message.serialize())
+            hex::encode(server_registration_start_result.message.serialize()?)
         );
     }
     Ok(())
@@ -278,7 +293,6 @@ fn test_registration_upload<CS: CipherSuite>(
                 Some(ids) => ClientRegistrationFinishParameters::new(Some(ids), None),
             },
         )?;
-
         assert_eq!(
             hex::encode(&parameters.auth_key),
             hex::encode(result.auth_key)
@@ -289,7 +303,7 @@ fn test_registration_upload<CS: CipherSuite>(
         );
         assert_eq!(
             hex::encode(&parameters.registration_upload),
-            hex::encode(result.message.serialize())
+            hex::encode(result.message.serialize()?)
         );
         assert_eq!(
             hex::encode(&parameters.export_key),
@@ -308,12 +322,18 @@ fn test_ke1<CS: CipherSuite>(tvs: &[OpaqueTestVectorParameters]) -> Result<(), P
             &parameters.client_nonce[..],
         ]
         .concat();
+
+        println!(
+            "&parameters.blind_login[..]: {:?}",
+            hex::encode(&parameters.blind_login[..])
+        );
+
         let mut client_login_start_rng = CycleRng::new(client_login_start);
         let client_login_start_result =
             ClientLogin::<CS>::start(&mut client_login_start_rng, &parameters.password)?;
         assert_eq!(
             hex::encode(&parameters.KE1),
-            hex::encode(client_login_start_result.message.serialize())
+            hex::encode(client_login_start_result.message.serialize()?)
         );
     }
     Ok(())
@@ -370,7 +390,7 @@ fn test_ke2<CS: CipherSuite>(tvs: &[OpaqueTestVectorParameters]) -> Result<(), P
         );
         assert_eq!(
             hex::encode(&parameters.KE2),
-            hex::encode(server_login_start_result.message.serialize())
+            hex::encode(server_login_start_result.message.serialize()?)
         );
     }
     Ok(())
@@ -416,7 +436,7 @@ fn test_ke3<CS: CipherSuite>(tvs: &[OpaqueTestVectorParameters]) -> Result<(), P
         );
         assert_eq!(
             hex::encode(&parameters.KE3),
-            hex::encode(client_login_finish_result.message.serialize())
+            hex::encode(client_login_finish_result.message.serialize()?)
         );
         assert_eq!(
             hex::encode(&parameters.export_key),
@@ -516,7 +536,7 @@ fn test_fake_vectors<CS: CipherSuite>(
         )?;
         assert_eq!(
             hex::encode(&parameters.KE2),
-            hex::encode(server_login_start_result.message.serialize())
+            hex::encode(server_login_start_result.message.serialize()?)
         );
     }
     Ok(())

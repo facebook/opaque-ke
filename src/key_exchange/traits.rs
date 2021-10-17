@@ -6,12 +6,12 @@
 use crate::{
     ciphersuite::CipherSuite,
     errors::ProtocolError,
-    group::Group,
     hash::Hash,
     keypair::{PrivateKey, PublicKey, SecretKey},
 };
 use alloc::vec::Vec;
 use rand::{CryptoRng, RngCore};
+use voprf::group::Group;
 use zeroize::Zeroize;
 
 #[cfg(not(test))]
@@ -95,5 +95,5 @@ pub trait ToBytesWithPointers {
 
     // Only used for tests to grab raw pointers to data
     #[cfg(test)]
-    fn as_byte_ptrs(&self) -> Vec<(*const u8, usize)>;
+    fn as_ptrs(&self) -> Vec<Vec<u8>>;
 }

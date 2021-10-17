@@ -5,7 +5,8 @@
 
 //! Defines the CipherSuite trait to specify the underlying primitives for OPAQUE
 
-use crate::{group::Group, hash::Hash, key_exchange::traits::KeyExchange, slow_hash::SlowHash};
+use crate::{hash::Hash, key_exchange::traits::KeyExchange, slow_hash::SlowHash};
+use voprf::group::Group;
 
 /// Configures the underlying primitives used in OPAQUE
 /// * `OprfGroup`: a finite cyclic group along with a point representation, along

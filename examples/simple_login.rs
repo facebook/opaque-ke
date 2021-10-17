@@ -53,7 +53,10 @@ fn account_registration(
     let mut client_rng = OsRng;
     let client_registration_start_result =
         ClientRegistration::<Default>::start(&mut client_rng, password.as_bytes()).unwrap();
-    let registration_request_bytes = client_registration_start_result.message.serialize();
+    let registration_request_bytes = client_registration_start_result
+        .message
+        .serialize()
+        .unwrap();
 
     // Client sends registration_request_bytes to server
 
@@ -63,7 +66,10 @@ fn account_registration(
         username.as_bytes(),
     )
     .unwrap();
-    let registration_response_bytes = server_registration_start_result.message.serialize();
+    let registration_response_bytes = server_registration_start_result
+        .message
+        .serialize()
+        .unwrap();
 
     // Server sends registration_response_bytes to client
 
@@ -75,14 +81,17 @@ fn account_registration(
             ClientRegistrationFinishParameters::default(),
         )
         .unwrap();
-    let message_bytes = client_finish_registration_result.message.serialize();
+    let message_bytes = client_finish_registration_result
+        .message
+        .serialize()
+        .unwrap();
 
     // Client sends message_bytes to server
 
     let password_file = ServerRegistration::finish(
         RegistrationUpload::<Default>::deserialize(&message_bytes[..]).unwrap(),
     );
-    password_file.serialize()
+    password_file.serialize().unwrap()
 }
 
 // Password-based login between a client and server
@@ -95,7 +104,7 @@ fn account_login(
     let mut client_rng = OsRng;
     let client_login_start_result =
         ClientLogin::<Default>::start(&mut client_rng, password.as_bytes()).unwrap();
-    let credential_request_bytes = client_login_start_result.message.serialize();
+    let credential_request_bytes = client_login_start_result.message.serialize().unwrap();
 
     // Client sends credential_request_bytes to server
 
@@ -110,7 +119,7 @@ fn account_login(
         ServerLoginStartParameters::default(),
     )
     .unwrap();
-    let credential_response_bytes = server_login_start_result.message.serialize();
+    let credential_response_bytes = server_login_start_result.message.serialize().unwrap();
 
     // Server sends credential_response_bytes to client
 
@@ -124,7 +133,7 @@ fn account_login(
         return false;
     }
     let client_login_finish_result = result.unwrap();
-    let credential_finalization_bytes = client_login_finish_result.message.serialize();
+    let credential_finalization_bytes = client_login_finish_result.message.serialize().unwrap();
 
     // Client sends credential_finalization_bytes to server
 
@@ -138,7 +147,7 @@ fn account_login(
 
 fn main() {
     let mut rng = OsRng;
-    let server_setup = ServerSetup::<Default>::new(&mut rng);
+    let server_setup = ServerSetup::<Default>::new(&mut rng).unwrap();
 
     let mut rl = Editor::<()>::new();
     let mut registered_users = HashMap::<String, Vec<u8>>::new();

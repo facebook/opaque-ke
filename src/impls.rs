@@ -105,64 +105,39 @@ macro_rules! impl_clone_for {
 macro_rules! impl_serialize_and_deserialize_for {
     ($t:ident) => {
         #[cfg(feature = "serialize")]
+        #[cfg_attr(docsrs, doc(cfg(feature = "serialize")))]
         impl<CS: CipherSuite> serde::Serialize for $t<CS> {
             fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
             where
                 S: serde::Serializer,
             {
+                use serde::ser::Error;
+
                 if serializer.is_human_readable() {
-                    serializer.serialize_str(&base64::encode(&self.serialize()))
+                    serializer
+                        .serialize_str(&base64::encode(&self.serialize().map_err(Error::custom)?))
                 } else {
-                    serializer.serialize_bytes(&self.serialize())
+                    serializer.serialize_bytes(&self.serialize().map_err(Error::custom)?[..])
                 }
             }
         }
 
         #[cfg(feature = "serialize")]
+        #[cfg_attr(docsrs, doc(cfg(feature = "serialize")))]
         impl<'de, CS: CipherSuite> serde::Deserialize<'de> for $t<CS> {
             fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
             where
                 D: serde::Deserializer<'de>,
             {
+                use serde::de::Error;
+
                 if deserializer.is_human_readable() {
                     let s = <&str>::deserialize(deserializer)?;
-                    $t::<CS>::deserialize(&base64::decode(s).map_err(serde::de::Error::custom)?)
-                        .map_err(serde::de::Error::custom)
+                    Self::deserialize(&base64::decode(s).map_err(Error::custom)?)
                 } else {
-                    struct ByteVisitor<CS: CipherSuite> {
-                        marker: core::marker::PhantomData<CS>,
-                    }
-                    impl<'de, CS: CipherSuite> serde::de::Visitor<'de> for ByteVisitor<CS> {
-                        type Value = $t<CS>;
-                        fn expecting(
-                            &self,
-                            formatter: &mut core::fmt::Formatter,
-                        ) -> core::fmt::Result {
-                            formatter.write_str(core::concat!(
-                                "the byte representation of a ",
-                                core::stringify!($t)
-                            ))
-                        }
-
-                        fn visit_bytes<E>(self, value: &[u8]) -> Result<Self::Value, E>
-                        where
-                            E: serde::de::Error,
-                        {
-                            $t::<CS>::deserialize(value).map_err(|_| {
-                                serde::de::Error::invalid_value(
-                                    serde::de::Unexpected::Bytes(value),
-                                    &core::concat!(
-                                        "invalid byte sequence for ",
-                                        core::stringify!($t)
-                                    ),
-                                )
-                            })
-                        }
-                    }
-                    deserializer.deserialize_bytes(ByteVisitor::<CS> {
-                        marker: core::marker::PhantomData,
-                    })
+                    Self::deserialize(<&[u8]>::deserialize(deserializer)?)
                 }
+                .map_err(Error::custom)
             }
         }
     };

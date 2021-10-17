@@ -8,4 +8,3 @@ pub mod mock_rng;
 mod opaque_vectors;
 mod parser;
 mod test_opaque_vectors;
-mod voprf_test_vectors;

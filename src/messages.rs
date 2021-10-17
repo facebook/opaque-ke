@@ -12,7 +12,6 @@ use crate::{
         utils::{check_slice_size, check_slice_size_atleast},
         ProtocolError,
     },
-    group::Group,
     key_exchange::traits::{FromBytes, KeyExchange, ToBytes},
     keypair::{KeyPair, PublicKey, SecretKey},
     opaque::ServerSetup,
@@ -21,6 +20,7 @@ use alloc::vec::Vec;
 use digest::Digest;
 use generic_array::{typenum::Unsigned, GenericArray};
 use rand::{CryptoRng, RngCore};
+use voprf::group::Group;
 
 ////////////////////////////
 // High-level API Structs //
@@ -30,14 +30,14 @@ use rand::{CryptoRng, RngCore};
 /// The message sent by the client to the server, to initiate registration
 pub struct RegistrationRequest<CS: CipherSuite> {
     /// blinded password information
-    pub(crate) alpha: CS::OprfGroup,
+    pub(crate) blinded_element: voprf::BlindedElement<CS::OprfGroup, CS::Hash>,
 }
 
 /// The answer sent by the server to the user, upon reception of the
 /// registration attempt
 pub struct RegistrationResponse<CS: CipherSuite> {
     /// The server's oprf output
-    pub(crate) beta: CS::OprfGroup,
+    pub(crate) evaluation_element: voprf::EvaluationElement<CS::OprfGroup, CS::Hash>,
     /// Server's static public key
     pub(crate) server_s_pk: PublicKey<CS::KeGroup>,
 }
@@ -56,8 +56,7 @@ pub struct RegistrationUpload<CS: CipherSuite> {
 
 /// The message sent by the user to the server, to initiate registration
 pub struct CredentialRequest<CS: CipherSuite> {
-    /// blinded password information
-    pub(crate) alpha: CS::OprfGroup,
+    pub(crate) blinded_element: voprf::BlindedElement<CS::OprfGroup, CS::Hash>,
     pub(crate) ke1_message: <CS::KeyExchange as KeyExchange<CS::Hash, CS::KeGroup>>::KE1Message,
 }
 
@@ -65,7 +64,7 @@ pub struct CredentialRequest<CS: CipherSuite> {
 /// login attempt
 pub struct CredentialResponse<CS: CipherSuite> {
     /// the server's oprf output
-    pub(crate) beta: CS::OprfGroup,
+    pub(crate) evaluation_element: voprf::EvaluationElement<CS::OprfGroup, CS::Hash>,
     pub(crate) masking_nonce: Vec<u8>,
     pub(crate) masked_response: Vec<u8>,
     pub(crate) ke2_message: <CS::KeyExchange as KeyExchange<CS::Hash, CS::KeGroup>>::KE2Message,
@@ -85,36 +84,33 @@ pub struct CredentialFinalization<CS: CipherSuite> {
 impl<CS: CipherSuite> RegistrationRequest<CS> {
     /// Only used for testing purposes
     #[cfg(test)]
-    pub fn get_alpha_for_testing(&self) -> CS::OprfGroup {
-        self.alpha
+    pub fn get_blinded_element_for_testing(
+        &self,
+    ) -> voprf::BlindedElement<CS::OprfGroup, CS::Hash> {
+        self.blinded_element.clone()
     }
 
     /// Serialization into bytes
-    pub fn serialize(&self) -> Vec<u8> {
-        self.alpha.to_arr().to_vec()
+    pub fn serialize(&self) -> Result<Vec<u8>, ProtocolError> {
+        Ok(self.blinded_element.serialize())
     }
 
     /// Deserialization from bytes
     pub fn deserialize(input: &[u8]) -> Result<Self, ProtocolError> {
-        let elem_len = <CS::OprfGroup as Group>::ElemLen::USIZE;
-        let checked_slice = check_slice_size(input, elem_len, "first_message_bytes")?;
-        // Check that the message is actually containing an element of the
-        // correct subgroup
-        let arr = GenericArray::from_slice(checked_slice);
-        let alpha = CS::OprfGroup::from_element_slice(arr)?;
-
-        // Throw an error if the identity group element is encountered
-        if alpha.is_identity() {
-            return Err(ProtocolError::IdentityGroupElementError);
-        }
-        Ok(Self { alpha })
+        Ok(Self {
+            blinded_element: voprf::BlindedElement::deserialize(input)?,
+        })
     }
 }
 
 impl<CS: CipherSuite> RegistrationResponse<CS> {
     /// Serialization into bytes
-    pub fn serialize(&self) -> Vec<u8> {
-        [self.beta.to_arr().to_vec(), self.server_s_pk.to_vec()].concat()
+    pub fn serialize(&self) -> Result<Vec<u8>, ProtocolError> {
+        Ok([
+            self.evaluation_element.serialize(),
+            self.server_s_pk.to_vec(),
+        ]
+        .concat())
     }
 
     /// Deserialization from bytes
@@ -124,30 +120,23 @@ impl<CS: CipherSuite> RegistrationResponse<CS> {
         let checked_slice =
             check_slice_size(input, elem_len + key_len, "registration_response_bytes")?;
 
-        // Check that the message is actually containing an element of the
-        // correct subgroup
-        let arr = GenericArray::from_slice(&checked_slice[..elem_len]);
-        let beta = CS::OprfGroup::from_element_slice(arr)?;
-
-        // Throw an error if the identity group element is encountered
-        if beta.is_identity() {
-            return Err(ProtocolError::IdentityGroupElementError);
-        }
-
         // Ensure that public key is valid
         let server_s_pk = KeyPair::<CS::KeGroup>::check_public_key(PublicKey::from_bytes(
             &checked_slice[elem_len..],
         )?)?;
 
-        Ok(Self { beta, server_s_pk })
+        Ok(Self {
+            evaluation_element: voprf::EvaluationElement::deserialize(&checked_slice[..elem_len])?,
+            server_s_pk,
+        })
     }
 
     #[cfg(test)]
     /// Only used for tests, where we can set the beta value to test for the reflection
     /// error case
-    pub fn set_beta_for_testing(&self, new_beta: CS::OprfGroup) -> Self {
+    pub fn set_evaluation_element_for_testing(&self, beta: CS::OprfGroup) -> Self {
         Self {
-            beta: new_beta,
+            evaluation_element: voprf::EvaluationElement::from_value_unchecked(beta),
             server_s_pk: self.server_s_pk.clone(),
         }
     }
@@ -155,13 +144,13 @@ impl<CS: CipherSuite> RegistrationResponse<CS> {
 
 impl<CS: CipherSuite> RegistrationUpload<CS> {
     /// Serialization into bytes
-    pub fn serialize(&self) -> Vec<u8> {
-        [
+    pub fn serialize(&self) -> Result<Vec<u8>, ProtocolError> {
+        Ok([
             self.client_s_pk.to_arr().to_vec(),
             self.masking_key.to_vec(),
             self.envelope.serialize(),
         ]
-        .concat()
+        .concat())
     }
 
     /// Deserialization from bytes
@@ -196,12 +185,26 @@ impl<CS: CipherSuite> RegistrationUpload<CS> {
             client_s_pk: server_setup.fake_keypair.public().clone(),
         }
     }
+
+    #[cfg(test)]
+    pub fn as_ptrs(&self) -> Vec<Vec<u8>> {
+        [
+            vec![self.client_s_pk.to_arr().to_vec()],
+            vec![self.masking_key.to_vec()],
+            self.envelope.as_ptrs(),
+        ]
+        .concat()
+    }
 }
 
 impl<CS: CipherSuite> CredentialRequest<CS> {
     /// Serialization into bytes
-    pub fn serialize(&self) -> Vec<u8> {
-        [self.alpha.to_arr().to_vec(), self.ke1_message.to_bytes()].concat()
+    pub fn serialize(&self) -> Result<Vec<u8>, ProtocolError> {
+        Ok([
+            self.blinded_element.serialize(),
+            self.ke1_message.to_bytes(),
+        ]
+        .concat())
     }
 
     /// Deserialization from bytes
@@ -212,11 +215,12 @@ impl<CS: CipherSuite> CredentialRequest<CS> {
 
         // Check that the message is actually containing an element of the
         // correct subgroup
-        let arr = GenericArray::from_slice(&checked_slice[..elem_len]);
-        let alpha = CS::OprfGroup::from_element_slice(arr)?;
+        let blinded_element = voprf::BlindedElement::<CS::OprfGroup, CS::Hash>::deserialize(
+            &checked_slice[..elem_len],
+        )?;
 
         // Throw an error if the identity group element is encountered
-        if alpha.is_identity() {
+        if blinded_element.value().is_identity() {
             return Err(ProtocolError::IdentityGroupElementError);
         }
 
@@ -225,24 +229,33 @@ impl<CS: CipherSuite> CredentialRequest<CS> {
                 &checked_slice[elem_len..],
             )?;
 
-        Ok(Self { alpha, ke1_message })
+        Ok(Self {
+            blinded_element,
+            ke1_message,
+        })
     }
 
     /// Only used for testing purposes
     #[cfg(test)]
-    pub fn get_alpha_for_testing(&self) -> CS::OprfGroup {
-        self.alpha
+    pub fn get_blinded_element_for_testing(
+        &self,
+    ) -> voprf::BlindedElement<CS::OprfGroup, CS::Hash> {
+        self.blinded_element.clone()
     }
 }
 
 impl<CS: CipherSuite> CredentialResponse<CS> {
     /// Serialization into bytes
-    pub fn serialize(&self) -> Vec<u8> {
-        [
-            Self::serialize_without_ke(&self.beta, &self.masking_nonce, &self.masked_response),
+    pub fn serialize(&self) -> Result<Vec<u8>, ProtocolError> {
+        Ok([
+            Self::serialize_without_ke(
+                &self.evaluation_element.value(),
+                &self.masking_nonce,
+                &self.masked_response,
+            ),
             self.ke2_message.to_bytes(),
         ]
-        .concat()
+        .concat())
     }
 
     pub(crate) fn serialize_without_ke(
@@ -271,11 +284,11 @@ impl<CS: CipherSuite> CredentialResponse<CS> {
         // Check that the message is actually containing an element of the
         // correct subgroup
         let beta_bytes = &checked_slice[..elem_len];
-        let arr = GenericArray::from_slice(beta_bytes);
-        let beta = CS::OprfGroup::from_element_slice(arr)?;
+        let evaluation_element =
+            voprf::EvaluationElement::<CS::OprfGroup, CS::Hash>::deserialize(beta_bytes)?;
 
         // Throw an error if the identity group element is encountered
-        if beta.is_identity() {
+        if evaluation_element.value().is_identity() {
             return Err(ProtocolError::IdentityGroupElementError);
         }
 
@@ -289,7 +302,7 @@ impl<CS: CipherSuite> CredentialResponse<CS> {
             )?;
 
         Ok(Self {
-            beta,
+            evaluation_element,
             masking_nonce,
             masked_response,
             ke2_message,
@@ -299,9 +312,9 @@ impl<CS: CipherSuite> CredentialResponse<CS> {
     #[cfg(test)]
     /// Only used for tests, where we can set the beta value to test for the reflection
     /// error case
-    pub fn set_beta_for_testing(&self, new_beta: CS::OprfGroup) -> Self {
+    pub fn set_evaluation_element_for_testing(&self, beta: CS::OprfGroup) -> Self {
         Self {
-            beta: new_beta,
+            evaluation_element: voprf::EvaluationElement::from_value_unchecked(beta),
             masking_nonce: self.masking_nonce.clone(),
             masked_response: self.masked_response.clone(),
             ke2_message: self.ke2_message.clone(),
@@ -311,8 +324,8 @@ impl<CS: CipherSuite> CredentialResponse<CS> {
 
 impl<CS: CipherSuite> CredentialFinalization<CS> {
     /// Serialization into bytes
-    pub fn serialize(&self) -> Vec<u8> {
-        self.ke3_message.to_bytes()
+    pub fn serialize(&self) -> Result<Vec<u8>, ProtocolError> {
+        Ok(self.ke3_message.to_bytes())
     }
 
     /// Deserialization from bytes
@@ -332,19 +345,19 @@ impl<CS: CipherSuite> CredentialFinalization<CS> {
 
 impl_clone_for!(
     struct RegistrationRequest<CS: CipherSuite>,
-    [alpha],
+    [blinded_element],
 );
-impl_debug_eq_hash_for!(struct RegistrationRequest<CS: CipherSuite>, [alpha], [CS::OprfGroup]);
+impl_debug_eq_hash_for!(struct RegistrationRequest<CS: CipherSuite>, [blinded_element], [CS::OprfGroup, CS::Hash]);
 impl_serialize_and_deserialize_for!(RegistrationRequest);
 
 impl_clone_for!(
     struct RegistrationResponse<CS: CipherSuite>,
-    [beta, server_s_pk],
+    [evaluation_element, server_s_pk],
 );
 impl_debug_eq_hash_for!(
     struct RegistrationResponse<CS: CipherSuite>,
-    [beta, server_s_pk],
-    [CS::OprfGroup],
+    [evaluation_element, server_s_pk],
+    [CS::OprfGroup, CS::Hash],
 );
 impl_serialize_and_deserialize_for!(RegistrationResponse);
 
@@ -360,11 +373,11 @@ impl_serialize_and_deserialize_for!(RegistrationUpload);
 
 impl_clone_for!(
     struct CredentialRequest<CS: CipherSuite>,
-    [alpha, ke1_message],
+    [blinded_element, ke1_message],
 );
 impl_debug_eq_hash_for!(
     struct CredentialRequest<CS: CipherSuite>,
-    [alpha, ke1_message],
+    [blinded_element, ke1_message],
     [
         CS::OprfGroup,
         <CS::KeyExchange as KeyExchange<CS::Hash, CS::KeGroup>>::KE1Message
@@ -374,11 +387,11 @@ impl_serialize_and_deserialize_for!(CredentialRequest);
 
 impl_clone_for!(
     struct CredentialResponse<CS: CipherSuite>,
-    [beta, masking_nonce, masked_response, ke2_message],
+    [evaluation_element, masking_nonce, masked_response, ke2_message],
 );
 impl_debug_eq_hash_for!(
     struct CredentialResponse<CS: CipherSuite>,
-    [beta, masking_nonce, masked_response, ke2_message],
+    [evaluation_element, masking_nonce, masked_response, ke2_message],
     [
         CS::OprfGroup,
         <CS::KeyExchange as KeyExchange<CS::Hash, CS::KeGroup>>::KE2Message,

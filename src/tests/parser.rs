@@ -15,10 +15,8 @@ fn parse_vector_types(input: &str) -> String {
 
     let chunks: Vec<&str> = re.split(input).collect();
 
-    println!("{:?}", chunks.len());
     let mut count = 1;
     for caps in re.captures_iter(input) {
-        println!("{:?}", caps["type"].to_string());
         let vector_type = format!(
             "\"{}\": [\n {} \n]",
             caps["type"].to_string(),
