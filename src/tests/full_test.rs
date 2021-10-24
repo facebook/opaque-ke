@@ -280,11 +280,11 @@ fn generate_parameters<CS: CipherSuite>() -> Result<TestVectorParameters, Protoc
     let mut rng = OsRng;
 
     // Inputs
-    let server_s_kp = KeyPair::<CS::OprfGroup>::generate_random(&mut rng)?;
-    let server_e_kp = KeyPair::<CS::OprfGroup>::generate_random(&mut rng)?;
-    let client_s_kp = KeyPair::<CS::OprfGroup>::generate_random(&mut rng)?;
-    let client_e_kp = KeyPair::<CS::OprfGroup>::generate_random(&mut rng)?;
-    let fake_kp = KeyPair::<CS::OprfGroup>::generate_random(&mut rng)?;
+    let server_s_kp = KeyPair::<CS::KeGroup>::generate_random(&mut rng)?;
+    let server_e_kp = KeyPair::<CS::KeGroup>::generate_random(&mut rng)?;
+    let client_s_kp = KeyPair::<CS::KeGroup>::generate_random(&mut rng)?;
+    let client_e_kp = KeyPair::<CS::KeGroup>::generate_random(&mut rng)?;
+    let fake_kp = KeyPair::<CS::KeGroup>::generate_random(&mut rng)?;
     let credential_identifier = b"credIdentifier";
     let id_u = b"idU";
     let id_s = b"idS";

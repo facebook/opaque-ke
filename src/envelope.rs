@@ -7,6 +7,7 @@ use crate::{
     ciphersuite::CipherSuite,
     errors::{utils::check_slice_size, InternalError, ProtocolError},
     hash::Hash,
+    key_exchange::group::KeGroup,
     keypair::{KeyPair, PublicKey},
     opaque::{bytestrings_from_identifiers, Identifiers},
 };
@@ -330,7 +331,7 @@ fn build_inner_envelope_internal<CS: CipherSuite>(
     randomized_pwd_hasher: Hkdf<CS::Hash>,
     nonce: &[u8],
 ) -> Result<PublicKey<CS::KeGroup>, ProtocolError> {
-    let mut keypair_seed = vec![0u8; <CS::KeGroup as Group>::ScalarLen::USIZE];
+    let mut keypair_seed = vec![0u8; <CS::KeGroup as KeGroup>::SkLen::USIZE];
     randomized_pwd_hasher
         .expand(&[nonce, STR_PRIVATE_KEY].concat(), &mut keypair_seed)
         .map_err(|_| InternalError::HkdfError)?;
@@ -348,7 +349,7 @@ fn recover_keys_internal<CS: CipherSuite>(
     randomized_pwd_hasher: Hkdf<CS::Hash>,
     nonce: &[u8],
 ) -> Result<KeyPair<CS::KeGroup>, ProtocolError> {
-    let mut keypair_seed = vec![0u8; <CS::KeGroup as Group>::ScalarLen::USIZE];
+    let mut keypair_seed = vec![0u8; <CS::KeGroup as KeGroup>::SkLen::USIZE];
     randomized_pwd_hasher
         .expand(&[nonce, STR_PRIVATE_KEY].concat(), &mut keypair_seed)
         .map_err(|_| InternalError::HkdfError)?;

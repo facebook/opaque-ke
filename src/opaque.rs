@@ -10,7 +10,10 @@ use crate::{
     envelope::Envelope,
     errors::{utils::check_slice_size, InternalError, ProtocolError},
     hash::Hash,
-    key_exchange::traits::{FromBytes, KeyExchange, ToBytesWithPointers},
+    key_exchange::{
+        group::KeGroup,
+        traits::{FromBytes, KeyExchange, ToBytesWithPointers},
+    },
     keypair::{KeyPair, PrivateKey, PublicKey, SecretKey},
     serialization::{serialize, tokenize},
     slow_hash::SlowHash,
@@ -169,7 +172,7 @@ impl<CS: CipherSuite, S: SecretKey<CS::KeGroup>> ServerSetup<CS, S> {
     /// Deserialization from bytes
     pub fn deserialize(input: &[u8]) -> Result<Self, ProtocolError<S::Error>> {
         let seed_len = <CS::Hash as Digest>::OutputSize::USIZE;
-        let key_len = <CS::KeGroup as Group>::ScalarLen::USIZE;
+        let key_len = <CS::KeGroup as KeGroup>::SkLen::USIZE;
         let checked_slice = check_slice_size(input, seed_len + key_len + key_len, "server_setup")?;
 
         Ok(Self {
@@ -997,7 +1000,7 @@ fn mask_response<CS: CipherSuite>(
     server_s_pk: &PublicKey<CS::KeGroup>,
     envelope: &Envelope<CS>,
 ) -> Result<Vec<u8>, ProtocolError> {
-    let mut xor_pad = vec![0u8; <CS::KeGroup as Group>::ElemLen::USIZE + Envelope::<CS>::len()];
+    let mut xor_pad = vec![0u8; <CS::KeGroup as KeGroup>::PkLen::USIZE + Envelope::<CS>::len()];
     Hkdf::<CS::Hash>::from_prk(masking_key)
         .map_err(|_| InternalError::HkdfError)?
         .expand(
@@ -1020,7 +1023,7 @@ fn unmask_response<CS: CipherSuite>(
     masking_nonce: &[u8],
     masked_response: &[u8],
 ) -> Result<(PublicKey<CS::KeGroup>, Envelope<CS>), ProtocolError> {
-    let mut xor_pad = vec![0u8; <CS::KeGroup as Group>::ElemLen::USIZE + Envelope::<CS>::len()];
+    let mut xor_pad = vec![0u8; <CS::KeGroup as KeGroup>::PkLen::USIZE + Envelope::<CS>::len()];
     Hkdf::<CS::Hash>::from_prk(masking_key)
         .map_err(|_| InternalError::HkdfError)?
         .expand(
@@ -1033,7 +1036,7 @@ fn unmask_response<CS: CipherSuite>(
         .zip(masked_response.iter())
         .map(|(&x1, &x2)| x1 ^ x2)
         .collect();
-    let key_len = <CS::KeGroup as Group>::ElemLen::USIZE;
+    let key_len = <CS::KeGroup as KeGroup>::PkLen::USIZE;
     let unchecked_server_s_pk = PublicKey::from_bytes(&plaintext[..key_len])?;
     let envelope = Envelope::deserialize(&plaintext[key_len..])?;
 

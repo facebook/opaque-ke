@@ -12,7 +12,10 @@ use crate::{
         utils::{check_slice_size, check_slice_size_atleast},
         ProtocolError,
     },
-    key_exchange::traits::{FromBytes, KeyExchange, ToBytes},
+    key_exchange::{
+        group::KeGroup,
+        traits::{FromBytes, KeyExchange, ToBytes},
+    },
     keypair::{KeyPair, PublicKey, SecretKey},
     opaque::ServerSetup,
 };
@@ -116,7 +119,7 @@ impl<CS: CipherSuite> RegistrationResponse<CS> {
     /// Deserialization from bytes
     pub fn deserialize(input: &[u8]) -> Result<Self, ProtocolError> {
         let elem_len = <CS::OprfGroup as Group>::ElemLen::USIZE;
-        let key_len = <CS::KeGroup as Group>::ElemLen::USIZE;
+        let key_len = <CS::KeGroup as KeGroup>::PkLen::USIZE;
         let checked_slice =
             check_slice_size(input, elem_len + key_len, "registration_response_bytes")?;
 
@@ -155,7 +158,7 @@ impl<CS: CipherSuite> RegistrationUpload<CS> {
 
     /// Deserialization from bytes
     pub fn deserialize(input: &[u8]) -> Result<Self, ProtocolError> {
-        let key_len = <CS::KeGroup as Group>::ElemLen::USIZE;
+        let key_len = <CS::KeGroup as KeGroup>::PkLen::USIZE;
         let hash_len = <CS::Hash as Digest>::OutputSize::USIZE;
         let checked_slice =
             check_slice_size_atleast(input, key_len + hash_len, "registration_upload_bytes")?;
@@ -269,7 +272,7 @@ impl<CS: CipherSuite> CredentialResponse<CS> {
     /// Deserialization from bytes
     pub fn deserialize(input: &[u8]) -> Result<Self, ProtocolError> {
         let elem_len = <CS::OprfGroup as Group>::ElemLen::USIZE;
-        let key_len = <CS::KeGroup as Group>::ElemLen::USIZE;
+        let key_len = <CS::KeGroup as KeGroup>::PkLen::USIZE;
         let nonce_len: usize = 32;
         let envelope_len = Envelope::<CS>::len();
         let masked_response_len = key_len + envelope_len;

@@ -3,6 +3,7 @@
 // This source code is licensed under the MIT license found in the
 // LICENSE file in the root directory of this source tree.
 
+use crate::key_exchange::group::KeGroup;
 use crate::{
     ciphersuite::CipherSuite,
     errors::ProtocolError,
@@ -11,7 +12,6 @@ use crate::{
 };
 use alloc::vec::Vec;
 use rand::{CryptoRng, RngCore};
-use voprf::group::Group;
 use zeroize::Zeroize;
 
 #[cfg(not(test))]
@@ -36,7 +36,7 @@ pub type GenerateKe3Result<K, D, G> = (
     generic_array::GenericArray<u8, <D as digest::Digest>::OutputSize>,
 );
 
-pub trait KeyExchange<D: Hash, G: Group> {
+pub trait KeyExchange<D: Hash, G: KeGroup> {
     type KE1State: FromBytes + ToBytesWithPointers + Zeroize + Clone;
     type KE2State: FromBytes + ToBytesWithPointers + Zeroize + Clone;
     type KE1Message: FromBytes + ToBytes + Clone;

@@ -5,8 +5,9 @@
 
 //! Defines the CipherSuite trait to specify the underlying primitives for OPAQUE
 
+use crate::key_exchange::group::KeGroup;
 use crate::{hash::Hash, key_exchange::traits::KeyExchange, slow_hash::SlowHash};
-use voprf::group::Group;
+use voprf::group::Group as OprfGroup;
 
 /// Configures the underlying primitives used in OPAQUE
 /// * `OprfGroup`: a finite cyclic group along with a point representation, along
@@ -20,9 +21,9 @@ pub trait CipherSuite {
     /// A finite cyclic group along with a point representation along with
     /// an extension trait PasswordToCurve that allows some customization on
     /// how to hash a password to a curve point. See `group::Group`.
-    type OprfGroup: Group;
+    type OprfGroup: OprfGroup;
     /// A `Group` used for the `KeyExchange`.
-    type KeGroup: Group;
+    type KeGroup: KeGroup;
     /// A key exchange protocol
     type KeyExchange: KeyExchange<Self::Hash, Self::KeGroup>;
     /// The main hash function use (for HKDF computations and hashing transcripts)
