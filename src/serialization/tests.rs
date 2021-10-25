@@ -7,7 +7,6 @@ use crate::{
     ciphersuite::CipherSuite,
     envelope::{Envelope, InnerEnvelopeMode},
     errors::*,
-    group::Group,
     key_exchange::{
         traits::{FromBytes, KeyExchange, ToBytes},
         tripledh::{NonceLen, TripleDH},
@@ -21,10 +20,11 @@ use alloc::vec;
 #[cfg(test)]
 use alloc::vec::Vec;
 
-use curve25519_dalek::{ristretto::RistrettoPoint, traits::Identity};
+use curve25519_dalek::ristretto::RistrettoPoint;
 use generic_array::typenum::Unsigned;
 use proptest::{collection::vec, prelude::*};
 use rand::{rngs::OsRng, RngCore};
+use voprf::group::Group;
 
 use sha2::Digest;
 
@@ -55,21 +55,27 @@ fn random_ristretto_point() -> RistrettoPoint {
 }
 
 #[test]
-fn client_registration_roundtrip() {
+fn client_registration_roundtrip() -> Result<(), ProtocolError> {
     let pw = b"hunter2";
     let mut rng = OsRng;
-    let sc = <RistrettoPoint as Group>::random_nonzero_scalar(&mut rng);
-    let elem = <RistrettoPoint as Group>::base_point() * sc;
 
-    // serialization order: scalar, password, group element
-    let bytes: Vec<u8> = [&elem.to_arr(), &sc.as_bytes()[..], &pw[..]].concat();
-    let reg = ClientRegistration::<Default>::deserialize(&bytes[..]).unwrap();
-    let reg_bytes = reg.serialize();
+    let blind_result =
+        &voprf::NonVerifiableClient::<RistrettoPoint, sha2::Sha512>::blind(pw.to_vec(), &mut rng)?;
+
+    let bytes: Vec<u8> = [
+        serialize(&blind_result.state.serialize(), 2)?,
+        serialize(&blind_result.message.serialize(), 2)?,
+    ]
+    .concat();
+
+    let reg = ClientRegistration::<Default>::deserialize(&bytes[..])?;
+    let reg_bytes = reg.serialize()?;
     assert_eq!(reg_bytes, bytes);
+    Ok(())
 }
 
 #[test]
-fn server_registration_roundtrip() {
+fn server_registration_roundtrip() -> Result<(), ProtocolError> {
     // If we don't have envelope and client_pk, the server registration just
     // contains the prf key
     let mut rng = OsRng;
@@ -82,27 +88,28 @@ fn server_registration_roundtrip() {
                                                                       // mock_envelope_bytes.extend_from_slice(&ciphertext); // ciphertext which is an encrypted private key
     mock_envelope_bytes.extend_from_slice(&[0; MAC_SIZE]); // length-MAC_SIZE hmac
 
-    let mock_client_kp = KeyPair::<<Default as CipherSuite>::OprfGroup>::generate_random(&mut rng);
+    let mock_client_kp = KeyPair::<<Default as CipherSuite>::OprfGroup>::generate_random(&mut rng)?;
     // serialization order: oprf_key, public key, envelope
     let mut bytes = Vec::<u8>::new();
     bytes.extend_from_slice(&mock_client_kp.public().to_arr());
     bytes.extend_from_slice(&masking_key);
     bytes.extend_from_slice(&mock_envelope_bytes);
-    let reg = ServerRegistration::<Default>::deserialize(&bytes[..]).unwrap();
-    let reg_bytes = reg.serialize();
+    let reg = ServerRegistration::<Default>::deserialize(&bytes[..])?;
+    let reg_bytes = reg.serialize()?;
     assert_eq!(reg_bytes, bytes);
+    Ok(())
 }
 
 #[test]
-fn registration_request_roundtrip() {
+fn registration_request_roundtrip() -> Result<(), ProtocolError> {
     let pt = random_ristretto_point();
     let pt_bytes = pt.to_arr().to_vec();
 
     let mut input = Vec::new();
     input.extend_from_slice(pt_bytes.as_slice());
 
-    let r1 = RegistrationRequest::<Default>::deserialize(input.as_slice()).unwrap();
-    let r1_bytes = r1.serialize();
+    let r1 = RegistrationRequest::<Default>::deserialize(input.as_slice())?;
+    let r1_bytes = r1.serialize()?;
     assert_eq!(input, r1_bytes);
 
     // Assert that identity group element is rejected
@@ -111,26 +118,30 @@ fn registration_request_roundtrip() {
 
     assert!(
         match RegistrationRequest::<Default>::deserialize(identity_bytes.as_slice()) {
-            Err(ProtocolError::IdentityGroupElementError) => true,
+            Err(ProtocolError::LibraryError(InternalError::OprfError(
+                voprf::errors::InternalError::PointError,
+            ))) => true,
             _ => false,
         }
     );
+
+    Ok(())
 }
 
 #[test]
-fn registration_response_roundtrip() {
+fn registration_response_roundtrip() -> Result<(), ProtocolError> {
     let pt = random_ristretto_point();
     let beta_bytes = pt.to_arr();
     let mut rng = OsRng;
-    let skp = KeyPair::<<Default as CipherSuite>::OprfGroup>::generate_random(&mut rng);
+    let skp = KeyPair::<<Default as CipherSuite>::OprfGroup>::generate_random(&mut rng)?;
     let pubkey_bytes = skp.public().to_arr();
 
     let mut input = Vec::new();
     input.extend_from_slice(beta_bytes.as_slice());
     input.extend_from_slice(&pubkey_bytes.as_slice());
 
-    let r2 = RegistrationResponse::<Default>::deserialize(input.as_slice()).unwrap();
-    let r2_bytes = r2.serialize();
+    let r2 = RegistrationResponse::<Default>::deserialize(input.as_slice())?;
+    let r2_bytes = r2.serialize()?;
     assert_eq!(input, r2_bytes);
 
     // Assert that identity group element is rejected
@@ -140,15 +151,19 @@ fn registration_response_roundtrip() {
     assert!(match RegistrationResponse::<Default>::deserialize(
         &[identity_bytes, pubkey_bytes.to_vec()].concat()
     ) {
-        Err(ProtocolError::IdentityGroupElementError) => true,
+        Err(ProtocolError::LibraryError(InternalError::OprfError(
+            voprf::errors::InternalError::PointError,
+        ))) => true,
         _ => false,
     });
+
+    Ok(())
 }
 
 #[test]
-fn registration_upload_roundtrip() {
+fn registration_upload_roundtrip() -> Result<(), ProtocolError> {
     let mut rng = OsRng;
-    let skp = KeyPair::<<Default as CipherSuite>::OprfGroup>::generate_random(&mut rng);
+    let skp = KeyPair::<<Default as CipherSuite>::OprfGroup>::generate_random(&mut rng)?;
     let pubkey_bytes = skp.public().to_arr();
 
     let mut key = [0u8; 32];
@@ -159,9 +174,15 @@ fn registration_upload_roundtrip() {
     let mut masking_key = vec![0u8; <sha2::Sha512 as Digest>::OutputSize::USIZE];
     rng.fill_bytes(&mut masking_key);
 
-    let (envelope, _, _) =
-        Envelope::<Default>::seal_raw(&key, &nonce, &pubkey_bytes, InnerEnvelopeMode::Internal)
-            .unwrap();
+    let randomized_pwd_hasher = hkdf::Hkdf::new(None, &key);
+
+    let (envelope, _, _) = Envelope::<Default>::seal_raw(
+        randomized_pwd_hasher,
+        &nonce,
+        &pubkey_bytes,
+        InnerEnvelopeMode::Internal,
+    )
+    .unwrap();
     let envelope_bytes = envelope.serialize();
 
     let mut input = Vec::new();
@@ -169,18 +190,20 @@ fn registration_upload_roundtrip() {
     input.extend_from_slice(&masking_key[..]);
     input.extend_from_slice(&envelope_bytes);
 
-    let r3 = RegistrationUpload::<Default>::deserialize(&input[..]).unwrap();
-    let r3_bytes = r3.serialize();
+    let r3 = RegistrationUpload::<Default>::deserialize(&input[..])?;
+    let r3_bytes = r3.serialize()?;
     assert_eq!(input, r3_bytes);
+
+    Ok(())
 }
 
 #[test]
-fn credential_request_roundtrip() {
+fn credential_request_roundtrip() -> Result<(), ProtocolError> {
     let mut rng = OsRng;
     let alpha = random_ristretto_point();
     let alpha_bytes = alpha.to_arr().to_vec();
 
-    let client_e_kp = KeyPair::<<Default as CipherSuite>::OprfGroup>::generate_random(&mut rng);
+    let client_e_kp = KeyPair::<<Default as CipherSuite>::OprfGroup>::generate_random(&mut rng)?;
     let mut client_nonce = vec![0u8; NonceLen::USIZE];
     rng.fill_bytes(&mut client_nonce);
 
@@ -190,8 +213,8 @@ fn credential_request_roundtrip() {
     input.extend_from_slice(&alpha_bytes);
     input.extend_from_slice(&ke1m[..]);
 
-    let l1 = CredentialRequest::<Default>::deserialize(input.as_slice()).unwrap();
-    let l1_bytes = l1.serialize();
+    let l1 = CredentialRequest::<Default>::deserialize(input.as_slice())?;
+    let l1_bytes = l1.serialize()?;
     assert_eq!(input, l1_bytes);
 
     // Assert that identity group element is rejected
@@ -201,13 +224,17 @@ fn credential_request_roundtrip() {
     assert!(match CredentialRequest::<Default>::deserialize(
         &[identity_bytes, ke1m.to_vec()].concat()
     ) {
-        Err(ProtocolError::IdentityGroupElementError) => true,
+        Err(ProtocolError::LibraryError(InternalError::OprfError(
+            voprf::errors::InternalError::PointError,
+        ))) => true,
         _ => false,
     });
+
+    Ok(())
 }
 
 #[test]
-fn credential_response_roundtrip() {
+fn credential_response_roundtrip() -> Result<(), ProtocolError> {
     let pt = random_ristretto_point();
     let pt_bytes = pt.to_arr().to_vec();
 
@@ -220,7 +247,7 @@ fn credential_response_roundtrip() {
         vec![0u8; <RistrettoPoint as Group>::ElemLen::USIZE + Envelope::<Default>::len()];
     rng.fill_bytes(&mut masked_response);
 
-    let server_e_kp = KeyPair::<<Default as CipherSuite>::OprfGroup>::generate_random(&mut rng);
+    let server_e_kp = KeyPair::<<Default as CipherSuite>::OprfGroup>::generate_random(&mut rng)?;
     let mut mac = [0u8; MAC_SIZE];
     rng.fill_bytes(&mut mac);
     let mut server_nonce = vec![0u8; NonceLen::USIZE];
@@ -234,8 +261,8 @@ fn credential_response_roundtrip() {
     input.extend_from_slice(&masked_response);
     input.extend_from_slice(&ke2m[..]);
 
-    let l2 = CredentialResponse::<Default>::deserialize(&input).unwrap();
-    let l2_bytes = l2.serialize();
+    let l2 = CredentialResponse::<Default>::deserialize(&input)?;
+    let l2_bytes = l2.serialize()?;
     assert_eq!(input, l2_bytes);
 
     // Assert that identity group element is rejected
@@ -251,72 +278,80 @@ fn credential_response_roundtrip() {
         ]
         .concat()
     ) {
-        Err(ProtocolError::IdentityGroupElementError) => true,
+        Err(ProtocolError::LibraryError(InternalError::OprfError(
+            voprf::errors::InternalError::PointError,
+        ))) => true,
         _ => false,
     });
+
+    Ok(())
 }
 
 #[test]
-fn credential_finalization_roundtrip() {
+fn credential_finalization_roundtrip() -> Result<(), ProtocolError> {
     let mut rng = OsRng;
     let mut mac = [0u8; MAC_SIZE];
     rng.fill_bytes(&mut mac);
 
     let input: Vec<u8> = [&mac[..]].concat();
 
-    let l3 = CredentialFinalization::<Default>::deserialize(&input).unwrap();
-    let l3_bytes = l3.serialize();
+    let l3 = CredentialFinalization::<Default>::deserialize(&input)?;
+    let l3_bytes = l3.serialize()?;
     assert_eq!(input, l3_bytes);
+
+    Ok(())
 }
 
 #[test]
-fn client_login_roundtrip() {
+fn client_login_roundtrip() -> Result<(), ProtocolError> {
     let pw = b"hunter2";
     let mut rng = OsRng;
-    let sc = <RistrettoPoint as Group>::random_nonzero_scalar(&mut rng);
 
-    let client_e_kp = KeyPair::<<Default as CipherSuite>::OprfGroup>::generate_random(&mut rng);
+    let client_e_kp = KeyPair::<<Default as CipherSuite>::OprfGroup>::generate_random(&mut rng)?;
     let mut client_nonce = vec![0u8; NonceLen::USIZE];
     rng.fill_bytes(&mut client_nonce);
 
     let serialized_credential_request = b"serialized credential_request".to_vec();
     let l1_data = [client_e_kp.private().to_arr().to_vec(), client_nonce].concat();
 
-    // serialization order: scalar, credential_request, ke1_state, password
+    let blind_result =
+        &voprf::NonVerifiableClient::<RistrettoPoint, sha2::Sha512>::blind(pw.to_vec(), &mut rng)?;
+
     let bytes: Vec<u8> = [
-        &sc.as_bytes()[..],
-        &serialize(&serialized_credential_request, 2).unwrap(),
-        &serialize(&l1_data, 2).unwrap(),
-        &pw[..],
+        serialize(&blind_result.state.serialize(), 2)?,
+        serialize(&serialized_credential_request, 2)?,
+        serialize(&l1_data, 2)?,
     ]
     .concat();
-    let reg = ClientLogin::<Default>::deserialize(&bytes[..]).unwrap();
-    let reg_bytes = reg.serialize().unwrap();
+    let reg = ClientLogin::<Default>::deserialize(&bytes[..])?;
+    let reg_bytes = reg.serialize()?;
     assert_eq!(reg_bytes, bytes);
+    Ok(())
 }
 
 #[test]
-fn ke1_message_roundtrip() {
+fn ke1_message_roundtrip() -> Result<(), ProtocolError> {
     let mut rng = OsRng;
 
-    let client_e_kp = KeyPair::<<Default as CipherSuite>::OprfGroup>::generate_random(&mut rng);
+    let client_e_kp = KeyPair::<<Default as CipherSuite>::OprfGroup>::generate_random(&mut rng)?;
     let mut client_nonce = vec![0u8; NonceLen::USIZE];
     rng.fill_bytes(&mut client_nonce);
 
     let ke1m: Vec<u8> = [&client_nonce[..], &client_e_kp.public()].concat();
     let reg = <TripleDH as KeyExchange<sha2::Sha512, RistrettoPoint>>::KE1Message::from_bytes::<
         Default,
-    >(&ke1m[..])
-    .unwrap();
+    >(&ke1m[..])?;
     let reg_bytes = reg.to_bytes();
     assert_eq!(reg_bytes, ke1m);
+
+    Ok(())
 }
 
 #[test]
-fn ke2_message_roundtrip() {
+fn ke2_message_roundtrip() -> Result<(), ProtocolError> {
     let mut rng = OsRng;
 
-    let server_e_kp = KeyPair::<<Default as CipherSuite>::OprfGroup>::generate_random(&mut rng);
+    let server_e_kp = KeyPair::<<Default as CipherSuite>::OprfGroup>::generate_random(&mut rng)?;
     let mut mac = [0u8; MAC_SIZE];
     rng.fill_bytes(&mut mac);
     let mut server_nonce = vec![0u8; NonceLen::USIZE];
@@ -326,14 +361,15 @@ fn ke2_message_roundtrip() {
 
     let reg = <TripleDH as KeyExchange<sha2::Sha512, RistrettoPoint>>::KE2Message::from_bytes::<
         Default,
-    >(&ke2m[..])
-    .unwrap();
+    >(&ke2m[..])?;
     let reg_bytes = reg.to_bytes();
     assert_eq!(reg_bytes, ke2m);
+
+    Ok(())
 }
 
 #[test]
-fn ke3_message_roundtrip() {
+fn ke3_message_roundtrip() -> Result<(), ProtocolError> {
     let mut rng = OsRng;
     let mut mac = [0u8; MAC_SIZE];
     rng.fill_bytes(&mut mac);
@@ -342,10 +378,11 @@ fn ke3_message_roundtrip() {
 
     let reg = <TripleDH as KeyExchange<sha2::Sha512, RistrettoPoint>>::KE3Message::from_bytes::<
         Default,
-    >(&ke3m[..])
-    .unwrap();
+    >(&ke3m[..])?;
     let reg_bytes = reg.to_bytes();
     assert_eq!(reg_bytes, ke3m);
+
+    Ok(())
 }
 
 proptest! {

@@ -6,8 +6,8 @@
 use crate::{
     ciphersuite::CipherSuite,
     errors::{utils::check_slice_size, InternalError, ProtocolError},
-    group::Group,
     hash::Hash,
+    key_exchange::group::KeGroup,
     keypair::{KeyPair, PublicKey},
     opaque::{bytestrings_from_identifiers, Identifiers},
 };
@@ -19,13 +19,14 @@ use generic_array::{typenum::Unsigned, GenericArray};
 use hkdf::Hkdf;
 use hmac::{Hmac, Mac, NewMac};
 use rand::{CryptoRng, RngCore};
+use voprf::group::Group;
 use zeroize::Zeroize;
 
 // Constant string used as salt for HKDF computation
-const STR_AUTH_KEY: &[u8] = b"AuthKey";
-const STR_EXPORT_KEY: &[u8] = b"ExportKey";
-const STR_PRIVATE_KEY: &[u8] = b"PrivateKey";
-const STR_OPAQUE_DERIVE_AUTH_KEY_PAIR: &[u8] = b"OPAQUE-DeriveAuthKeyPair";
+const STR_AUTH_KEY: &[u8; 7] = b"AuthKey";
+const STR_EXPORT_KEY: &[u8; 9] = b"ExportKey";
+const STR_PRIVATE_KEY: &[u8; 10] = b"PrivateKey";
+const STR_OPAQUE_DERIVE_AUTH_KEY_PAIR: &[u8; 24] = b"OPAQUE-DeriveAuthKeyPair";
 const NONCE_LEN: usize = 32;
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq, Zeroize)]
@@ -117,7 +118,7 @@ impl<CS: CipherSuite> Envelope<CS> {
     #[allow(clippy::type_complexity)]
     pub(crate) fn seal<R: RngCore + CryptoRng>(
         rng: &mut R,
-        key: &[u8],
+        randomized_pwd_hasher: Hkdf<CS::Hash>,
         server_s_pk: &[u8],
         optional_ids: Option<Identifiers>,
     ) -> Result<SealResult<CS>, ProtocolError> {
@@ -126,14 +127,14 @@ impl<CS: CipherSuite> Envelope<CS> {
 
         let (mode, client_s_pk) = (
             InnerEnvelopeMode::Internal,
-            build_inner_envelope_internal::<CS>(key, &nonce)?,
+            build_inner_envelope_internal::<CS>(randomized_pwd_hasher.clone(), &nonce)?,
         );
 
         let (id_u, id_s) =
             bytestrings_from_identifiers(&optional_ids, &client_s_pk.to_arr(), server_s_pk)?;
         let aad = construct_aad(&id_u, &id_s, server_s_pk);
 
-        let result = Self::seal_raw(key, &nonce, &aad, mode)?;
+        let result = Self::seal_raw(randomized_pwd_hasher, &nonce, &aad, mode)?;
         Ok((
             result.0,
             client_s_pk,
@@ -147,18 +148,19 @@ impl<CS: CipherSuite> Envelope<CS> {
     /// Note that a new nonce is sampled for each call to seal.
     #[allow(clippy::type_complexity)]
     pub(crate) fn seal_raw(
-        key: &[u8],
+        randomized_pwd_hasher: Hkdf<CS::Hash>,
         nonce: &[u8],
         aad: &[u8],
         mode: InnerEnvelopeMode,
     ) -> Result<SealRawResult<CS>, InternalError> {
-        let h = Hkdf::<CS::Hash>::new(None, key);
         let mut hmac_key = vec![0u8; Self::hmac_key_size()];
         let mut export_key = vec![0u8; Self::export_key_size()];
 
-        h.expand(&[nonce, STR_AUTH_KEY].concat(), &mut hmac_key)
+        randomized_pwd_hasher
+            .expand(&[nonce, STR_AUTH_KEY].concat(), &mut hmac_key)
             .map_err(|_| InternalError::HkdfError)?;
-        h.expand(&[nonce, STR_EXPORT_KEY].concat(), &mut export_key)
+        randomized_pwd_hasher
+            .expand(&[nonce, STR_EXPORT_KEY].concat(), &mut export_key)
             .map_err(|_| InternalError::HkdfError)?;
 
         let mut hmac =
@@ -182,7 +184,7 @@ impl<CS: CipherSuite> Envelope<CS> {
 
     pub(crate) fn open(
         &self,
-        key: &[u8],
+        randomized_pwd_hasher: Hkdf<CS::Hash>,
         server_s_pk: &[u8],
         optional_ids: &Option<Identifiers>,
     ) -> Result<OpenedEnvelope<CS>, ProtocolError> {
@@ -190,7 +192,9 @@ impl<CS: CipherSuite> Envelope<CS> {
             InnerEnvelopeMode::Zero => {
                 return Err(InternalError::IncompatibleEnvelopeModeError.into())
             }
-            InnerEnvelopeMode::Internal => recover_keys_internal::<CS>(key, &self.nonce)?,
+            InnerEnvelopeMode::Internal => {
+                recover_keys_internal::<CS>(randomized_pwd_hasher.clone(), &self.nonce)?
+            }
         };
 
         let (id_u, id_s) = bytestrings_from_identifiers(
@@ -200,7 +204,7 @@ impl<CS: CipherSuite> Envelope<CS> {
         )?;
         let aad = construct_aad(&id_u, &id_s, server_s_pk);
 
-        let opened = self.open_raw(key, &aad)?;
+        let opened = self.open_raw(randomized_pwd_hasher, &aad)?;
 
         Ok(OpenedEnvelope {
             client_static_keypair,
@@ -214,16 +218,23 @@ impl<CS: CipherSuite> Envelope<CS> {
     /// aad used to construct the envelope are the same.
     pub(crate) fn open_raw(
         &self,
-        key: &[u8],
+        randomized_pwd_hasher: Hkdf<CS::Hash>,
         aad: &[u8],
     ) -> Result<OpenedInnerEnvelope<CS::Hash>, InternalError> {
-        let h = Hkdf::<CS::Hash>::new(None, key);
         let mut hmac_key = vec![0u8; Self::hmac_key_size()];
         let mut export_key = vec![0u8; Self::export_key_size()];
 
-        h.expand(&[&self.nonce, STR_AUTH_KEY].concat(), &mut hmac_key)
+        randomized_pwd_hasher
+            .expand(
+                &[self.nonce.clone(), STR_AUTH_KEY.to_vec()].concat(),
+                &mut hmac_key,
+            )
             .map_err(|_| InternalError::HkdfError)?;
-        h.expand(&[&self.nonce, STR_EXPORT_KEY].concat(), &mut export_key)
+        randomized_pwd_hasher
+            .expand(
+                &[self.nonce.clone(), STR_EXPORT_KEY.to_vec()].concat(),
+                &mut export_key,
+            )
             .map_err(|_| InternalError::HkdfError)?;
 
         let mut hmac =
@@ -292,11 +303,6 @@ impl<CS: CipherSuite> Envelope<CS> {
             hmac: GenericArray::clone_from_slice(hmac),
         })
     }
-
-    #[cfg(test)]
-    pub fn as_byte_ptrs(&self) -> Vec<(*const u8, usize)> {
-        vec![(self.hmac.as_ptr(), self.hmac.len())]
-    }
 }
 
 // This can't be derived because of the use of a phantom parameter
@@ -317,17 +323,17 @@ impl<CS: CipherSuite> Drop for Envelope<CS> {
 // Helper functions
 
 fn build_inner_envelope_internal<CS: CipherSuite>(
-    random_pwd: &[u8],
+    randomized_pwd_hasher: Hkdf<CS::Hash>,
     nonce: &[u8],
 ) -> Result<PublicKey<CS::KeGroup>, ProtocolError> {
-    let h = Hkdf::<CS::Hash>::new(None, random_pwd);
-    let mut keypair_seed = vec![0u8; <CS::KeGroup as Group>::ScalarLen::USIZE];
-    h.expand(&[nonce, STR_PRIVATE_KEY].concat(), &mut keypair_seed)
+    let mut keypair_seed = vec![0u8; <CS::KeGroup as KeGroup>::SkLen::USIZE];
+    randomized_pwd_hasher
+        .expand(&[nonce, STR_PRIVATE_KEY].concat(), &mut keypair_seed)
         .map_err(|_| InternalError::HkdfError)?;
     let client_static_keypair = KeyPair::<CS::KeGroup>::from_private_key_slice(
-        &CS::OprfGroup::scalar_as_bytes(CS::OprfGroup::hash_to_scalar::<CS::Hash>(
-            &keypair_seed[..],
-            STR_OPAQUE_DERIVE_AUTH_KEY_PAIR,
+        &CS::OprfGroup::scalar_as_bytes(CS::OprfGroup::hash_to_scalar::<CS::Hash, _, _>(
+            Some(&keypair_seed[..]),
+            GenericArray::from(*STR_OPAQUE_DERIVE_AUTH_KEY_PAIR),
         )?),
     )?;
 
@@ -335,17 +341,17 @@ fn build_inner_envelope_internal<CS: CipherSuite>(
 }
 
 fn recover_keys_internal<CS: CipherSuite>(
-    random_pwd: &[u8],
+    randomized_pwd_hasher: Hkdf<CS::Hash>,
     nonce: &[u8],
 ) -> Result<KeyPair<CS::KeGroup>, ProtocolError> {
-    let h = Hkdf::<CS::Hash>::new(None, random_pwd);
-    let mut keypair_seed = vec![0u8; <CS::KeGroup as Group>::ScalarLen::USIZE];
-    h.expand(&[nonce, STR_PRIVATE_KEY].concat(), &mut keypair_seed)
+    let mut keypair_seed = vec![0u8; <CS::KeGroup as KeGroup>::SkLen::USIZE];
+    randomized_pwd_hasher
+        .expand(&[nonce, STR_PRIVATE_KEY].concat(), &mut keypair_seed)
         .map_err(|_| InternalError::HkdfError)?;
     let client_static_keypair = KeyPair::<CS::KeGroup>::from_private_key_slice(
-        &CS::OprfGroup::scalar_as_bytes(CS::OprfGroup::hash_to_scalar::<CS::Hash>(
-            &keypair_seed[..],
-            STR_OPAQUE_DERIVE_AUTH_KEY_PAIR,
+        &CS::OprfGroup::scalar_as_bytes(CS::OprfGroup::hash_to_scalar::<CS::Hash, _, _>(
+            Some(&keypair_seed[..]),
+            GenericArray::from(*STR_OPAQUE_DERIVE_AUTH_KEY_PAIR),
         )?),
     )?;
 

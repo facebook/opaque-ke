@@ -163,6 +163,13 @@ jobs:
   benches:
     name: cargo bench compilation
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        backend_feature:
+          - u64_backend
+          - u32_backend
+          - p256,u64_backend
     steps:
       - name: Checkout sources
         uses: actions/checkout@v2
@@ -178,7 +185,7 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: bench
-          args: --features "bench" --no-run
+          args: --no-default-features --features bench --features ${{ matrix.backend_feature }} --no-run
 
   clippy:
     name: cargo clippy

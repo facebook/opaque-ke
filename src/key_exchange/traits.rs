@@ -3,10 +3,10 @@
 // This source code is licensed under the MIT license found in the
 // LICENSE file in the root directory of this source tree.
 
+use crate::key_exchange::group::KeGroup;
 use crate::{
     ciphersuite::CipherSuite,
     errors::ProtocolError,
-    group::Group,
     hash::Hash,
     keypair::{PrivateKey, PublicKey, SecretKey},
 };
@@ -36,9 +36,9 @@ pub type GenerateKe3Result<K, D, G> = (
     generic_array::GenericArray<u8, <D as digest::Digest>::OutputSize>,
 );
 
-pub trait KeyExchange<D: Hash, G: Group> {
-    type KE1State: FromBytes + ToBytesWithPointers + Zeroize + Clone;
-    type KE2State: FromBytes + ToBytesWithPointers + Zeroize + Clone;
+pub trait KeyExchange<D: Hash, G: KeGroup> {
+    type KE1State: FromBytes + ToBytes + Zeroize + Clone;
+    type KE2State: FromBytes + ToBytes + Zeroize + Clone;
     type KE1Message: FromBytes + ToBytes + Clone;
     type KE2Message: FromBytes + ToBytes + Clone;
     type KE3Message: FromBytes + ToBytes + Clone;
@@ -88,12 +88,4 @@ pub trait FromBytes: Sized {
 
 pub trait ToBytes {
     fn to_bytes(&self) -> Vec<u8>;
-}
-
-pub trait ToBytesWithPointers {
-    fn to_bytes(&self) -> Vec<u8>;
-
-    // Only used for tests to grab raw pointers to data
-    #[cfg(test)]
-    fn as_byte_ptrs(&self) -> Vec<(*const u8, usize)>;
 }

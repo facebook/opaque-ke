@@ -6,5 +6,6 @@
 //! Includes instantiations of key exchange protocols used in the
 //! login step for OPAQUE
 
+pub mod group;
 pub(crate) mod traits;
 pub mod tripledh;
