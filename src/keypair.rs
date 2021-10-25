@@ -141,10 +141,6 @@ impl<KG: KeGroup + Debug> KeyPair<KG> {
             .no_shrink()
             .boxed()
     }
-
-    pub fn as_ptrs(&self) -> Vec<Vec<u8>> {
-        vec![self.sk.to_vec(), self.pk.to_vec()]
-    }
 }
 
 /// A minimalist key type built around a \[u8; 32\]
@@ -373,7 +369,7 @@ mod tests {
         ));
         let ptr = key.as_ptr();
 
-        key.zeroize();
+        Zeroize::zeroize(&mut key);
 
         let bytes = unsafe { from_raw_parts(ptr, key_len) };
         assert!(bytes.iter().all(|&x| x == 0));
@@ -385,10 +381,18 @@ mod tests {
     fn test_zeroize_keypair() -> Result<(), ProtocolError> {
         let mut rng = OsRng;
         let mut keypair = KeyPair::<RistrettoPoint>::generate_random(&mut rng)?;
+        let pk_ptr = keypair.pk.as_ptr();
+        let sk_ptr = keypair.sk.as_ptr();
+        let pk_len = <RistrettoPoint as KeGroup>::PkLen::USIZE;
+        let sk_len = <RistrettoPoint as KeGroup>::SkLen::USIZE;
+
         Zeroize::zeroize(&mut keypair);
-        for bytes in keypair.as_ptrs() {
-            assert!(bytes.iter().all(|&x| x == 0));
-        }
+
+        let pk_bytes = unsafe { from_raw_parts(pk_ptr, pk_len) };
+        let sk_bytes = unsafe { from_raw_parts(sk_ptr, sk_len) };
+
+        assert!(pk_bytes.iter().all(|&x| x == 0));
+        assert!(sk_bytes.iter().all(|&x| x == 0));
 
         Ok(())
     }

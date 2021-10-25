@@ -14,11 +14,11 @@ resolver = "2"
 [features]
 default = ["u64_backend", "serialize"]
 slow-hash = ["argon2"]
-p256 = ["num-bigint", "num-integer", "num-traits", "once_cell", "p256_", "voprf/p256"]
+p256 = ["p256_", "voprf/p256"]
 bench = []
 u64_backend = ["curve25519-dalek/u64_backend", "voprf/ristretto255_u64"]
 u32_backend = ["curve25519-dalek/u32_backend", "voprf/ristretto255_u32"]
-std = ["curve25519-dalek/std", "getrandom", "rand/std", "rand/std_rng", "num-bigint/std", "num-integer/std", "num-traits/std", "voprf/std"]
+std = ["curve25519-dalek/std", "getrandom", "rand/std", "rand/std_rng", "voprf/std"]
 serialize = ["serde", "base64", "generic-array/serde", "curve25519-dalek/serde", "voprf/serde"]
 
 [dependencies]
@@ -32,10 +32,6 @@ generic-array = "0.14"
 getrandom = { version = "0.2", optional = true }
 hkdf = "0.11"
 hmac = "0.11"
-num-bigint = { version = "0.4", default-features = false, optional = true }
-num-integer = { version = "0.1", default-features = false, optional = true }
-num-traits = { version = "0.2", default-features = false, optional = true }
-once_cell = { version = "1", default-features = false, optional = true }
 p256_ = { package = "p256", version = "0.9", default-features = false, features = ["arithmetic", "zeroize"], optional = true }
 rand = { version = "0.8", default-features = false }
 serde = { version = "1", default-features = false, features = ["alloc", "derive"], optional = true }
@@ -60,7 +56,6 @@ sha2 = "0.9"
 proptest = "1"
 regex = "1"
 rustyline = "8"
-voprf = { version = "0.2", default-features = false, features = ["danger"] }
 
 [[bench]]
 name = "opaque"

@@ -34,9 +34,11 @@ impl KeGroup for p256_::ProjectivePoint {
     fn to_arr(&self) -> GenericArray<u8, Self::PkLen> {
         use p256_::elliptic_curve::sec1::ToEncodedPoint;
 
-        let mut bytes = self.to_affine().to_encoded_point(true).as_bytes().to_vec();
-        bytes.resize(33, 0);
-        *GenericArray::from_slice(&bytes)
+        let bytes = self.to_affine().to_encoded_point(true);
+        let bytes = bytes.as_bytes();
+        let mut result = GenericArray::default();
+        result[..bytes.len()].copy_from_slice(bytes);
+        result
     }
 
     fn diffie_hellman(&self, sk: &GenericArray<u8, Self::SkLen>) -> GenericArray<u8, Self::PkLen> {

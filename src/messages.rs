@@ -188,16 +188,6 @@ impl<CS: CipherSuite> RegistrationUpload<CS> {
             client_s_pk: server_setup.fake_keypair.public().clone(),
         }
     }
-
-    #[cfg(test)]
-    pub fn as_ptrs(&self) -> Vec<Vec<u8>> {
-        [
-            vec![self.client_s_pk.to_arr().to_vec()],
-            vec![self.masking_key.to_vec()],
-            self.envelope.as_ptrs(),
-        ]
-        .concat()
-    }
 }
 
 impl<CS: CipherSuite> CredentialRequest<CS> {

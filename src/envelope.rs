@@ -303,11 +303,6 @@ impl<CS: CipherSuite> Envelope<CS> {
             hmac: GenericArray::clone_from_slice(hmac),
         })
     }
-
-    #[cfg(test)]
-    pub fn as_ptrs(&self) -> Vec<Vec<u8>> {
-        vec![self.hmac.to_vec()]
-    }
 }
 
 // This can't be derived because of the use of a phantom parameter

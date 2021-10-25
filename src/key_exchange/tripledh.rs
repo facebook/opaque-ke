@@ -13,10 +13,7 @@ use crate::{
     hash::Hash,
     key_exchange::{
         group::KeGroup,
-        traits::{
-            FromBytes, GenerateKe2Result, GenerateKe3Result, KeyExchange, ToBytes,
-            ToBytesWithPointers,
-        },
+        traits::{FromBytes, GenerateKe2Result, GenerateKe3Result, KeyExchange, ToBytes},
     },
     keypair::{KeyPair, PrivateKey, PublicKey, SecretKey},
     serialization::serialize,
@@ -450,18 +447,10 @@ impl<KG: KeGroup> FromBytes for Ke1State<KG> {
     }
 }
 
-impl<KG: KeGroup> ToBytesWithPointers for Ke1State<KG> {
+impl<KG: KeGroup> ToBytes for Ke1State<KG> {
     fn to_bytes(&self) -> Vec<u8> {
         let output: Vec<u8> = [&self.client_e_sk.to_arr(), &self.client_nonce[..]].concat();
         output
-    }
-
-    #[cfg(test)]
-    fn as_ptrs(&self) -> Vec<Vec<u8>> {
-        vec![
-            self.client_e_sk.to_arr().to_vec(),
-            self.client_nonce.to_vec(),
-        ]
     }
 }
 
@@ -502,7 +491,7 @@ impl<HashLen: ArrayLength<u8>> FromBytes for Ke2State<HashLen> {
     }
 }
 
-impl<HashLen: ArrayLength<u8>> ToBytesWithPointers for Ke2State<HashLen> {
+impl<HashLen: ArrayLength<u8>> ToBytes for Ke2State<HashLen> {
     fn to_bytes(&self) -> Vec<u8> {
         [
             &self.km3[..],
@@ -510,15 +499,6 @@ impl<HashLen: ArrayLength<u8>> ToBytesWithPointers for Ke2State<HashLen> {
             &self.session_key[..],
         ]
         .concat()
-    }
-
-    #[cfg(test)]
-    fn as_ptrs(&self) -> Vec<Vec<u8>> {
-        vec![
-            self.km3.to_vec(),
-            self.hashed_transcript.to_vec(),
-            self.session_key.to_vec(),
-        ]
     }
 }
 

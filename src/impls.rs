@@ -105,7 +105,6 @@ macro_rules! impl_clone_for {
 macro_rules! impl_serialize_and_deserialize_for {
     ($t:ident) => {
         #[cfg(feature = "serialize")]
-        #[cfg_attr(docsrs, doc(cfg(feature = "serialize")))]
         impl<CS: CipherSuite> serde::Serialize for $t<CS> {
             fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
             where
@@ -117,13 +116,12 @@ macro_rules! impl_serialize_and_deserialize_for {
                     serializer
                         .serialize_str(&base64::encode(&self.serialize().map_err(Error::custom)?))
                 } else {
-                    serializer.serialize_bytes(&self.serialize().map_err(Error::custom)?[..])
+                    serializer.serialize_bytes(&self.serialize().map_err(Error::custom)?)
                 }
             }
         }
 
         #[cfg(feature = "serialize")]
-        #[cfg_attr(docsrs, doc(cfg(feature = "serialize")))]
         impl<'de, CS: CipherSuite> serde::Deserialize<'de> for $t<CS> {
             fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
             where

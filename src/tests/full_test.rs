@@ -811,7 +811,7 @@ fn test_zeroize_client_registration_start() -> Result<(), ProtocolError> {
 
     let mut state = client_registration_start_result.state;
     Zeroize::zeroize(&mut state);
-    for bytes in state.as_ptrs() {
+    for bytes in state.to_vec() {
         assert!(bytes.iter().all(|&x| x == 0));
     }
 
@@ -842,7 +842,7 @@ fn test_zeroize_client_registration_finish() -> Result<(), ProtocolError> {
 
     let mut state = client_registration_finish_result.state;
     Zeroize::zeroize(&mut state);
-    for bytes in state.as_ptrs() {
+    for bytes in state.to_vec() {
         assert!(bytes.iter().all(|&x| x == 0));
     }
 
@@ -874,7 +874,7 @@ fn test_zeroize_server_registration_finish() -> Result<(), ProtocolError> {
 
     let mut state = p_file;
     Zeroize::zeroize(&mut state);
-    for bytes in state.as_ptrs() {
+    for bytes in state.serialize() {
         assert!(bytes.iter().all(|&x| x == 0));
     }
 
@@ -891,7 +891,7 @@ fn test_zeroize_client_login_start() -> Result<(), ProtocolError> {
 
     let mut state = client_login_start_result.state;
     Zeroize::zeroize(&mut state);
-    for bytes in state.as_ptrs() {
+    for bytes in state.to_vec() {
         assert!(bytes.iter().all(|&x| x == 0));
     }
 
@@ -935,7 +935,7 @@ fn test_zeroize_server_login_start() -> Result<(), ProtocolError> {
 
     let mut state = server_login_start_result.state;
     Zeroize::zeroize(&mut state);
-    for bytes in state.as_ptrs() {
+    for bytes in state.serialize() {
         assert!(bytes.iter().all(|&x| x == 0));
     }
 
@@ -983,7 +983,7 @@ fn test_zeroize_client_login_finish() -> Result<(), ProtocolError> {
 
     let mut state = client_login_finish_result.state;
     Zeroize::zeroize(&mut state);
-    for bytes in state.as_ptrs() {
+    for bytes in state.to_vec() {
         assert!(bytes.iter().all(|&x| x == 0));
     }
 
@@ -1034,7 +1034,7 @@ fn test_zeroize_server_login_finish() -> Result<(), ProtocolError> {
 
     let mut state = server_login_finish_result.state;
     Zeroize::zeroize(&mut state);
-    for bytes in state.as_ptrs() {
+    for bytes in state.serialize() {
         assert!(bytes.iter().all(|&x| x == 0));
     }
 

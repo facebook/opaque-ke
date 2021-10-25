@@ -12,7 +12,7 @@ use crate::{
     hash::Hash,
     key_exchange::{
         group::KeGroup,
-        traits::{FromBytes, KeyExchange, ToBytesWithPointers},
+        traits::{FromBytes, KeyExchange, ToBytes},
     },
     keypair::{KeyPair, PrivateKey, PublicKey, SecretKey},
     serialization::{serialize, tokenize},
@@ -218,10 +218,13 @@ impl<CS: CipherSuite> ClientRegistration<CS> {
     }
 
     #[cfg(test)]
-    pub fn as_ptrs(&self) -> Vec<Vec<u8>> {
-        let mut result = vec![self.oprf_client.serialize()];
-        result.push(self.blinded_element.value().to_arr().to_vec());
-        result
+    /// Only used for testing zeroize
+    pub(crate) fn to_vec(&self) -> Result<Vec<u8>, ProtocolError> {
+        Ok([
+            self.oprf_client.serialize(),
+            self.blinded_element.serialize(),
+        ]
+        .concat())
     }
 
     /// Returns an initial "blinded" request to send to the server, as well as a ClientRegistration
@@ -308,11 +311,6 @@ impl<CS: CipherSuite> ServerRegistration<CS> {
         Ok(Self(RegistrationUpload::deserialize(input)?))
     }
 
-    #[cfg(test)]
-    pub fn as_ptrs(&self) -> Vec<Vec<u8>> {
-        self.0.as_ptrs()
-    }
-
     /// From the client's "blinded" password, returns a response to be
     /// sent back to the client, as well as a ServerRegistration
     pub fn start<S: SecretKey<CS::KeGroup>>(
@@ -390,13 +388,14 @@ impl<CS: CipherSuite> ClientLogin<CS> {
     }
 
     #[cfg(test)]
-    pub fn as_ptrs(&self) -> Vec<Vec<u8>> {
-        [
-            vec![self.oprf_client.serialize()],
-            self.ke1_state.as_ptrs(),
-            vec![self.serialized_credential_request.clone()],
+    /// Only used for testing zeroize
+    pub(crate) fn to_vec(&self) -> Result<Vec<u8>, ProtocolError> {
+        Ok([
+            self.oprf_client.serialize(),
+            self.serialized_credential_request.clone(),
+            self.ke1_state.to_bytes(),
         ]
-        .concat()
+        .concat())
     }
 }
 
@@ -650,11 +649,6 @@ impl<CS: CipherSuite> ServerLogin<CS> {
             #[cfg(test)]
             state: self,
         })
-    }
-
-    #[cfg(test)]
-    pub fn as_ptrs(&self) -> Vec<Vec<u8>> {
-        self.ke2_state.as_ptrs()
     }
 }
 
