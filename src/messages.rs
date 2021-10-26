@@ -342,7 +342,7 @@ impl_clone_for!(
     struct RegistrationRequest<CS: CipherSuite>,
     [blinded_element],
 );
-impl_debug_eq_hash_for!(struct RegistrationRequest<CS: CipherSuite>, [blinded_element], [CS::OprfGroup, CS::Hash]);
+impl_debug_eq_hash_for!(struct RegistrationRequest<CS: CipherSuite>, [blinded_element], [CS::OprfGroup]);
 impl_serialize_and_deserialize_for!(RegistrationRequest);
 
 impl_clone_for!(
@@ -352,7 +352,7 @@ impl_clone_for!(
 impl_debug_eq_hash_for!(
     struct RegistrationResponse<CS: CipherSuite>,
     [evaluation_element, server_s_pk],
-    [CS::OprfGroup, CS::Hash],
+    [CS::OprfGroup],
 );
 impl_serialize_and_deserialize_for!(RegistrationResponse);
 
