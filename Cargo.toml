@@ -36,7 +36,7 @@ p256_ = { package = "p256", version = "0.9", default-features = false, features 
 rand = { version = "0.8", default-features = false }
 serde = { version = "1", default-features = false, features = ["alloc", "derive"], optional = true }
 subtle = { version = "2.3", default-features = false }
-voprf = { git = "https://github.com/daxpedda/voprf", branch = "de-serialization", default-features = false, features = ["danger"] }
+voprf = { git = "https://github.com/daxpedda/voprf", rev = "af90af97d52805775888a578253c669ed68df16b", default-features = false, features = ["danger"] }
 zeroize = { version = "1", features = ["zeroize_derive"] }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
