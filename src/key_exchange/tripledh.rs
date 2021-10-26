@@ -434,7 +434,7 @@ fn generate_nonce<R: RngCore + CryptoRng>(rng: &mut R) -> GenericArray<u8, Nonce
 
 impl<KG: KeGroup> FromBytes for Ke1State<KG> {
     fn from_bytes<CS: CipherSuite>(bytes: &[u8]) -> Result<Self, ProtocolError> {
-        let key_len = <KG as KeGroup>::PkLen::USIZE;
+        let key_len = <KG as KeGroup>::SkLen::USIZE;
 
         let nonce_len = NonceLen::USIZE;
         let checked_bytes = check_slice_size_atleast(bytes, key_len + nonce_len, "ke1_state")?;
