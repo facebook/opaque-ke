@@ -11,9 +11,9 @@ macro_rules! impl_debug_eq_hash_for {
         $(where $($type: core::fmt::Debug,)+)?
         {
             fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-                f.debug_struct("$name")
-                .field("$field1", &self.$field1)
-                $(.field("$field2", &self.$field2))*
+                f.debug_struct(stringify!($name))
+                .field(stringify!($field1), &self.$field1)
+                $(.field(stringify!($field2), &self.$field2))*
                 .finish()
             }
         }
