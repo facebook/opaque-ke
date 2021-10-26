@@ -282,11 +282,11 @@ fn generate_parameters<CS: CipherSuite>() -> Result<TestVectorParameters, Protoc
     let mut rng = OsRng;
 
     // Inputs
-    let server_s_kp = KeyPair::<CS::KeGroup>::generate_random(&mut rng)?;
-    let server_e_kp = KeyPair::<CS::KeGroup>::generate_random(&mut rng)?;
-    let client_s_kp = KeyPair::<CS::KeGroup>::generate_random(&mut rng)?;
-    let client_e_kp = KeyPair::<CS::KeGroup>::generate_random(&mut rng)?;
-    let fake_kp = KeyPair::<CS::KeGroup>::generate_random(&mut rng)?;
+    let server_s_kp = KeyPair::<CS::KeGroup>::generate_random(&mut rng);
+    let server_e_kp = KeyPair::<CS::KeGroup>::generate_random(&mut rng);
+    let client_s_kp = KeyPair::<CS::KeGroup>::generate_random(&mut rng);
+    let client_e_kp = KeyPair::<CS::KeGroup>::generate_random(&mut rng);
+    let fake_kp = KeyPair::<CS::KeGroup>::generate_random(&mut rng);
     let credential_identifier = b"credIdentifier";
     let id_u = b"idU";
     let id_s = b"idS";
@@ -732,7 +732,7 @@ fn test_complete_flow(
     let credential_identifier = b"credentialIdentifier";
     let mut client_rng = OsRng;
     let mut server_rng = OsRng;
-    let server_setup = ServerSetup::<RistrettoSha5123dhNoSlowHash>::new(&mut server_rng)?;
+    let server_setup = ServerSetup::<RistrettoSha5123dhNoSlowHash>::new(&mut server_rng);
     let client_registration_start_result =
         ClientRegistration::<RistrettoSha5123dhNoSlowHash>::start(
             &mut client_rng,
@@ -824,7 +824,7 @@ fn test_zeroize_client_registration_start() -> Result<(), ProtocolError> {
 fn test_zeroize_client_registration_finish() -> Result<(), ProtocolError> {
     let mut client_rng = OsRng;
     let mut server_rng = OsRng;
-    let server_setup = ServerSetup::<RistrettoSha5123dhNoSlowHash>::new(&mut server_rng)?;
+    let server_setup = ServerSetup::<RistrettoSha5123dhNoSlowHash>::new(&mut server_rng);
     let client_registration_start_result =
         ClientRegistration::<RistrettoSha5123dhNoSlowHash>::start(
             &mut client_rng,
@@ -855,7 +855,7 @@ fn test_zeroize_client_registration_finish() -> Result<(), ProtocolError> {
 fn test_zeroize_server_registration_finish() -> Result<(), ProtocolError> {
     let mut client_rng = OsRng;
     let mut server_rng = OsRng;
-    let server_setup = ServerSetup::<RistrettoSha5123dhNoSlowHash>::new(&mut server_rng)?;
+    let server_setup = ServerSetup::<RistrettoSha5123dhNoSlowHash>::new(&mut server_rng);
     let client_registration_start_result =
         ClientRegistration::<RistrettoSha5123dhNoSlowHash>::start(
             &mut client_rng,
@@ -904,7 +904,7 @@ fn test_zeroize_client_login_start() -> Result<(), ProtocolError> {
 fn test_zeroize_server_login_start() -> Result<(), ProtocolError> {
     let mut client_rng = OsRng;
     let mut server_rng = OsRng;
-    let server_setup = ServerSetup::<RistrettoSha5123dhNoSlowHash>::new(&mut server_rng)?;
+    let server_setup = ServerSetup::<RistrettoSha5123dhNoSlowHash>::new(&mut server_rng);
     let client_registration_start_result =
         ClientRegistration::<RistrettoSha5123dhNoSlowHash>::start(
             &mut client_rng,
@@ -948,7 +948,7 @@ fn test_zeroize_server_login_start() -> Result<(), ProtocolError> {
 fn test_zeroize_client_login_finish() -> Result<(), ProtocolError> {
     let mut client_rng = OsRng;
     let mut server_rng = OsRng;
-    let server_setup = ServerSetup::<RistrettoSha5123dhNoSlowHash>::new(&mut server_rng)?;
+    let server_setup = ServerSetup::<RistrettoSha5123dhNoSlowHash>::new(&mut server_rng);
     let client_registration_start_result =
         ClientRegistration::<RistrettoSha5123dhNoSlowHash>::start(
             &mut client_rng,
@@ -996,7 +996,7 @@ fn test_zeroize_client_login_finish() -> Result<(), ProtocolError> {
 fn test_zeroize_server_login_finish() -> Result<(), ProtocolError> {
     let mut client_rng = OsRng;
     let mut server_rng = OsRng;
-    let server_setup = ServerSetup::<RistrettoSha5123dhNoSlowHash>::new(&mut server_rng)?;
+    let server_setup = ServerSetup::<RistrettoSha5123dhNoSlowHash>::new(&mut server_rng);
     let client_registration_start_result =
         ClientRegistration::<RistrettoSha5123dhNoSlowHash>::start(
             &mut client_rng,
@@ -1085,7 +1085,7 @@ fn test_reflected_value_error_registration() -> Result<(), ProtocolError> {
     let password = b"password";
     let mut client_rng = OsRng;
     let mut server_rng = OsRng;
-    let server_setup = ServerSetup::<RistrettoSha5123dhNoSlowHash>::new(&mut server_rng)?;
+    let server_setup = ServerSetup::<RistrettoSha5123dhNoSlowHash>::new(&mut server_rng);
     let client_registration_start_result =
         ClientRegistration::<RistrettoSha5123dhNoSlowHash>::start(&mut client_rng, password)?;
     let alpha = client_registration_start_result
@@ -1123,7 +1123,7 @@ fn test_reflected_value_error_login() -> Result<(), ProtocolError> {
     let password = b"password";
     let mut client_rng = OsRng;
     let mut server_rng = OsRng;
-    let server_setup = ServerSetup::<RistrettoSha5123dhNoSlowHash>::new(&mut server_rng)?;
+    let server_setup = ServerSetup::<RistrettoSha5123dhNoSlowHash>::new(&mut server_rng);
     let client_registration_start_result =
         ClientRegistration::<RistrettoSha5123dhNoSlowHash>::start(&mut client_rng, password)?;
     let server_registration_start_result =

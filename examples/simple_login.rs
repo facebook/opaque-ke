@@ -149,7 +149,7 @@ fn account_login(
 
 fn main() {
     let mut rng = OsRng;
-    let server_setup = ServerSetup::<Default>::new(&mut rng).unwrap();
+    let server_setup = ServerSetup::<Default>::new(&mut rng);
 
     let mut rl = Editor::<()>::new();
     let mut registered_users = HashMap::<String, Vec<u8>>::new();

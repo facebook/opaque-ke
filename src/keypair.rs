@@ -113,15 +113,13 @@ impl<KG: KeGroup, S: SecretKey<KG>> KeyPair<KG, S> {
 
 impl<KG: KeGroup> KeyPair<KG> {
     /// Generating a random key pair given a cryptographic rng
-    pub(crate) fn generate_random<R: RngCore + CryptoRng>(
-        rng: &mut R,
-    ) -> Result<Self, InternalError> {
+    pub(crate) fn generate_random<R: RngCore + CryptoRng>(rng: &mut R) -> Self {
         let sk = KG::random_sk(rng);
         let pk = KG::public_key(&sk);
-        Ok(Self {
+        Self {
             pk: PublicKey(Key(pk.to_arr())),
             sk: PrivateKey(Key(sk)),
-        })
+        }
     }
 }
 
@@ -138,7 +136,7 @@ impl<KG: KeGroup + Debug> KeyPair<KG> {
         any::<[u8; 32]>()
             .prop_filter_map("valid random keypair", |seed| {
                 let mut rng = StdRng::from_seed(seed);
-                Some(Self::generate_random(&mut rng).unwrap())
+                Some(Self::generate_random(&mut rng))
             })
             .no_shrink()
             .boxed()
@@ -380,9 +378,9 @@ mod tests {
     }
 
     #[test]
-    fn test_zeroize_keypair() -> Result<(), ProtocolError> {
+    fn test_zeroize_keypair() {
         let mut rng = OsRng;
-        let mut keypair = KeyPair::<RistrettoPoint>::generate_random(&mut rng)?;
+        let mut keypair = KeyPair::<RistrettoPoint>::generate_random(&mut rng);
         let pk_ptr = keypair.pk.as_ptr();
         let sk_ptr = keypair.sk.as_ptr();
         let pk_len = <RistrettoPoint as KeGroup>::PkLen::USIZE;
@@ -395,8 +393,6 @@ mod tests {
 
         assert!(pk_bytes.iter().all(|&x| x == 0));
         assert!(sk_bytes.iter().all(|&x| x == 0));
-
-        Ok(())
     }
 
     proptest! {
@@ -489,7 +485,7 @@ mod tests {
         let keypair = KeyPair::from_private_key(sk).unwrap();
 
         let server_setup =
-            ServerSetup::<Default, RemoteKey>::new_with_key(&mut OsRng, keypair).unwrap();
+            ServerSetup::<Default, RemoteKey>::new_with_key(&mut OsRng, keypair);
 
         let ClientRegistrationStartResult {
             message,

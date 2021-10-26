@@ -208,7 +208,7 @@ fn open_locker(
 
 fn main() {
     let mut rng = OsRng;
-    let server_setup = ServerSetup::<Default>::new(&mut rng).unwrap();
+    let server_setup = ServerSetup::<Default>::new(&mut rng);
 
     let mut rl = Editor::<()>::new();
     let mut registered_lockers: Vec<Locker> = vec![];

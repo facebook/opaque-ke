@@ -122,7 +122,7 @@ impl<D: Hash, KG: KeGroup> KeyExchange<D, KG> for TripleDH {
     fn generate_ke1<R: RngCore + CryptoRng>(
         rng: &mut R,
     ) -> Result<(Self::KE1State, Self::KE1Message), ProtocolError> {
-        let client_e_kp = KeyPair::<KG>::generate_random(rng)?;
+        let client_e_kp = KeyPair::<KG>::generate_random(rng);
         let client_nonce = generate_nonce::<R>(rng);
 
         let ke1_message = Ke1Message {
@@ -151,8 +151,7 @@ impl<D: Hash, KG: KeGroup> KeyExchange<D, KG> for TripleDH {
         id_s: Vec<u8>,
         context: Vec<u8>,
     ) -> Result<GenerateKe2Result<Self, D, KG>, ProtocolError<S::Error>> {
-        let server_e_kp =
-            KeyPair::<KG>::generate_random(rng).map_err(|_| InternalError::InvalidKeypairError)?;
+        let server_e_kp = KeyPair::<KG>::generate_random(rng);
         let server_nonce = generate_nonce::<R>(rng);
 
         let mut transcript_hasher = D::new()

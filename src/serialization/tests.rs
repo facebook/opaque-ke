@@ -90,7 +90,7 @@ fn server_registration_roundtrip() -> Result<(), ProtocolError> {
                                                                       // mock_envelope_bytes.extend_from_slice(&ciphertext); // ciphertext which is an encrypted private key
     mock_envelope_bytes.extend_from_slice(&[0; MAC_SIZE]); // length-MAC_SIZE hmac
 
-    let mock_client_kp = KeyPair::<<Default as CipherSuite>::OprfGroup>::generate_random(&mut rng)?;
+    let mock_client_kp = KeyPair::<<Default as CipherSuite>::OprfGroup>::generate_random(&mut rng);
     // serialization order: oprf_key, public key, envelope
     let mut bytes = Vec::<u8>::new();
     bytes.extend_from_slice(&mock_client_kp.public().to_arr());
@@ -135,7 +135,7 @@ fn registration_response_roundtrip() -> Result<(), ProtocolError> {
     let pt = random_ristretto_point();
     let beta_bytes = pt.to_arr();
     let mut rng = OsRng;
-    let skp = KeyPair::<<Default as CipherSuite>::OprfGroup>::generate_random(&mut rng)?;
+    let skp = KeyPair::<<Default as CipherSuite>::OprfGroup>::generate_random(&mut rng);
     let pubkey_bytes = skp.public().to_arr();
 
     let mut input = Vec::new();
@@ -165,7 +165,7 @@ fn registration_response_roundtrip() -> Result<(), ProtocolError> {
 #[test]
 fn registration_upload_roundtrip() -> Result<(), ProtocolError> {
     let mut rng = OsRng;
-    let skp = KeyPair::<<Default as CipherSuite>::OprfGroup>::generate_random(&mut rng)?;
+    let skp = KeyPair::<<Default as CipherSuite>::OprfGroup>::generate_random(&mut rng);
     let pubkey_bytes = skp.public().to_arr();
 
     let mut key = [0u8; 32];
@@ -205,7 +205,7 @@ fn credential_request_roundtrip() -> Result<(), ProtocolError> {
     let alpha = random_ristretto_point();
     let alpha_bytes = alpha.to_arr().to_vec();
 
-    let client_e_kp = KeyPair::<<Default as CipherSuite>::OprfGroup>::generate_random(&mut rng)?;
+    let client_e_kp = KeyPair::<<Default as CipherSuite>::OprfGroup>::generate_random(&mut rng);
     let mut client_nonce = vec![0u8; NonceLen::USIZE];
     rng.fill_bytes(&mut client_nonce);
 
@@ -249,7 +249,7 @@ fn credential_response_roundtrip() -> Result<(), ProtocolError> {
         vec![0u8; <RistrettoPoint as Group>::ElemLen::USIZE + Envelope::<Default>::len()];
     rng.fill_bytes(&mut masked_response);
 
-    let server_e_kp = KeyPair::<<Default as CipherSuite>::OprfGroup>::generate_random(&mut rng)?;
+    let server_e_kp = KeyPair::<<Default as CipherSuite>::OprfGroup>::generate_random(&mut rng);
     let mut mac = [0u8; MAC_SIZE];
     rng.fill_bytes(&mut mac);
     let mut server_nonce = vec![0u8; NonceLen::USIZE];
@@ -309,7 +309,7 @@ fn client_login_roundtrip() -> Result<(), ProtocolError> {
     let pw = b"hunter2";
     let mut rng = OsRng;
 
-    let client_e_kp = KeyPair::<<Default as CipherSuite>::OprfGroup>::generate_random(&mut rng)?;
+    let client_e_kp = KeyPair::<<Default as CipherSuite>::OprfGroup>::generate_random(&mut rng);
     let mut client_nonce = vec![0u8; NonceLen::USIZE];
     rng.fill_bytes(&mut client_nonce);
 
@@ -335,7 +335,7 @@ fn client_login_roundtrip() -> Result<(), ProtocolError> {
 fn ke1_message_roundtrip() -> Result<(), ProtocolError> {
     let mut rng = OsRng;
 
-    let client_e_kp = KeyPair::<<Default as CipherSuite>::OprfGroup>::generate_random(&mut rng)?;
+    let client_e_kp = KeyPair::<<Default as CipherSuite>::OprfGroup>::generate_random(&mut rng);
     let mut client_nonce = vec![0u8; NonceLen::USIZE];
     rng.fill_bytes(&mut client_nonce);
 
@@ -353,7 +353,7 @@ fn ke1_message_roundtrip() -> Result<(), ProtocolError> {
 fn ke2_message_roundtrip() -> Result<(), ProtocolError> {
     let mut rng = OsRng;
 
-    let server_e_kp = KeyPair::<<Default as CipherSuite>::OprfGroup>::generate_random(&mut rng)?;
+    let server_e_kp = KeyPair::<<Default as CipherSuite>::OprfGroup>::generate_random(&mut rng);
     let mut mac = [0u8; MAC_SIZE];
     rng.fill_bytes(&mut mac);
     let mut server_nonce = vec![0u8; NonceLen::USIZE];

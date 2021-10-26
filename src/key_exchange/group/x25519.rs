@@ -88,7 +88,7 @@ mod tests {
 
         const PASSWORD: &[u8] = b"1234";
 
-        let server_setup = ServerSetup::<X25519Sha512NoSlowHash>::new(&mut OsRng)?;
+        let server_setup = ServerSetup::<X25519Sha512NoSlowHash>::new(&mut OsRng);
 
         let ClientRegistrationStartResult {
             message,

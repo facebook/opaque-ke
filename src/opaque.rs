@@ -139,8 +139,8 @@ impl_serialize_and_deserialize_for!(ServerLogin);
 
 impl<CS: CipherSuite> ServerSetup<CS, PrivateKey<CS::KeGroup>> {
     /// Generate a new instance of server setup
-    pub fn new<R: CryptoRng + RngCore>(rng: &mut R) -> Result<Self, InternalError> {
-        let keypair = KeyPair::<CS::KeGroup>::generate_random(rng)?;
+    pub fn new<R: CryptoRng + RngCore>(rng: &mut R) -> Self {
+        let keypair = KeyPair::<CS::KeGroup>::generate_random(rng);
         Self::new_with_key(rng, keypair)
     }
 }
@@ -150,15 +150,15 @@ impl<CS: CipherSuite, S: SecretKey<CS::KeGroup>> ServerSetup<CS, S> {
     pub fn new_with_key<R: CryptoRng + RngCore>(
         rng: &mut R,
         keypair: KeyPair<CS::KeGroup, S>,
-    ) -> Result<Self, InternalError> {
+    ) -> Self {
         let mut seed = vec![0u8; <CS::Hash as Digest>::OutputSize::USIZE];
         rng.fill_bytes(&mut seed);
 
-        Ok(Self {
+        Self {
             oprf_seed: GenericArray::clone_from_slice(&seed[..]),
             keypair,
-            fake_keypair: KeyPair::<CS::KeGroup>::generate_random(rng)?,
-        })
+            fake_keypair: KeyPair::<CS::KeGroup>::generate_random(rng),
+        }
     }
 
     /// Serialization into bytes
