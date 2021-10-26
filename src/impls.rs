@@ -134,10 +134,42 @@ macro_rules! impl_serialize_and_deserialize_for {
                 if deserializer.is_human_readable() {
                     let s = <&str>::deserialize(deserializer)?;
                     Self::deserialize(&base64::decode(s).map_err(Error::custom)?)
+                        .map_err(Error::custom)
                 } else {
-                    Self::deserialize(<&[u8]>::deserialize(deserializer)?)
+                    struct ByteVisitor<CS: CipherSuite>(core::marker::PhantomData<CS>);
+
+                    impl<'de, CS: CipherSuite> serde::de::Visitor<'de> for ByteVisitor<CS> {
+                        type Value = $t<CS>;
+                        fn expecting(
+                            &self,
+                            formatter: &mut core::fmt::Formatter,
+                        ) -> core::fmt::Result {
+                            formatter.write_str(core::concat!(
+                                "the byte representation of a ",
+                                core::stringify!($t)
+                            ))
+                        }
+
+                        fn visit_bytes<E>(self, value: &[u8]) -> Result<Self::Value, E>
+                        where
+                            E: Error,
+                        {
+                            $t::<CS>::deserialize(value).map_err(|_| {
+                                Error::invalid_value(
+                                    serde::de::Unexpected::Bytes(value),
+                                    &core::concat!(
+                                        "invalid byte sequence for ",
+                                        core::stringify!($t)
+                                    ),
+                                )
+                            })
+                        }
+                    }
+
+                    deserializer
+                        .deserialize_bytes(ByteVisitor::<CS>(core::marker::PhantomData))
+                        .map_err(Error::custom)
                 }
-                .map_err(Error::custom)
             }
         }
     };
