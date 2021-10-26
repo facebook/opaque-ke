@@ -17,7 +17,11 @@ use alloc::vec;
 use alloc::vec::Vec;
 use core::convert::TryFrom;
 use digest::Digest;
-use generic_array::{typenum::Unsigned, GenericArray};
+use generic_array::{
+    sequence::Concat,
+    typenum::{Unsigned, U32},
+    GenericArray,
+};
 use hkdf::Hkdf;
 use hmac::{Hmac, Mac, NewMac};
 use rand::{CryptoRng, RngCore};
@@ -25,11 +29,11 @@ use voprf::group::Group;
 use zeroize::Zeroize;
 
 // Constant string used as salt for HKDF computation
-const STR_AUTH_KEY: &[u8; 7] = b"AuthKey";
-const STR_EXPORT_KEY: &[u8; 9] = b"ExportKey";
-const STR_PRIVATE_KEY: &[u8; 10] = b"PrivateKey";
-const STR_OPAQUE_DERIVE_AUTH_KEY_PAIR: &[u8; 24] = b"OPAQUE-DeriveAuthKeyPair";
-const NONCE_LEN: usize = 32;
+const STR_AUTH_KEY: [u8; 7] = *b"AuthKey";
+const STR_EXPORT_KEY: [u8; 9] = *b"ExportKey";
+const STR_PRIVATE_KEY: [u8; 10] = *b"PrivateKey";
+const STR_OPAQUE_DERIVE_AUTH_KEY_PAIR: [u8; 24] = *b"OPAQUE-DeriveAuthKeyPair";
+type NonceLen = U32;
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq, Zeroize)]
 #[zeroize(drop)]
@@ -60,7 +64,7 @@ impl TryFrom<u8> for InnerEnvelopeMode {
 /// the confusion around the implementation of an RKR-secure encryption.
 pub(crate) struct Envelope<CS: CipherSuite> {
     mode: InnerEnvelopeMode,
-    nonce: Vec<u8>,
+    nonce: GenericArray<u8, NonceLen>,
     hmac: GenericArray<u8, <CS::Hash as Digest>::OutputSize>,
 }
 
@@ -69,7 +73,7 @@ impl<CS: CipherSuite> Clone for Envelope<CS> {
     fn clone(&self) -> Self {
         Self {
             mode: self.mode.clone(),
-            nonce: self.nonce.clone(),
+            nonce: self.nonce,
             hmac: self.hmac.clone(),
         }
     }
@@ -124,19 +128,19 @@ impl<CS: CipherSuite> Envelope<CS> {
         server_s_pk: &[u8],
         optional_ids: Option<Identifiers>,
     ) -> Result<SealResult<CS>, ProtocolError> {
-        let mut nonce = vec![0u8; NONCE_LEN];
+        let mut nonce = GenericArray::default();
         rng.fill_bytes(&mut nonce);
 
         let (mode, client_s_pk) = (
             InnerEnvelopeMode::Internal,
-            build_inner_envelope_internal::<CS>(randomized_pwd_hasher.clone(), &nonce)?,
+            build_inner_envelope_internal::<CS>(randomized_pwd_hasher.clone(), nonce)?,
         );
 
         let (id_u, id_s) =
             bytestrings_from_identifiers(&optional_ids, &client_s_pk.to_arr(), server_s_pk)?;
         let aad = construct_aad(&id_u, &id_s, server_s_pk);
 
-        let result = Self::seal_raw(randomized_pwd_hasher, &nonce, &aad, mode)?;
+        let result = Self::seal_raw(randomized_pwd_hasher, nonce, &aad, mode)?;
         Ok((
             result.0,
             client_s_pk,
@@ -151,7 +155,7 @@ impl<CS: CipherSuite> Envelope<CS> {
     #[allow(clippy::type_complexity)]
     pub(crate) fn seal_raw(
         randomized_pwd_hasher: Hkdf<CS::Hash>,
-        nonce: &[u8],
+        nonce: GenericArray<u8, NonceLen>,
         aad: &[u8],
         mode: InnerEnvelopeMode,
     ) -> Result<SealRawResult<CS>, InternalError> {
@@ -159,15 +163,15 @@ impl<CS: CipherSuite> Envelope<CS> {
         let mut export_key = vec![0u8; Self::export_key_size()];
 
         randomized_pwd_hasher
-            .expand(&[nonce, STR_AUTH_KEY].concat(), &mut hmac_key)
+            .expand(&nonce.concat(STR_AUTH_KEY.into()), &mut hmac_key)
             .map_err(|_| InternalError::HkdfError)?;
         randomized_pwd_hasher
-            .expand(&[nonce, STR_EXPORT_KEY].concat(), &mut export_key)
+            .expand(&nonce.concat(STR_EXPORT_KEY.into()), &mut export_key)
             .map_err(|_| InternalError::HkdfError)?;
 
         let mut hmac =
             Hmac::<CS::Hash>::new_from_slice(&hmac_key).map_err(|_| InternalError::HmacError)?;
-        hmac.update(nonce);
+        hmac.update(&nonce);
         hmac.update(aad);
 
         let hmac_bytes = hmac.finalize().into_bytes();
@@ -175,7 +179,7 @@ impl<CS: CipherSuite> Envelope<CS> {
         Ok((
             Self {
                 mode,
-                nonce: nonce.to_vec(),
+                nonce,
                 hmac: hmac_bytes,
             },
             GenericArray::clone_from_slice(&export_key),
@@ -195,7 +199,7 @@ impl<CS: CipherSuite> Envelope<CS> {
                 return Err(InternalError::IncompatibleEnvelopeModeError.into())
             }
             InnerEnvelopeMode::Internal => {
-                recover_keys_internal::<CS>(randomized_pwd_hasher.clone(), &self.nonce)?
+                recover_keys_internal::<CS>(randomized_pwd_hasher.clone(), self.nonce)?
             }
         };
 
@@ -227,16 +231,10 @@ impl<CS: CipherSuite> Envelope<CS> {
         let mut export_key = vec![0u8; Self::export_key_size()];
 
         randomized_pwd_hasher
-            .expand(
-                &[self.nonce.clone(), STR_AUTH_KEY.to_vec()].concat(),
-                &mut hmac_key,
-            )
+            .expand(&self.nonce.concat(STR_AUTH_KEY.into()), &mut hmac_key)
             .map_err(|_| InternalError::HkdfError)?;
         randomized_pwd_hasher
-            .expand(
-                &[self.nonce.clone(), STR_EXPORT_KEY.to_vec()].concat(),
-                &mut export_key,
-            )
+            .expand(&self.nonce.concat(STR_EXPORT_KEY.into()), &mut export_key)
             .map_err(|_| InternalError::HkdfError)?;
 
         let mut hmac =
@@ -258,7 +256,7 @@ impl<CS: CipherSuite> Envelope<CS> {
     pub(crate) fn dummy() -> Self {
         Self {
             mode: InnerEnvelopeMode::Zero,
-            nonce: vec![0u8; NONCE_LEN],
+            nonce: GenericArray::default(),
             hmac: GenericArray::clone_from_slice(&vec![
                 0u8;
                 <CS::Hash as Digest>::OutputSize::USIZE
@@ -275,7 +273,7 @@ impl<CS: CipherSuite> Envelope<CS> {
     }
 
     pub(crate) fn len() -> usize {
-        <CS::Hash as Digest>::OutputSize::USIZE + NONCE_LEN
+        <CS::Hash as Digest>::OutputSize::USIZE + NonceLen::USIZE
     }
 
     pub(crate) fn serialize(&self) -> Vec<u8> {
@@ -284,16 +282,16 @@ impl<CS: CipherSuite> Envelope<CS> {
     pub(crate) fn deserialize(bytes: &[u8]) -> Result<Self, ProtocolError> {
         let mode = InnerEnvelopeMode::Internal; // Better way to hard-code this?
 
-        if bytes.len() < NONCE_LEN {
+        if bytes.len() < NonceLen::USIZE {
             return Err(ProtocolError::SerializationError);
         }
-        let nonce = bytes[..NONCE_LEN].to_vec();
+        let nonce = GenericArray::clone_from_slice(&bytes[..NonceLen::USIZE]);
 
         let remainder = match mode {
             InnerEnvelopeMode::Zero => {
                 return Err(InternalError::IncompatibleEnvelopeModeError.into())
             }
-            InnerEnvelopeMode::Internal => bytes[NONCE_LEN..].to_vec(),
+            InnerEnvelopeMode::Internal => bytes[NonceLen::USIZE..].to_vec(),
         };
 
         let hmac_key_size = Self::hmac_key_size();
@@ -326,16 +324,16 @@ impl<CS: CipherSuite> Drop for Envelope<CS> {
 
 fn build_inner_envelope_internal<CS: CipherSuite>(
     randomized_pwd_hasher: Hkdf<CS::Hash>,
-    nonce: &[u8],
+    nonce: GenericArray<u8, NonceLen>,
 ) -> Result<PublicKey<CS::KeGroup>, ProtocolError> {
     let mut keypair_seed = vec![0u8; <CS::KeGroup as KeGroup>::SkLen::USIZE];
     randomized_pwd_hasher
-        .expand(&[nonce, STR_PRIVATE_KEY].concat(), &mut keypair_seed)
+        .expand(&nonce.concat(STR_PRIVATE_KEY.into()), &mut keypair_seed)
         .map_err(|_| InternalError::HkdfError)?;
     let client_static_keypair = KeyPair::<CS::KeGroup>::from_private_key_slice(
         &CS::OprfGroup::scalar_as_bytes(CS::OprfGroup::hash_to_scalar::<CS::Hash, _, _>(
             Some(&keypair_seed[..]),
-            GenericArray::from(*STR_OPAQUE_DERIVE_AUTH_KEY_PAIR),
+            GenericArray::from(STR_OPAQUE_DERIVE_AUTH_KEY_PAIR),
         )?),
     )?;
 
@@ -344,16 +342,16 @@ fn build_inner_envelope_internal<CS: CipherSuite>(
 
 fn recover_keys_internal<CS: CipherSuite>(
     randomized_pwd_hasher: Hkdf<CS::Hash>,
-    nonce: &[u8],
+    nonce: GenericArray<u8, NonceLen>,
 ) -> Result<KeyPair<CS::KeGroup>, ProtocolError> {
     let mut keypair_seed = vec![0u8; <CS::KeGroup as KeGroup>::SkLen::USIZE];
     randomized_pwd_hasher
-        .expand(&[nonce, STR_PRIVATE_KEY].concat(), &mut keypair_seed)
+        .expand(&nonce.concat(STR_PRIVATE_KEY.into()), &mut keypair_seed)
         .map_err(|_| InternalError::HkdfError)?;
     let client_static_keypair = KeyPair::<CS::KeGroup>::from_private_key_slice(
         &CS::OprfGroup::scalar_as_bytes(CS::OprfGroup::hash_to_scalar::<CS::Hash, _, _>(
             Some(&keypair_seed[..]),
-            GenericArray::from(*STR_OPAQUE_DERIVE_AUTH_KEY_PAIR),
+            GenericArray::from(STR_OPAQUE_DERIVE_AUTH_KEY_PAIR),
         )?),
     )?;
 
