@@ -53,12 +53,12 @@ impl TryFrom<u8> for InnerEnvelopeMode {
 }
 
 /// This struct is an instantiation of the envelope as described in
-/// https://tools.ietf.org/html/draft-krawczyk-cfrg-opaque-06#section-4
+/// <https://tools.ietf.org/html/draft-krawczyk-cfrg-opaque-06#section-4>
 ///
 /// Note that earlier versions of this specification described an
 /// implementation of this envelope using an encryption scheme that
 /// satisfied random-key robustness
-/// (https://tools.ietf.org/html/draft-krawczyk-cfrg-opaque-05#section-4).
+/// (<https://tools.ietf.org/html/draft-krawczyk-cfrg-opaque-05#section-4>).
 /// The specification update has simplified this assumption by taking
 /// an XOR-based approach without compromising on security, and to avoid
 /// the confusion around the implementation of an RKR-secure encryption.
@@ -241,9 +241,8 @@ impl<CS: CipherSuite> Envelope<CS> {
             Hmac::<CS::Hash>::new_from_slice(&hmac_key).map_err(|_| InternalError::HmacError)?;
         hmac.update(&self.nonce);
         hmac.update(aad);
-        if hmac.verify(&self.hmac).is_err() {
-            return Err(InternalError::SealOpenHmacError);
-        }
+        hmac.verify(&self.hmac)
+            .map_err(|_| InternalError::SealOpenHmacError)?;
 
         Ok(OpenedInnerEnvelope {
             export_key: GenericArray::<u8, <CS::Hash as Digest>::OutputSize>::clone_from_slice(
@@ -277,7 +276,7 @@ impl<CS: CipherSuite> Envelope<CS> {
     }
 
     pub(crate) fn serialize(&self) -> Vec<u8> {
-        [&self.nonce[..], &self.hmac[..]].concat()
+        [self.nonce.as_slice(), &self.hmac].concat()
     }
     pub(crate) fn deserialize(bytes: &[u8]) -> Result<Self, ProtocolError> {
         let mode = InnerEnvelopeMode::Internal; // Better way to hard-code this?
@@ -332,7 +331,7 @@ fn build_inner_envelope_internal<CS: CipherSuite>(
         .map_err(|_| InternalError::HkdfError)?;
     let client_static_keypair = KeyPair::<CS::KeGroup>::from_private_key_slice(
         &CS::OprfGroup::scalar_as_bytes(CS::OprfGroup::hash_to_scalar::<CS::Hash, _, _>(
-            Some(&keypair_seed[..]),
+            Some(keypair_seed.as_slice()),
             GenericArray::from(STR_OPAQUE_DERIVE_AUTH_KEY_PAIR),
         )?),
     )?;
@@ -350,7 +349,7 @@ fn recover_keys_internal<CS: CipherSuite>(
         .map_err(|_| InternalError::HkdfError)?;
     let client_static_keypair = KeyPair::<CS::KeGroup>::from_private_key_slice(
         &CS::OprfGroup::scalar_as_bytes(CS::OprfGroup::hash_to_scalar::<CS::Hash, _, _>(
-            Some(&keypair_seed[..]),
+            Some(keypair_seed.as_slice()),
             GenericArray::from(STR_OPAQUE_DERIVE_AUTH_KEY_PAIR),
         )?),
     )?;

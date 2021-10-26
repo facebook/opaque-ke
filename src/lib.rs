@@ -292,7 +292,7 @@
 //! #   b"password",
 //! # )?;
 //! use opaque_ke::{ServerLogin, ServerLoginStartParameters};
-//! let password_file = ServerRegistration::<Default>::deserialize(&password_file_bytes[..])?;
+//! let password_file = ServerRegistration::<Default>::deserialize(&password_file_bytes)?;
 //! let mut server_rng = OsRng;
 //! let server_login_start_result = ServerLogin::start(
 //!     &mut server_rng,
@@ -347,7 +347,7 @@
 //! # )?;
 //! # let password_file =
 //! #   ServerRegistration::<Default>::deserialize(
-//! #     &password_file_bytes[..],
+//! #     &password_file_bytes,
 //! #   )?;
 //! # let server_login_start_result =
 //! #     ServerLogin::start(&mut server_rng, &server_setup, Some(password_file), client_login_start_result.message, b"alice@example.com", ServerLoginStartParameters::default())?;
@@ -393,7 +393,7 @@
 //! # )?;
 //! # let password_file =
 //! #   ServerRegistration::<Default>::deserialize(
-//! #     &password_file_bytes[..],
+//! #     &password_file_bytes,
 //! #   )?;
 //! # let server_login_start_result =
 //! #     ServerLogin::start(&mut server_rng, &server_setup, Some(password_file), client_login_start_result.message, b"alice@example.com", ServerLoginStartParameters::default())?;
@@ -475,7 +475,7 @@
 //! # )?;
 //! # let password_file =
 //! #   ServerRegistration::<Default>::deserialize(
-//! #     &password_file_bytes[..],
+//! #     &password_file_bytes,
 //! #   )?;
 //! # let server_login_start_result =
 //! #     ServerLogin::start(&mut server_rng, &server_setup, Some(password_file), client_login_start_result.message, b"alice@example.com", ServerLoginStartParameters::default())?;
@@ -552,7 +552,7 @@
 //! # )?;
 //! # let password_file =
 //! #   ServerRegistration::<Default>::deserialize(
-//! #     &password_file_bytes[..],
+//! #     &password_file_bytes,
 //! #   )?;
 //! # let server_login_start_result =
 //! #     ServerLogin::start(&mut server_rng, &server_setup, Some(password_file), client_login_start_result.message, b"alice@example.com", ServerLoginStartParameters::default())?;
@@ -651,7 +651,7 @@
 //! #   b"password",
 //! # )?;
 //! # use opaque_ke::{ServerLogin, ServerLoginStartParameters};
-//! # let password_file = ServerRegistration::<Default>::deserialize(&password_file_bytes[..])?;
+//! # let password_file = ServerRegistration::<Default>::deserialize(&password_file_bytes)?;
 //! # let mut server_rng = OsRng;
 //! let server_login_start_result = ServerLogin::start(
 //!     &mut server_rng,
@@ -702,7 +702,7 @@
 //! # )?;
 //! # let password_file =
 //! #   ServerRegistration::<Default>::deserialize(
-//! #     &password_file_bytes[..],
+//! #     &password_file_bytes,
 //! #   )?;
 //! # let server_login_start_result =
 //! #     ServerLogin::start(&mut server_rng, &server_setup, Some(password_file), client_login_start_result.message, b"alice@example.com", ServerLoginStartParameters::WithIdentifiers(Identifiers::ClientAndServerIdentifiers(b"Alice_the_Cryptographer".to_vec(), b"Facebook".to_vec())))?;

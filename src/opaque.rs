@@ -155,7 +155,7 @@ impl<CS: CipherSuite, S: SecretKey<CS::KeGroup>> ServerSetup<CS, S> {
         rng.fill_bytes(&mut seed);
 
         Self {
-            oprf_seed: GenericArray::clone_from_slice(&seed[..]),
+            oprf_seed: GenericArray::clone_from_slice(&seed),
             keypair,
             fake_keypair: KeyPair::<CS::KeGroup>::generate_random(rng),
         }
@@ -221,12 +221,12 @@ impl<CS: CipherSuite> ClientRegistration<CS> {
 
     #[cfg(test)]
     /// Only used for testing zeroize
-    pub(crate) fn to_vec(&self) -> Result<Vec<u8>, ProtocolError> {
-        Ok([
+    pub(crate) fn to_vec(&self) -> Vec<u8> {
+        [
             self.oprf_client.serialize(),
             self.blinded_element.serialize(),
         ]
-        .concat())
+        .concat()
     }
 
     /// Returns an initial "blinded" request to send to the server, as well as a ClientRegistration
@@ -287,7 +287,7 @@ impl<CS: CipherSuite> ClientRegistration<CS> {
         Ok(ClientRegistrationFinishResult {
             message: RegistrationUpload {
                 envelope: result.0,
-                masking_key: GenericArray::clone_from_slice(&masking_key[..]),
+                masking_key: GenericArray::clone_from_slice(&masking_key),
                 client_s_pk: result.1,
             },
             export_key: result.2,
@@ -380,7 +380,7 @@ impl<CS: CipherSuite> ClientLogin<CS> {
 
         let ke1_state =
             <CS::KeyExchange as KeyExchange<CS::Hash, CS::KeGroup>>::KE1State::from_bytes::<CS>(
-                &ke1_state_bytes[..],
+                &ke1_state_bytes,
             )?;
         Ok(Self {
             oprf_client: voprf::NonVerifiableClient::deserialize(&serialized_oprf_client)?,
@@ -391,13 +391,13 @@ impl<CS: CipherSuite> ClientLogin<CS> {
 
     #[cfg(test)]
     /// Only used for testing zeroize
-    pub(crate) fn to_vec(&self) -> Result<Vec<u8>, ProtocolError> {
-        Ok([
+    pub(crate) fn to_vec(&self) -> Vec<u8> {
+        [
             self.oprf_client.serialize(),
             self.serialized_credential_request.clone(),
             self.ke1_state.to_bytes(),
         ]
-        .concat())
+        .concat()
     }
 }
 
@@ -435,7 +435,7 @@ impl<CS: CipherSuite> ClientLogin<CS> {
     ) -> Result<ClientLoginFinishResult<CS>, ProtocolError> {
         // Check if beta value from server is equal to alpha value from client
         let credential_request =
-            CredentialRequest::<CS>::deserialize(&self.serialized_credential_request[..])?;
+            CredentialRequest::<CS>::deserialize(&self.serialized_credential_request)?;
         if credential_request
             .blinded_element
             .value()
@@ -984,7 +984,7 @@ fn oprf_key_from_seed<G: Group, D: Hash>(
         .expand(&[credential_identifier, STR_OPRF_KEY].concat(), &mut ikm)
         .map_err(|_| InternalError::HkdfError)?;
     Ok(G::scalar_as_bytes(G::hash_to_scalar::<D, _, _>(
-        Some(&ikm[..]),
+        Some(ikm.as_slice()),
         GenericArray::from(*STR_OPAQUE_DERIVE_KEY_PAIR),
     )?)
     .to_vec())
@@ -1005,7 +1005,7 @@ fn mask_response<CS: CipherSuite>(
         )
         .map_err(|_| InternalError::HkdfError)?;
 
-    let plaintext = [&server_s_pk.to_arr()[..], &envelope.serialize()].concat();
+    let plaintext = [server_s_pk.to_arr().as_slice(), &envelope.serialize()].concat();
 
     Ok(xor_pad
         .iter()

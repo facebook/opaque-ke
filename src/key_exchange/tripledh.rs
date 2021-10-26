@@ -158,10 +158,10 @@ impl<D: Hash, KG: KeGroup> KeyExchange<D, KG> for TripleDH {
             .chain(STR_RFC)
             .chain(&serialize(&context, 2).map_err(ProtocolError::into_custom)?)
             .chain(&id_u)
-            .chain(&serialized_credential_request[..])
+            .chain(serialized_credential_request)
             .chain(&id_s)
-            .chain(&l2_bytes[..])
-            .chain(&server_nonce[..])
+            .chain(l2_bytes)
+            .chain(server_nonce)
             .chain(&server_e_kp.public().to_arr());
 
         let result = derive_3dh_keys::<D, KG, S>(
@@ -219,7 +219,7 @@ impl<D: Hash, KG: KeGroup> KeyExchange<D, KG> for TripleDH {
             .chain(&id_u)
             .chain(&serialized_credential_request)
             .chain(&id_s)
-            .chain(&l2_component[..])
+            .chain(l2_component)
             .chain(&ke2_message.to_bytes_without_info_or_mac());
 
         let result = derive_3dh_keys::<D, KG, PrivateKey<KG>>(
@@ -238,9 +238,9 @@ impl<D: Hash, KG: KeGroup> KeyExchange<D, KG> for TripleDH {
             Hmac::<D>::new_from_slice(&result.1).map_err(|_| InternalError::HmacError)?;
         server_mac.update(&transcript_hasher.clone().finalize());
 
-        if server_mac.verify(&ke2_message.mac).is_err() {
-            return Err(ProtocolError::InvalidLoginError);
-        }
+        server_mac
+            .verify(&ke2_message.mac)
+            .map_err(|_| ProtocolError::InvalidLoginError)?;
 
         transcript_hasher.update(ke2_message.mac.to_vec());
 
@@ -269,9 +269,9 @@ impl<D: Hash, KG: KeGroup> KeyExchange<D, KG> for TripleDH {
             Hmac::<D>::new_from_slice(&ke2_state.km3).map_err(|_| InternalError::HmacError)?;
         client_mac.update(&ke2_state.hashed_transcript);
 
-        if client_mac.verify(&ke3_message.mac).is_err() {
-            return Err(ProtocolError::InvalidLoginError);
-        }
+        client_mac
+            .verify(&ke3_message.mac)
+            .map_err(|_| ProtocolError::InvalidLoginError)?;
 
         Ok(ke2_state.session_key.to_vec())
     }
@@ -327,13 +327,13 @@ fn derive_3dh_keys<D: Hash, KG: KeGroup, S: SecretKey<KG>>(
     hashed_derivation_transcript: &[u8],
 ) -> Result<TripleDHDerivationResult<D>, ProtocolError<S::Error>> {
     let ikm: Vec<u8> = [
-        &dh.sk1
+        dh.sk1
             .diffie_hellman(dh.pk1)
-            .map_err(InternalError::into_custom)?[..],
-        &dh.sk2.diffie_hellman(dh.pk2)?[..],
-        &dh.sk3
+            .map_err(InternalError::into_custom)?,
+        dh.sk2.diffie_hellman(dh.pk2)?,
+        dh.sk3
             .diffie_hellman(dh.pk3)
-            .map_err(InternalError::into_custom)?[..],
+            .map_err(InternalError::into_custom)?,
     ]
     .concat();
 
@@ -450,7 +450,7 @@ impl<KG: KeGroup> FromBytes for Ke1State<KG> {
 
 impl<KG: KeGroup> ToBytes for Ke1State<KG> {
     fn to_bytes(&self) -> Vec<u8> {
-        let output: Vec<u8> = [&self.client_e_sk.to_arr(), &self.client_nonce[..]].concat();
+        let output: Vec<u8> = [&self.client_e_sk.to_arr(), self.client_nonce.as_slice()].concat();
         output
     }
 }
@@ -473,7 +473,7 @@ impl<KG: KeGroup> FromBytes for Ke1Message<KG> {
 
 impl<KG: KeGroup> ToBytes for Ke1Message<KG> {
     fn to_bytes(&self) -> Vec<u8> {
-        [&self.client_nonce[..], &self.client_e_pk.to_arr()].concat()
+        [self.client_nonce.as_slice(), &self.client_e_pk.to_arr()].concat()
     }
 }
 
@@ -495,9 +495,9 @@ impl<HashLen: ArrayLength<u8>> FromBytes for Ke2State<HashLen> {
 impl<HashLen: ArrayLength<u8>> ToBytes for Ke2State<HashLen> {
     fn to_bytes(&self) -> Vec<u8> {
         [
-            &self.km3[..],
-            &self.hashed_transcript[..],
-            &self.session_key[..],
+            self.km3.as_slice(),
+            &self.hashed_transcript,
+            &self.session_key,
         ]
         .concat()
     }
@@ -535,13 +535,13 @@ impl<KG: KeGroup, HashLen: ArrayLength<u8>> FromBytes for Ke2Message<KG, HashLen
 
 impl<KG: KeGroup, HashLen: ArrayLength<u8>> ToBytes for Ke2Message<KG, HashLen> {
     fn to_bytes(&self) -> Vec<u8> {
-        [&self.to_bytes_without_info_or_mac(), &self.mac[..]].concat()
+        [self.to_bytes_without_info_or_mac().as_slice(), &self.mac].concat()
     }
 }
 
 impl<KG: KeGroup, HashLen: ArrayLength<u8>> Ke2Message<KG, HashLen> {
     fn to_bytes_without_info_or_mac(&self) -> Vec<u8> {
-        [&self.server_nonce[..], &self.server_e_pk.to_arr()].concat()
+        [self.server_nonce.as_slice(), &self.server_e_pk.to_arr()].concat()
     }
 }
 

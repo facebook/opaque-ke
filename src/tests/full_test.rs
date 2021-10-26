@@ -115,38 +115,38 @@ fn decode(values: &Value, key: &str) -> Option<Vec<u8>> {
 
 fn populate_test_vectors(values: &Value) -> TestVectorParameters {
     TestVectorParameters {
-        client_s_pk: decode(&values, "client_s_pk").unwrap(),
-        client_s_sk: decode(&values, "client_s_sk").unwrap(),
-        client_e_pk: decode(&values, "client_e_pk").unwrap(),
-        client_e_sk: decode(&values, "client_e_sk").unwrap(),
-        server_s_pk: decode(&values, "server_s_pk").unwrap(),
-        server_s_sk: decode(&values, "server_s_sk").unwrap(),
-        server_e_pk: decode(&values, "server_e_pk").unwrap(),
-        server_e_sk: decode(&values, "server_e_sk").unwrap(),
-        fake_sk: decode(&values, "fake_sk").unwrap(),
-        credential_identifier: decode(&values, "credential_identifier").unwrap(),
-        id_u: decode(&values, "id_u").unwrap(),
-        id_s: decode(&values, "id_s").unwrap(),
-        password: decode(&values, "password").unwrap(),
-        blinding_factor: decode(&values, "blinding_factor").unwrap(),
-        oprf_seed: decode(&values, "oprf_seed").unwrap(),
-        masking_nonce: decode(&values, "masking_nonce").unwrap(),
-        envelope_nonce: decode(&values, "envelope_nonce").unwrap(),
-        client_nonce: decode(&values, "client_nonce").unwrap(),
-        server_nonce: decode(&values, "server_nonce").unwrap(),
-        context: decode(&values, "context").unwrap(),
-        registration_request: decode(&values, "registration_request").unwrap(),
-        registration_response: decode(&values, "registration_response").unwrap(),
-        registration_upload: decode(&values, "registration_upload").unwrap(),
-        credential_request: decode(&values, "credential_request").unwrap(),
-        credential_response: decode(&values, "credential_response").unwrap(),
-        credential_finalization: decode(&values, "credential_finalization").unwrap(),
-        client_registration_state: decode(&values, "client_registration_state").unwrap(),
-        client_login_state: decode(&values, "client_login_state").unwrap(),
-        server_login_state: decode(&values, "server_login_state").unwrap(),
-        password_file: decode(&values, "password_file").unwrap(),
-        export_key: decode(&values, "export_key").unwrap(),
-        session_key: decode(&values, "session_key").unwrap(),
+        client_s_pk: decode(values, "client_s_pk").unwrap(),
+        client_s_sk: decode(values, "client_s_sk").unwrap(),
+        client_e_pk: decode(values, "client_e_pk").unwrap(),
+        client_e_sk: decode(values, "client_e_sk").unwrap(),
+        server_s_pk: decode(values, "server_s_pk").unwrap(),
+        server_s_sk: decode(values, "server_s_sk").unwrap(),
+        server_e_pk: decode(values, "server_e_pk").unwrap(),
+        server_e_sk: decode(values, "server_e_sk").unwrap(),
+        fake_sk: decode(values, "fake_sk").unwrap(),
+        credential_identifier: decode(values, "credential_identifier").unwrap(),
+        id_u: decode(values, "id_u").unwrap(),
+        id_s: decode(values, "id_s").unwrap(),
+        password: decode(values, "password").unwrap(),
+        blinding_factor: decode(values, "blinding_factor").unwrap(),
+        oprf_seed: decode(values, "oprf_seed").unwrap(),
+        masking_nonce: decode(values, "masking_nonce").unwrap(),
+        envelope_nonce: decode(values, "envelope_nonce").unwrap(),
+        client_nonce: decode(values, "client_nonce").unwrap(),
+        server_nonce: decode(values, "server_nonce").unwrap(),
+        context: decode(values, "context").unwrap(),
+        registration_request: decode(values, "registration_request").unwrap(),
+        registration_response: decode(values, "registration_response").unwrap(),
+        registration_upload: decode(values, "registration_upload").unwrap(),
+        credential_request: decode(values, "credential_request").unwrap(),
+        credential_response: decode(values, "credential_response").unwrap(),
+        credential_finalization: decode(values, "credential_finalization").unwrap(),
+        client_registration_state: decode(values, "client_registration_state").unwrap(),
+        client_login_state: decode(values, "client_login_state").unwrap(),
+        server_login_state: decode(values, "server_login_state").unwrap(),
+        password_file: decode(values, "password_file").unwrap(),
+        export_key: decode(values, "export_key").unwrap(),
+        session_key: decode(values, "session_key").unwrap(),
     }
 }
 
@@ -305,7 +305,12 @@ fn generate_parameters<CS: CipherSuite>() -> Result<TestVectorParameters, Protoc
 
     let fake_sk: Vec<u8> = fake_kp.private().to_vec();
     let server_setup = ServerSetup::<CS>::deserialize(
-        &[&oprf_seed, &server_s_kp.private().to_arr()[..], &fake_sk].concat(),
+        &[
+            oprf_seed.as_ref(),
+            &server_s_kp.private().to_arr(),
+            &fake_sk,
+        ]
+        .concat(),
     )
     .unwrap();
 
@@ -332,7 +337,7 @@ fn generate_parameters<CS: CipherSuite>() -> Result<TestVectorParameters, Protoc
     let server_registration_start_result = ServerRegistration::<CS>::start(
         &server_setup,
         client_registration_start_result.message,
-        &credential_identifier[..],
+        credential_identifier,
     )
     .unwrap();
     let registration_response_bytes = server_registration_start_result.message.serialize()?;
@@ -519,9 +524,9 @@ fn test_registration_response() -> Result<(), ProtocolError> {
 
     let server_setup = ServerSetup::<RistrettoSha5123dhNoSlowHash>::deserialize(
         &[
-            &parameters.oprf_seed[..],
-            &parameters.server_s_sk[..],
-            &parameters.fake_sk[..],
+            parameters.oprf_seed,
+            parameters.server_s_sk,
+            parameters.fake_sk,
         ]
         .concat(),
     )?;
@@ -529,7 +534,7 @@ fn test_registration_response() -> Result<(), ProtocolError> {
     let server_registration_start_result =
         ServerRegistration::<RistrettoSha5123dhNoSlowHash>::start(
             &server_setup,
-            RegistrationRequest::deserialize(&parameters.registration_request[..])?,
+            RegistrationRequest::deserialize(&parameters.registration_request)?,
             &parameters.credential_identifier,
         )?;
     assert_eq!(
@@ -549,11 +554,11 @@ fn test_registration_upload() -> Result<(), ProtocolError> {
         [parameters.client_s_sk, parameters.envelope_nonce].concat();
     let mut finish_registration_rng = CycleRng::new(client_s_sk_and_nonce);
     let result = ClientRegistration::<RistrettoSha5123dhNoSlowHash>::deserialize(
-        &parameters.client_registration_state[..],
+        &parameters.client_registration_state,
     )?
     .finish(
         &mut finish_registration_rng,
-        RegistrationResponse::deserialize(&parameters.registration_response[..])?,
+        RegistrationResponse::deserialize(&parameters.registration_response)?,
         ClientRegistrationFinishParameters::new(
             Some(Identifiers::ClientAndServerIdentifiers(
                 parameters.id_u,
@@ -582,7 +587,7 @@ fn test_password_file() -> Result<(), ProtocolError> {
     let password_file = ServerRegistration::finish(RegistrationUpload::<
         RistrettoSha5123dhNoSlowHash,
     >::deserialize(
-        &parameters.registration_upload[..]
+        &parameters.registration_upload
     )?);
 
     assert_eq!(
@@ -624,9 +629,9 @@ fn test_credential_response() -> Result<(), ProtocolError> {
 
     let server_setup = ServerSetup::<RistrettoSha5123dhNoSlowHash>::deserialize(
         &[
-            &parameters.oprf_seed[..],
-            &parameters.server_s_sk[..],
-            &parameters.fake_sk[..],
+            parameters.oprf_seed,
+            parameters.server_s_sk,
+            parameters.fake_sk,
         ]
         .concat(),
     )?;
@@ -642,11 +647,9 @@ fn test_credential_response() -> Result<(), ProtocolError> {
     let server_login_start_result = ServerLogin::<RistrettoSha5123dhNoSlowHash>::start(
         &mut server_e_sk_and_nonce_rng,
         &server_setup,
-        Some(ServerRegistration::deserialize(
-            &parameters.password_file[..],
-        )?),
+        Some(ServerRegistration::deserialize(&parameters.password_file)?),
         CredentialRequest::<RistrettoSha5123dhNoSlowHash>::deserialize(
-            &parameters.credential_request[..],
+            &parameters.credential_request,
         )?,
         &parameters.credential_identifier,
         ServerLoginStartParameters::WithContextAndIdentifiers(
@@ -669,22 +672,21 @@ fn test_credential_response() -> Result<(), ProtocolError> {
 fn test_credential_finalization() -> Result<(), ProtocolError> {
     let parameters = populate_test_vectors(&serde_json::from_str(TEST_VECTOR).unwrap());
 
-    let client_login_finish_result = ClientLogin::<RistrettoSha5123dhNoSlowHash>::deserialize(
-        &parameters.client_login_state[..],
-    )?
-    .finish(
-        CredentialResponse::<RistrettoSha5123dhNoSlowHash>::deserialize(
-            &parameters.credential_response[..],
-        )?,
-        ClientLoginFinishParameters::new(
-            Some(parameters.context),
-            Some(Identifiers::ClientAndServerIdentifiers(
-                parameters.id_u,
-                parameters.id_s,
-            )),
-            None,
-        ),
-    )?;
+    let client_login_finish_result =
+        ClientLogin::<RistrettoSha5123dhNoSlowHash>::deserialize(&parameters.client_login_state)?
+            .finish(
+            CredentialResponse::<RistrettoSha5123dhNoSlowHash>::deserialize(
+                &parameters.credential_response,
+            )?,
+            ClientLoginFinishParameters::new(
+                Some(parameters.context),
+                Some(Identifiers::ClientAndServerIdentifiers(
+                    parameters.id_u,
+                    parameters.id_s,
+                )),
+                None,
+            ),
+        )?;
 
     assert_eq!(
         hex::encode(&parameters.server_s_pk),
@@ -710,12 +712,11 @@ fn test_credential_finalization() -> Result<(), ProtocolError> {
 fn test_server_login_finish() -> Result<(), ProtocolError> {
     let parameters = populate_test_vectors(&serde_json::from_str(TEST_VECTOR).unwrap());
 
-    let server_login_result = ServerLogin::<RistrettoSha5123dhNoSlowHash>::deserialize(
-        &parameters.server_login_state[..],
-    )?
-    .finish(CredentialFinalization::deserialize(
-        &parameters.credential_finalization[..],
-    )?)?;
+    let server_login_result =
+        ServerLogin::<RistrettoSha5123dhNoSlowHash>::deserialize(&parameters.server_login_state)?
+            .finish(CredentialFinalization::deserialize(
+            &parameters.credential_finalization,
+        )?)?;
 
     assert_eq!(
         hex::encode(parameters.session_key),
@@ -781,10 +782,10 @@ fn test_complete_flow(
             hex::encode(client_login_finish_result.export_key)
         );
     } else {
-        assert!(match client_login_result {
-            Err(ProtocolError::InvalidLoginError) => true,
-            _ => false,
-        });
+        assert!(matches!(
+            client_login_result,
+            Err(ProtocolError::InvalidLoginError)
+        ));
     }
 
     Ok(())
@@ -813,8 +814,8 @@ fn test_zeroize_client_registration_start() -> Result<(), ProtocolError> {
 
     let mut state = client_registration_start_result.state;
     Zeroize::zeroize(&mut state);
-    for bytes in state.to_vec() {
-        assert!(bytes.iter().all(|&x| x == 0));
+    for byte in state.to_vec() {
+        assert_eq!(byte, 0);
     }
 
     Ok(())
@@ -844,8 +845,8 @@ fn test_zeroize_client_registration_finish() -> Result<(), ProtocolError> {
 
     let mut state = client_registration_finish_result.state;
     Zeroize::zeroize(&mut state);
-    for bytes in state.to_vec() {
-        assert!(bytes.iter().all(|&x| x == 0));
+    for byte in state.to_vec() {
+        assert_eq!(byte, 0);
     }
 
     Ok(())
@@ -876,8 +877,8 @@ fn test_zeroize_server_registration_finish() -> Result<(), ProtocolError> {
 
     let mut state = p_file;
     Zeroize::zeroize(&mut state);
-    for bytes in state.serialize() {
-        assert!(bytes.iter().all(|&x| x == 0));
+    for byte in state.serialize()? {
+        assert_eq!(byte, 0);
     }
 
     Ok(())
@@ -893,8 +894,8 @@ fn test_zeroize_client_login_start() -> Result<(), ProtocolError> {
 
     let mut state = client_login_start_result.state;
     Zeroize::zeroize(&mut state);
-    for bytes in state.to_vec() {
-        assert!(bytes.iter().all(|&x| x == 0));
+    for byte in state.to_vec() {
+        assert_eq!(byte, 0);
     }
 
     Ok(())
@@ -937,8 +938,8 @@ fn test_zeroize_server_login_start() -> Result<(), ProtocolError> {
 
     let mut state = server_login_start_result.state;
     Zeroize::zeroize(&mut state);
-    for bytes in state.serialize() {
-        assert!(bytes.iter().all(|&x| x == 0));
+    for byte in state.serialize()? {
+        assert_eq!(byte, 0);
     }
 
     Ok(())
@@ -985,8 +986,8 @@ fn test_zeroize_client_login_finish() -> Result<(), ProtocolError> {
 
     let mut state = client_login_finish_result.state;
     Zeroize::zeroize(&mut state);
-    for bytes in state.to_vec() {
-        assert!(bytes.iter().all(|&x| x == 0));
+    for byte in state.to_vec() {
+        assert_eq!(byte, 0);
     }
 
     Ok(())
@@ -1036,8 +1037,8 @@ fn test_zeroize_server_login_finish() -> Result<(), ProtocolError> {
 
     let mut state = server_login_finish_result.state;
     Zeroize::zeroize(&mut state);
-    for bytes in state.serialize() {
-        assert!(bytes.iter().all(|&x| x == 0));
+    for byte in state.serialize()? {
+        assert_eq!(byte, 0);
     }
 
     Ok(())
@@ -1109,10 +1110,10 @@ fn test_reflected_value_error_registration() -> Result<(), ProtocolError> {
         ClientRegistrationFinishParameters::default(),
     );
 
-    assert!(match client_registration_finish_result {
-        Err(ProtocolError::ReflectedValueError) => true,
-        _ => false,
-    });
+    assert!(matches!(
+        client_registration_finish_result,
+        Err(ProtocolError::ReflectedValueError)
+    ));
 
     Ok(())
 }
@@ -1162,9 +1163,9 @@ fn test_reflected_value_error_login() -> Result<(), ProtocolError> {
         ClientLoginFinishParameters::default(),
     );
 
-    assert!(match client_login_result {
-        Err(ProtocolError::ReflectedValueError) => true,
-        _ => false,
-    });
+    assert!(matches!(
+        client_login_result,
+        Err(ProtocolError::ReflectedValueError)
+    ));
     Ok(())
 }

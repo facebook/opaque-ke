@@ -50,7 +50,7 @@ fn random_ristretto_point() -> RistrettoPoint {
     // This is because RistrettoPoint is on an obsolete sha2 version
     let mut bits = [0u8; 64];
     let mut hasher = sha2::Sha512::new();
-    hasher.update(&random_bits[..]);
+    hasher.update(random_bits);
     bits.copy_from_slice(&hasher.finalize());
 
     RistrettoPoint::from_uniform_bytes(&bits)
@@ -70,7 +70,7 @@ fn client_registration_roundtrip() -> Result<(), ProtocolError> {
     ]
     .concat();
 
-    let reg = ClientRegistration::<Default>::deserialize(&bytes[..])?;
+    let reg = ClientRegistration::<Default>::deserialize(&bytes)?;
     let reg_bytes = reg.serialize()?;
     assert_eq!(reg_bytes, bytes);
     Ok(())
@@ -86,8 +86,8 @@ fn server_registration_roundtrip() -> Result<(), ProtocolError> {
 
     // Construct a mock envelope
     let mut mock_envelope_bytes = Vec::new();
-    mock_envelope_bytes.extend_from_slice(&vec![0; NonceLen::USIZE]); // empty nonce
-                                                                      // mock_envelope_bytes.extend_from_slice(&ciphertext); // ciphertext which is an encrypted private key
+    mock_envelope_bytes.extend_from_slice(&[0; NonceLen::USIZE]); // empty nonce
+                                                                  // mock_envelope_bytes.extend_from_slice(&ciphertext); // ciphertext which is an encrypted private key
     mock_envelope_bytes.extend_from_slice(&[0; MAC_SIZE]); // length-MAC_SIZE hmac
 
     let mock_client_kp = KeyPair::<<Default as CipherSuite>::OprfGroup>::generate_random(&mut rng);
@@ -96,7 +96,7 @@ fn server_registration_roundtrip() -> Result<(), ProtocolError> {
     bytes.extend_from_slice(&mock_client_kp.public().to_arr());
     bytes.extend_from_slice(&masking_key);
     bytes.extend_from_slice(&mock_envelope_bytes);
-    let reg = ServerRegistration::<Default>::deserialize(&bytes[..])?;
+    let reg = ServerRegistration::<Default>::deserialize(&bytes)?;
     let reg_bytes = reg.serialize()?;
     assert_eq!(reg_bytes, bytes);
     Ok(())
@@ -118,14 +118,12 @@ fn registration_request_roundtrip() -> Result<(), ProtocolError> {
     let identity = RistrettoPoint::identity();
     let identity_bytes = identity.to_arr().to_vec();
 
-    assert!(
-        match RegistrationRequest::<Default>::deserialize(identity_bytes.as_slice()) {
-            Err(ProtocolError::LibraryError(InternalError::OprfError(
-                voprf::errors::InternalError::PointError,
-            ))) => true,
-            _ => false,
-        }
-    );
+    assert!(matches!(
+        RegistrationRequest::<Default>::deserialize(identity_bytes.as_slice()),
+        Err(ProtocolError::LibraryError(InternalError::OprfError(
+            voprf::errors::InternalError::PointError,
+        )))
+    ));
 
     Ok(())
 }
@@ -139,8 +137,8 @@ fn registration_response_roundtrip() -> Result<(), ProtocolError> {
     let pubkey_bytes = skp.public().to_arr();
 
     let mut input = Vec::new();
-    input.extend_from_slice(beta_bytes.as_slice());
-    input.extend_from_slice(&pubkey_bytes.as_slice());
+    input.extend_from_slice(&beta_bytes);
+    input.extend_from_slice(&pubkey_bytes);
 
     let r2 = RegistrationResponse::<Default>::deserialize(input.as_slice())?;
     let r2_bytes = r2.serialize()?;
@@ -150,14 +148,14 @@ fn registration_response_roundtrip() -> Result<(), ProtocolError> {
     let identity = RistrettoPoint::identity();
     let identity_bytes = identity.to_arr().to_vec();
 
-    assert!(match RegistrationResponse::<Default>::deserialize(
-        &[identity_bytes, pubkey_bytes.to_vec()].concat()
-    ) {
+    assert!(matches!(
+        RegistrationResponse::<Default>::deserialize(
+            &[identity_bytes, pubkey_bytes.to_vec()].concat()
+        ),
         Err(ProtocolError::LibraryError(InternalError::OprfError(
             voprf::errors::InternalError::PointError,
-        ))) => true,
-        _ => false,
-    });
+        )))
+    ));
 
     Ok(())
 }
@@ -188,11 +186,11 @@ fn registration_upload_roundtrip() -> Result<(), ProtocolError> {
     let envelope_bytes = envelope.serialize();
 
     let mut input = Vec::new();
-    input.extend_from_slice(&pubkey_bytes[..]);
-    input.extend_from_slice(&masking_key[..]);
+    input.extend_from_slice(&pubkey_bytes);
+    input.extend_from_slice(&masking_key);
     input.extend_from_slice(&envelope_bytes);
 
-    let r3 = RegistrationUpload::<Default>::deserialize(&input[..])?;
+    let r3 = RegistrationUpload::<Default>::deserialize(&input)?;
     let r3_bytes = r3.serialize()?;
     assert_eq!(input, r3_bytes);
 
@@ -209,11 +207,11 @@ fn credential_request_roundtrip() -> Result<(), ProtocolError> {
     let mut client_nonce = vec![0u8; NonceLen::USIZE];
     rng.fill_bytes(&mut client_nonce);
 
-    let ke1m: Vec<u8> = [&client_nonce[..], &client_e_kp.public()].concat();
+    let ke1m: Vec<u8> = [client_nonce.as_slice(), client_e_kp.public()].concat();
 
     let mut input = Vec::new();
     input.extend_from_slice(&alpha_bytes);
-    input.extend_from_slice(&ke1m[..]);
+    input.extend_from_slice(&ke1m);
 
     let l1 = CredentialRequest::<Default>::deserialize(input.as_slice())?;
     let l1_bytes = l1.serialize()?;
@@ -223,14 +221,12 @@ fn credential_request_roundtrip() -> Result<(), ProtocolError> {
     let identity = RistrettoPoint::identity();
     let identity_bytes = identity.to_arr().to_vec();
 
-    assert!(match CredentialRequest::<Default>::deserialize(
-        &[identity_bytes, ke1m.to_vec()].concat()
-    ) {
+    assert!(matches!(
+        CredentialRequest::<Default>::deserialize(&[identity_bytes, ke1m.to_vec()].concat()),
         Err(ProtocolError::LibraryError(InternalError::OprfError(
             voprf::errors::InternalError::PointError,
-        ))) => true,
-        _ => false,
-    });
+        )))
+    ));
 
     Ok(())
 }
@@ -255,13 +251,13 @@ fn credential_response_roundtrip() -> Result<(), ProtocolError> {
     let mut server_nonce = vec![0u8; NonceLen::USIZE];
     rng.fill_bytes(&mut server_nonce);
 
-    let ke2m: Vec<u8> = [&server_nonce[..], &server_e_kp.public(), &mac[..]].concat();
+    let ke2m: Vec<u8> = [server_nonce.as_slice(), server_e_kp.public(), &mac].concat();
 
     let mut input = Vec::new();
     input.extend_from_slice(pt_bytes.as_slice());
     input.extend_from_slice(&masking_nonce);
     input.extend_from_slice(&masked_response);
-    input.extend_from_slice(&ke2m[..]);
+    input.extend_from_slice(&ke2m);
 
     let l2 = CredentialResponse::<Default>::deserialize(&input)?;
     let l2_bytes = l2.serialize()?;
@@ -271,20 +267,20 @@ fn credential_response_roundtrip() -> Result<(), ProtocolError> {
     let identity = RistrettoPoint::identity();
     let identity_bytes = identity.to_arr().to_vec();
 
-    assert!(match CredentialResponse::<Default>::deserialize(
-        &[
-            identity_bytes,
-            masking_nonce.to_vec(),
-            masked_response,
-            ke2m.to_vec()
-        ]
-        .concat()
-    ) {
+    assert!(matches!(
+        CredentialResponse::<Default>::deserialize(
+            &[
+                identity_bytes,
+                masking_nonce.to_vec(),
+                masked_response,
+                ke2m.to_vec()
+            ]
+            .concat()
+        ),
         Err(ProtocolError::LibraryError(InternalError::OprfError(
             voprf::errors::InternalError::PointError,
-        ))) => true,
-        _ => false,
-    });
+        )))
+    ));
 
     Ok(())
 }
@@ -295,7 +291,7 @@ fn credential_finalization_roundtrip() -> Result<(), ProtocolError> {
     let mut mac = [0u8; MAC_SIZE];
     rng.fill_bytes(&mut mac);
 
-    let input: Vec<u8> = [&mac[..]].concat();
+    let input: Vec<u8> = [mac].concat();
 
     let l3 = CredentialFinalization::<Default>::deserialize(&input)?;
     let l3_bytes = l3.serialize()?;
@@ -325,7 +321,7 @@ fn client_login_roundtrip() -> Result<(), ProtocolError> {
         serialize(&l1_data, 2)?,
     ]
     .concat();
-    let reg = ClientLogin::<Default>::deserialize(&bytes[..])?;
+    let reg = ClientLogin::<Default>::deserialize(&bytes)?;
     let reg_bytes = reg.serialize()?;
     assert_eq!(reg_bytes, bytes);
     Ok(())
@@ -339,10 +335,10 @@ fn ke1_message_roundtrip() -> Result<(), ProtocolError> {
     let mut client_nonce = vec![0u8; NonceLen::USIZE];
     rng.fill_bytes(&mut client_nonce);
 
-    let ke1m: Vec<u8> = [&client_nonce[..], &client_e_kp.public()].concat();
+    let ke1m: Vec<u8> = [client_nonce.as_slice(), client_e_kp.public()].concat();
     let reg = <TripleDH as KeyExchange<sha2::Sha512, RistrettoPoint>>::KE1Message::from_bytes::<
         Default,
-    >(&ke1m[..])?;
+    >(&ke1m)?;
     let reg_bytes = reg.to_bytes();
     assert_eq!(reg_bytes, ke1m);
 
@@ -359,11 +355,11 @@ fn ke2_message_roundtrip() -> Result<(), ProtocolError> {
     let mut server_nonce = vec![0u8; NonceLen::USIZE];
     rng.fill_bytes(&mut server_nonce);
 
-    let ke2m: Vec<u8> = [&server_nonce[..], &server_e_kp.public(), &mac[..]].concat();
+    let ke2m: Vec<u8> = [server_nonce.as_slice(), server_e_kp.public(), &mac].concat();
 
     let reg = <TripleDH as KeyExchange<sha2::Sha512, RistrettoPoint>>::KE2Message::from_bytes::<
         Default,
-    >(&ke2m[..])?;
+    >(&ke2m)?;
     let reg_bytes = reg.to_bytes();
     assert_eq!(reg_bytes, ke2m);
 
@@ -376,11 +372,11 @@ fn ke3_message_roundtrip() -> Result<(), ProtocolError> {
     let mut mac = [0u8; MAC_SIZE];
     rng.fill_bytes(&mut mac);
 
-    let ke3m: Vec<u8> = [&mac[..]].concat();
+    let ke3m: Vec<u8> = [mac].concat();
 
     let reg = <TripleDH as KeyExchange<sha2::Sha512, RistrettoPoint>>::KE3Message::from_bytes::<
         Default,
-    >(&ke3m[..])?;
+    >(&ke3m)?;
     let reg_bytes = reg.to_bytes();
     assert_eq!(reg_bytes, ke3m);
 
@@ -396,52 +392,52 @@ fn test_i2osp_os2ip(bytes in vec(any::<u8>(), 0..core::mem::size_of::<usize>()))
 
 #[test]
 fn test_nocrash_registration_request(bytes in vec(any::<u8>(), 0..200)) {
-    RegistrationRequest::<Default>::deserialize(&bytes[..]).map_or(true, |_| true);
+    RegistrationRequest::<Default>::deserialize(&bytes).map_or(true, |_| true);
 }
 
 #[test]
 fn test_nocrash_registration_response(bytes in vec(any::<u8>(), 0..200)) {
-    RegistrationResponse::<Default>::deserialize(&bytes[..]).map_or(true, |_| true);
+    RegistrationResponse::<Default>::deserialize(&bytes).map_or(true, |_| true);
 }
 
 #[test]
 fn test_nocrash_registration_upload(bytes in vec(any::<u8>(), 0..200)) {
-    RegistrationUpload::<Default>::deserialize(&bytes[..]).map_or(true, |_| true);
+    RegistrationUpload::<Default>::deserialize(&bytes).map_or(true, |_| true);
 }
 
 #[test]
 fn test_nocrash_credential_request(bytes in vec(any::<u8>(), 0..500)) {
-    CredentialRequest::<Default>::deserialize(&bytes[..]).map_or(true, |_| true);
+    CredentialRequest::<Default>::deserialize(&bytes).map_or(true, |_| true);
 }
 
 #[test]
 fn test_nocrash_credential_response(bytes in vec(any::<u8>(), 0..500)) {
-    CredentialResponse::<Default>::deserialize(&bytes[..]).map_or(true, |_| true);
+    CredentialResponse::<Default>::deserialize(&bytes).map_or(true, |_| true);
 }
 
 #[test]
 fn test_nocrash_credential_finalization(bytes in vec(any::<u8>(), 0..500)) {
-    CredentialFinalization::<Default>::deserialize(&bytes[..]).map_or(true, |_| true);
+    CredentialFinalization::<Default>::deserialize(&bytes).map_or(true, |_| true);
 }
 
 #[test]
 fn test_nocrash_client_registration(bytes in vec(any::<u8>(), 0..700)) {
-    ClientRegistration::<Default>::deserialize(&bytes[..]).map_or(true, |_| true);
+    ClientRegistration::<Default>::deserialize(&bytes).map_or(true, |_| true);
 }
 
 #[test]
 fn test_nocrash_server_registration(bytes in vec(any::<u8>(), 0..700)) {
-    ServerRegistration::<Default>::deserialize(&bytes[..]).map_or(true, |_| true);
+    ServerRegistration::<Default>::deserialize(&bytes).map_or(true, |_| true);
 }
 
 #[test]
 fn test_nocrash_client_login(bytes in vec(any::<u8>(), 0..700)) {
-    ClientLogin::<Default>::deserialize(&bytes[..]).map_or(true, |_| true);
+    ClientLogin::<Default>::deserialize(&bytes).map_or(true, |_| true);
 }
 
 #[test]
 fn test_nocrash_server_login(bytes in vec(any::<u8>(), 0..700)) {
-    ServerLogin::<Default>::deserialize(&bytes[..]).map_or(true, |_| true);
+    ServerLogin::<Default>::deserialize(&bytes).map_or(true, |_| true);
 }
 
 }

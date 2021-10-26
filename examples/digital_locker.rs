@@ -99,8 +99,8 @@ fn register_locker(
 
     // Client sends registration_request_bytes to server
     let server_registration_start_result = ServerRegistration::<Default>::start(
-        &server_setup,
-        RegistrationRequest::deserialize(&registration_request_bytes[..]).unwrap(),
+        server_setup,
+        RegistrationRequest::deserialize(&registration_request_bytes).unwrap(),
         &locker_id.to_be_bytes(),
     )
     .unwrap();
@@ -115,7 +115,7 @@ fn register_locker(
         .state
         .finish(
             &mut client_rng,
-            RegistrationResponse::deserialize(&registration_response_bytes[..]).unwrap(),
+            RegistrationResponse::deserialize(&registration_response_bytes).unwrap(),
             ClientRegistrationFinishParameters::default(),
         )
         .unwrap();
@@ -133,7 +133,7 @@ fn register_locker(
     // Client sends message_bytes to server
 
     let password_file = ServerRegistration::finish(
-        RegistrationUpload::<Default>::deserialize(&message_bytes[..]).unwrap(),
+        RegistrationUpload::<Default>::deserialize(&message_bytes).unwrap(),
     );
 
     Locker {
@@ -156,14 +156,13 @@ fn open_locker(
 
     // Client sends credential_request_bytes to server
 
-    let password_file =
-        ServerRegistration::<Default>::deserialize(&locker.password_file[..]).unwrap();
+    let password_file = ServerRegistration::<Default>::deserialize(&locker.password_file).unwrap();
     let mut server_rng = OsRng;
     let server_login_start_result = ServerLogin::start(
         &mut server_rng,
-        &server_setup,
+        server_setup,
         Some(password_file),
-        CredentialRequest::deserialize(&credential_request_bytes[..]).unwrap(),
+        CredentialRequest::deserialize(&credential_request_bytes).unwrap(),
         &locker_id.to_be_bytes(),
         ServerLoginStartParameters::default(),
     )
@@ -173,7 +172,7 @@ fn open_locker(
     // Server sends credential_response_bytes to client
 
     let result = client_login_start_result.state.finish(
-        CredentialResponse::deserialize(&credential_response_bytes[..]).unwrap(),
+        CredentialResponse::deserialize(&credential_response_bytes).unwrap(),
         ClientLoginFinishParameters::default(),
     );
 
@@ -188,7 +187,7 @@ fn open_locker(
 
     let server_login_finish_result = server_login_start_result
         .state
-        .finish(CredentialFinalization::deserialize(&credential_finalization_bytes[..]).unwrap())
+        .finish(CredentialFinalization::deserialize(&credential_finalization_bytes).unwrap())
         .unwrap();
 
     // Server sends locker contents, encrypted under the session key, to the client
@@ -292,7 +291,7 @@ fn main() {
 
 // Helper functions
 
-fn display_lockers(lockers: &Vec<Locker>) {
+fn display_lockers(lockers: &[Locker]) {
     let mut locker_numbers = vec![];
     for (i, _) in lockers.iter().enumerate() {
         locker_numbers.push(i);

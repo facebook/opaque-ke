@@ -21,7 +21,7 @@ fn parse_vector_types(input: &str) -> String {
     for caps in re.captures_iter(input) {
         let vector_type = format!(
             "\"{}\": [\n {} \n]",
-            caps["type"].to_string(),
+            &caps["type"],
             parse_ciphersuites(chunks[count])
         );
         vector_types.push(vector_type);
@@ -44,8 +44,8 @@ fn parse_ciphersuites(input: &str) -> String {
     for caps in re.captures_iter(input) {
         let ciphersuite = format!(
             "{{ \"{}, {}\": {{ {} }} }}",
-            caps["group"].to_string(),
-            caps["hash"].to_string(),
+            &caps["group"],
+            &caps["hash"],
             parse_params(chunks[count])
         );
         ciphersuites.push(ciphersuite);

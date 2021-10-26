@@ -63,8 +63,8 @@ fn account_registration(
     // Client sends registration_request_bytes to server
 
     let server_registration_start_result = ServerRegistration::<Default>::start(
-        &server_setup,
-        RegistrationRequest::deserialize(&registration_request_bytes[..]).unwrap(),
+        server_setup,
+        RegistrationRequest::deserialize(&registration_request_bytes).unwrap(),
         username.as_bytes(),
     )
     .unwrap();
@@ -79,7 +79,7 @@ fn account_registration(
         .state
         .finish(
             &mut client_rng,
-            RegistrationResponse::deserialize(&registration_response_bytes[..]).unwrap(),
+            RegistrationResponse::deserialize(&registration_response_bytes).unwrap(),
             ClientRegistrationFinishParameters::default(),
         )
         .unwrap();
@@ -91,7 +91,7 @@ fn account_registration(
     // Client sends message_bytes to server
 
     let password_file = ServerRegistration::finish(
-        RegistrationUpload::<Default>::deserialize(&message_bytes[..]).unwrap(),
+        RegistrationUpload::<Default>::deserialize(&message_bytes).unwrap(),
     );
     password_file.serialize().unwrap()
 }
@@ -114,9 +114,9 @@ fn account_login(
     let mut server_rng = OsRng;
     let server_login_start_result = ServerLogin::start(
         &mut server_rng,
-        &server_setup,
+        server_setup,
         Some(password_file),
-        CredentialRequest::deserialize(&credential_request_bytes[..]).unwrap(),
+        CredentialRequest::deserialize(&credential_request_bytes).unwrap(),
         username.as_bytes(),
         ServerLoginStartParameters::default(),
     )
@@ -126,7 +126,7 @@ fn account_login(
     // Server sends credential_response_bytes to client
 
     let result = client_login_start_result.state.finish(
-        CredentialResponse::deserialize(&credential_response_bytes[..]).unwrap(),
+        CredentialResponse::deserialize(&credential_response_bytes).unwrap(),
         ClientLoginFinishParameters::default(),
     );
 
@@ -141,7 +141,7 @@ fn account_login(
 
     let server_login_finish_result = server_login_start_result
         .state
-        .finish(CredentialFinalization::deserialize(&credential_finalization_bytes[..]).unwrap())
+        .finish(CredentialFinalization::deserialize(&credential_finalization_bytes).unwrap())
         .unwrap();
 
     client_login_finish_result.session_key == server_login_finish_result.session_key
