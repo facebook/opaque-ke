@@ -85,8 +85,8 @@ pub struct ClientRegistration<CS: CipherSuite> {
 impl_clone_for!(struct ClientRegistration<CS: CipherSuite>, [oprf_client, blinded_element]);
 impl_debug_eq_hash_for!(
     struct ClientRegistration<CS: CipherSuite>,
-    [oprf_client],
-    [voprf::NonVerifiableClient<CS::OprfGroup, CS::Hash>],
+    [oprf_client, blinded_element],
+    [voprf::NonVerifiableClient<CS::OprfGroup, CS::Hash>, voprf::BlindedElement<CS::OprfGroup, CS::Hash>],
 );
 impl_serialize_and_deserialize_for!(ClientRegistration);
 
