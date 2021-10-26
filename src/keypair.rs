@@ -484,8 +484,7 @@ mod tests {
         let sk = RemoteKey(PrivateKey(Key(sk)));
         let keypair = KeyPair::from_private_key(sk).unwrap();
 
-        let server_setup =
-            ServerSetup::<Default, RemoteKey>::new_with_key(&mut OsRng, keypair);
+        let server_setup = ServerSetup::<Default, RemoteKey>::new_with_key(&mut OsRng, keypair);
 
         let ClientRegistrationStartResult {
             message,
