@@ -36,7 +36,7 @@ p256_ = { package = "p256", version = "0.9", default-features = false, features 
 rand = { version = "0.8", default-features = false }
 serde = { version = "1", default-features = false, features = ["alloc", "derive"], optional = true }
 subtle = { version = "2.3", default-features = false }
-voprf = { git = "https://github.com/daxpedda/voprf", rev = "af90af97d52805775888a578253c669ed68df16b", default-features = false, features = ["danger"] }
+voprf = { git = "https://github.com/novifinancial/voprf", rev = "66fe587294922d83109b6d064576f9f5ffa31a5d", default-features = false, features = ["danger"] }
 zeroize = { version = "1", features = ["zeroize_derive"] }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
@@ -45,7 +45,7 @@ getrandom = { version = "0.2", features = ["js"], optional = true }
 [dev-dependencies]
 base64 = "0.13"
 bincode = "1"
-chacha20poly1305 = "0.8"
+chacha20poly1305 = "0.9"
 criterion = "0.3"
 hex = "0.4"
 json = "0.12"
@@ -55,7 +55,7 @@ serde_json = "1"
 sha2 = "0.9"
 proptest = "1"
 regex = "1"
-rustyline = "8"
+rustyline = "9"
 
 [[bench]]
 name = "opaque"
