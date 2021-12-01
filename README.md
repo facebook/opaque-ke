@@ -50,8 +50,7 @@ Special thanks go to Hugo Krawczyk and Chris Wood for helping to clarify discrep
 this implementation. Additional credit goes to @daxpedda for adding no_std support, p256 support, and making other general
 improvements to the library.
 
-
 License
 -------
 
-This project is [MIT licensed](./LICENSE).
+This project is [licensed](./LICENSE) under either Apache 2.0 or MIT, at your option.
