@@ -12,8 +12,8 @@
 use crate::errors::{InternalError, ProtocolError};
 use crate::key_exchange::group::KeGroup;
 use alloc::vec::Vec;
-use core::fmt::Debug;
 use core::ops::Deref;
+use derive_where::DeriveWhere;
 use generic_array::typenum::Unsigned;
 use generic_array::{ArrayLength, GenericArray};
 use rand::{CryptoRng, RngCore};
@@ -28,56 +28,12 @@ use zeroize::Zeroize;
         serialize = "S: serde::Serialize"
     ))
 )]
+#[derive(DeriveWhere)]
+#[derive_where(Clone, Zeroize(drop))]
+#[derive_where(Debug, Eq, Hash, PartialEq; S)]
 pub struct KeyPair<KG: KeGroup, S: SecretKey<KG> = PrivateKey<KG>> {
     pk: PublicKey<KG>,
     sk: S,
-}
-
-impl<KG: KeGroup, S: SecretKey<KG>> Clone for KeyPair<KG, S> {
-    fn clone(&self) -> Self {
-        Self {
-            pk: self.pk.clone(),
-            sk: self.sk.clone(),
-        }
-    }
-}
-
-impl<KG: KeGroup, S: SecretKey<KG> + Debug> Debug for KeyPair<KG, S> {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        f.debug_struct("KeyPair")
-            .field("pk", &self.pk)
-            .field("sk", &self.sk)
-            .finish()
-    }
-}
-
-impl<KG: KeGroup, S: SecretKey<KG> + PartialEq> PartialEq for KeyPair<KG, S> {
-    fn eq(&self, other: &Self) -> bool {
-        self.pk.eq(&other.pk) && self.sk.eq(&other.sk)
-    }
-}
-
-impl<KG: KeGroup, S: SecretKey<KG> + Eq> Eq for KeyPair<KG, S> {}
-
-impl<KG: KeGroup, S: SecretKey<KG> + core::hash::Hash> core::hash::Hash for KeyPair<KG, S> {
-    fn hash<H: core::hash::Hasher>(&self, state: &mut H) {
-        self.pk.hash(state);
-        self.sk.hash(state);
-    }
-}
-
-// This can't be derived because of the use of a generic parameter
-impl<KG: KeGroup, S: SecretKey<KG>> Zeroize for KeyPair<KG, S> {
-    fn zeroize(&mut self) {
-        self.pk.zeroize();
-        self.sk.zeroize();
-    }
-}
-
-impl<KG: KeGroup, S: SecretKey<KG>> Drop for KeyPair<KG, S> {
-    fn drop(&mut self) {
-        self.zeroize();
-    }
 }
 
 impl<KG: KeGroup, S: SecretKey<KG>> KeyPair<KG, S> {
@@ -124,7 +80,7 @@ impl<KG: KeGroup> KeyPair<KG> {
 }
 
 #[cfg(test)]
-impl<KG: KeGroup + Debug> KeyPair<KG> {
+impl<KG: KeGroup + core::fmt::Debug> KeyPair<KG> {
     /// Test-only strategy returning a proptest Strategy based on
     /// generate_random
     fn uniform_keypair_strategy() -> proptest::prelude::BoxedStrategy<Self> {
@@ -149,47 +105,9 @@ impl<KG: KeGroup + Debug> KeyPair<KG> {
     derive(serde::Deserialize, serde::Serialize),
     serde(bound = "")
 )]
-#[repr(transparent)]
+#[derive(DeriveWhere)]
+#[derive_where(Clone, Debug, Eq, Hash, PartialEq, Zeroize(drop))]
 pub struct Key<L: ArrayLength<u8>>(GenericArray<u8, L>);
-
-impl<L: ArrayLength<u8>> Clone for Key<L> {
-    fn clone(&self) -> Self {
-        Self(self.0.clone())
-    }
-}
-
-impl<L: ArrayLength<u8>> Debug for Key<L> {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        f.debug_tuple("Key").field(&self.0).finish()
-    }
-}
-
-impl<L: ArrayLength<u8>> Eq for Key<L> {}
-
-impl<L: ArrayLength<u8>> PartialEq for Key<L> {
-    fn eq(&self, other: &Self) -> bool {
-        self.0.eq(&other.0)
-    }
-}
-
-impl<L: ArrayLength<u8>> core::hash::Hash for Key<L> {
-    fn hash<H: core::hash::Hasher>(&self, state: &mut H) {
-        self.0.hash(state);
-    }
-}
-
-// This can't be derived because of the use of a generic parameter
-impl<L: ArrayLength<u8>> Zeroize for Key<L> {
-    fn zeroize(&mut self) {
-        self.0.zeroize();
-    }
-}
-
-impl<L: ArrayLength<u8>> Drop for Key<L> {
-    fn drop(&mut self) {
-        self.zeroize();
-    }
-}
 
 impl<L: ArrayLength<u8>> Deref for Key<L> {
     type Target = GenericArray<u8, L>;
@@ -208,32 +126,16 @@ impl<L: ArrayLength<u8>> Key<L> {
 }
 
 /// Wrapper around a Key to enforce that it's a private one.
-#[cfg_attr(feature = "serialize", derive(serde::Deserialize, serde::Serialize))]
-#[repr(transparent)]
+#[cfg_attr(
+    feature = "serialize",
+    derive(serde::Deserialize, serde::Serialize),
+    serde(bound = "")
+)]
+#[derive(DeriveWhere)]
+#[derive_where(Clone, Debug, Eq, Hash, PartialEq, Zeroize(drop))]
 pub struct PrivateKey<KG: KeGroup>(Key<KG::SkLen>);
 
-impl_clone_for!(
-    tuple PrivateKey<KG: KeGroup>,
-    [0],
-);
-impl_debug_eq_hash_for!(
-    tuple PrivateKey<KG: KeGroup>,
-    [0],
-);
-
 // This can't be derived because of the use of a generic parameter
-impl<KG: KeGroup> Zeroize for PrivateKey<KG> {
-    fn zeroize(&mut self) {
-        self.0.zeroize();
-    }
-}
-
-impl<KG: KeGroup> Drop for PrivateKey<KG> {
-    fn drop(&mut self) {
-        self.zeroize();
-    }
-}
-
 impl<KG: KeGroup> Deref for PrivateKey<KG> {
     type Target = Key<KG::SkLen>;
 
@@ -298,31 +200,14 @@ impl<KG: KeGroup> SecretKey<KG> for PrivateKey<KG> {
 }
 
 /// Wrapper around a Key to enforce that it's a public one.
-#[cfg_attr(feature = "serialize", derive(serde::Deserialize, serde::Serialize))]
-#[repr(transparent)]
+#[cfg_attr(
+    feature = "serialize",
+    derive(serde::Deserialize, serde::Serialize),
+    serde(bound = "")
+)]
+#[derive(DeriveWhere)]
+#[derive_where(Clone, Debug, Eq, Hash, PartialEq, Zeroize(drop))]
 pub struct PublicKey<KG: KeGroup>(Key<KG::PkLen>);
-
-impl_clone_for!(
-    tuple PublicKey<KG: KeGroup>,
-    [0],
-);
-impl_debug_eq_hash_for!(
-    tuple PublicKey<KG: KeGroup>,
-    [0],
-);
-
-// This can't be derived because of the use of a generic parameter
-impl<KG: KeGroup> Zeroize for PublicKey<KG> {
-    fn zeroize(&mut self) {
-        self.0.zeroize();
-    }
-}
-
-impl<KG: KeGroup> Drop for PublicKey<KG> {
-    fn drop(&mut self) {
-        self.zeroize();
-    }
-}
 
 impl<KG: KeGroup> Deref for PublicKey<KG> {
     type Target = Key<KG::PkLen>;

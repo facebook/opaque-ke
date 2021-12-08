@@ -26,6 +26,7 @@ argon2 = { version = "0.3", default-features = false, features = ["alloc"], opti
 base64 = { version = "0.13", default-features = false, features = ["alloc"], optional = true }
 constant_time_eq = "0.1"
 curve25519-dalek = { version = "3", default-features = false }
+derive-where = { version = "1.0.0-rc.1", features = ["zeroize"] }
 digest = "0.9"
 displaydoc = { version = "0.2", default-features = false }
 generic-array = "0.14"

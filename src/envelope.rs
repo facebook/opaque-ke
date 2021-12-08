@@ -16,6 +16,7 @@ use crate::{
 use alloc::vec;
 use alloc::vec::Vec;
 use core::convert::TryFrom;
+use derive_where::DeriveWhere;
 use digest::Digest;
 use generic_array::{
     sequence::Concat,
@@ -62,24 +63,13 @@ impl TryFrom<u8> for InnerEnvelopeMode {
 /// The specification update has simplified this assumption by taking
 /// an XOR-based approach without compromising on security, and to avoid
 /// the confusion around the implementation of an RKR-secure encryption.
+#[derive(DeriveWhere)]
+#[derive_where(Clone, Debug, Eq, Hash, PartialEq, Zeroize(drop))]
 pub(crate) struct Envelope<CS: CipherSuite> {
     mode: InnerEnvelopeMode,
     nonce: GenericArray<u8, NonceLen>,
     hmac: GenericArray<u8, <CS::Hash as Digest>::OutputSize>,
 }
-
-// Cannot be derived because it would require for CS to be Clone.
-impl<CS: CipherSuite> Clone for Envelope<CS> {
-    fn clone(&self) -> Self {
-        Self {
-            mode: self.mode.clone(),
-            nonce: self.nonce,
-            hmac: self.hmac.clone(),
-        }
-    }
-}
-
-impl_debug_eq_hash_for!(struct Envelope<CS: CipherSuite>, [mode, nonce, hmac]);
 
 // Note that this struct represents an envelope that has been "opened" with the asssociated
 // key. This key is also used to derive the export_key parameter, which is technically
@@ -301,21 +291,6 @@ impl<CS: CipherSuite> Envelope<CS> {
             nonce,
             hmac: GenericArray::clone_from_slice(hmac),
         })
-    }
-}
-
-// This can't be derived because of the use of a phantom parameter
-impl<CS: CipherSuite> Zeroize for Envelope<CS> {
-    fn zeroize(&mut self) {
-        self.mode.zeroize();
-        self.nonce.zeroize();
-        self.hmac.zeroize();
-    }
-}
-
-impl<CS: CipherSuite> Drop for Envelope<CS> {
-    fn drop(&mut self) {
-        self.zeroize();
     }
 }
 

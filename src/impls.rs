@@ -5,105 +5,7 @@
 // License, Version 2.0 found in the LICENSE-APACHE file in the root directory
 // of this source tree.
 
-macro_rules! impl_debug_eq_hash_for {
-    (struct $name:ident$(<$($gen:ident$(: $bound:tt)?),+$(,)?>)?, [$field1:ident$(, $field2:ident)*$(,)?]$(, )?$([$($type:ty),+$(,)?]$(,)?)?) => {
-        impl$(<$($gen$(: $bound)?),+>)? core::fmt::Debug for $name$(<$($gen),+>)?
-        $(where $($type: core::fmt::Debug,)+)?
-        {
-            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-                f.debug_struct(stringify!($name))
-                .field(stringify!($field1), &self.$field1)
-                $(.field(stringify!($field2), &self.$field2))*
-                .finish()
-            }
-        }
-
-        impl$(<$($gen$(: $bound)?),+>)? Eq for $name$(<$($gen),+>)?
-        $(where $($type: Eq,)+)?
-        {}
-
-        impl$(<$($gen$(: $bound)?),+>)? PartialEq for $name$(<$($gen),+>)?
-        $(where $($type: PartialEq,)+)?
-        {
-            fn eq(&self, other: &Self) -> bool {
-                PartialEq::eq(&self.$field1, &other.$field1)
-                $(&& PartialEq::eq(&self.$field2, &other.$field2))*
-            }
-        }
-
-        impl$(<$($gen$(: $bound)?),+>)? core::hash::Hash for $name$(<$($gen),+>)?
-        $(where $($type: core::hash::Hash,)+)?
-        {
-            fn hash<H: core::hash::Hasher>(&self, state: &mut H) {
-                core::hash::Hash::hash(&self.$field1, state);
-                $(core::hash::Hash::hash(&self.$field2, state);)*
-            }
-        }
-    };
-    (tuple $name:ident$(<$($gen:ident$(: $bound:tt)?),+$(,)?>)?, [$field1:tt$(, $field2:tt)*$(,)?]$(, )?$([$($type:ty),+$(,)?]$(,)?)?) => {
-        impl$(<$($gen$(: $bound)?),+>)? core::fmt::Debug for $name$(<$($gen),+>)?
-        $(where $($type: core::fmt::Debug,)+)?
-        {
-            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-                f.debug_tuple("$name")
-                .field(&self.$field1)
-                $(.field(&self.$field2))*
-                .finish()
-            }
-        }
-
-        impl$(<$($gen$(: $bound)?),+>)? Eq for $name$(<$($gen),+>)?
-        $(where $($type: Eq,)+)?
-        {}
-
-        impl$(<$($gen$(: $bound)?),+>)? PartialEq for $name$(<$($gen),+>)?
-        $(where $($type: PartialEq,)+)?
-        {
-            fn eq(&self, other: &Self) -> bool {
-                PartialEq::eq(&self.$field1, &other.$field1)
-                $(&& PartialEq::eq(&self.$field2, &other.$field2))*
-            }
-        }
-
-        impl$(<$($gen$(: $bound)?),+>)? core::hash::Hash for $name$(<$($gen),+>)?
-        $(where $($type: core::hash::Hash,)+)?
-        {
-            fn hash<H: core::hash::Hasher>(&self, state: &mut H) {
-                core::hash::Hash::hash(&self.$field1, state);
-                $(core::hash::Hash::hash(&self.$field2, state);)*
-            }
-        }
-    };
-}
-
-macro_rules! impl_clone_for {
-    (struct $name:ident$(<$($gen:ident$(: $bound:tt)?),+$(,)?>)?, [$field1:ident$(, $field2:ident)*$(,)?]$(, )?$([$($type:ty),+$(,)?]$(,)?)?) => {
-        impl$(<$($gen$(: $bound)?),+>)? Clone for $name$(<$($gen),+>)?
-        $(where $($type: Clone,)+)?
-        {
-            fn clone(&self) -> Self {
-                Self {
-                    $field1: self.$field1.clone(),
-                    $($field2: self.$field2.clone(),)*
-                }
-            }
-        }
-    };
-    (tuple $name:ident$(<$($gen:ident$(: $bound:tt)?),+$(,)?>)?, [$field1:tt$(, $field2:tt)*$(,)?]$(, )?$([$($type:ty),+$(,)?]$(,)?)?) => {
-        impl$(<$($gen$(: $bound)?),+>)? Clone for $name$(<$($gen),+>)?
-        $(where $($type: Clone,)+)?
-        {
-            fn clone(&self) -> Self {
-                Self(
-                    self.$field1.clone(),
-                    $(self.$field2.clone(),)*
-                )
-            }
-        }
-    };
-}
-
-/// Inner macro used for deriving `serde`'s `Serialize` and `Deserialize` traits.
+/// Macro used for deriving `serde`'s `Serialize` and `Deserialize` traits.
 macro_rules! impl_serialize_and_deserialize_for {
     ($t:ident) => {
         #[cfg(feature = "serialize")]
@@ -140,6 +42,7 @@ macro_rules! impl_serialize_and_deserialize_for {
 
                     impl<'de, CS: CipherSuite> serde::de::Visitor<'de> for ByteVisitor<CS> {
                         type Value = $t<CS>;
+
                         fn expecting(
                             &self,
                             formatter: &mut core::fmt::Formatter,

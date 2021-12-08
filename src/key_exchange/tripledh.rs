@@ -23,6 +23,7 @@ use crate::{
 use alloc::vec;
 use alloc::vec::Vec;
 use core::convert::TryFrom;
+use derive_where::DeriveWhere;
 use digest::{Digest, FixedOutput};
 use generic_array::{
     typenum::{Unsigned, U32},
@@ -31,7 +32,6 @@ use generic_array::{
 use hkdf::Hkdf;
 use hmac::{Hmac, Mac, NewMac};
 use rand::{CryptoRng, RngCore};
-use zeroize::Zeroize;
 
 ///////////////
 // Constants //
@@ -56,33 +56,39 @@ static STR_OPAQUE: &[u8] = b"OPAQUE-";
 pub struct TripleDH;
 
 /// The client state produced after the first key exchange message
-#[cfg_attr(feature = "serialize", derive(serde::Deserialize, serde::Serialize))]
+#[cfg_attr(
+    feature = "serialize",
+    derive(serde::Deserialize, serde::Serialize),
+    serde(bound = "")
+)]
+#[derive(DeriveWhere)]
+#[derive_where(Clone, Debug, Eq, Hash, PartialEq, Zeroize(drop))]
 pub struct Ke1State<KG: KeGroup> {
     client_e_sk: PrivateKey<KG>,
     client_nonce: GenericArray<u8, NonceLen>,
 }
 
-impl_clone_for!(
-    struct Ke1State<KG: KeGroup>,
-    [client_e_sk, client_nonce],
-);
-impl_debug_eq_hash_for!(
-    struct Ke1State<KG: KeGroup>,
-    [client_e_sk, client_nonce],
-);
-
 /// The first key exchange message
-#[derive(PartialEq, Eq, Debug, Hash, Clone)]
-#[cfg_attr(feature = "serialize", derive(serde::Deserialize, serde::Serialize))]
+#[cfg_attr(
+    feature = "serialize",
+    derive(serde::Deserialize, serde::Serialize),
+    serde(bound = "")
+)]
+#[derive(DeriveWhere)]
+#[derive_where(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct Ke1Message<KG: KeGroup> {
     pub(crate) client_nonce: GenericArray<u8, NonceLen>,
     pub(crate) client_e_pk: PublicKey<KG>,
 }
 
 /// The server state produced after the second key exchange message
-#[derive(Clone, Debug, Eq, Hash, PartialEq)]
-#[cfg_attr(feature = "serialize", derive(serde::Deserialize, serde::Serialize))]
-#[cfg_attr(feature = "serialize", serde(bound = ""))]
+#[cfg_attr(
+    feature = "serialize",
+    derive(serde::Deserialize, serde::Serialize),
+    serde(bound = "")
+)]
+#[derive(DeriveWhere)]
+#[derive_where(Clone, Debug, Eq, Hash, PartialEq, Zeroize(drop))]
 pub struct Ke2State<HashLen: ArrayLength<u8>> {
     km3: GenericArray<u8, HashLen>,
     hashed_transcript: GenericArray<u8, HashLen>,
@@ -90,9 +96,13 @@ pub struct Ke2State<HashLen: ArrayLength<u8>> {
 }
 
 /// The second key exchange message
-#[derive(Clone, Debug, Eq, Hash, PartialEq)]
-#[cfg_attr(feature = "serialize", derive(serde::Deserialize, serde::Serialize))]
-#[cfg_attr(feature = "serialize", serde(bound = ""))]
+#[cfg_attr(
+    feature = "serialize",
+    derive(serde::Deserialize, serde::Serialize),
+    serde(bound = "")
+)]
+#[derive(DeriveWhere)]
+#[derive_where(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct Ke2Message<KG: KeGroup, HashLen: ArrayLength<u8>> {
     server_nonce: GenericArray<u8, NonceLen>,
     server_e_pk: PublicKey<KG>,
@@ -100,9 +110,13 @@ pub struct Ke2Message<KG: KeGroup, HashLen: ArrayLength<u8>> {
 }
 
 /// The third key exchange message
-#[derive(Clone, Debug, Eq, Hash, PartialEq)]
-#[cfg_attr(feature = "serialize", derive(serde::Deserialize, serde::Serialize))]
-#[cfg_attr(feature = "serialize", serde(bound = ""))]
+#[cfg_attr(
+    feature = "serialize",
+    derive(serde::Deserialize, serde::Serialize),
+    serde(bound = "")
+)]
+#[derive(DeriveWhere)]
+#[derive_where(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct Ke3Message<HashLen: ArrayLength<u8>> {
     mac: GenericArray<u8, HashLen>,
 }
@@ -558,36 +572,5 @@ impl<HashLen: ArrayLength<u8>> FromBytes for Ke3Message<HashLen> {
 impl<HashLen: ArrayLength<u8>> ToBytes for Ke3Message<HashLen> {
     fn to_bytes(&self) -> Vec<u8> {
         self.mac.to_vec()
-    }
-}
-
-// Zeroize on drop implementations
-
-// This can't be derived because of the use of a generic parameter
-impl<KG: KeGroup> Zeroize for Ke1State<KG> {
-    fn zeroize(&mut self) {
-        self.client_e_sk.zeroize();
-        self.client_nonce.zeroize();
-    }
-}
-
-impl<KG: KeGroup> Drop for Ke1State<KG> {
-    fn drop(&mut self) {
-        self.zeroize();
-    }
-}
-
-// This can't be derived because of the use of a phantom parameter
-impl<HashLen: ArrayLength<u8>> Zeroize for Ke2State<HashLen> {
-    fn zeroize(&mut self) {
-        self.km3.zeroize();
-        self.hashed_transcript.zeroize();
-        self.session_key.zeroize();
-    }
-}
-
-impl<HashLen: ArrayLength<u8>> Drop for Ke2State<HashLen> {
-    fn drop(&mut self) {
-        self.zeroize();
     }
 }

@@ -25,13 +25,13 @@ use crate::{
 use alloc::vec;
 use alloc::vec::Vec;
 use core::marker::PhantomData;
+use derive_where::DeriveWhere;
 use digest::Digest;
 use generic_array::{typenum::Unsigned, GenericArray};
 use hkdf::Hkdf;
 use rand::{CryptoRng, RngCore};
 use subtle::ConstantTimeEq;
 use voprf::group::Group;
-use zeroize::Zeroize;
 
 ///////////////
 // Constants //
@@ -57,6 +57,9 @@ const STR_OPAQUE_DERIVE_KEY_PAIR: &[u8; 20] = b"OPAQUE-DeriveKeyPair";
         serialize = "KeyPair<CS::KeGroup, S>: serde::Serialize"
     ))
 )]
+#[derive(DeriveWhere)]
+#[derive_where(Clone)]
+#[derive_where(Debug, Eq, Hash, PartialEq; S)]
 pub struct ServerSetup<
     CS: CipherSuite,
     S: SecretKey<CS::KeGroup> = PrivateKey<<CS as CipherSuite>::KeGroup>,
@@ -66,67 +69,57 @@ pub struct ServerSetup<
     pub(crate) fake_keypair: KeyPair<CS::KeGroup>,
 }
 
-// Cannot be derived because it would require for CS to be bound.
-impl_clone_for!(
-    struct ServerSetup<CS: CipherSuite>,
-    [oprf_seed, keypair, fake_keypair],
-);
-impl_debug_eq_hash_for!(
-    struct ServerSetup<CS: CipherSuite>,
-    [oprf_seed, oprf_seed, fake_keypair],
-);
-
 /// The state elements the client holds to register itself
+#[derive(DeriveWhere)]
+#[derive_where(Clone, Zeroize(drop))]
+#[derive_where(
+    Debug, Eq, Hash, PartialEq;
+    voprf::NonVerifiableClient<CS::OprfGroup, CS::Hash>,
+    voprf::BlindedElement<CS::OprfGroup, CS::Hash>,
+)]
 pub struct ClientRegistration<CS: CipherSuite> {
     pub(crate) oprf_client: voprf::NonVerifiableClient<CS::OprfGroup, CS::Hash>,
     pub(crate) blinded_element: voprf::BlindedElement<CS::OprfGroup, CS::Hash>,
 }
 
-impl_clone_for!(struct ClientRegistration<CS: CipherSuite>, [oprf_client, blinded_element]);
-impl_debug_eq_hash_for!(
-    struct ClientRegistration<CS: CipherSuite>,
-    [oprf_client, blinded_element],
-    [voprf::NonVerifiableClient<CS::OprfGroup, CS::Hash>, voprf::BlindedElement<CS::OprfGroup, CS::Hash>],
-);
 impl_serialize_and_deserialize_for!(ClientRegistration);
 
 /// The state elements the server holds to record a registration
+#[derive(DeriveWhere)]
+#[derive_where(Clone, Debug, Eq, Hash, PartialEq, Zeroize(drop))]
 pub struct ServerRegistration<CS: CipherSuite>(RegistrationUpload<CS>);
 
-impl_clone_for!(tuple ServerRegistration<CS: CipherSuite>, [0]);
-impl_debug_eq_hash_for!(
-    tuple ServerRegistration<CS: CipherSuite>,
-    [0],
-);
 impl_serialize_and_deserialize_for!(ServerRegistration);
 
 /// The state elements the client holds to perform a login
+#[derive(DeriveWhere)]
+#[derive_where(Clone, Zeroize(drop))]
+#[derive_where(
+    Debug, Eq, Hash, PartialEq;
+    voprf::NonVerifiableClient<CS::OprfGroup, CS::Hash>,
+    <CS::KeyExchange as KeyExchange<CS::Hash, CS::KeGroup>>::KE1State,
+)]
 pub struct ClientLogin<CS: CipherSuite> {
     oprf_client: voprf::NonVerifiableClient<CS::OprfGroup, CS::Hash>,
     ke1_state: <CS::KeyExchange as KeyExchange<CS::Hash, CS::KeGroup>>::KE1State,
     serialized_credential_request: Vec<u8>,
 }
 
-impl_clone_for!(struct ClientLogin<CS: CipherSuite>, [oprf_client, ke1_state, serialized_credential_request]);
-impl_debug_eq_hash_for!(
-    struct ClientLogin<CS: CipherSuite>,
-    [oprf_client, ke1_state, serialized_credential_request],
-    [voprf::NonVerifiableClient<CS::OprfGroup, CS::Hash>, <CS::KeyExchange as KeyExchange<CS::Hash, CS::KeGroup>>::KE1State],
-);
 impl_serialize_and_deserialize_for!(ClientLogin);
 
 /// The state elements the server holds to record a login
+#[derive(DeriveWhere)]
+#[derive_where(Clone, Zeroize(drop))]
+#[derive_where(
+    Debug, Eq, Hash, PartialEq;
+    <CS::KeyExchange as KeyExchange<CS::Hash, CS::KeGroup>>::KE2State,
+)]
 pub struct ServerLogin<CS: CipherSuite> {
     ke2_state: <CS::KeyExchange as KeyExchange<CS::Hash, CS::KeGroup>>::KE2State,
+    #[derive_where(skip(Zeroize))]
     _cs: PhantomData<CS>,
 }
 
-impl_clone_for!(struct ServerLogin<CS: CipherSuite>, [ke2_state, _cs]);
-impl_debug_eq_hash_for!(
-    struct ServerLogin<CS: CipherSuite>,
-    [ke2_state, _cs],
-    [<CS::KeyExchange as KeyExchange<CS::Hash, CS::KeGroup>>::KE2State],
-);
 impl_serialize_and_deserialize_for!(ServerLogin);
 
 ////////////////////////////////
@@ -671,21 +664,13 @@ pub enum Identifiers {
 }
 
 /// Optional parameters for client registration finish
-#[derive(Clone)]
+#[derive(DeriveWhere)]
+#[derive_where(Clone, Default)]
 pub struct ClientRegistrationFinishParameters<'h, CS: CipherSuite> {
     /// Specifying the identifiers idU and idS
     pub identifiers: Option<Identifiers>,
     /// Specifying a configuration for the slow hash
     pub slow_hash: Option<&'h CS::SlowHash>,
-}
-
-impl<'h, CS: CipherSuite> Default for ClientRegistrationFinishParameters<'h, CS> {
-    fn default() -> Self {
-        Self {
-            identifiers: None,
-            slow_hash: None,
-        }
-    }
 }
 
 impl<'h, CS: CipherSuite> ClientRegistrationFinishParameters<'h, CS> {
@@ -699,6 +684,8 @@ impl<'h, CS: CipherSuite> ClientRegistrationFinishParameters<'h, CS> {
 }
 
 /// Contains the fields that are returned by a client registration start
+#[derive(DeriveWhere)]
+#[derive_where(Clone)]
 pub struct ClientRegistrationStartResult<CS: CipherSuite> {
     /// The registration request message to be sent to the server
     pub message: RegistrationRequest<CS>,
@@ -706,17 +693,9 @@ pub struct ClientRegistrationStartResult<CS: CipherSuite> {
     pub state: ClientRegistration<CS>,
 }
 
-// Cannot be derived because it would require for CS to be Clone.
-impl<CS: CipherSuite> Clone for ClientRegistrationStartResult<CS> {
-    fn clone(&self) -> Self {
-        Self {
-            message: self.message.clone(),
-            state: self.state.clone(),
-        }
-    }
-}
-
 /// Contains the fields that are returned by a client registration finish
+#[derive(DeriveWhere)]
+#[derive_where(Clone)]
 pub struct ClientRegistrationFinishResult<CS: CipherSuite> {
     /// The registration upload message to be sent to the server
     pub message: RegistrationUpload<CS>,
@@ -735,25 +714,10 @@ pub struct ClientRegistrationFinishResult<CS: CipherSuite> {
     pub randomized_pwd: GenericArray<u8, <CS::Hash as Digest>::OutputSize>,
 }
 
-// Cannot be derived because it would require for CS to be Clone.
-impl<CS: CipherSuite> Clone for ClientRegistrationFinishResult<CS> {
-    fn clone(&self) -> Self {
-        Self {
-            message: self.message.clone(),
-            export_key: self.export_key.clone(),
-            server_s_pk: self.server_s_pk.clone(),
-            #[cfg(test)]
-            state: self.state.clone(),
-            #[cfg(test)]
-            auth_key: self.auth_key.clone(),
-            #[cfg(test)]
-            randomized_pwd: self.randomized_pwd.clone(),
-        }
-    }
-}
-
 /// Contains the fields that are returned by a server registration start.
 /// Note that there is no state output in this step
+#[derive(DeriveWhere)]
+#[derive_where(Clone)]
 pub struct ServerRegistrationStartResult<CS: CipherSuite> {
     /// The registration resposne message to send to the client
     pub message: RegistrationResponse<CS>,
@@ -762,18 +726,9 @@ pub struct ServerRegistrationStartResult<CS: CipherSuite> {
     pub oprf_key: GenericArray<u8, <CS::OprfGroup as Group>::ScalarLen>,
 }
 
-// Cannot be derived because it would require for CS to be Clone.
-impl<CS: CipherSuite> Clone for ServerRegistrationStartResult<CS> {
-    fn clone(&self) -> Self {
-        Self {
-            message: self.message.clone(),
-            #[cfg(test)]
-            oprf_key: self.oprf_key.clone(),
-        }
-    }
-}
-
 /// Contains the fields that are returned by a client login start
+#[derive(DeriveWhere)]
+#[derive_where(Clone)]
 pub struct ClientLoginStartResult<CS: CipherSuite> {
     /// The message to send to the server to begin the login protocol
     pub message: CredentialRequest<CS>,
@@ -781,18 +736,9 @@ pub struct ClientLoginStartResult<CS: CipherSuite> {
     pub state: ClientLogin<CS>,
 }
 
-// Cannot be derived because it would require for CS to be Clone.
-impl<CS: CipherSuite> Clone for ClientLoginStartResult<CS> {
-    fn clone(&self) -> Self {
-        Self {
-            message: self.message.clone(),
-            state: self.state.clone(),
-        }
-    }
-}
-
 /// Optional parameters for client login finish
-#[derive(Clone)]
+#[derive(DeriveWhere)]
+#[derive_where(Clone, Default)]
 pub struct ClientLoginFinishParameters<'h, CS: CipherSuite> {
     /// Specifying a context field that the server must agree on
     pub context: Option<Vec<u8>>,
@@ -800,16 +746,6 @@ pub struct ClientLoginFinishParameters<'h, CS: CipherSuite> {
     pub identifiers: Option<Identifiers>,
     /// Specifying a configuration for the slow hash
     pub slow_hash: Option<&'h CS::SlowHash>,
-}
-
-impl<'h, CS: CipherSuite> Default for ClientLoginFinishParameters<'h, CS> {
-    fn default() -> Self {
-        Self {
-            context: None,
-            identifiers: None,
-            slow_hash: None,
-        }
-    }
 }
 
 impl<'h, CS: CipherSuite> ClientLoginFinishParameters<'h, CS> {
@@ -828,6 +764,8 @@ impl<'h, CS: CipherSuite> ClientLoginFinishParameters<'h, CS> {
 }
 
 /// Contains the fields that are returned by a client login finish
+#[derive(DeriveWhere)]
+#[derive_where(Clone)]
 pub struct ClientLoginFinishResult<CS: CipherSuite> {
     /// The message to send to the server to complete the protocol
     pub message: CredentialFinalization<CS>,
@@ -848,25 +786,9 @@ pub struct ClientLoginFinishResult<CS: CipherSuite> {
     pub client_mac_key: GenericArray<u8, <CS::Hash as Digest>::OutputSize>,
 }
 
-// Cannot be derived because it would require for CS to be Clone.
-impl<CS: CipherSuite> Clone for ClientLoginFinishResult<CS> {
-    fn clone(&self) -> Self {
-        Self {
-            message: self.message.clone(),
-            session_key: self.session_key.clone(),
-            export_key: self.export_key.clone(),
-            server_s_pk: self.server_s_pk.clone(),
-            #[cfg(test)]
-            state: self.state.clone(),
-            #[cfg(test)]
-            handshake_secret: self.handshake_secret.clone(),
-            #[cfg(test)]
-            client_mac_key: self.client_mac_key.clone(),
-        }
-    }
-}
-
 /// Contains the fields that are returned by a server login finish
+#[derive(DeriveWhere)]
+#[derive_where(Clone)]
 pub struct ServerLoginFinishResult<CS: CipherSuite> {
     /// The session key between client and server
     pub session_key: Vec<u8>,
@@ -874,18 +796,6 @@ pub struct ServerLoginFinishResult<CS: CipherSuite> {
     /// Instance of the ClientRegistration, only used in tests for checking zeroize
     #[cfg(test)]
     pub state: ServerLogin<CS>,
-}
-
-// Cannot be derived because it would require for CS to be Clone.
-impl<CS: CipherSuite> Clone for ServerLoginFinishResult<CS> {
-    fn clone(&self) -> Self {
-        Self {
-            session_key: self.session_key.clone(),
-            _cs: PhantomData,
-            #[cfg(test)]
-            state: self.state.clone(),
-        }
-    }
 }
 
 /// Optional parameters for server login start
@@ -908,6 +818,8 @@ impl Default for ServerLoginStartParameters {
 }
 
 /// Contains the fields that are returned by a server login start
+#[derive(DeriveWhere)]
+#[derive_where(Clone)]
 pub struct ServerLoginStartResult<CS: CipherSuite> {
     /// The message to send back to the client
     pub message: CredentialResponse<CS>,
@@ -922,22 +834,6 @@ pub struct ServerLoginStartResult<CS: CipherSuite> {
     /// OPRF key, only used in tests
     #[cfg(test)]
     pub oprf_key: GenericArray<u8, <CS::OprfGroup as Group>::ScalarLen>,
-}
-
-// Cannot be derived because it would require for CS to be Clone.
-impl<CS: CipherSuite> Clone for ServerLoginStartResult<CS> {
-    fn clone(&self) -> Self {
-        Self {
-            message: self.message.clone(),
-            state: self.state.clone(),
-            #[cfg(test)]
-            handshake_secret: self.handshake_secret.clone(),
-            #[cfg(test)]
-            server_mac_key: self.server_mac_key.clone(),
-            #[cfg(test)]
-            oprf_key: self.oprf_key.clone(),
-        }
-    }
 }
 
 ////////////////////////////////////////////////
@@ -1094,63 +990,4 @@ fn blind<CS: CipherSuite, R: RngCore + CryptoRng>(
     };
 
     Ok(result)
-}
-
-// Zeroize on drop implementations
-
-// This can't be derived because of the use of a phantom parameter
-impl<CS: CipherSuite> Zeroize for ClientRegistration<CS> {
-    fn zeroize(&mut self) {
-        self.oprf_client.zeroize();
-        self.blinded_element.zeroize();
-    }
-}
-
-impl<CS: CipherSuite> Drop for ClientRegistration<CS> {
-    fn drop(&mut self) {
-        self.zeroize();
-    }
-}
-
-// This can't be derived because of the use of a phantom parameter
-impl<CS: CipherSuite> Zeroize for ServerRegistration<CS> {
-    fn zeroize(&mut self) {
-        self.0.envelope.zeroize();
-        self.0.masking_key.zeroize();
-        self.0.client_s_pk.zeroize();
-    }
-}
-
-impl<CS: CipherSuite> Drop for ServerRegistration<CS> {
-    fn drop(&mut self) {
-        self.zeroize();
-    }
-}
-
-// This can't be derived because of the use of a phantom parameter
-impl<CS: CipherSuite> Zeroize for ClientLogin<CS> {
-    fn zeroize(&mut self) {
-        self.oprf_client.zeroize();
-        self.ke1_state.zeroize();
-        self.serialized_credential_request.zeroize();
-    }
-}
-
-impl<CS: CipherSuite> Drop for ClientLogin<CS> {
-    fn drop(&mut self) {
-        self.zeroize();
-    }
-}
-
-// This can't be derived because of the use of a phantom parameter
-impl<CS: CipherSuite> Zeroize for ServerLogin<CS> {
-    fn zeroize(&mut self) {
-        self.ke2_state.zeroize();
-    }
-}
-
-impl<CS: CipherSuite> Drop for ServerLogin<CS> {
-    fn drop(&mut self) {
-        self.zeroize();
-    }
 }
