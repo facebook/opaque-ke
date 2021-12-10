@@ -22,10 +22,11 @@ use crate::{
 use alloc::string::ToString;
 use alloc::vec;
 use alloc::vec::Vec;
-use core::ops::Add;
+use core::ops::{Add, Shl};
 use curve25519_dalek::{ristretto::RistrettoPoint, traits::Identity};
 use digest::FixedOutput;
-use generic_array::{typenum::Sum, ArrayLength};
+use generic_array::typenum::{Double, Sum, B1};
+use generic_array::ArrayLength;
 use rand::rngs::OsRng;
 use serde_json::Value;
 use zeroize::Zeroize;
@@ -286,6 +287,8 @@ fn stringify_test_vectors(p: &TestVectorParameters) -> alloc::string::String {
 
 fn generate_parameters<CS: CipherSuite>() -> Result<TestVectorParameters, ProtocolError>
 where
+    <CS::Hash as FixedOutput>::OutputSize: Shl<B1>,
+    Double<<CS::Hash as FixedOutput>::OutputSize>: ArrayLength<u8>,
     Sum<<CS::KeGroup as KeGroup>::PkLen, NonceLen>: Add<<CS::Hash as FixedOutput>::OutputSize>,
     Sum<Sum<<CS::KeGroup as KeGroup>::PkLen, NonceLen>, <CS::Hash as FixedOutput>::OutputSize>:
         ArrayLength<u8>,

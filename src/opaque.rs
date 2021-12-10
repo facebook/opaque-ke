@@ -25,17 +25,17 @@ use crate::{
 };
 use alloc::vec::Vec;
 use core::marker::PhantomData;
-use core::ops::Add;
+use core::ops::{Add, Shl};
 use derive_where::DeriveWhere;
 use digest::{Digest, FixedOutput};
 use generic_array::{
-    typenum::{Sum, Unsigned},
+    typenum::{Double, Sum, Unsigned, B1},
     ArrayLength, GenericArray,
 };
 use hkdf::Hkdf;
 use rand::{CryptoRng, RngCore};
 use subtle::ConstantTimeEq;
-use voprf::group::Group;
+use voprf::{group::Group, EvaluationElement, NonVerifiableClient};
 
 ///////////////
 // Constants //
@@ -82,7 +82,7 @@ pub struct ServerSetup<
     voprf::BlindedElement<CS::OprfGroup, CS::Hash>,
 )]
 pub struct ClientRegistration<CS: CipherSuite> {
-    pub(crate) oprf_client: voprf::NonVerifiableClient<CS::OprfGroup, CS::Hash>,
+    pub(crate) oprf_client: NonVerifiableClient<CS::OprfGroup, CS::Hash>,
     pub(crate) blinded_element: voprf::BlindedElement<CS::OprfGroup, CS::Hash>,
 }
 
@@ -104,7 +104,7 @@ impl_serialize_and_deserialize_for!(ServerRegistration);
     <CS::KeyExchange as KeyExchange<CS::Hash, CS::KeGroup>>::KE1State,
 )]
 pub struct ClientLogin<CS: CipherSuite> {
-    oprf_client: voprf::NonVerifiableClient<CS::OprfGroup, CS::Hash>,
+    oprf_client: NonVerifiableClient<CS::OprfGroup, CS::Hash>,
     ke1_state: <CS::KeyExchange as KeyExchange<CS::Hash, CS::KeGroup>>::KE1State,
     serialized_credential_request: Vec<u8>,
 }
@@ -148,11 +148,11 @@ impl<CS: CipherSuite, S: SecretKey<CS::KeGroup>> ServerSetup<CS, S> {
         rng: &mut R,
         keypair: KeyPair<CS::KeGroup, S>,
     ) -> Self {
-        let mut seed = vec![0u8; <CS::Hash as Digest>::OutputSize::USIZE];
-        rng.fill_bytes(&mut seed);
+        let mut oprf_seed = GenericArray::default();
+        rng.fill_bytes(&mut oprf_seed);
 
         Self {
-            oprf_seed: GenericArray::clone_from_slice(&seed),
+            oprf_seed,
             keypair,
             fake_keypair: KeyPair::<CS::KeGroup>::generate_random(rng),
         }
@@ -211,7 +211,7 @@ impl<CS: CipherSuite> ClientRegistration<CS> {
         }
 
         Ok(Self {
-            oprf_client: voprf::NonVerifiableClient::deserialize(&serialized_oprf_client)?,
+            oprf_client: NonVerifiableClient::deserialize(&serialized_oprf_client)?,
             blinded_element: voprf::BlindedElement::deserialize(&serialized_blinded_element)?,
         })
     }
@@ -251,7 +251,11 @@ impl<CS: CipherSuite> ClientRegistration<CS> {
         rng: &mut R,
         registration_response: RegistrationResponse<CS>,
         params: ClientRegistrationFinishParameters<CS>,
-    ) -> Result<ClientRegistrationFinishResult<CS>, ProtocolError> {
+    ) -> Result<ClientRegistrationFinishResult<CS>, ProtocolError>
+    where
+        <CS::Hash as FixedOutput>::OutputSize: Shl<B1>,
+        Double<<CS::Hash as FixedOutput>::OutputSize>: ArrayLength<u8>,
+    {
         // Check for reflected value from server and halt if detected
         if self
             .blinded_element
@@ -380,14 +384,14 @@ impl<CS: CipherSuite> ClientLogin<CS> {
                 &ke1_state_bytes,
             )?;
         Ok(Self {
-            oprf_client: voprf::NonVerifiableClient::deserialize(&serialized_oprf_client)?,
+            oprf_client: NonVerifiableClient::deserialize(&serialized_oprf_client)?,
             ke1_state,
             serialized_credential_request,
         })
     }
 
-    #[cfg(test)]
     /// Only used for testing zeroize
+    #[cfg(test)]
     pub(crate) fn to_vec(&self) -> Vec<u8> {
         [
             self.oprf_client.serialize(),
@@ -431,6 +435,8 @@ impl<CS: CipherSuite> ClientLogin<CS> {
         params: ClientLoginFinishParameters<CS>,
     ) -> Result<ClientLoginFinishResult<CS>, ProtocolError>
     where
+        <CS::Hash as FixedOutput>::OutputSize: Shl<B1>,
+        Double<<CS::Hash as FixedOutput>::OutputSize>: ArrayLength<u8>,
         Sum<<CS::KeGroup as KeGroup>::PkLen, NonceLen>: Add<<CS::Hash as FixedOutput>::OutputSize>,
         Sum<Sum<<CS::KeGroup as KeGroup>::PkLen, NonceLen>, <CS::Hash as FixedOutput>::OutputSize>:
             ArrayLength<u8>,
@@ -453,7 +459,7 @@ impl<CS: CipherSuite> ClientLogin<CS> {
             params.slow_hash,
         )?;
 
-        let mut masking_key = vec![0u8; <CS::Hash as Digest>::OutputSize::USIZE];
+        let mut masking_key = GenericArray::<_, <CS::Hash as Digest>::OutputSize>::default();
         randomized_pwd_hasher
             .expand(STR_MASKING_KEY, &mut masking_key)
             .map_err(|_| InternalError::HkdfError)?;
@@ -467,7 +473,7 @@ impl<CS: CipherSuite> ClientLogin<CS> {
             ProtocolError::SerializationError => ProtocolError::InvalidLoginError,
             err => err,
         })?;
-        let server_s_pk_bytes = server_s_pk.to_arr().to_vec();
+        let server_s_pk_bytes = server_s_pk.to_arr();
 
         let opened_envelope = &envelope
             .open(
@@ -567,7 +573,7 @@ impl<CS: CipherSuite> ServerLogin<CS> {
         let server_s_sk = server_setup.keypair.private();
         let server_s_pk = server_s_sk.public_key()?;
 
-        let mut masking_nonce = vec![0u8; 32];
+        let mut masking_nonce = GenericArray::<_, NonceLen>::default();
         rng.fill_bytes(&mut masking_nonce);
 
         let masked_response = mask_response(
@@ -872,8 +878,8 @@ where
 
 #[allow(clippy::type_complexity)]
 fn get_password_derived_key<CS: CipherSuite>(
-    oprf_client: voprf::NonVerifiableClient<CS::OprfGroup, CS::Hash>,
-    evaluation_element: voprf::EvaluationElement<CS::OprfGroup, CS::Hash>,
+    oprf_client: NonVerifiableClient<CS::OprfGroup, CS::Hash>,
+    evaluation_element: EvaluationElement<CS::OprfGroup, CS::Hash>,
     slow_hash: Option<&CS::SlowHash>,
 ) -> Result<
     (
@@ -881,7 +887,11 @@ fn get_password_derived_key<CS: CipherSuite>(
         Hkdf<CS::Hash>,
     ),
     ProtocolError,
-> {
+>
+where
+    <CS::Hash as FixedOutput>::OutputSize: Shl<B1>,
+    Double<<CS::Hash as FixedOutput>::OutputSize>: ArrayLength<u8>,
+{
     let oprf_output = oprf_client.finalize(evaluation_element, None)?;
 
     let hardened_output = if let Some(slow_hash) = slow_hash {
@@ -893,7 +903,7 @@ fn get_password_derived_key<CS: CipherSuite>(
 
     Ok(Hkdf::<CS::Hash>::extract(
         None,
-        &[oprf_output.to_vec(), hardened_output].concat(),
+        &[oprf_output, hardened_output].concat(),
     ))
 }
 
@@ -955,8 +965,13 @@ fn unmask_response<CS: CipherSuite>(
     masking_key: &[u8],
     masking_nonce: &[u8],
     masked_response: &[u8],
-) -> Result<(PublicKey<CS::KeGroup>, Envelope<CS>), ProtocolError> {
-    let mut xor_pad = vec![0u8; <CS::KeGroup as KeGroup>::PkLen::USIZE + Envelope::<CS>::len()];
+) -> Result<(PublicKey<CS::KeGroup>, Envelope<CS>), ProtocolError>
+where
+    Sum<<CS::KeGroup as KeGroup>::PkLen, NonceLen>: Add<<CS::Hash as FixedOutput>::OutputSize>,
+    Sum<Sum<<CS::KeGroup as KeGroup>::PkLen, NonceLen>, <CS::Hash as FixedOutput>::OutputSize>:
+        ArrayLength<u8>,
+{
+    let mut xor_pad = MaskResponse::<CS>::default();
     Hkdf::<CS::Hash>::from_prk(masking_key)
         .map_err(|_| InternalError::HkdfError)?
         .expand(
@@ -1009,7 +1024,7 @@ fn blind<CS: CipherSuite, R: RngCore + CryptoRng>(
     voprf::errors::InternalError,
 > {
     #[cfg(not(test))]
-    let result = voprf::NonVerifiableClient::blind(password.to_vec(), rng)?;
+    let result = NonVerifiableClient::blind(password.to_vec(), rng)?;
 
     #[cfg(test)]
     let result = {
@@ -1027,7 +1042,7 @@ fn blind<CS: CipherSuite, R: RngCore + CryptoRng>(
                 true => (),
             }
         };
-        voprf::NonVerifiableClient::deterministic_blind_unchecked(password.to_vec(), blind)?
+        NonVerifiableClient::deterministic_blind_unchecked(password.to_vec(), blind)?
     };
 
     Ok(result)

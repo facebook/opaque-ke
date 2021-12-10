@@ -18,9 +18,13 @@ use crate::{
     *,
 };
 use alloc::{string::ToString, vec, vec::Vec};
-use core::ops::Add;
+use core::ops::{Add, Shl};
 use digest::FixedOutput;
-use generic_array::{typenum::Sum, ArrayLength};
+use generic_array::typenum::Double;
+use generic_array::{
+    typenum::{Sum, B1},
+    ArrayLength,
+};
 use json::JsonValue;
 
 #[allow(non_snake_case)]
@@ -293,7 +297,11 @@ fn test_registration_response<CS: CipherSuite>(
 
 fn test_registration_upload<CS: CipherSuite>(
     tvs: &[OpaqueTestVectorParameters],
-) -> Result<(), ProtocolError> {
+) -> Result<(), ProtocolError>
+where
+    <CS::Hash as FixedOutput>::OutputSize: Shl<B1>,
+    Double<<CS::Hash as FixedOutput>::OutputSize>: ArrayLength<u8>,
+{
     for parameters in tvs {
         let mut rng = CycleRng::new(parameters.blind_registration.to_vec());
         let client_registration_start_result =
@@ -417,6 +425,8 @@ where
 
 fn test_ke3<CS: CipherSuite>(tvs: &[OpaqueTestVectorParameters]) -> Result<(), ProtocolError>
 where
+    <CS::Hash as FixedOutput>::OutputSize: Shl<B1>,
+    Double<<CS::Hash as FixedOutput>::OutputSize>: ArrayLength<u8>,
     Sum<<CS::KeGroup as KeGroup>::PkLen, NonceLen>: Add<<CS::Hash as FixedOutput>::OutputSize>,
     Sum<Sum<<CS::KeGroup as KeGroup>::PkLen, NonceLen>, <CS::Hash as FixedOutput>::OutputSize>:
         ArrayLength<u8>,

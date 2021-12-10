@@ -111,7 +111,7 @@ where
 {
     /// the server's oprf output
     pub(crate) evaluation_element: voprf::EvaluationElement<CS::OprfGroup, CS::Hash>,
-    pub(crate) masking_nonce: Vec<u8>,
+    pub(crate) masking_nonce: GenericArray<u8, NonceLen>,
     pub(crate) masked_response: MaskResponse<CS>,
     pub(crate) ke2_message: <CS::KeyExchange as KeyExchange<CS::Hash, CS::KeGroup>>::KE2Message,
 }
@@ -343,8 +343,9 @@ where
             return Err(ProtocolError::IdentityGroupElementError);
         }
 
-        let masking_nonce = checked_slice[elem_len..elem_len + nonce_len].to_vec();
-        let masked_response = MaskResponse::<CS>::clone_from_slice(
+        let masking_nonce =
+            GenericArray::clone_from_slice(&checked_slice[elem_len..elem_len + nonce_len]);
+        let masked_response = GenericArray::clone_from_slice(
             &checked_slice[elem_len + nonce_len..elem_len + nonce_len + masked_response_len],
         );
         let ke2_message =
