@@ -35,7 +35,7 @@ use generic_array::{
 use hkdf::Hkdf;
 use rand::{CryptoRng, RngCore};
 use subtle::ConstantTimeEq;
-use voprf::{group::Group, EvaluationElement, NonVerifiableClient, NonVerifiableServer};
+use voprf::group::Group;
 
 ///////////////
 // Constants //
@@ -82,7 +82,7 @@ pub struct ServerSetup<
     voprf::BlindedElement<CS::OprfGroup, CS::Hash>,
 )]
 pub struct ClientRegistration<CS: CipherSuite> {
-    pub(crate) oprf_client: NonVerifiableClient<CS::OprfGroup, CS::Hash>,
+    pub(crate) oprf_client: voprf::NonVerifiableClient<CS::OprfGroup, CS::Hash>,
     pub(crate) blinded_element: voprf::BlindedElement<CS::OprfGroup, CS::Hash>,
 }
 
@@ -104,7 +104,7 @@ impl_serialize_and_deserialize_for!(ServerRegistration);
     <CS::KeyExchange as KeyExchange<CS::Hash, CS::KeGroup>>::KE1State,
 )]
 pub struct ClientLogin<CS: CipherSuite> {
-    oprf_client: NonVerifiableClient<CS::OprfGroup, CS::Hash>,
+    oprf_client: voprf::NonVerifiableClient<CS::OprfGroup, CS::Hash>,
     ke1_state: <CS::KeyExchange as KeyExchange<CS::Hash, CS::KeGroup>>::KE1State,
     serialized_credential_request: Vec<u8>,
 }
@@ -211,7 +211,7 @@ impl<CS: CipherSuite> ClientRegistration<CS> {
         }
 
         Ok(Self {
-            oprf_client: NonVerifiableClient::deserialize(&serialized_oprf_client)?,
+            oprf_client: voprf::NonVerifiableClient::deserialize(&serialized_oprf_client)?,
             blinded_element: voprf::BlindedElement::deserialize(&serialized_blinded_element)?,
         })
     }
@@ -326,7 +326,7 @@ impl<CS: CipherSuite> ServerRegistration<CS> {
             credential_identifier,
         )?;
 
-        let server = NonVerifiableServer::new_with_key(&oprf_key)?;
+        let server = voprf::NonVerifiableServer::new_with_key(&oprf_key)?;
         let evaluate_result = server.evaluate(message.blinded_element, None)?;
 
         Ok(ServerRegistrationStartResult {
@@ -384,7 +384,7 @@ impl<CS: CipherSuite> ClientLogin<CS> {
                 &ke1_state_bytes,
             )?;
         Ok(Self {
-            oprf_client: NonVerifiableClient::deserialize(&serialized_oprf_client)?,
+            oprf_client: voprf::NonVerifiableClient::deserialize(&serialized_oprf_client)?,
             ke1_state,
             serialized_credential_request,
         })
@@ -598,7 +598,7 @@ impl<CS: CipherSuite> ServerLogin<CS> {
             credential_identifier,
         )
         .map_err(ProtocolError::into_custom)?;
-        let server = NonVerifiableServer::new_with_key(&oprf_key)
+        let server = voprf::NonVerifiableServer::new_with_key(&oprf_key)
             .map_err(|e| ProtocolError::into_custom(e.into()))?;
         let evaluate_result = server
             .evaluate(credential_request.blinded_element, None)
@@ -864,8 +864,8 @@ where
 
 #[allow(clippy::type_complexity)]
 fn get_password_derived_key<CS: CipherSuite>(
-    oprf_client: NonVerifiableClient<CS::OprfGroup, CS::Hash>,
-    evaluation_element: EvaluationElement<CS::OprfGroup, CS::Hash>,
+    oprf_client: voprf::NonVerifiableClient<CS::OprfGroup, CS::Hash>,
+    evaluation_element: voprf::EvaluationElement<CS::OprfGroup, CS::Hash>,
     slow_hash: Option<&CS::SlowHash>,
 ) -> Result<
     (
@@ -1006,7 +1006,7 @@ fn blind<CS: CipherSuite, R: RngCore + CryptoRng>(
     voprf::errors::InternalError,
 > {
     #[cfg(not(test))]
-    let result = NonVerifiableClient::blind(password.to_vec(), rng)?;
+    let result = voprf::NonVerifiableClient::blind(password.to_vec(), rng)?;
 
     #[cfg(test)]
     let result = {
@@ -1024,7 +1024,7 @@ fn blind<CS: CipherSuite, R: RngCore + CryptoRng>(
                 true => (),
             }
         };
-        NonVerifiableClient::deterministic_blind_unchecked(password.to_vec(), blind)?
+        voprf::NonVerifiableClient::deterministic_blind_unchecked(password.to_vec(), blind)?
     };
 
     Ok(result)
