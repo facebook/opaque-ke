@@ -619,7 +619,7 @@
 //! # Ok::<(), ProtocolError>(())
 //! ```
 //!
-//! The same identifiers must also be supplied using [ServerLoginStartParameters::WithIdentifiers] in [Server Login Start](#server-login-start):
+//! The same identifiers must also be supplied using [ServerLoginStartParameters] in [Server Login Start](#server-login-start):
 //! ```
 //! # use opaque_ke::{
 //! #   errors::ProtocolError,
@@ -724,7 +724,7 @@
 //! Failing to supply the same pair of custom identifiers in any of the three steps above will result in an error in attempting to complete
 //! the protocol!
 //!
-//! Note that if only one of the client and server identifiers are present, then [Identifiers::ClientIdentifier] and [Identifiers::ServerIdentifier] can be
+//! Note that if only one of the client and server identifiers are present, then [Identifiers] can be
 //! used to specify them individually.
 //!
 //! ## Key Exchange Context
@@ -732,7 +732,7 @@
 //! A key exchange protocol typically allows for the specifying of shared "context" information between the two parties before the exchange is complete,
 //! so as to bind the integrity of application-specific data or configuration parameters to the security of the key exchange.
 //! During the login phase, the client and server can specify this context using:
-//! - The second login message, where the server can populate [ServerLoginStartParameters::WithContext], and
+//! - The second login message, where the server can populate [ServerLoginStartParameters], and
 //! - The third login message, where the client can populate [ClientLoginFinishParameters].
 //!
 //! For both of these messages, the `WithContextAndIdentifiers` variant can be used to specify these fields in addition to
