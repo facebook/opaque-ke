@@ -57,7 +57,7 @@ serde_json = "1"
 sha2 = "0.9"
 proptest = "1"
 regex = "1"
-rustyline = "9"
+rustyline = "~9.0"
 
 [[bench]]
 name = "opaque"
