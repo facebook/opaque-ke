@@ -367,7 +367,7 @@ where
     pub fn set_evaluation_element_for_testing(&self, beta: CS::OprfGroup) -> Self {
         Self {
             evaluation_element: voprf::EvaluationElement::from_value_unchecked(beta),
-            masking_nonce: self.masking_nonce.clone(),
+            masking_nonce: self.masking_nonce,
             masked_response: self.masked_response.clone(),
             ke2_message: self.ke2_message.clone(),
         }

@@ -59,7 +59,7 @@ pub trait KeyExchange<D: Hash, G: KeGroup> {
         server_s_sk: S,
         id_u: Vec<u8>,
         id_s: Vec<u8>,
-        context: Vec<u8>,
+        context: &[u8],
     ) -> Result<GenerateKe2Result<Self, D, G>, ProtocolError<S::Error>>;
 
     #[allow(clippy::too_many_arguments, clippy::type_complexity)]
@@ -72,7 +72,7 @@ pub trait KeyExchange<D: Hash, G: KeGroup> {
         client_s_sk: PrivateKey<G>,
         id_u: Vec<u8>,
         id_s: Vec<u8>,
-        context: Vec<u8>,
+        context: &[u8],
     ) -> Result<GenerateKe3Result<Self, D, G>, ProtocolError>;
 
     #[allow(clippy::type_complexity)]

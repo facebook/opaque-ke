@@ -609,10 +609,10 @@
 //!     &mut client_rng,
 //!     server_registration_start_result.message,
 //!     ClientRegistrationFinishParameters::new(
-//!         Some(Identifiers::ClientAndServerIdentifiers(
-//!             b"Alice_the_Cryptographer".to_vec(),
-//!             b"Facebook".to_vec(),
-//!         )),
+//!         Identifiers {
+//!             client: Some(b"Alice_the_Cryptographer"),
+//!             server: Some(b"Facebook"),
+//!         },
 //!         None,
 //!     ),
 //! )?;
@@ -644,7 +644,7 @@
 //! # let mut server_rng = OsRng;
 //! # let server_setup = ServerSetup::<Default>::new(&mut server_rng);
 //! # let server_registration_start_result = ServerRegistration::<Default>::start(&server_setup, client_registration_start_result.message, b"alice@example.com")?;
-//! # let client_registration_finish_result = client_registration_start_result.state.finish(&mut client_rng, server_registration_start_result.message, ClientRegistrationFinishParameters::new(Some(Identifiers::ClientAndServerIdentifiers(b"Alice_the_Cryptographer".to_vec(), b"Facebook".to_vec())), None))?;
+//! # let client_registration_finish_result = client_registration_start_result.state.finish(&mut client_rng, server_registration_start_result.message, ClientRegistrationFinishParameters::new(Identifiers { client: Some(b"Alice_the_Cryptographer"), server: Some(b"Facebook") }, None))?;
 //! # let password_file_bytes = ServerRegistration::<Default>::finish(client_registration_finish_result.message).serialize()?;
 //! # let client_login_start_result = ClientLogin::<Default>::start(
 //! #   &mut client_rng,
@@ -659,12 +659,13 @@
 //!     Some(password_file),
 //!     client_login_start_result.message,
 //!     b"alice@example.com",
-//!     ServerLoginStartParameters::WithIdentifiers(
-//!         Identifiers::ClientAndServerIdentifiers(
-//!             b"Alice_the_Cryptographer".to_vec(),
-//!             b"Facebook".to_vec(),
-//!         ),
-//!     ),
+//!     ServerLoginStartParameters {
+//!         context: None,
+//!         identifiers: Identifiers {
+//!             client: Some(b"Alice_the_Cryptographer"),
+//!             server: Some(b"Facebook"),
+//!         },
+//!     },
 //! )?;
 //! # Ok::<(), ProtocolError>(())
 //! ```
@@ -694,7 +695,7 @@
 //! # let mut server_rng = OsRng;
 //! # let server_setup = ServerSetup::<Default>::new(&mut server_rng);
 //! # let server_registration_start_result = ServerRegistration::<Default>::start(&server_setup, client_registration_start_result.message, b"alice@example.com")?;
-//! # let client_registration_finish_result = client_registration_start_result.state.finish(&mut client_rng, server_registration_start_result.message, ClientRegistrationFinishParameters::new(Some(Identifiers::ClientAndServerIdentifiers(b"Alice_the_Cryptographer".to_vec(), b"Facebook".to_vec())), None))?;
+//! # let client_registration_finish_result = client_registration_start_result.state.finish(&mut client_rng, server_registration_start_result.message, ClientRegistrationFinishParameters::new(Identifiers { client: Some(b"Alice_the_Cryptographer"), server: Some(b"Facebook") }, None))?;
 //! # let password_file_bytes = ServerRegistration::<Default>::finish(client_registration_finish_result.message).serialize()?;
 //! # let client_login_start_result = ClientLogin::<Default>::start(
 //! #     &mut client_rng,
@@ -705,15 +706,15 @@
 //! #     &password_file_bytes,
 //! #   )?;
 //! # let server_login_start_result =
-//! #     ServerLogin::start(&mut server_rng, &server_setup, Some(password_file), client_login_start_result.message, b"alice@example.com", ServerLoginStartParameters::WithIdentifiers(Identifiers::ClientAndServerIdentifiers(b"Alice_the_Cryptographer".to_vec(), b"Facebook".to_vec())))?;
+//! #     ServerLogin::start(&mut server_rng, &server_setup, Some(password_file), client_login_start_result.message, b"alice@example.com", ServerLoginStartParameters { context: None, identifiers: Identifiers { client: Some(b"Alice_the_Cryptographer"), server: Some(b"Facebook") } })?;
 //! let client_login_finish_result = client_login_start_result.state.finish(
 //!     server_login_start_result.message,
 //!     ClientLoginFinishParameters::new(
 //!         None,
-//!         Some(Identifiers::ClientAndServerIdentifiers(
-//!             b"Alice_the_Cryptographer".to_vec(),
-//!             b"Facebook".to_vec(),
-//!         )),
+//!         Identifiers {
+//!             client: Some(b"Alice_the_Cryptographer"),
+//!             server: Some(b"Facebook"),
+//!         },
 //!         None,
 //!     ),
 //! )?;

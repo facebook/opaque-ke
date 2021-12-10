@@ -155,21 +155,6 @@ fn get_password_file_bytes<CS: CipherSuite>(
     password_file.serialize()
 }
 
-fn parse_identifiers(
-    client_identity: &Option<Vec<u8>>,
-    server_identity: &Option<Vec<u8>>,
-) -> Option<Identifiers> {
-    match (client_identity, server_identity) {
-        (None, None) => None,
-        (Some(x), None) => Some(Identifiers::ClientIdentifier(x.clone())),
-        (None, Some(y)) => Some(Identifiers::ServerIdentifier(y.clone())),
-        (Some(x), Some(y)) => Some(Identifiers::ClientAndServerIdentifiers(
-            x.clone(),
-            y.clone(),
-        )),
-    }
-}
-
 macro_rules! json_to_test_vectors {
     ( $v:ident, $vector_type:expr, $cs:expr, ) => {
         $v[$vector_type]
@@ -311,10 +296,13 @@ where
         let result = client_registration_start_result.state.finish(
             &mut finish_registration_rng,
             RegistrationResponse::deserialize(&parameters.registration_response).unwrap(),
-            match parse_identifiers(&parameters.client_identity, &parameters.server_identity) {
-                None => ClientRegistrationFinishParameters::default(),
-                Some(ids) => ClientRegistrationFinishParameters::new(Some(ids), None),
-            },
+            ClientRegistrationFinishParameters::new(
+                Identifiers {
+                    client: parameters.client_identity.as_deref(),
+                    server: parameters.server_identity.as_deref(),
+                },
+                None,
+            ),
         )?;
         assert_eq!(
             hex::encode(&parameters.auth_key),
@@ -395,12 +383,12 @@ where
             Some(record),
             CredentialRequest::<CS>::deserialize(&parameters.KE1).unwrap(),
             &parameters.credential_identifier,
-            match parse_identifiers(&parameters.client_identity, &parameters.server_identity) {
-                None => ServerLoginStartParameters::WithContext(parameters.context.to_vec()),
-                Some(ids) => ServerLoginStartParameters::WithContextAndIdentifiers(
-                    parameters.context.to_vec(),
-                    ids,
-                ),
+            ServerLoginStartParameters {
+                context: Some(&parameters.context),
+                identifiers: Identifiers {
+                    client: parameters.client_identity.as_deref(),
+                    server: parameters.server_identity.as_deref(),
+                },
             },
         )?;
         assert_eq!(
@@ -444,16 +432,14 @@ where
 
         let client_login_finish_result = client_login_start_result.state.finish(
             CredentialResponse::<CS>::deserialize(&parameters.KE2)?,
-            match parse_identifiers(&parameters.client_identity, &parameters.server_identity) {
-                None => {
-                    ClientLoginFinishParameters::new(Some(parameters.context.clone()), None, None)
-                }
-                Some(ids) => ClientLoginFinishParameters::new(
-                    Some(parameters.context.clone()),
-                    Some(ids),
-                    None,
-                ),
-            },
+            ClientLoginFinishParameters::new(
+                Some(&parameters.context.clone()),
+                Identifiers {
+                    client: parameters.client_identity.as_deref(),
+                    server: parameters.server_identity.as_deref(),
+                },
+                None,
+            ),
         )?;
 
         assert_eq!(
@@ -515,12 +501,12 @@ where
             Some(record),
             CredentialRequest::<CS>::deserialize(&parameters.KE1).unwrap(),
             &parameters.credential_identifier,
-            match parse_identifiers(&parameters.client_identity, &parameters.server_identity) {
-                None => ServerLoginStartParameters::WithContext(parameters.context.to_vec()),
-                Some(ids) => ServerLoginStartParameters::WithContextAndIdentifiers(
-                    parameters.context.to_vec(),
-                    ids,
-                ),
+            ServerLoginStartParameters {
+                context: Some(&parameters.context),
+                identifiers: Identifiers {
+                    client: parameters.client_identity.as_deref(),
+                    server: parameters.server_identity.as_deref(),
+                },
             },
         )?;
 
@@ -569,12 +555,12 @@ where
             None,
             CredentialRequest::<CS>::deserialize(&parameters.KE1).unwrap(),
             &parameters.credential_identifier,
-            match parse_identifiers(&parameters.client_identity, &parameters.server_identity) {
-                None => ServerLoginStartParameters::WithContext(parameters.context.to_vec()),
-                Some(ids) => ServerLoginStartParameters::WithContextAndIdentifiers(
-                    parameters.context.to_vec(),
-                    ids,
-                ),
+            ServerLoginStartParameters {
+                context: Some(&parameters.context),
+                identifiers: Identifiers {
+                    client: parameters.client_identity.as_deref(),
+                    server: parameters.server_identity.as_deref(),
+                },
             },
         )?;
         assert_eq!(

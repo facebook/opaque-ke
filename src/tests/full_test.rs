@@ -372,10 +372,10 @@ where
             &mut finish_registration_rng,
             server_registration_start_result.message,
             ClientRegistrationFinishParameters::new(
-                Some(Identifiers::ClientAndServerIdentifiers(
-                    id_u.to_vec(),
-                    id_s.to_vec(),
-                )),
+                Identifiers {
+                    client: Some(id_u),
+                    server: Some(id_s),
+                },
                 None,
             ),
         )
@@ -414,10 +414,13 @@ where
         Some(password_file),
         client_login_start_result.message,
         credential_identifier,
-        ServerLoginStartParameters::WithContextAndIdentifiers(
-            context.to_vec(),
-            Identifiers::ClientAndServerIdentifiers(id_u.to_vec(), id_s.to_vec()),
-        ),
+        ServerLoginStartParameters {
+            context: Some(context),
+            identifiers: Identifiers {
+                client: Some(id_u),
+                server: Some(id_s),
+            },
+        },
     )
     .unwrap();
     let credential_response_bytes = server_login_start_result.message.serialize()?;
@@ -428,11 +431,11 @@ where
         .finish(
             server_login_start_result.message,
             ClientLoginFinishParameters::new(
-                Some(context.to_vec()),
-                Some(Identifiers::ClientAndServerIdentifiers(
-                    id_u.to_vec(),
-                    id_s.to_vec(),
-                )),
+                Some(context),
+                Identifiers {
+                    client: Some(id_u),
+                    server: Some(id_s),
+                },
                 None,
             ),
         )
@@ -579,10 +582,10 @@ fn test_registration_upload() -> Result<(), ProtocolError> {
         &mut finish_registration_rng,
         RegistrationResponse::deserialize(&parameters.registration_response)?,
         ClientRegistrationFinishParameters::new(
-            Some(Identifiers::ClientAndServerIdentifiers(
-                parameters.id_u,
-                parameters.id_s,
-            )),
+            Identifiers {
+                client: Some(&parameters.id_u),
+                server: Some(&parameters.id_s),
+            },
             None,
         ),
     )?;
@@ -671,10 +674,13 @@ fn test_credential_response() -> Result<(), ProtocolError> {
             &parameters.credential_request,
         )?,
         &parameters.credential_identifier,
-        ServerLoginStartParameters::WithContextAndIdentifiers(
-            parameters.context,
-            Identifiers::ClientAndServerIdentifiers(parameters.id_u, parameters.id_s),
-        ),
+        ServerLoginStartParameters {
+            context: Some(&parameters.context),
+            identifiers: Identifiers {
+                client: Some(&parameters.id_u),
+                server: Some(&parameters.id_s),
+            },
+        },
     )?;
     assert_eq!(
         hex::encode(&parameters.credential_response),
@@ -698,11 +704,11 @@ fn test_credential_finalization() -> Result<(), ProtocolError> {
                 &parameters.credential_response,
             )?,
             ClientLoginFinishParameters::new(
-                Some(parameters.context),
-                Some(Identifiers::ClientAndServerIdentifiers(
-                    parameters.id_u,
-                    parameters.id_s,
-                )),
+                Some(&parameters.context),
+                Identifiers {
+                    client: Some(&parameters.id_u),
+                    server: Some(&parameters.id_s),
+                },
                 None,
             ),
         )?;

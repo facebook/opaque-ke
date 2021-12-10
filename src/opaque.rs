@@ -35,7 +35,7 @@ use generic_array::{
 use hkdf::Hkdf;
 use rand::{CryptoRng, RngCore};
 use subtle::ConstantTimeEq;
-use voprf::{group::Group, EvaluationElement, NonVerifiableClient};
+use voprf::{group::Group, EvaluationElement, NonVerifiableClient, NonVerifiableServer};
 
 ///////////////
 // Constants //
@@ -326,7 +326,7 @@ impl<CS: CipherSuite> ServerRegistration<CS> {
             credential_identifier,
         )?;
 
-        let server = voprf::NonVerifiableServer::new_with_key(&oprf_key)?;
+        let server = NonVerifiableServer::new_with_key(&oprf_key)?;
         let evaluate_result = server.evaluate(message.blinded_element, None)?;
 
         Ok(ServerRegistrationStartResult {
@@ -335,7 +335,7 @@ impl<CS: CipherSuite> ServerRegistration<CS> {
                 server_s_pk: server_setup.keypair.public().clone(),
             },
             #[cfg(test)]
-            oprf_key: GenericArray::clone_from_slice(&oprf_key),
+            oprf_key,
         })
     }
 
@@ -479,7 +479,7 @@ impl<CS: CipherSuite> ClientLogin<CS> {
             .open(
                 randomized_pwd_hasher,
                 &server_s_pk_bytes,
-                &params.identifiers,
+                params.identifiers,
             )
             .map_err(|e| match e {
                 ProtocolError::LibraryError(InternalError::SealOpenHmacError) => {
@@ -503,7 +503,7 @@ impl<CS: CipherSuite> ClientLogin<CS> {
             opened_envelope.client_static_keypair.private().clone(),
             opened_envelope.id_u.clone(),
             opened_envelope.id_s.clone(),
-            params.context.unwrap_or_default(),
+            params.context.unwrap_or(&[]),
         )?;
 
         Ok(ClientLoginFinishResult {
@@ -548,7 +548,10 @@ impl<CS: CipherSuite> ServerLogin<CS> {
         password_file: Option<ServerRegistration<CS>>,
         credential_request: CredentialRequest<CS>,
         credential_identifier: &[u8],
-        params: ServerLoginStartParameters,
+        ServerLoginStartParameters {
+            context,
+            identifiers,
+        }: ServerLoginStartParameters,
     ) -> Result<ServerLoginStartResult<CS>, ProtocolError<S::Error>>
     where
         Sum<<CS::KeGroup as KeGroup>::PkLen, NonceLen>: Add<<CS::Hash as FixedOutput>::OutputSize>,
@@ -562,12 +565,10 @@ impl<CS: CipherSuite> ServerLogin<CS> {
 
         let client_s_pk = record.0.client_s_pk.clone();
 
-        let (context, optional_ids) = match params {
-            ServerLoginStartParameters::WithContext(context) => (context, None),
-            ServerLoginStartParameters::WithIdentifiers(ids) => (Vec::new(), Some(ids)),
-            ServerLoginStartParameters::WithContextAndIdentifiers(context, ids) => {
-                (context, Some(ids))
-            }
+        let context = if let Some(context) = context {
+            context
+        } else {
+            &[]
         };
 
         let server_s_sk = server_setup.keypair.private();
@@ -584,12 +585,9 @@ impl<CS: CipherSuite> ServerLogin<CS> {
         )
         .map_err(ProtocolError::into_custom)?;
 
-        let (id_u, id_s) = bytestrings_from_identifiers(
-            &optional_ids,
-            &client_s_pk.to_arr(),
-            &server_s_pk.to_arr(),
-        )
-        .map_err(ProtocolError::into_custom)?;
+        let (id_u, id_s) =
+            bytestrings_from_identifiers(identifiers, &client_s_pk.to_arr(), &server_s_pk.to_arr())
+                .map_err(ProtocolError::into_custom)?;
 
         let credential_request_bytes = credential_request
             .serialize()
@@ -600,7 +598,7 @@ impl<CS: CipherSuite> ServerLogin<CS> {
             credential_identifier,
         )
         .map_err(ProtocolError::into_custom)?;
-        let server = voprf::NonVerifiableServer::new_with_key(&oprf_key)
+        let server = NonVerifiableServer::new_with_key(&oprf_key)
             .map_err(|e| ProtocolError::into_custom(e.into()))?;
         let evaluate_result = server
             .evaluate(credential_request.blinded_element, None)
@@ -673,29 +671,27 @@ impl<CS: CipherSuite> ServerLogin<CS> {
 /////////////////////////
 
 /// Options for specifying custom identifiers
-#[derive(Clone, Debug)]
-pub enum Identifiers {
-    /// Supply only a client identifier
-    ClientIdentifier(Vec<u8>),
-    /// Supply only a server identifier
-    ServerIdentifier(Vec<u8>),
-    /// Supply a client and server identifier
-    ClientAndServerIdentifiers(Vec<u8>, Vec<u8>),
+#[derive(Clone, Copy, Debug, Default)]
+pub struct Identifiers<'a> {
+    /// Client identifier
+    pub client: Option<&'a [u8]>,
+    /// Server identifier
+    pub server: Option<&'a [u8]>,
 }
 
 /// Optional parameters for client registration finish
 #[derive(DeriveWhere)]
 #[derive_where(Clone, Default)]
-pub struct ClientRegistrationFinishParameters<'h, CS: CipherSuite> {
+pub struct ClientRegistrationFinishParameters<'i, 'h, CS: CipherSuite> {
     /// Specifying the identifiers idU and idS
-    pub identifiers: Option<Identifiers>,
+    pub identifiers: Identifiers<'i>,
     /// Specifying a configuration for the slow hash
     pub slow_hash: Option<&'h CS::SlowHash>,
 }
 
-impl<'h, CS: CipherSuite> ClientRegistrationFinishParameters<'h, CS> {
+impl<'i, 'h, CS: CipherSuite> ClientRegistrationFinishParameters<'i, 'h, CS> {
     /// Create a new [`ClientRegistrationFinishParameters`]
-    pub fn new(identifiers: Option<Identifiers>, slow_hash: Option<&'h CS::SlowHash>) -> Self {
+    pub fn new(identifiers: Identifiers<'i>, slow_hash: Option<&'h CS::SlowHash>) -> Self {
         Self {
             identifiers,
             slow_hash,
@@ -759,20 +755,20 @@ pub struct ClientLoginStartResult<CS: CipherSuite> {
 /// Optional parameters for client login finish
 #[derive(DeriveWhere)]
 #[derive_where(Clone, Default)]
-pub struct ClientLoginFinishParameters<'h, CS: CipherSuite> {
+pub struct ClientLoginFinishParameters<'c, 'i, 'h, CS: CipherSuite> {
     /// Specifying a context field that the server must agree on
-    pub context: Option<Vec<u8>>,
+    pub context: Option<&'c [u8]>,
     /// Specifying a user identifier and server identifier that will be matched against the server
-    pub identifiers: Option<Identifiers>,
+    pub identifiers: Identifiers<'i>,
     /// Specifying a configuration for the slow hash
     pub slow_hash: Option<&'h CS::SlowHash>,
 }
 
-impl<'h, CS: CipherSuite> ClientLoginFinishParameters<'h, CS> {
+impl<'c, 'i, 'h, CS: CipherSuite> ClientLoginFinishParameters<'c, 'i, 'h, CS> {
     /// Create a new [`ClientLoginFinishParameters`]
     pub fn new(
-        context: Option<Vec<u8>>,
-        identifiers: Option<Identifiers>,
+        context: Option<&'c [u8]>,
+        identifiers: Identifiers<'i>,
         slow_hash: Option<&'h CS::SlowHash>,
     ) -> Self {
         Self {
@@ -821,22 +817,12 @@ pub struct ServerLoginFinishResult<CS: CipherSuite> {
 }
 
 /// Optional parameters for server login start
-#[derive(Clone, Debug)]
-pub enum ServerLoginStartParameters {
+#[derive(Clone, Debug, Default)]
+pub struct ServerLoginStartParameters<'c, 'i> {
     /// Specifying a context field that the client must agree on
-    WithContext(Vec<u8>),
+    pub context: Option<&'c [u8]>,
     /// Specifying a user identifier and server identifier that will be matched against the client
-    WithIdentifiers(Identifiers),
-    /// Specifying a context field that the client must agree on,
-    /// along with a user identifier and and server identifier that will be matched against the client
-    /// (in that order)
-    WithContextAndIdentifiers(Vec<u8>, Identifiers),
-}
-
-impl Default for ServerLoginStartParameters {
-    fn default() -> Self {
-        Self::WithContext(Vec::new())
-    }
+    pub identifiers: Identifiers<'i>,
 }
 
 /// Contains the fields that are returned by a server login start
@@ -996,19 +982,15 @@ where
 }
 
 pub(crate) fn bytestrings_from_identifiers(
-    ids: &Option<Identifiers>,
+    ids: Identifiers,
     client_s_pk: &[u8],
     server_s_pk: &[u8],
 ) -> Result<(Vec<u8>, Vec<u8>), ProtocolError> {
-    let (client_identity, server_identity): (Vec<u8>, Vec<u8>) = match ids {
-        None => (client_s_pk.to_vec(), server_s_pk.to_vec()),
-        Some(Identifiers::ClientIdentifier(id_u)) => (id_u.clone(), server_s_pk.to_vec()),
-        Some(Identifiers::ServerIdentifier(id_s)) => (client_s_pk.to_vec(), id_s.clone()),
-        Some(Identifiers::ClientAndServerIdentifiers(id_u, id_s)) => (id_u.clone(), id_s.clone()),
-    };
+    let client_identity = ids.client.unwrap_or(client_s_pk);
+    let server_identity = ids.server.unwrap_or(server_s_pk);
     Ok((
-        serialize(&client_identity, 2)?,
-        serialize(&server_identity, 2)?,
+        serialize(client_identity, 2)?,
+        serialize(server_identity, 2)?,
     ))
 }
 

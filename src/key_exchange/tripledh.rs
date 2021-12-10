@@ -163,14 +163,14 @@ impl<D: Hash, KG: KeGroup> KeyExchange<D, KG> for TripleDH {
         server_s_sk: S,
         id_u: Vec<u8>,
         id_s: Vec<u8>,
-        context: Vec<u8>,
+        context: &[u8],
     ) -> Result<GenerateKe2Result<Self, D, KG>, ProtocolError<S::Error>> {
         let server_e_kp = KeyPair::<KG>::generate_random(rng);
         let server_nonce = generate_nonce::<R>(rng);
 
         let mut transcript_hasher = D::new()
             .chain(STR_RFC)
-            .chain(&serialize(&context, 2).map_err(ProtocolError::into_custom)?)
+            .chain(&serialize(context, 2).map_err(ProtocolError::into_custom)?)
             .chain(&id_u)
             .chain(serialized_credential_request)
             .chain(&id_s)
@@ -225,11 +225,11 @@ impl<D: Hash, KG: KeGroup> KeyExchange<D, KG> for TripleDH {
         client_s_sk: PrivateKey<KG>,
         id_u: Vec<u8>,
         id_s: Vec<u8>,
-        context: Vec<u8>,
+        context: &[u8],
     ) -> Result<GenerateKe3Result<Self, D, KG>, ProtocolError> {
         let mut transcript_hasher = D::new()
             .chain(STR_RFC)
-            .chain(&serialize(&context, 2)?)
+            .chain(&serialize(context, 2)?)
             .chain(&id_u)
             .chain(&serialized_credential_request)
             .chain(&id_s)

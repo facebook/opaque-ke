@@ -116,7 +116,7 @@ impl<CS: CipherSuite> Envelope<CS> {
         rng: &mut R,
         randomized_pwd_hasher: Hkdf<CS::Hash>,
         server_s_pk: &[u8],
-        optional_ids: Option<Identifiers>,
+        ids: Identifiers,
     ) -> Result<SealResult<CS>, ProtocolError> {
         let mut nonce = GenericArray::default();
         rng.fill_bytes(&mut nonce);
@@ -126,8 +126,7 @@ impl<CS: CipherSuite> Envelope<CS> {
             build_inner_envelope_internal::<CS>(randomized_pwd_hasher.clone(), nonce)?,
         );
 
-        let (id_u, id_s) =
-            bytestrings_from_identifiers(&optional_ids, &client_s_pk.to_arr(), server_s_pk)?;
+        let (id_u, id_s) = bytestrings_from_identifiers(ids, &client_s_pk.to_arr(), server_s_pk)?;
         let aad = construct_aad(&id_u, &id_s, server_s_pk);
 
         let result = Self::seal_raw(randomized_pwd_hasher, nonce, &aad, mode)?;
@@ -182,7 +181,7 @@ impl<CS: CipherSuite> Envelope<CS> {
         &self,
         randomized_pwd_hasher: Hkdf<CS::Hash>,
         server_s_pk: &[u8],
-        optional_ids: &Option<Identifiers>,
+        optional_ids: Identifiers,
     ) -> Result<OpenedEnvelope<CS>, ProtocolError> {
         let client_static_keypair = match self.mode {
             InnerEnvelopeMode::Zero => {
