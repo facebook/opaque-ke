@@ -59,7 +59,7 @@ const STR_OPAQUE_DERIVE_KEY_PAIR: &[u8; 20] = b"OPAQUE-DeriveKeyPair";
 )]
 #[derive(DeriveWhere)]
 #[derive_where(Clone)]
-#[derive_where(Debug, Eq, Hash, PartialEq; S)]
+#[derive_where(Debug, Eq, Hash, Ord, PartialEq, PartialOrd; S)]
 pub struct ServerSetup<
     CS: CipherSuite,
     S: SecretKey<CS::KeGroup> = PrivateKey<<CS as CipherSuite>::KeGroup>,
@@ -86,7 +86,7 @@ impl_serialize_and_deserialize_for!(ClientRegistration);
 
 /// The state elements the server holds to record a registration
 #[derive(DeriveWhere)]
-#[derive_where(Clone, Debug, Eq, Hash, PartialEq, Zeroize(drop))]
+#[derive_where(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, Zeroize(drop))]
 pub struct ServerRegistration<CS: CipherSuite>(RegistrationUpload<CS>);
 
 impl_serialize_and_deserialize_for!(ServerRegistration);
@@ -653,7 +653,7 @@ impl<CS: CipherSuite> ServerLogin<CS> {
 /////////////////////////
 
 /// Options for specifying custom identifiers
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum Identifiers {
     /// Supply only a client identifier
     ClientIdentifier(Vec<u8>),
@@ -789,6 +789,8 @@ pub struct ClientLoginFinishResult<CS: CipherSuite> {
 /// Contains the fields that are returned by a server login finish
 #[derive(DeriveWhere)]
 #[derive_where(Clone)]
+#[cfg_attr(not(test), derive_where(Debug))]
+#[cfg_attr(test, derive_where(Debug; ServerLogin<CS>))]
 pub struct ServerLoginFinishResult<CS: CipherSuite> {
     /// The session key between client and server
     pub session_key: Vec<u8>,
@@ -799,7 +801,7 @@ pub struct ServerLoginFinishResult<CS: CipherSuite> {
 }
 
 /// Optional parameters for server login start
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum ServerLoginStartParameters {
     /// Specifying a context field that the client must agree on
     WithContext(Vec<u8>),
@@ -820,6 +822,12 @@ impl Default for ServerLoginStartParameters {
 /// Contains the fields that are returned by a server login start
 #[derive(DeriveWhere)]
 #[derive_where(Clone)]
+#[derive_where(
+    Debug;
+    CS::OprfGroup,
+    <CS::KeyExchange as KeyExchange<CS::Hash, CS::KeGroup>>::KE2Message,
+    <CS::KeyExchange as KeyExchange<CS::Hash, CS::KeGroup>>::KE2State,
+)]
 pub struct ServerLoginStartResult<CS: CipherSuite> {
     /// The message to send back to the client
     pub message: CredentialResponse<CS>,

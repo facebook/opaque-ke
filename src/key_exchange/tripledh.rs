@@ -62,7 +62,7 @@ pub struct TripleDH;
     serde(bound = "")
 )]
 #[derive(DeriveWhere)]
-#[derive_where(Clone, Debug, Eq, Hash, PartialEq, Zeroize(drop))]
+#[derive_where(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, Zeroize(drop))]
 pub struct Ke1State<KG: KeGroup> {
     client_e_sk: PrivateKey<KG>,
     client_nonce: GenericArray<u8, NonceLen>,
@@ -75,7 +75,7 @@ pub struct Ke1State<KG: KeGroup> {
     serde(bound = "")
 )]
 #[derive(DeriveWhere)]
-#[derive_where(Clone, Debug, Eq, Hash, PartialEq)]
+#[derive_where(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct Ke1Message<KG: KeGroup> {
     pub(crate) client_nonce: GenericArray<u8, NonceLen>,
     pub(crate) client_e_pk: PublicKey<KG>,
@@ -88,7 +88,7 @@ pub struct Ke1Message<KG: KeGroup> {
     serde(bound = "")
 )]
 #[derive(DeriveWhere)]
-#[derive_where(Clone, Debug, Eq, Hash, PartialEq, Zeroize(drop))]
+#[derive_where(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, Zeroize(drop))]
 pub struct Ke2State<HashLen: ArrayLength<u8>> {
     km3: GenericArray<u8, HashLen>,
     hashed_transcript: GenericArray<u8, HashLen>,
@@ -102,7 +102,7 @@ pub struct Ke2State<HashLen: ArrayLength<u8>> {
     serde(bound = "")
 )]
 #[derive(DeriveWhere)]
-#[derive_where(Clone, Debug, Eq, Hash, PartialEq)]
+#[derive_where(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct Ke2Message<KG: KeGroup, HashLen: ArrayLength<u8>> {
     server_nonce: GenericArray<u8, NonceLen>,
     server_e_pk: PublicKey<KG>,
@@ -116,7 +116,7 @@ pub struct Ke2Message<KG: KeGroup, HashLen: ArrayLength<u8>> {
     serde(bound = "")
 )]
 #[derive(DeriveWhere)]
-#[derive_where(Clone, Debug, Eq, Hash, PartialEq)]
+#[derive_where(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct Ke3Message<HashLen: ArrayLength<u8>> {
     mac: GenericArray<u8, HashLen>,
 }

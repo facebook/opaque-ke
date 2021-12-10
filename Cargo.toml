@@ -37,7 +37,7 @@ p256_ = { package = "p256", version = "0.9", default-features = false, features 
 rand = { version = "0.8", default-features = false }
 serde = { version = "1", default-features = false, features = ["alloc", "derive"], optional = true }
 subtle = { version = "2.3", default-features = false }
-voprf = { git = "https://github.com/novifinancial/voprf", rev = "66fe587294922d83109b6d064576f9f5ffa31a5d", default-features = false, features = ["danger"] }
+voprf = { git = "https://github.com/khonsulabs/voprf", rev = "f8c19eab4ecc9e7a2a5ae26c59661ce797229566", default-features = false, features = ["danger"] }
 zeroize = { version = "1", features = ["zeroize_derive"] }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]

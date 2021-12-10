@@ -36,7 +36,7 @@ const STR_PRIVATE_KEY: [u8; 10] = *b"PrivateKey";
 const STR_OPAQUE_DERIVE_AUTH_KEY_PAIR: [u8; 24] = *b"OPAQUE-DeriveAuthKeyPair";
 type NonceLen = U32;
 
-#[derive(Clone, Debug, Eq, Hash, PartialEq, Zeroize)]
+#[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, Zeroize)]
 #[zeroize(drop)]
 pub(crate) enum InnerEnvelopeMode {
     Zero = 0,
@@ -64,7 +64,7 @@ impl TryFrom<u8> for InnerEnvelopeMode {
 /// an XOR-based approach without compromising on security, and to avoid
 /// the confusion around the implementation of an RKR-secure encryption.
 #[derive(DeriveWhere)]
-#[derive_where(Clone, Debug, Eq, Hash, PartialEq, Zeroize(drop))]
+#[derive_where(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, Zeroize(drop))]
 pub(crate) struct Envelope<CS: CipherSuite> {
     mode: InnerEnvelopeMode,
     nonce: GenericArray<u8, NonceLen>,

@@ -30,7 +30,7 @@ use zeroize::Zeroize;
 )]
 #[derive(DeriveWhere)]
 #[derive_where(Clone, Zeroize(drop))]
-#[derive_where(Debug, Eq, Hash, PartialEq; S)]
+#[derive_where(Debug, Eq, Hash, Ord, PartialEq, PartialOrd; S)]
 pub struct KeyPair<KG: KeGroup, S: SecretKey<KG> = PrivateKey<KG>> {
     pk: PublicKey<KG>,
     sk: S,
@@ -106,7 +106,7 @@ impl<KG: KeGroup + core::fmt::Debug> KeyPair<KG> {
     serde(bound = "")
 )]
 #[derive(DeriveWhere)]
-#[derive_where(Clone, Debug, Eq, Hash, PartialEq, Zeroize(drop))]
+#[derive_where(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, Zeroize(drop))]
 pub struct Key<L: ArrayLength<u8>>(GenericArray<u8, L>);
 
 impl<L: ArrayLength<u8>> Deref for Key<L> {
@@ -132,7 +132,7 @@ impl<L: ArrayLength<u8>> Key<L> {
     serde(bound = "")
 )]
 #[derive(DeriveWhere)]
-#[derive_where(Clone, Debug, Eq, Hash, PartialEq, Zeroize(drop))]
+#[derive_where(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, Zeroize(drop))]
 pub struct PrivateKey<KG: KeGroup>(Key<KG::SkLen>);
 
 // This can't be derived because of the use of a generic parameter
@@ -206,7 +206,7 @@ impl<KG: KeGroup> SecretKey<KG> for PrivateKey<KG> {
     serde(bound = "")
 )]
 #[derive(DeriveWhere)]
-#[derive_where(Clone, Debug, Eq, Hash, PartialEq, Zeroize(drop))]
+#[derive_where(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, Zeroize(drop))]
 pub struct PublicKey<KG: KeGroup>(Key<KG::PkLen>);
 
 impl<KG: KeGroup> Deref for PublicKey<KG> {

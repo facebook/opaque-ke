@@ -14,7 +14,7 @@ use rand::{CryptoRng, Error, RngCore};
 /// This generates a cyclic sequence (i.e. cycles over an initial buffer)
 ///
 ///
-#[derive(Debug, Clone)]
+#[derive(Clone, Debug)]
 pub struct CycleRng {
     v: Vec<u8>,
 }
