@@ -10,6 +10,7 @@ license = "Apache-2.0 OR MIT"
 edition = "2018"
 readme = "README.md"
 resolver = "2"
+rust-version = "1.51"
 
 [features]
 default = ["u64_backend", "serialize"]
