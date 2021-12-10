@@ -7,8 +7,6 @@
 
 //! Contains the messages used for OPAQUE
 
-use std::ops::Add;
-
 use crate::{
     ciphersuite::CipherSuite,
     envelope::Envelope,
@@ -25,6 +23,7 @@ use crate::{
     opaque::{MaskResponse, ServerSetup},
 };
 use alloc::vec::Vec;
+use core::ops::Add;
 use derive_where::DeriveWhere;
 use digest::{Digest, FixedOutput};
 use generic_array::{
