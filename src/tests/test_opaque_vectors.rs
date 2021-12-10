@@ -6,10 +6,21 @@
 // of this source tree.
 
 use crate::{
-    ciphersuite::CipherSuite, errors::*, key_exchange::tripledh::TripleDH, opaque::*,
-    slow_hash::NoOpHash, tests::mock_rng::CycleRng, *,
+    ciphersuite::CipherSuite,
+    errors::*,
+    key_exchange::{
+        group::KeGroup,
+        tripledh::{NonceLen, TripleDH},
+    },
+    opaque::*,
+    slow_hash::NoOpHash,
+    tests::mock_rng::CycleRng,
+    *,
 };
 use alloc::{string::ToString, vec, vec::Vec};
+use core::ops::Add;
+use digest::FixedOutput;
+use generic_array::{typenum::Sum, ArrayLength};
 use json::JsonValue;
 
 #[allow(non_snake_case)]
@@ -343,7 +354,12 @@ fn test_ke1<CS: CipherSuite>(tvs: &[OpaqueTestVectorParameters]) -> Result<(), P
     Ok(())
 }
 
-fn test_ke2<CS: CipherSuite>(tvs: &[OpaqueTestVectorParameters]) -> Result<(), ProtocolError> {
+fn test_ke2<CS: CipherSuite>(tvs: &[OpaqueTestVectorParameters]) -> Result<(), ProtocolError>
+where
+    Sum<<CS::KeGroup as KeGroup>::PkLen, NonceLen>: Add<<CS::Hash as FixedOutput>::OutputSize>,
+    Sum<Sum<<CS::KeGroup as KeGroup>::PkLen, NonceLen>, <CS::Hash as FixedOutput>::OutputSize>:
+        ArrayLength<u8>,
+{
     for parameters in tvs {
         let server_setup = ServerSetup::<CS>::deserialize(
             &[
@@ -399,7 +415,12 @@ fn test_ke2<CS: CipherSuite>(tvs: &[OpaqueTestVectorParameters]) -> Result<(), P
     Ok(())
 }
 
-fn test_ke3<CS: CipherSuite>(tvs: &[OpaqueTestVectorParameters]) -> Result<(), ProtocolError> {
+fn test_ke3<CS: CipherSuite>(tvs: &[OpaqueTestVectorParameters]) -> Result<(), ProtocolError>
+where
+    Sum<<CS::KeGroup as KeGroup>::PkLen, NonceLen>: Add<<CS::Hash as FixedOutput>::OutputSize>,
+    Sum<Sum<<CS::KeGroup as KeGroup>::PkLen, NonceLen>, <CS::Hash as FixedOutput>::OutputSize>:
+        ArrayLength<u8>,
+{
     for parameters in tvs {
         let client_login_start = [
             parameters.blind_login.as_slice(),
@@ -451,7 +472,12 @@ fn test_ke3<CS: CipherSuite>(tvs: &[OpaqueTestVectorParameters]) -> Result<(), P
 
 fn test_server_login_finish<CS: CipherSuite>(
     tvs: &[OpaqueTestVectorParameters],
-) -> Result<(), ProtocolError> {
+) -> Result<(), ProtocolError>
+where
+    Sum<<CS::KeGroup as KeGroup>::PkLen, NonceLen>: Add<<CS::Hash as FixedOutput>::OutputSize>,
+    Sum<Sum<<CS::KeGroup as KeGroup>::PkLen, NonceLen>, <CS::Hash as FixedOutput>::OutputSize>:
+        ArrayLength<u8>,
+{
     for parameters in tvs {
         let server_setup = ServerSetup::<CS>::deserialize(
             &[
@@ -502,7 +528,12 @@ fn test_server_login_finish<CS: CipherSuite>(
 
 fn test_fake_vectors<CS: CipherSuite>(
     tvs: &[OpaqueTestVectorParameters],
-) -> Result<(), ProtocolError> {
+) -> Result<(), ProtocolError>
+where
+    Sum<<CS::KeGroup as KeGroup>::PkLen, NonceLen>: Add<<CS::Hash as FixedOutput>::OutputSize>,
+    Sum<Sum<<CS::KeGroup as KeGroup>::PkLen, NonceLen>, <CS::Hash as FixedOutput>::OutputSize>:
+        ArrayLength<u8>,
+{
     for parameters in tvs {
         let server_setup = ServerSetup::<CS>::deserialize(
             &[

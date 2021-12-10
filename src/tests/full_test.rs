@@ -8,13 +8,24 @@
 #![allow(unsafe_code)]
 
 use crate::{
-    ciphersuite::CipherSuite, errors::*, key_exchange::tripledh::TripleDH, opaque::*,
-    slow_hash::NoOpHash, tests::mock_rng::CycleRng, *,
+    ciphersuite::CipherSuite,
+    errors::*,
+    key_exchange::{
+        group::KeGroup,
+        tripledh::{NonceLen, TripleDH},
+    },
+    opaque::*,
+    slow_hash::NoOpHash,
+    tests::mock_rng::CycleRng,
+    *,
 };
 use alloc::string::ToString;
 use alloc::vec;
 use alloc::vec::Vec;
+use core::ops::Add;
 use curve25519_dalek::{ristretto::RistrettoPoint, traits::Identity};
+use digest::FixedOutput;
+use generic_array::{typenum::Sum, ArrayLength};
 use rand::rngs::OsRng;
 use serde_json::Value;
 use zeroize::Zeroize;
@@ -273,8 +284,13 @@ fn stringify_test_vectors(p: &TestVectorParameters) -> alloc::string::String {
     s
 }
 
-fn generate_parameters<CS: CipherSuite>() -> Result<TestVectorParameters, ProtocolError> {
-    use crate::{key_exchange::tripledh::NonceLen, keypair::KeyPair};
+fn generate_parameters<CS: CipherSuite>() -> Result<TestVectorParameters, ProtocolError>
+where
+    Sum<<CS::KeGroup as KeGroup>::PkLen, NonceLen>: Add<<CS::Hash as FixedOutput>::OutputSize>,
+    Sum<Sum<<CS::KeGroup as KeGroup>::PkLen, NonceLen>, <CS::Hash as FixedOutput>::OutputSize>:
+        ArrayLength<u8>,
+{
+    use crate::keypair::KeyPair;
     use generic_array::typenum::Unsigned;
     use rand::RngCore;
     use voprf::group::Group;

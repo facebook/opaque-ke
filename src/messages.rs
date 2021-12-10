@@ -7,6 +7,8 @@
 
 //! Contains the messages used for OPAQUE
 
+use std::ops::Add;
+
 use crate::{
     ciphersuite::CipherSuite,
     envelope::Envelope,
@@ -17,14 +19,18 @@ use crate::{
     key_exchange::{
         group::KeGroup,
         traits::{FromBytes, KeyExchange, ToBytes},
+        tripledh::NonceLen,
     },
     keypair::{KeyPair, PublicKey, SecretKey},
-    opaque::ServerSetup,
+    opaque::{MaskResponse, ServerSetup},
 };
 use alloc::vec::Vec;
 use derive_where::DeriveWhere;
-use digest::Digest;
-use generic_array::{typenum::Unsigned, GenericArray};
+use digest::{Digest, FixedOutput};
+use generic_array::{
+    typenum::{Sum, Unsigned},
+    ArrayLength, GenericArray,
+};
 use rand::{CryptoRng, RngCore};
 use voprf::group::Group;
 
@@ -98,11 +104,16 @@ impl_serialize_and_deserialize_for!(CredentialRequest);
     CS::OprfGroup,
     <CS::KeyExchange as KeyExchange<CS::Hash, CS::KeGroup>>::KE2Message,
 )]
-pub struct CredentialResponse<CS: CipherSuite> {
+pub struct CredentialResponse<CS: CipherSuite>
+where
+    Sum<<CS::KeGroup as KeGroup>::PkLen, NonceLen>: Add<<CS::Hash as FixedOutput>::OutputSize>,
+    Sum<Sum<<CS::KeGroup as KeGroup>::PkLen, NonceLen>, <CS::Hash as FixedOutput>::OutputSize>:
+        ArrayLength<u8>,
+{
     /// the server's oprf output
     pub(crate) evaluation_element: voprf::EvaluationElement<CS::OprfGroup, CS::Hash>,
     pub(crate) masking_nonce: Vec<u8>,
-    pub(crate) masked_response: Vec<u8>,
+    pub(crate) masked_response: MaskResponse<CS>,
     pub(crate) ke2_message: <CS::KeyExchange as KeyExchange<CS::Hash, CS::KeGroup>>::KE2Message,
 }
 
@@ -280,7 +291,12 @@ impl<CS: CipherSuite> CredentialRequest<CS> {
     }
 }
 
-impl<CS: CipherSuite> CredentialResponse<CS> {
+impl<CS: CipherSuite> CredentialResponse<CS>
+where
+    Sum<<CS::KeGroup as KeGroup>::PkLen, NonceLen>: Add<<CS::Hash as FixedOutput>::OutputSize>,
+    Sum<Sum<<CS::KeGroup as KeGroup>::PkLen, NonceLen>, <CS::Hash as FixedOutput>::OutputSize>:
+        ArrayLength<u8>,
+{
     /// Serialization into bytes
     pub fn serialize(&self) -> Result<Vec<u8>, ProtocolError> {
         Ok([
@@ -329,9 +345,9 @@ impl<CS: CipherSuite> CredentialResponse<CS> {
         }
 
         let masking_nonce = checked_slice[elem_len..elem_len + nonce_len].to_vec();
-        let masked_response = checked_slice
-            [elem_len + nonce_len..elem_len + nonce_len + masked_response_len]
-            .to_vec();
+        let masked_response = MaskResponse::<CS>::clone_from_slice(
+            &checked_slice[elem_len + nonce_len..elem_len + nonce_len + masked_response_len],
+        );
         let ke2_message =
             <CS::KeyExchange as KeyExchange<CS::Hash, CS::KeGroup>>::KE2Message::from_bytes::<CS>(
                 &checked_slice[elem_len + nonce_len + masked_response_len..],
