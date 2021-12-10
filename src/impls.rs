@@ -7,9 +7,9 @@
 
 /// Macro used for deriving `serde`'s `Serialize` and `Deserialize` traits.
 macro_rules! impl_serialize_and_deserialize_for {
-    ($t:ident) => {
+    ($item:ident) => {
         #[cfg(feature = "serialize")]
-        impl<CS: CipherSuite> serde::Serialize for $t<CS> {
+        impl<CS: CipherSuite> serde::Serialize for $item<CS> {
             fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
             where
                 S: serde::Serializer,
@@ -26,7 +26,7 @@ macro_rules! impl_serialize_and_deserialize_for {
         }
 
         #[cfg(feature = "serialize")]
-        impl<'de, CS: CipherSuite> serde::Deserialize<'de> for $t<CS> {
+        impl<'de, CS: CipherSuite> serde::Deserialize<'de> for $item<CS> {
             fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
             where
                 D: serde::Deserializer<'de>,
@@ -41,7 +41,7 @@ macro_rules! impl_serialize_and_deserialize_for {
                     struct ByteVisitor<CS: CipherSuite>(core::marker::PhantomData<CS>);
 
                     impl<'de, CS: CipherSuite> serde::de::Visitor<'de> for ByteVisitor<CS> {
-                        type Value = $t<CS>;
+                        type Value = $item<CS>;
 
                         fn expecting(
                             &self,
@@ -57,7 +57,7 @@ macro_rules! impl_serialize_and_deserialize_for {
                         where
                             E: Error,
                         {
-                            $t::<CS>::deserialize(value).map_err(|_| {
+                            $item::<CS>::deserialize(value).map_err(|_| {
                                 Error::invalid_value(
                                     serde::de::Unexpected::Bytes(value),
                                     &core::concat!(
