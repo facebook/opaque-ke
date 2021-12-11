@@ -238,12 +238,12 @@ impl<CS: CipherSuite> RegistrationUpload<CS> {
         rng: &mut R,
         server_setup: &ServerSetup<CS, S>,
     ) -> Self {
-        let mut masking_key = alloc::vec![0u8; <CS::Hash as Digest>::OutputSize::USIZE];
+        let mut masking_key = GenericArray::<_, <CS::Hash as Digest>::OutputSize>::default();
         rng.fill_bytes(&mut masking_key);
 
         Self {
             envelope: Envelope::<CS>::dummy(),
-            masking_key: GenericArray::clone_from_slice(&masking_key),
+            masking_key,
             client_s_pk: server_setup.fake_keypair.public().clone(),
         }
     }

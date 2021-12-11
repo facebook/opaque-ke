@@ -18,7 +18,7 @@ use crate::{
         traits::{FromBytes, GenerateKe2Result, GenerateKe3Result, KeyExchange, ToBytes},
     },
     keypair::{KeyPair, PrivateKey, PublicKey, SecretKey},
-    serialization::{serialize, UpdateExt},
+    serialization::{Serialize, UpdateExt},
 };
 use alloc::vec;
 use alloc::vec::Vec;
@@ -161,8 +161,8 @@ impl<D: Hash, KG: KeGroup> KeyExchange<D, KG> for TripleDH {
         ke1_message: Self::KE1Message,
         client_s_pk: PublicKey<KG>,
         server_s_sk: S,
-        id_u: impl IntoIterator<Item = &'a [u8]>,
-        id_s: impl IntoIterator<Item = &'a [u8]>,
+        id_u: impl Iterator<Item = &'a [u8]>,
+        id_s: impl Iterator<Item = &'a [u8]>,
         context: &[u8],
     ) -> Result<GenerateKe2Result<Self, D, KG>, ProtocolError<S::Error>> {
         let server_e_kp = KeyPair::<KG>::generate_random(rng);
@@ -171,9 +171,9 @@ impl<D: Hash, KG: KeGroup> KeyExchange<D, KG> for TripleDH {
         let mut transcript_hasher = D::new()
             .chain(STR_RFC)
             .chain_iter(
-                serialize::<U2>(context)
+                Serialize::<U2>::from(context)
                     .map_err(ProtocolError::into_custom)?
-                    .into_iter(),
+                    .iter(),
             )
             .chain_iter(id_u.into_iter())
             .chain(serialized_credential_request)
@@ -227,16 +227,16 @@ impl<D: Hash, KG: KeGroup> KeyExchange<D, KG> for TripleDH {
         serialized_credential_request: &[u8],
         server_s_pk: PublicKey<KG>,
         client_s_sk: PrivateKey<KG>,
-        id_u: impl IntoIterator<Item = &'a [u8]>,
-        id_s: impl IntoIterator<Item = &'a [u8]>,
+        id_u: impl Iterator<Item = &'a [u8]>,
+        id_s: impl Iterator<Item = &'a [u8]>,
         context: &[u8],
     ) -> Result<GenerateKe3Result<Self, D, KG>, ProtocolError> {
         let mut transcript_hasher = D::new()
             .chain(STR_RFC)
-            .chain_iter(serialize::<U2>(context)?.into_iter())
-            .chain_iter(id_u.into_iter())
+            .chain_iter(Serialize::<U2>::from(context)?.iter())
+            .chain_iter(id_u)
             .chain(&serialized_credential_request)
-            .chain_iter(id_s.into_iter())
+            .chain_iter(id_s)
             .chain(l2_component)
             .chain(&ke2_message.to_bytes_without_info_or_mac());
 
@@ -260,14 +260,14 @@ impl<D: Hash, KG: KeGroup> KeyExchange<D, KG> for TripleDH {
             .verify(&ke2_message.mac)
             .map_err(|_| ProtocolError::InvalidLoginError)?;
 
-        transcript_hasher.update(ke2_message.mac.to_vec());
+        transcript_hasher.update(&ke2_message.mac);
 
         let mut client_mac =
             Hmac::<D>::new_from_slice(&result.2).map_err(|_| InternalError::HmacError)?;
         client_mac.update(&transcript_hasher.finalize());
 
         Ok((
-            result.0.to_vec(),
+            result.0,
             Ke3Message {
                 mac: client_mac.finalize().into_bytes(),
             },
@@ -282,7 +282,7 @@ impl<D: Hash, KG: KeGroup> KeyExchange<D, KG> for TripleDH {
     fn finish_ke(
         ke3_message: Self::KE3Message,
         ke2_state: &Self::KE2State,
-    ) -> Result<Vec<u8>, ProtocolError> {
+    ) -> Result<GenericArray<u8, D::OutputSize>, ProtocolError> {
         let mut client_mac =
             Hmac::<D>::new_from_slice(&ke2_state.km3).map_err(|_| InternalError::HmacError)?;
         client_mac.update(&ke2_state.hashed_transcript);
@@ -291,7 +291,7 @@ impl<D: Hash, KG: KeGroup> KeyExchange<D, KG> for TripleDH {
             .verify(&ke3_message.mac)
             .map_err(|_| ProtocolError::InvalidLoginError)?;
 
-        Ok(ke2_state.session_key.to_vec())
+        Ok(ke2_state.session_key.clone())
     }
 
     fn ke2_message_size() -> usize {
@@ -328,7 +328,7 @@ type TripleDHDerivationResult<D> = (
     GenericArray<u8, <D as FixedOutput>::OutputSize>,
     GenericArray<u8, <D as FixedOutput>::OutputSize>,
     GenericArray<u8, <D as FixedOutput>::OutputSize>,
-    Vec<u8>,
+    GenericArray<u8, <D as FixedOutput>::OutputSize>,
 );
 
 ////////////////////////////////////////////////
@@ -369,20 +369,10 @@ fn derive_3dh_keys<D: Hash, KG: KeGroup, S: SecretKey<KG>>(
     )
     .map_err(ProtocolError::into_custom)?;
 
-    let km2 = hkdf_expand_label::<D>(
-        &handshake_secret,
-        STR_SERVER_MAC,
-        b"",
-        <D as Digest>::OutputSize::USIZE,
-    )
-    .map_err(ProtocolError::into_custom)?;
-    let km3 = hkdf_expand_label::<D>(
-        &handshake_secret,
-        STR_CLIENT_MAC,
-        b"",
-        <D as Digest>::OutputSize::USIZE,
-    )
-    .map_err(ProtocolError::into_custom)?;
+    let km2 = hkdf_expand_label::<D>(&handshake_secret, STR_SERVER_MAC, b"")
+        .map_err(ProtocolError::into_custom)?;
+    let km3 = hkdf_expand_label::<D>(&handshake_secret, STR_CLIENT_MAC, b"")
+        .map_err(ProtocolError::into_custom)?;
 
     Ok((
         GenericArray::clone_from_slice(&session_key),
@@ -397,33 +387,35 @@ fn hkdf_expand_label<D: Hash>(
     secret: &[u8],
     label: &[u8],
     context: &[u8],
-    length: usize,
-) -> Result<Vec<u8>, ProtocolError> {
+) -> Result<GenericArray<u8, D::OutputSize>, ProtocolError> {
     let h = Hkdf::<D>::from_prk(secret).map_err(|_| InternalError::HkdfError)?;
-    hkdf_expand_label_extracted(&h, label, context, length)
+    hkdf_expand_label_extracted(&h, label, context)
 }
 
 fn hkdf_expand_label_extracted<D: Hash>(
     hkdf: &Hkdf<D>,
     label: &[u8],
     context: &[u8],
-    length: usize,
-) -> Result<Vec<u8>, ProtocolError> {
-    let mut okm = vec![0u8; length];
+) -> Result<GenericArray<u8, D::OutputSize>, ProtocolError> {
+    let mut okm = GenericArray::default();
 
-    let mut hkdf_label: Vec<u8> = Vec::new();
+    let length_u16: u16 =
+        u16::try_from(D::OutputSize::USIZE).map_err(|_| ProtocolError::SerializationError)?;
+    let label = Serialize::<U1>::from_label(STR_OPAQUE, label)?;
+    let label = label.to_array_3();
+    let context = Serialize::<U1>::from(context)?;
+    let context = context.to_array_2();
 
-    let length_u16: u16 = u16::try_from(length).map_err(|_| ProtocolError::SerializationError)?;
-    hkdf_label.extend_from_slice(&length_u16.to_be_bytes());
+    let hkdf_label = [
+        &length_u16.to_be_bytes(),
+        label[0],
+        label[1],
+        label[2],
+        context[0],
+        context[1],
+    ];
 
-    let mut opaque_label: Vec<u8> = Vec::new();
-    opaque_label.extend_from_slice(STR_OPAQUE);
-    opaque_label.extend_from_slice(label);
-    hkdf_label.extend(serialize::<U1>(&opaque_label)?.into_iter().flatten());
-
-    hkdf_label.extend(serialize::<U1>(context)?.into_iter().flatten());
-
-    hkdf.expand(&hkdf_label, &mut okm)
+    hkdf.expand_multi_info(&hkdf_label, &mut okm)
         .map_err(|_| InternalError::HkdfError)?;
     Ok(okm)
 }
@@ -432,13 +424,8 @@ fn derive_secrets<D: Hash>(
     hkdf: &Hkdf<D>,
     label: &[u8],
     hashed_derivation_transcript: &[u8],
-) -> Result<Vec<u8>, ProtocolError> {
-    hkdf_expand_label_extracted::<D>(
-        hkdf,
-        label,
-        hashed_derivation_transcript,
-        <D as Digest>::OutputSize::USIZE,
-    )
+) -> Result<GenericArray<u8, D::OutputSize>, ProtocolError> {
+    hkdf_expand_label_extracted::<D>(hkdf, label, hashed_derivation_transcript)
 }
 
 // Generate a random nonce up to NonceLen::USIZE bytes.

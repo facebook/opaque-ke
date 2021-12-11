@@ -13,6 +13,8 @@ use crate::{
     keypair::{PrivateKey, PublicKey, SecretKey},
 };
 use alloc::vec::Vec;
+use digest::Digest;
+use generic_array::GenericArray;
 use rand::{CryptoRng, RngCore};
 use zeroize::Zeroize;
 
@@ -25,17 +27,20 @@ pub type GenerateKe2Result<K, D, G> = (
 pub type GenerateKe2Result<K, D, G> = (
     <K as KeyExchange<D, G>>::KE2State,
     <K as KeyExchange<D, G>>::KE2Message,
-    Vec<u8>,
-    generic_array::GenericArray<u8, <D as digest::Digest>::OutputSize>,
+    GenericArray<u8, <D as Digest>::OutputSize>,
+    GenericArray<u8, <D as Digest>::OutputSize>,
 );
 #[cfg(not(test))]
-pub type GenerateKe3Result<K, D, G> = (Vec<u8>, <K as KeyExchange<D, G>>::KE3Message);
+pub type GenerateKe3Result<K, D, G> = (
+    GenericArray<u8, <D as Digest>::OutputSize>,
+    <K as KeyExchange<D, G>>::KE3Message,
+);
 #[cfg(test)]
 pub type GenerateKe3Result<K, D, G> = (
-    Vec<u8>,
+    GenericArray<u8, <D as Digest>::OutputSize>,
     <K as KeyExchange<D, G>>::KE3Message,
-    Vec<u8>,
-    generic_array::GenericArray<u8, <D as digest::Digest>::OutputSize>,
+    GenericArray<u8, <D as Digest>::OutputSize>,
+    GenericArray<u8, <D as Digest>::OutputSize>,
 );
 
 pub trait KeyExchange<D: Hash, G: KeGroup> {
@@ -57,8 +62,8 @@ pub trait KeyExchange<D: Hash, G: KeGroup> {
         ke1_message: Self::KE1Message,
         client_s_pk: PublicKey<G>,
         server_s_sk: S,
-        id_u: impl IntoIterator<Item = &'a [u8]>,
-        id_s: impl IntoIterator<Item = &'a [u8]>,
+        id_u: impl Iterator<Item = &'a [u8]>,
+        id_s: impl Iterator<Item = &'a [u8]>,
         context: &[u8],
     ) -> Result<GenerateKe2Result<Self, D, G>, ProtocolError<S::Error>>;
 
@@ -70,8 +75,8 @@ pub trait KeyExchange<D: Hash, G: KeGroup> {
         serialized_credential_request: &[u8],
         server_s_pk: PublicKey<G>,
         client_s_sk: PrivateKey<G>,
-        id_u: impl IntoIterator<Item = &'a [u8]>,
-        id_s: impl IntoIterator<Item = &'a [u8]>,
+        id_u: impl Iterator<Item = &'a [u8]>,
+        id_s: impl Iterator<Item = &'a [u8]>,
         context: &[u8],
     ) -> Result<GenerateKe3Result<Self, D, G>, ProtocolError>;
 
@@ -79,7 +84,7 @@ pub trait KeyExchange<D: Hash, G: KeGroup> {
     fn finish_ke(
         ke3_message: Self::KE3Message,
         ke2_state: &Self::KE2State,
-    ) -> Result<Vec<u8>, ProtocolError>;
+    ) -> Result<GenericArray<u8, D::OutputSize>, ProtocolError>;
 
     fn ke2_message_size() -> usize;
 }

@@ -14,7 +14,7 @@ use crate::{
         tripledh::{NonceLen, TripleDH},
     },
     keypair::KeyPair,
-    serialization::{i2osp, os2ip, serialize},
+    serialization::{i2osp, os2ip, Serialize},
     *,
 };
 #[cfg(test)]
@@ -65,8 +65,8 @@ fn client_registration_roundtrip() -> Result<(), ProtocolError> {
         &voprf::NonVerifiableClient::<RistrettoPoint, sha2::Sha512>::blind(pw.to_vec(), &mut rng)?;
 
     let bytes: Vec<u8> = chain!(
-        serialize::<U2>(&blind_result.state.serialize())?.into_iter(),
-        serialize::<U2>(&blind_result.message.serialize())?.into_iter(),
+        Serialize::<U2>::from(&blind_result.state.serialize())?.iter(),
+        Serialize::<U2>::from(&blind_result.message.serialize())?.iter(),
     )
     .flatten()
     .cloned()
@@ -318,9 +318,9 @@ fn client_login_roundtrip() -> Result<(), ProtocolError> {
         &voprf::NonVerifiableClient::<RistrettoPoint, sha2::Sha512>::blind(pw.to_vec(), &mut rng)?;
 
     let bytes: Vec<u8> = chain!(
-        serialize::<U2>(&blind_result.state.serialize())?.into_iter(),
-        serialize::<U2>(&serialized_credential_request)?.into_iter(),
-        serialize::<U2>(&l1_data)?.into_iter(),
+        Serialize::<U2>::from(&blind_result.state.serialize())?.iter(),
+        Serialize::<U2>::from(&serialized_credential_request)?.iter(),
+        Serialize::<U2>::from(&l1_data)?.iter(),
     )
     .flatten()
     .cloned()

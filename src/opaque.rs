@@ -18,7 +18,7 @@ use crate::{
         tripledh::NonceLen,
     },
     keypair::{KeyPair, PrivateKey, PublicKey, SecretKey},
-    serialization::{serialize, serialize_owned, tokenize, Serialized},
+    serialization::{tokenize, Serialize},
     slow_hash::SlowHash,
     CredentialFinalization, CredentialRequest, CredentialResponse, RegistrationRequest,
     RegistrationResponse, RegistrationUpload,
@@ -195,8 +195,8 @@ impl<CS: CipherSuite> ClientRegistration<CS> {
     /// Serialization into bytes
     pub fn serialize(&self) -> Result<Vec<u8>, ProtocolError> {
         Ok(chain!(
-            serialize::<U2>(&self.oprf_client.serialize())?.into_iter(),
-            serialize::<U2>(&self.blinded_element.serialize())?.into_iter(),
+            Serialize::<U2>::from(&self.oprf_client.serialize())?.iter(),
+            Serialize::<U2>::from(&self.blinded_element.serialize())?.iter(),
         )
         .flatten()
         .cloned()
@@ -363,9 +363,9 @@ impl<CS: CipherSuite> ClientLogin<CS> {
     /// Serialization into bytes
     pub fn serialize(&self) -> Result<Vec<u8>, ProtocolError> {
         Ok(chain!(
-            serialize::<U2>(&self.oprf_client.serialize())?.into_iter(),
-            serialize::<U2>(&self.serialized_credential_request)?.into_iter(),
-            serialize::<U2>(&self.ke1_state.to_bytes())?.into_iter(),
+            Serialize::<U2>::from(&self.oprf_client.serialize())?.iter(),
+            Serialize::<U2>::from(&self.serialized_credential_request)?.iter(),
+            Serialize::<U2>::from(&self.ke1_state.to_bytes())?.iter(),
         )
         .flatten()
         .cloned()
@@ -477,8 +477,12 @@ impl<CS: CipherSuite> ClientLogin<CS> {
             err => err,
         })?;
 
-        let opened_envelope = &envelope
-            .open(randomized_pwd_hasher, &server_s_pk, params.identifiers)
+        let opened_envelope = envelope
+            .open(
+                randomized_pwd_hasher,
+                server_s_pk.clone(),
+                params.identifiers,
+            )
             .map_err(|e| match e {
                 ProtocolError::LibraryError(InternalError::SealOpenHmacError) => {
                     ProtocolError::InvalidLoginError
@@ -499,8 +503,8 @@ impl<CS: CipherSuite> ClientLogin<CS> {
             &self.serialized_credential_request,
             server_s_pk.clone(),
             opened_envelope.client_static_keypair.private().clone(),
-            &opened_envelope.id_u,
-            &opened_envelope.id_s,
+            opened_envelope.id_u.iter(),
+            opened_envelope.id_s.iter(),
             params.context.unwrap_or(&[]),
         )?;
 
@@ -509,7 +513,7 @@ impl<CS: CipherSuite> ClientLogin<CS> {
                 ke3_message: result.1,
             },
             session_key: result.0,
-            export_key: opened_envelope.export_key.clone(),
+            export_key: opened_envelope.export_key,
             server_s_pk,
             #[cfg(test)]
             state: self,
@@ -621,8 +625,8 @@ impl<CS: CipherSuite> ServerLogin<CS> {
             credential_request.ke1_message,
             client_s_pk,
             server_s_sk.clone(),
-            &id_u,
-            &id_s,
+            id_u.iter(),
+            id_s.iter(),
             context,
         )?;
 
@@ -789,7 +793,7 @@ pub struct ClientLoginFinishResult<CS: CipherSuite> {
     /// The message to send to the server to complete the protocol
     pub message: CredentialFinalization<CS>,
     /// The session key
-    pub session_key: Vec<u8>,
+    pub session_key: GenericArray<u8, <CS::Hash as Digest>::OutputSize>,
     /// The client-side export key
     pub export_key: GenericArray<u8, <CS::Hash as Digest>::OutputSize>,
     /// The server's static public key
@@ -799,7 +803,7 @@ pub struct ClientLoginFinishResult<CS: CipherSuite> {
     pub state: ClientLogin<CS>,
     /// Handshake secret, only used in tests
     #[cfg(test)]
-    pub handshake_secret: Vec<u8>,
+    pub handshake_secret: GenericArray<u8, <CS::Hash as Digest>::OutputSize>,
     /// Client MAC key, only used in tests
     #[cfg(test)]
     pub client_mac_key: GenericArray<u8, <CS::Hash as Digest>::OutputSize>,
@@ -812,7 +816,7 @@ pub struct ClientLoginFinishResult<CS: CipherSuite> {
 #[cfg_attr(test, derive_where(Debug; ServerLogin<CS>))]
 pub struct ServerLoginFinishResult<CS: CipherSuite> {
     /// The session key between client and server
-    pub session_key: Vec<u8>,
+    pub session_key: GenericArray<u8, <CS::Hash as Digest>::OutputSize>,
     _cs: PhantomData<CS>,
     /// Instance of the ClientRegistration, only used in tests for checking zeroize
     #[cfg(test)]
@@ -851,7 +855,7 @@ where
     pub state: ServerLogin<CS>,
     /// Handshake secret, only used in tests
     #[cfg(test)]
-    pub handshake_secret: Vec<u8>,
+    pub handshake_secret: GenericArray<u8, <CS::Hash as Digest>::OutputSize>,
     /// Server MAC key, only used in tests
     #[cfg(test)]
     pub server_mac_key: GenericArray<u8, <CS::Hash as Digest>::OutputSize>,
@@ -970,14 +974,14 @@ where
             &mut xor_pad,
         )
         .map_err(|_| InternalError::HkdfError)?;
-    let plaintext: Vec<u8> = xor_pad
-        .iter()
-        .zip(masked_response.iter())
-        .map(|(&x1, &x2)| x1 ^ x2)
-        .collect();
+
+    for (x1, x2) in xor_pad.iter_mut().zip(masked_response.iter()) {
+        *x1 ^= x2
+    }
+
     let key_len = <CS::KeGroup as KeGroup>::PkLen::USIZE;
-    let unchecked_server_s_pk = PublicKey::from_bytes(&plaintext[..key_len])?;
-    let envelope = Envelope::deserialize(&plaintext[key_len..])?;
+    let unchecked_server_s_pk = PublicKey::from_bytes(&xor_pad[..key_len])?;
+    let envelope = Envelope::deserialize(&xor_pad[key_len..])?;
 
     // Ensure that public key is valid
     let server_s_pk = KeyPair::<CS::KeGroup>::check_public_key(unchecked_server_s_pk)
@@ -991,16 +995,16 @@ pub(crate) fn bytestrings_from_identifiers<KG: KeGroup>(
     ids: Identifiers,
     client_s_pk: GenericArray<u8, KG::PkLen>,
     server_s_pk: GenericArray<u8, KG::PkLen>,
-) -> Result<(Serialized<U2, KG::PkLen>, Serialized<U2, KG::PkLen>), ProtocolError> {
+) -> Result<(Serialize<U2, KG::PkLen>, Serialize<U2, KG::PkLen>), ProtocolError> {
     let client_identity = if let Some(client) = ids.client {
-        serialize::<U2>(client)?.with_length()
+        Serialize::<U2, KG::PkLen>::from(client)?
     } else {
-        serialize_owned::<U2, _>(client_s_pk)?
+        Serialize::<U2, _>::from_owned(client_s_pk)?
     };
     let server_identity = if let Some(server) = ids.server {
-        serialize::<U2>(server)?.with_length()
+        Serialize::<U2, KG::PkLen>::from(server)?
     } else {
-        serialize_owned::<U2, _>(server_s_pk)?
+        Serialize::<U2, _>::from_owned(server_s_pk)?
     };
 
     Ok((client_identity, server_identity))

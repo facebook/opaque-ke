@@ -12,7 +12,7 @@ use crate::{
     key_exchange::group::KeGroup,
     keypair::{KeyPair, PublicKey},
     opaque::{bytestrings_from_identifiers, Identifiers},
-    serialization::{MacExt, Serialized},
+    serialization::{MacExt, Serialize},
 };
 use core::convert::TryFrom;
 use core::ops::Add;
@@ -77,8 +77,8 @@ pub(crate) struct Envelope<CS: CipherSuite> {
 pub(crate) struct OpenedEnvelope<'a, CS: CipherSuite> {
     pub(crate) client_static_keypair: KeyPair<CS::KeGroup>,
     pub(crate) export_key: GenericArray<u8, <CS::Hash as Digest>::OutputSize>,
-    pub(crate) id_u: Serialized<'a, U2, <CS::KeGroup as KeGroup>::PkLen>,
-    pub(crate) id_s: Serialized<'a, U2, <CS::KeGroup as KeGroup>::PkLen>,
+    pub(crate) id_u: Serialize<'a, U2, <CS::KeGroup as KeGroup>::PkLen>,
+    pub(crate) id_s: Serialize<'a, U2, <CS::KeGroup as KeGroup>::PkLen>,
 }
 
 pub(crate) struct OpenedInnerEnvelope<D: Hash> {
@@ -131,7 +131,7 @@ impl<CS: CipherSuite> Envelope<CS> {
             client_s_pk.to_arr(),
             server_s_pk.to_arr(),
         )?;
-        let aad = construct_aad(id_u.into_iter(), id_s.into_iter(), server_s_pk);
+        let aad = construct_aad(id_u.iter(), id_s.iter(), server_s_pk);
 
         let result = Self::seal_raw(randomized_pwd_hasher, nonce, aad, mode)?;
         Ok((
@@ -184,7 +184,7 @@ impl<CS: CipherSuite> Envelope<CS> {
     pub(crate) fn open<'a>(
         &self,
         randomized_pwd_hasher: Hkdf<CS::Hash>,
-        server_s_pk: &PublicKey<CS::KeGroup>,
+        server_s_pk: PublicKey<CS::KeGroup>,
         optional_ids: Identifiers<'a>,
     ) -> Result<OpenedEnvelope<'a, CS>, ProtocolError> {
         let client_static_keypair = match self.mode {
@@ -201,7 +201,7 @@ impl<CS: CipherSuite> Envelope<CS> {
             client_static_keypair.public().to_arr(),
             server_s_pk.to_arr(),
         )?;
-        let aad = construct_aad(id_u.into_iter(), id_s.into_iter(), server_s_pk);
+        let aad = construct_aad(id_u.iter(), id_s.iter(), &server_s_pk);
 
         let opened = self.open_raw(randomized_pwd_hasher, aad)?;
 
@@ -237,11 +237,7 @@ impl<CS: CipherSuite> Envelope<CS> {
         hmac.verify(&self.hmac)
             .map_err(|_| InternalError::SealOpenHmacError)?;
 
-        Ok(OpenedInnerEnvelope {
-            export_key: GenericArray::<u8, <CS::Hash as Digest>::OutputSize>::clone_from_slice(
-                &export_key,
-            ),
-        })
+        Ok(OpenedInnerEnvelope { export_key })
     }
 
     // Creates a dummy envelope object that serializes to the all-zeros byte string

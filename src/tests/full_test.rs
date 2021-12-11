@@ -473,7 +473,7 @@ where
         client_registration_state,
         client_login_state,
         server_login_state,
-        session_key: client_login_finish_result.session_key,
+        session_key: client_login_finish_result.session_key.to_vec(),
         export_key: client_registration_finish_result.export_key.to_vec(),
     })
 }
