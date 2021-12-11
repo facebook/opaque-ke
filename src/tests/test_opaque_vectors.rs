@@ -18,13 +18,9 @@ use crate::{
     *,
 };
 use alloc::{string::ToString, vec, vec::Vec};
-use core::ops::{Add, Shl};
+use core::ops::Add;
 use digest::FixedOutput;
-use generic_array::typenum::Double;
-use generic_array::{
-    typenum::{Sum, B1},
-    ArrayLength,
-};
+use generic_array::{typenum::Sum, ArrayLength};
 use json::JsonValue;
 
 #[allow(non_snake_case)]
@@ -147,7 +143,11 @@ fn populate_test_vectors(values: &JsonValue) -> OpaqueTestVectorParameters {
 
 fn get_password_file_bytes<CS: CipherSuite>(
     parameters: &OpaqueTestVectorParameters,
-) -> Result<Vec<u8>, ProtocolError> {
+) -> Result<Vec<u8>, ProtocolError>
+where
+    NonceLen: Add<<CS::Hash as FixedOutput>::OutputSize>,
+    Sum<NonceLen, <CS::Hash as FixedOutput>::OutputSize>: ArrayLength<u8>,
+{
     let password_file = ServerRegistration::<CS>::finish(
         RegistrationUpload::deserialize(&parameters.registration_upload).unwrap(),
     );
@@ -284,8 +284,9 @@ fn test_registration_upload<CS: CipherSuite>(
     tvs: &[OpaqueTestVectorParameters],
 ) -> Result<(), ProtocolError>
 where
-    <CS::Hash as FixedOutput>::OutputSize: Shl<B1>,
-    Double<<CS::Hash as FixedOutput>::OutputSize>: ArrayLength<u8>,
+    NonceLen: Add<<CS::Hash as FixedOutput>::OutputSize>,
+    Sum<NonceLen, <CS::Hash as FixedOutput>::OutputSize>:
+        ArrayLength<u8> + Add<<CS::KeGroup as KeGroup>::PkLen>,
 {
     for parameters in tvs {
         let mut rng = CycleRng::new(parameters.blind_registration.to_vec());
@@ -352,8 +353,10 @@ fn test_ke1<CS: CipherSuite>(tvs: &[OpaqueTestVectorParameters]) -> Result<(), P
 
 fn test_ke2<CS: CipherSuite>(tvs: &[OpaqueTestVectorParameters]) -> Result<(), ProtocolError>
 where
-    Sum<<CS::KeGroup as KeGroup>::PkLen, NonceLen>: Add<<CS::Hash as FixedOutput>::OutputSize>,
-    Sum<Sum<<CS::KeGroup as KeGroup>::PkLen, NonceLen>, <CS::Hash as FixedOutput>::OutputSize>:
+    NonceLen: Add<<CS::Hash as FixedOutput>::OutputSize>,
+    Sum<NonceLen, <CS::Hash as FixedOutput>::OutputSize>:
+        ArrayLength<u8> + Add<<CS::KeGroup as KeGroup>::PkLen>,
+    Sum<Sum<NonceLen, <CS::Hash as FixedOutput>::OutputSize>, <CS::KeGroup as KeGroup>::PkLen>:
         ArrayLength<u8>,
 {
     for parameters in tvs {
@@ -413,10 +416,10 @@ where
 
 fn test_ke3<CS: CipherSuite>(tvs: &[OpaqueTestVectorParameters]) -> Result<(), ProtocolError>
 where
-    <CS::Hash as FixedOutput>::OutputSize: Shl<B1>,
-    Double<<CS::Hash as FixedOutput>::OutputSize>: ArrayLength<u8>,
-    Sum<<CS::KeGroup as KeGroup>::PkLen, NonceLen>: Add<<CS::Hash as FixedOutput>::OutputSize>,
-    Sum<Sum<<CS::KeGroup as KeGroup>::PkLen, NonceLen>, <CS::Hash as FixedOutput>::OutputSize>:
+    NonceLen: Add<<CS::Hash as FixedOutput>::OutputSize>,
+    Sum<NonceLen, <CS::Hash as FixedOutput>::OutputSize>:
+        ArrayLength<u8> + Add<<CS::KeGroup as KeGroup>::PkLen>,
+    Sum<Sum<NonceLen, <CS::Hash as FixedOutput>::OutputSize>, <CS::KeGroup as KeGroup>::PkLen>:
         ArrayLength<u8>,
 {
     for parameters in tvs {
@@ -470,8 +473,10 @@ fn test_server_login_finish<CS: CipherSuite>(
     tvs: &[OpaqueTestVectorParameters],
 ) -> Result<(), ProtocolError>
 where
-    Sum<<CS::KeGroup as KeGroup>::PkLen, NonceLen>: Add<<CS::Hash as FixedOutput>::OutputSize>,
-    Sum<Sum<<CS::KeGroup as KeGroup>::PkLen, NonceLen>, <CS::Hash as FixedOutput>::OutputSize>:
+    NonceLen: Add<<CS::Hash as FixedOutput>::OutputSize>,
+    Sum<NonceLen, <CS::Hash as FixedOutput>::OutputSize>:
+        ArrayLength<u8> + Add<<CS::KeGroup as KeGroup>::PkLen>,
+    Sum<Sum<NonceLen, <CS::Hash as FixedOutput>::OutputSize>, <CS::KeGroup as KeGroup>::PkLen>:
         ArrayLength<u8>,
 {
     for parameters in tvs {
@@ -526,8 +531,10 @@ fn test_fake_vectors<CS: CipherSuite>(
     tvs: &[OpaqueTestVectorParameters],
 ) -> Result<(), ProtocolError>
 where
-    Sum<<CS::KeGroup as KeGroup>::PkLen, NonceLen>: Add<<CS::Hash as FixedOutput>::OutputSize>,
-    Sum<Sum<<CS::KeGroup as KeGroup>::PkLen, NonceLen>, <CS::Hash as FixedOutput>::OutputSize>:
+    NonceLen: Add<<CS::Hash as FixedOutput>::OutputSize>,
+    Sum<NonceLen, <CS::Hash as FixedOutput>::OutputSize>:
+        ArrayLength<u8> + Add<<CS::KeGroup as KeGroup>::PkLen>,
+    Sum<Sum<NonceLen, <CS::Hash as FixedOutput>::OutputSize>, <CS::KeGroup as KeGroup>::PkLen>:
         ArrayLength<u8>,
 {
     for parameters in tvs {

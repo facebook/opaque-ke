@@ -105,8 +105,10 @@ impl_serialize_and_deserialize_for!(CredentialRequest);
 )]
 pub struct CredentialResponse<CS: CipherSuite>
 where
-    Sum<<CS::KeGroup as KeGroup>::PkLen, NonceLen>: Add<<CS::Hash as FixedOutput>::OutputSize>,
-    Sum<Sum<<CS::KeGroup as KeGroup>::PkLen, NonceLen>, <CS::Hash as FixedOutput>::OutputSize>:
+    NonceLen: Add<<CS::Hash as FixedOutput>::OutputSize>,
+    Sum<NonceLen, <CS::Hash as FixedOutput>::OutputSize>:
+        ArrayLength<u8> + Add<<CS::KeGroup as KeGroup>::PkLen>,
+    Sum<Sum<NonceLen, <CS::Hash as FixedOutput>::OutputSize>, <CS::KeGroup as KeGroup>::PkLen>:
         ArrayLength<u8>,
 {
     /// the server's oprf output
@@ -200,11 +202,15 @@ impl<CS: CipherSuite> RegistrationResponse<CS> {
 
 impl<CS: CipherSuite> RegistrationUpload<CS> {
     /// Serialization into bytes
-    pub fn serialize(&self) -> Result<Vec<u8>, ProtocolError> {
+    pub fn serialize(&self) -> Result<Vec<u8>, ProtocolError>
+    where
+        NonceLen: Add<<CS::Hash as FixedOutput>::OutputSize>,
+        Sum<NonceLen, <CS::Hash as FixedOutput>::OutputSize>: ArrayLength<u8>,
+    {
         Ok([
             self.client_s_pk.to_arr().to_vec(),
             self.masking_key.to_vec(),
-            self.envelope.serialize(),
+            self.envelope.serialize().to_vec(),
         ]
         .concat())
     }
@@ -292,8 +298,10 @@ impl<CS: CipherSuite> CredentialRequest<CS> {
 
 impl<CS: CipherSuite> CredentialResponse<CS>
 where
-    Sum<<CS::KeGroup as KeGroup>::PkLen, NonceLen>: Add<<CS::Hash as FixedOutput>::OutputSize>,
-    Sum<Sum<<CS::KeGroup as KeGroup>::PkLen, NonceLen>, <CS::Hash as FixedOutput>::OutputSize>:
+    NonceLen: Add<<CS::Hash as FixedOutput>::OutputSize>,
+    Sum<NonceLen, <CS::Hash as FixedOutput>::OutputSize>:
+        ArrayLength<u8> + Add<<CS::KeGroup as KeGroup>::PkLen>,
+    Sum<Sum<NonceLen, <CS::Hash as FixedOutput>::OutputSize>, <CS::KeGroup as KeGroup>::PkLen>:
         ArrayLength<u8>,
 {
     /// Serialization into bytes

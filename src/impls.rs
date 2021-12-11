@@ -11,11 +11,12 @@ macro_rules! impl_serialize_and_deserialize_for {
         #[cfg(feature = "serialize")]
         impl<CS: CipherSuite> serde::Serialize for $item<CS>
         where
-            Sum<<CS::KeGroup as KeGroup>::PkLen, NonceLen>:
-                Add<<CS::Hash as FixedOutput>::OutputSize>,
+            NonceLen: Add<<CS::Hash as FixedOutput>::OutputSize>,
+            Sum<NonceLen, <CS::Hash as FixedOutput>::OutputSize>:
+                ArrayLength<u8> + Add<<CS::KeGroup as KeGroup>::PkLen>,
             Sum<
-                Sum<<CS::KeGroup as KeGroup>::PkLen, NonceLen>,
-                <CS::Hash as FixedOutput>::OutputSize,
+                Sum<NonceLen, <CS::Hash as FixedOutput>::OutputSize>,
+                <CS::KeGroup as KeGroup>::PkLen,
             >: ArrayLength<u8>,
         {
             fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
@@ -36,11 +37,12 @@ macro_rules! impl_serialize_and_deserialize_for {
         #[cfg(feature = "serialize")]
         impl<'de, CS: CipherSuite> serde::Deserialize<'de> for $item<CS>
         where
-            Sum<<CS::KeGroup as KeGroup>::PkLen, NonceLen>:
-                Add<<CS::Hash as FixedOutput>::OutputSize>,
+            NonceLen: Add<<CS::Hash as FixedOutput>::OutputSize>,
+            Sum<NonceLen, <CS::Hash as FixedOutput>::OutputSize>:
+                ArrayLength<u8> + Add<<CS::KeGroup as KeGroup>::PkLen>,
             Sum<
-                Sum<<CS::KeGroup as KeGroup>::PkLen, NonceLen>,
-                <CS::Hash as FixedOutput>::OutputSize,
+                Sum<NonceLen, <CS::Hash as FixedOutput>::OutputSize>,
+                <CS::KeGroup as KeGroup>::PkLen,
             >: ArrayLength<u8>,
         {
             fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
@@ -58,11 +60,12 @@ macro_rules! impl_serialize_and_deserialize_for {
 
                     impl<'de, CS: CipherSuite> serde::de::Visitor<'de> for ByteVisitor<CS>
                     where
-                        Sum<<CS::KeGroup as KeGroup>::PkLen, NonceLen>:
-                            Add<<CS::Hash as FixedOutput>::OutputSize>,
+                        NonceLen: Add<<CS::Hash as FixedOutput>::OutputSize>,
+                        Sum<NonceLen, <CS::Hash as FixedOutput>::OutputSize>:
+                            ArrayLength<u8> + Add<<CS::KeGroup as KeGroup>::PkLen>,
                         Sum<
-                            Sum<<CS::KeGroup as KeGroup>::PkLen, NonceLen>,
-                            <CS::Hash as FixedOutput>::OutputSize,
+                            Sum<NonceLen, <CS::Hash as FixedOutput>::OutputSize>,
+                            <CS::KeGroup as KeGroup>::PkLen,
                         >: ArrayLength<u8>,
                     {
                         type Value = $item<CS>;

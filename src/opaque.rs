@@ -25,11 +25,11 @@ use crate::{
 };
 use alloc::vec::Vec;
 use core::marker::PhantomData;
-use core::ops::{Add, Shl};
+use core::ops::Add;
 use derive_where::DeriveWhere;
 use digest::{Digest, FixedOutput};
 use generic_array::{
-    typenum::{Double, Sum, Unsigned, B1, U2},
+    typenum::{Sum, Unsigned, U2},
     ArrayLength, GenericArray,
 };
 use hkdf::Hkdf;
@@ -253,11 +253,7 @@ impl<CS: CipherSuite> ClientRegistration<CS> {
         rng: &mut R,
         registration_response: RegistrationResponse<CS>,
         params: ClientRegistrationFinishParameters<CS>,
-    ) -> Result<ClientRegistrationFinishResult<CS>, ProtocolError>
-    where
-        <CS::Hash as FixedOutput>::OutputSize: Shl<B1>,
-        Double<<CS::Hash as FixedOutput>::OutputSize>: ArrayLength<u8>,
-    {
+    ) -> Result<ClientRegistrationFinishResult<CS>, ProtocolError> {
         // Check for reflected value from server and halt if detected
         if self
             .blinded_element
@@ -307,7 +303,11 @@ impl<CS: CipherSuite> ClientRegistration<CS> {
 
 impl<CS: CipherSuite> ServerRegistration<CS> {
     /// Serialization into bytes
-    pub fn serialize(&self) -> Result<Vec<u8>, ProtocolError> {
+    pub fn serialize(&self) -> Result<Vec<u8>, ProtocolError>
+    where
+        NonceLen: Add<<CS::Hash as FixedOutput>::OutputSize>,
+        Sum<NonceLen, <CS::Hash as FixedOutput>::OutputSize>: ArrayLength<u8>,
+    {
         self.0.serialize()
     }
 
@@ -438,10 +438,10 @@ impl<CS: CipherSuite> ClientLogin<CS> {
         params: ClientLoginFinishParameters<CS>,
     ) -> Result<ClientLoginFinishResult<CS>, ProtocolError>
     where
-        <CS::Hash as FixedOutput>::OutputSize: Shl<B1>,
-        Double<<CS::Hash as FixedOutput>::OutputSize>: ArrayLength<u8>,
-        Sum<<CS::KeGroup as KeGroup>::PkLen, NonceLen>: Add<<CS::Hash as FixedOutput>::OutputSize>,
-        Sum<Sum<<CS::KeGroup as KeGroup>::PkLen, NonceLen>, <CS::Hash as FixedOutput>::OutputSize>:
+        NonceLen: Add<<CS::Hash as FixedOutput>::OutputSize>,
+        Sum<NonceLen, <CS::Hash as FixedOutput>::OutputSize>:
+            ArrayLength<u8> + Add<<CS::KeGroup as KeGroup>::PkLen>,
+        Sum<Sum<NonceLen, <CS::Hash as FixedOutput>::OutputSize>, <CS::KeGroup as KeGroup>::PkLen>:
             ArrayLength<u8>,
     {
         // Check if beta value from server is equal to alpha value from client
@@ -552,8 +552,10 @@ impl<CS: CipherSuite> ServerLogin<CS> {
         }: ServerLoginStartParameters,
     ) -> Result<ServerLoginStartResult<CS>, ProtocolError<S::Error>>
     where
-        Sum<<CS::KeGroup as KeGroup>::PkLen, NonceLen>: Add<<CS::Hash as FixedOutput>::OutputSize>,
-        Sum<Sum<<CS::KeGroup as KeGroup>::PkLen, NonceLen>, <CS::Hash as FixedOutput>::OutputSize>:
+        NonceLen: Add<<CS::Hash as FixedOutput>::OutputSize>,
+        Sum<NonceLen, <CS::Hash as FixedOutput>::OutputSize>:
+            ArrayLength<u8> + Add<<CS::KeGroup as KeGroup>::PkLen>,
+        Sum<Sum<NonceLen, <CS::Hash as FixedOutput>::OutputSize>, <CS::KeGroup as KeGroup>::PkLen>:
             ArrayLength<u8>,
     {
         let record = match password_file {
@@ -577,7 +579,7 @@ impl<CS: CipherSuite> ServerLogin<CS> {
 
         let masked_response = mask_response(
             &record.0.masking_key,
-            &masking_nonce,
+            masking_nonce.as_slice(),
             &server_s_pk,
             &record.0.envelope,
         )
@@ -725,7 +727,7 @@ pub struct ClientRegistrationFinishResult<CS: CipherSuite> {
     pub state: ClientRegistration<CS>,
     /// AuthKey, only used in tests
     #[cfg(test)]
-    pub auth_key: Vec<u8>,
+    pub auth_key: GenericArray<u8, <CS::Hash as Digest>::OutputSize>,
     /// Password derived key, only used in tests
     #[cfg(test)]
     pub randomized_pwd: GenericArray<u8, <CS::Hash as Digest>::OutputSize>,
@@ -837,8 +839,10 @@ pub struct ServerLoginStartParameters<'c, 'i> {
 )]
 pub struct ServerLoginStartResult<CS: CipherSuite>
 where
-    Sum<<CS::KeGroup as KeGroup>::PkLen, NonceLen>: Add<<CS::Hash as FixedOutput>::OutputSize>,
-    Sum<Sum<<CS::KeGroup as KeGroup>::PkLen, NonceLen>, <CS::Hash as FixedOutput>::OutputSize>:
+    NonceLen: Add<<CS::Hash as FixedOutput>::OutputSize>,
+    Sum<NonceLen, <CS::Hash as FixedOutput>::OutputSize>:
+        ArrayLength<u8> + Add<<CS::KeGroup as KeGroup>::PkLen>,
+    Sum<Sum<NonceLen, <CS::Hash as FixedOutput>::OutputSize>, <CS::KeGroup as KeGroup>::PkLen>:
         ArrayLength<u8>,
 {
     /// The message to send back to the client
@@ -874,11 +878,7 @@ fn get_password_derived_key<CS: CipherSuite>(
         Hkdf<CS::Hash>,
     ),
     ProtocolError,
->
-where
-    <CS::Hash as FixedOutput>::OutputSize: Shl<B1>,
-    Double<<CS::Hash as FixedOutput>::OutputSize>: ArrayLength<u8>,
-{
+> {
     let oprf_output = oprf_client.finalize(evaluation_element, None)?;
 
     let hardened_output = if let Some(slow_hash) = slow_hash {
@@ -915,7 +915,7 @@ fn oprf_key_from_seed<G: Group, D: Hash>(
 #[allow(type_alias_bounds)]
 pub type MaskResponse<CS: CipherSuite> = GenericArray<
     u8,
-    Sum<Sum<<CS::KeGroup as KeGroup>::PkLen, NonceLen>, <CS::Hash as FixedOutput>::OutputSize>,
+    Sum<Sum<NonceLen, <CS::Hash as FixedOutput>::OutputSize>, <CS::KeGroup as KeGroup>::PkLen>,
 >;
 
 fn mask_response<CS: CipherSuite>(
@@ -925,8 +925,10 @@ fn mask_response<CS: CipherSuite>(
     envelope: &Envelope<CS>,
 ) -> Result<MaskResponse<CS>, ProtocolError>
 where
-    Sum<<CS::KeGroup as KeGroup>::PkLen, NonceLen>: Add<<CS::Hash as FixedOutput>::OutputSize>,
-    Sum<Sum<<CS::KeGroup as KeGroup>::PkLen, NonceLen>, <CS::Hash as FixedOutput>::OutputSize>:
+    NonceLen: Add<<CS::Hash as FixedOutput>::OutputSize>,
+    Sum<NonceLen, <CS::Hash as FixedOutput>::OutputSize>:
+        ArrayLength<u8> + Add<<CS::KeGroup as KeGroup>::PkLen>,
+    Sum<Sum<NonceLen, <CS::Hash as FixedOutput>::OutputSize>, <CS::KeGroup as KeGroup>::PkLen>:
         ArrayLength<u8>,
 {
     let mut xor_pad = GenericArray::default();
@@ -954,8 +956,10 @@ fn unmask_response<CS: CipherSuite>(
     masked_response: &[u8],
 ) -> Result<(PublicKey<CS::KeGroup>, Envelope<CS>), ProtocolError>
 where
-    Sum<<CS::KeGroup as KeGroup>::PkLen, NonceLen>: Add<<CS::Hash as FixedOutput>::OutputSize>,
-    Sum<Sum<<CS::KeGroup as KeGroup>::PkLen, NonceLen>, <CS::Hash as FixedOutput>::OutputSize>:
+    NonceLen: Add<<CS::Hash as FixedOutput>::OutputSize>,
+    Sum<NonceLen, <CS::Hash as FixedOutput>::OutputSize>:
+        ArrayLength<u8> + Add<<CS::KeGroup as KeGroup>::PkLen>,
+    Sum<Sum<NonceLen, <CS::Hash as FixedOutput>::OutputSize>, <CS::KeGroup as KeGroup>::PkLen>:
         ArrayLength<u8>,
 {
     let mut xor_pad = MaskResponse::<CS>::default();

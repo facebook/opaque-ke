@@ -8,16 +8,14 @@
 //! Includes the KeGroup trait and definitions for the
 //! key exchange groups
 
-use super::tripledh::NonceLen;
 use crate::errors::InternalError;
-use core::ops::Add;
 use generic_array::{ArrayLength, GenericArray};
 use rand::{CryptoRng, RngCore};
 
 /// A group representation for use in the key exchange
 pub trait KeGroup: Sized + Clone {
     /// Length of the public key
-    type PkLen: ArrayLength<u8> + Add<NonceLen> + 'static;
+    type PkLen: ArrayLength<u8> + 'static;
     /// Length of the secret key
     type SkLen: ArrayLength<u8> + 'static;
 

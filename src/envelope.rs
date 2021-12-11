@@ -14,15 +14,14 @@ use crate::{
     opaque::{bytestrings_from_identifiers, Identifiers},
     serialization::{MacExt, Serialized},
 };
-use alloc::vec;
-use alloc::vec::Vec;
 use core::convert::TryFrom;
+use core::ops::Add;
 use derive_where::DeriveWhere;
-use digest::Digest;
+use digest::{Digest, FixedOutput};
 use generic_array::{
     sequence::Concat,
-    typenum::{Unsigned, U2, U32},
-    GenericArray,
+    typenum::{Sum, Unsigned, U2, U32},
+    ArrayLength, GenericArray,
 };
 use hkdf::Hkdf;
 use hmac::{Hmac, Mac, NewMac};
@@ -95,7 +94,7 @@ type SealRawResult<CS> = (
 type SealRawResult<CS> = (
     Envelope<CS>,
     GenericArray<u8, <<CS as CipherSuite>::Hash as Digest>::OutputSize>,
-    Vec<u8>,
+    GenericArray<u8, <<CS as CipherSuite>::Hash as Digest>::OutputSize>,
 );
 #[cfg(not(test))]
 type SealResult<CS> = (
@@ -108,7 +107,7 @@ type SealResult<CS> = (
     Envelope<CS>,
     PublicKey<<CS as CipherSuite>::KeGroup>,
     GenericArray<u8, <<CS as CipherSuite>::Hash as Digest>::OutputSize>,
-    Vec<u8>,
+    GenericArray<u8, <<CS as CipherSuite>::Hash as Digest>::OutputSize>,
 );
 
 impl<CS: CipherSuite> Envelope<CS> {
@@ -153,8 +152,8 @@ impl<CS: CipherSuite> Envelope<CS> {
         aad: impl Iterator<Item = &'a [u8]>,
         mode: InnerEnvelopeMode,
     ) -> Result<SealRawResult<CS>, InternalError> {
-        let mut hmac_key = vec![0u8; Self::hmac_key_size()];
-        let mut export_key = vec![0u8; Self::export_key_size()];
+        let mut hmac_key = GenericArray::<_, <CS::Hash as Digest>::OutputSize>::default();
+        let mut export_key = GenericArray::<_, <CS::Hash as Digest>::OutputSize>::default();
 
         randomized_pwd_hasher
             .expand(&nonce.concat(STR_AUTH_KEY.into()), &mut hmac_key)
@@ -176,7 +175,7 @@ impl<CS: CipherSuite> Envelope<CS> {
                 nonce,
                 hmac: hmac_bytes,
             },
-            GenericArray::clone_from_slice(&export_key),
+            export_key,
             #[cfg(test)]
             hmac_key,
         ))
@@ -221,8 +220,8 @@ impl<CS: CipherSuite> Envelope<CS> {
         randomized_pwd_hasher: Hkdf<CS::Hash>,
         aad: impl Iterator<Item = &'a [u8]>,
     ) -> Result<OpenedInnerEnvelope<CS::Hash>, InternalError> {
-        let mut hmac_key = vec![0u8; Self::hmac_key_size()];
-        let mut export_key = vec![0u8; Self::export_key_size()];
+        let mut hmac_key = GenericArray::<_, <CS::Hash as Digest>::OutputSize>::default();
+        let mut export_key = GenericArray::<_, <CS::Hash as Digest>::OutputSize>::default();
 
         randomized_pwd_hasher
             .expand(&self.nonce.concat(STR_AUTH_KEY.into()), &mut hmac_key)
@@ -250,10 +249,7 @@ impl<CS: CipherSuite> Envelope<CS> {
         Self {
             mode: InnerEnvelopeMode::Zero,
             nonce: GenericArray::default(),
-            hmac: GenericArray::clone_from_slice(&vec![
-                0u8;
-                <CS::Hash as Digest>::OutputSize::USIZE
-            ]),
+            hmac: GenericArray::default(),
         }
     }
 
@@ -261,16 +257,18 @@ impl<CS: CipherSuite> Envelope<CS> {
         <CS::Hash as Digest>::OutputSize::USIZE
     }
 
-    fn export_key_size() -> usize {
-        <CS::Hash as Digest>::OutputSize::USIZE
-    }
-
     pub(crate) fn len() -> usize {
         <CS::Hash as Digest>::OutputSize::USIZE + NonceLen::USIZE
     }
 
-    pub(crate) fn serialize(&self) -> Vec<u8> {
-        [self.nonce.as_slice(), &self.hmac].concat()
+    pub(crate) fn serialize(
+        &self,
+    ) -> GenericArray<u8, Sum<NonceLen, <CS::Hash as FixedOutput>::OutputSize>>
+    where
+        NonceLen: Add<<CS::Hash as FixedOutput>::OutputSize>,
+        Sum<NonceLen, <CS::Hash as FixedOutput>::OutputSize>: ArrayLength<u8>,
+    {
+        self.nonce.concat(self.hmac.clone())
     }
     pub(crate) fn deserialize(bytes: &[u8]) -> Result<Self, ProtocolError> {
         let mode = InnerEnvelopeMode::Internal; // Better way to hard-code this?
@@ -284,11 +282,11 @@ impl<CS: CipherSuite> Envelope<CS> {
             InnerEnvelopeMode::Zero => {
                 return Err(InternalError::IncompatibleEnvelopeModeError.into())
             }
-            InnerEnvelopeMode::Internal => bytes[NonceLen::USIZE..].to_vec(),
+            InnerEnvelopeMode::Internal => &bytes[NonceLen::USIZE..],
         };
 
         let hmac_key_size = Self::hmac_key_size();
-        let hmac = check_slice_size(&remainder, hmac_key_size, "hmac_key_size")?;
+        let hmac = check_slice_size(remainder, hmac_key_size, "hmac_key_size")?;
 
         Ok(Self {
             mode,
@@ -304,7 +302,7 @@ fn build_inner_envelope_internal<CS: CipherSuite>(
     randomized_pwd_hasher: Hkdf<CS::Hash>,
     nonce: GenericArray<u8, NonceLen>,
 ) -> Result<PublicKey<CS::KeGroup>, ProtocolError> {
-    let mut keypair_seed = vec![0u8; <CS::KeGroup as KeGroup>::SkLen::USIZE];
+    let mut keypair_seed = GenericArray::<_, <CS::KeGroup as KeGroup>::SkLen>::default();
     randomized_pwd_hasher
         .expand(&nonce.concat(STR_PRIVATE_KEY.into()), &mut keypair_seed)
         .map_err(|_| InternalError::HkdfError)?;
@@ -322,7 +320,7 @@ fn recover_keys_internal<CS: CipherSuite>(
     randomized_pwd_hasher: Hkdf<CS::Hash>,
     nonce: GenericArray<u8, NonceLen>,
 ) -> Result<KeyPair<CS::KeGroup>, ProtocolError> {
-    let mut keypair_seed = vec![0u8; <CS::KeGroup as KeGroup>::SkLen::USIZE];
+    let mut keypair_seed = GenericArray::<_, <CS::KeGroup as KeGroup>::SkLen>::default();
     randomized_pwd_hasher
         .expand(&nonce.concat(STR_PRIVATE_KEY.into()), &mut keypair_seed)
         .map_err(|_| InternalError::HkdfError)?;
