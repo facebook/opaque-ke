@@ -754,7 +754,7 @@
 //! ```
 //! # use curve25519_dalek::ristretto::RistrettoPoint;
 //! # use generic_array::{GenericArray, typenum::U32};
-//! # use opaque_ke::{CipherSuite, errors::{InternalError}, keypair::{KeyPair, PrivateKey, PublicKey, SecretKey}, ServerSetup};
+//! # use opaque_ke::{CipherSuite, errors::{InternalError}, key_exchange::group::KeGroup, keypair::{KeyPair, PrivateKey, PublicKey, SecretKey}, ServerSetup};
 //! # use rand::rngs::OsRng;
 //! # use zeroize::Zeroize;
 //! # struct Default;
@@ -770,7 +770,7 @@
 //! # #[derive(Clone, Zeroize)]
 //! # struct YourRemoteKey(PrivateKey<RistrettoPoint>);
 //! # impl YourRemoteKey {
-//! #     fn diffie_hellman(&self, pk: &[u8]) -> Result<Vec<u8>, YourRemoteKeyError> { todo!() }
+//! #     fn diffie_hellman(&self, pk: &[u8]) -> Result<GenericArray<u8, <RistrettoPoint as KeGroup>::PkLen>, YourRemoteKeyError> { todo!() }
 //! #     fn public_key(&self) -> Result<GenericArray<u8, U32>, YourRemoteKeyError> { Ok(GenericArray::default()) }
 //! # }
 //! impl SecretKey<RistrettoPoint> for YourRemoteKey {
@@ -779,7 +779,7 @@
 //!     fn diffie_hellman(
 //!         &self,
 //!         pk: PublicKey<RistrettoPoint>,
-//!     ) -> Result<Vec<u8>, InternalError<Self::Error>> {
+//!     ) -> Result<GenericArray<u8, <RistrettoPoint as KeGroup>::PkLen>, InternalError<Self::Error>> {
 //!         YourRemoteKey::diffie_hellman(self, &pk.to_arr()).map_err(InternalError::Custom)
 //!     }
 //!

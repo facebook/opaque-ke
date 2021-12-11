@@ -166,7 +166,10 @@ pub trait SecretKey<KG: KeGroup>: Clone + Sized + Zeroize {
     type Error;
 
     /// Diffie-Hellman key exchange implementation
-    fn diffie_hellman(&self, pk: PublicKey<KG>) -> Result<Vec<u8>, InternalError<Self::Error>>;
+    fn diffie_hellman(
+        &self,
+        pk: PublicKey<KG>,
+    ) -> Result<GenericArray<u8, KG::PkLen>, InternalError<Self::Error>>;
 
     /// Returns public key from private key
     fn public_key(&self) -> Result<PublicKey<KG>, InternalError<Self::Error>>;
@@ -181,9 +184,12 @@ pub trait SecretKey<KG: KeGroup>: Clone + Sized + Zeroize {
 impl<KG: KeGroup> SecretKey<KG> for PrivateKey<KG> {
     type Error = core::convert::Infallible;
 
-    fn diffie_hellman(&self, pk: PublicKey<KG>) -> Result<Vec<u8>, InternalError> {
+    fn diffie_hellman(
+        &self,
+        pk: PublicKey<KG>,
+    ) -> Result<GenericArray<u8, KG::PkLen>, InternalError> {
         let pk = KG::from_pk_slice(&pk)?;
-        Ok(pk.diffie_hellman(self).to_vec())
+        Ok(pk.diffie_hellman(self))
     }
 
     fn public_key(&self) -> Result<PublicKey<KG>, InternalError> {
@@ -346,7 +352,10 @@ mod tests {
             fn diffie_hellman(
                 &self,
                 pk: PublicKey<RistrettoPoint>,
-            ) -> Result<Vec<u8>, InternalError<Self::Error>> {
+            ) -> Result<
+                GenericArray<u8, <RistrettoPoint as KeGroup>::PkLen>,
+                InternalError<Self::Error>,
+            > {
                 self.0.diffie_hellman(pk)
             }
 
