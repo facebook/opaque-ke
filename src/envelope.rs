@@ -12,6 +12,7 @@ use crate::{
     key_exchange::group::KeGroup,
     keypair::{KeyPair, PublicKey},
     opaque::{bytestrings_from_identifiers, Identifiers},
+    serialization::{MacExt, Serialized},
 };
 use alloc::vec;
 use alloc::vec::Vec;
@@ -20,7 +21,7 @@ use derive_where::DeriveWhere;
 use digest::Digest;
 use generic_array::{
     sequence::Concat,
-    typenum::{Unsigned, U32},
+    typenum::{Unsigned, U2, U32},
     GenericArray,
 };
 use hkdf::Hkdf;
@@ -74,11 +75,11 @@ pub(crate) struct Envelope<CS: CipherSuite> {
 // Note that this struct represents an envelope that has been "opened" with the asssociated
 // key. This key is also used to derive the export_key parameter, which is technically
 // unrelated to the envelope's encrypted and authenticated contents.
-pub(crate) struct OpenedEnvelope<CS: CipherSuite> {
+pub(crate) struct OpenedEnvelope<'a, CS: CipherSuite> {
     pub(crate) client_static_keypair: KeyPair<CS::KeGroup>,
     pub(crate) export_key: GenericArray<u8, <CS::Hash as Digest>::OutputSize>,
-    pub(crate) id_u: Vec<u8>,
-    pub(crate) id_s: Vec<u8>,
+    pub(crate) id_u: Serialized<'a, U2, <CS::KeGroup as KeGroup>::PkLen>,
+    pub(crate) id_s: Serialized<'a, U2, <CS::KeGroup as KeGroup>::PkLen>,
 }
 
 pub(crate) struct OpenedInnerEnvelope<D: Hash> {
@@ -115,7 +116,7 @@ impl<CS: CipherSuite> Envelope<CS> {
     pub(crate) fn seal<R: RngCore + CryptoRng>(
         rng: &mut R,
         randomized_pwd_hasher: Hkdf<CS::Hash>,
-        server_s_pk: &[u8],
+        server_s_pk: &PublicKey<CS::KeGroup>,
         ids: Identifiers,
     ) -> Result<SealResult<CS>, ProtocolError> {
         let mut nonce = GenericArray::default();
@@ -126,10 +127,14 @@ impl<CS: CipherSuite> Envelope<CS> {
             build_inner_envelope_internal::<CS>(randomized_pwd_hasher.clone(), nonce)?,
         );
 
-        let (id_u, id_s) = bytestrings_from_identifiers(ids, &client_s_pk.to_arr(), server_s_pk)?;
-        let aad = construct_aad(&id_u, &id_s, server_s_pk);
+        let (id_u, id_s) = bytestrings_from_identifiers::<CS::KeGroup>(
+            ids,
+            client_s_pk.to_arr(),
+            server_s_pk.to_arr(),
+        )?;
+        let aad = construct_aad(id_u.into_iter(), id_s.into_iter(), server_s_pk);
 
-        let result = Self::seal_raw(randomized_pwd_hasher, nonce, &aad, mode)?;
+        let result = Self::seal_raw(randomized_pwd_hasher, nonce, aad, mode)?;
         Ok((
             result.0,
             client_s_pk,
@@ -142,10 +147,10 @@ impl<CS: CipherSuite> Envelope<CS> {
     /// Uses a key to convert the plaintext into an envelope, authenticated by the aad field.
     /// Note that a new nonce is sampled for each call to seal.
     #[allow(clippy::type_complexity)]
-    pub(crate) fn seal_raw(
+    pub(crate) fn seal_raw<'a>(
         randomized_pwd_hasher: Hkdf<CS::Hash>,
         nonce: GenericArray<u8, NonceLen>,
-        aad: &[u8],
+        aad: impl Iterator<Item = &'a [u8]>,
         mode: InnerEnvelopeMode,
     ) -> Result<SealRawResult<CS>, InternalError> {
         let mut hmac_key = vec![0u8; Self::hmac_key_size()];
@@ -161,7 +166,7 @@ impl<CS: CipherSuite> Envelope<CS> {
         let mut hmac =
             Hmac::<CS::Hash>::new_from_slice(&hmac_key).map_err(|_| InternalError::HmacError)?;
         hmac.update(&nonce);
-        hmac.update(aad);
+        hmac.update_iter(aad);
 
         let hmac_bytes = hmac.finalize().into_bytes();
 
@@ -177,12 +182,12 @@ impl<CS: CipherSuite> Envelope<CS> {
         ))
     }
 
-    pub(crate) fn open(
+    pub(crate) fn open<'a>(
         &self,
         randomized_pwd_hasher: Hkdf<CS::Hash>,
-        server_s_pk: &[u8],
-        optional_ids: Identifiers,
-    ) -> Result<OpenedEnvelope<CS>, ProtocolError> {
+        server_s_pk: &PublicKey<CS::KeGroup>,
+        optional_ids: Identifiers<'a>,
+    ) -> Result<OpenedEnvelope<'a, CS>, ProtocolError> {
         let client_static_keypair = match self.mode {
             InnerEnvelopeMode::Zero => {
                 return Err(InternalError::IncompatibleEnvelopeModeError.into())
@@ -192,14 +197,14 @@ impl<CS: CipherSuite> Envelope<CS> {
             }
         };
 
-        let (id_u, id_s) = bytestrings_from_identifiers(
+        let (id_u, id_s) = bytestrings_from_identifiers::<CS::KeGroup>(
             optional_ids,
-            &client_static_keypair.public().to_arr(),
-            server_s_pk,
+            client_static_keypair.public().to_arr(),
+            server_s_pk.to_arr(),
         )?;
-        let aad = construct_aad(&id_u, &id_s, server_s_pk);
+        let aad = construct_aad(id_u.into_iter(), id_s.into_iter(), server_s_pk);
 
-        let opened = self.open_raw(randomized_pwd_hasher, &aad)?;
+        let opened = self.open_raw(randomized_pwd_hasher, aad)?;
 
         Ok(OpenedEnvelope {
             client_static_keypair,
@@ -211,10 +216,10 @@ impl<CS: CipherSuite> Envelope<CS> {
 
     /// Attempts to decrypt the envelope using a key, which is successful only if the key and
     /// aad used to construct the envelope are the same.
-    pub(crate) fn open_raw(
+    pub(crate) fn open_raw<'a>(
         &self,
         randomized_pwd_hasher: Hkdf<CS::Hash>,
-        aad: &[u8],
+        aad: impl Iterator<Item = &'a [u8]>,
     ) -> Result<OpenedInnerEnvelope<CS::Hash>, InternalError> {
         let mut hmac_key = vec![0u8; Self::hmac_key_size()];
         let mut export_key = vec![0u8; Self::export_key_size()];
@@ -229,7 +234,7 @@ impl<CS: CipherSuite> Envelope<CS> {
         let mut hmac =
             Hmac::<CS::Hash>::new_from_slice(&hmac_key).map_err(|_| InternalError::HmacError)?;
         hmac.update(&self.nonce);
-        hmac.update(aad);
+        hmac.update_iter(aad);
         hmac.verify(&self.hmac)
             .map_err(|_| InternalError::SealOpenHmacError)?;
 
@@ -331,6 +336,10 @@ fn recover_keys_internal<CS: CipherSuite>(
     Ok(client_static_keypair)
 }
 
-fn construct_aad(id_u: &[u8], id_s: &[u8], server_s_pk: &[u8]) -> Vec<u8> {
-    [server_s_pk, id_s, id_u].concat()
+fn construct_aad<'a>(
+    id_u: impl Iterator<Item = &'a [u8]>,
+    id_s: impl Iterator<Item = &'a [u8]>,
+    server_s_pk: &'a [u8],
+) -> impl Iterator<Item = &'a [u8]> {
+    chain!(Some(server_s_pk).into_iter(), id_s, id_u)
 }

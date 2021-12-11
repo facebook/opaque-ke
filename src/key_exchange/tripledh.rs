@@ -18,7 +18,7 @@ use crate::{
         traits::{FromBytes, GenerateKe2Result, GenerateKe3Result, KeyExchange, ToBytes},
     },
     keypair::{KeyPair, PrivateKey, PublicKey, SecretKey},
-    serialization::serialize,
+    serialization::{serialize, UpdateExt},
 };
 use alloc::vec;
 use alloc::vec::Vec;
@@ -26,7 +26,7 @@ use core::convert::TryFrom;
 use derive_where::DeriveWhere;
 use digest::{Digest, FixedOutput};
 use generic_array::{
-    typenum::{Unsigned, U32},
+    typenum::{Unsigned, U1, U2, U32},
     ArrayLength, GenericArray,
 };
 use hkdf::Hkdf;
@@ -154,15 +154,15 @@ impl<D: Hash, KG: KeGroup> KeyExchange<D, KG> for TripleDH {
     }
 
     #[allow(clippy::type_complexity)]
-    fn generate_ke2<R: RngCore + CryptoRng, S: SecretKey<KG>>(
+    fn generate_ke2<'a, R: RngCore + CryptoRng, S: SecretKey<KG>>(
         rng: &mut R,
         serialized_credential_request: Vec<u8>,
         l2_bytes: Vec<u8>,
         ke1_message: Self::KE1Message,
         client_s_pk: PublicKey<KG>,
         server_s_sk: S,
-        id_u: Vec<u8>,
-        id_s: Vec<u8>,
+        id_u: impl IntoIterator<Item = &'a [u8]>,
+        id_s: impl IntoIterator<Item = &'a [u8]>,
         context: &[u8],
     ) -> Result<GenerateKe2Result<Self, D, KG>, ProtocolError<S::Error>> {
         let server_e_kp = KeyPair::<KG>::generate_random(rng);
@@ -170,10 +170,14 @@ impl<D: Hash, KG: KeGroup> KeyExchange<D, KG> for TripleDH {
 
         let mut transcript_hasher = D::new()
             .chain(STR_RFC)
-            .chain(&serialize(context, 2).map_err(ProtocolError::into_custom)?)
-            .chain(&id_u)
+            .chain_iter(
+                serialize::<U2>(context)
+                    .map_err(ProtocolError::into_custom)?
+                    .into_iter(),
+            )
+            .chain_iter(id_u.into_iter())
             .chain(serialized_credential_request)
-            .chain(&id_s)
+            .chain_iter(id_s.into_iter())
             .chain(l2_bytes)
             .chain(server_nonce)
             .chain(&server_e_kp.public().to_arr());
@@ -216,23 +220,23 @@ impl<D: Hash, KG: KeGroup> KeyExchange<D, KG> for TripleDH {
     }
 
     #[allow(clippy::type_complexity)]
-    fn generate_ke3(
+    fn generate_ke3<'a>(
         l2_component: Vec<u8>,
         ke2_message: Self::KE2Message,
         ke1_state: &Self::KE1State,
         serialized_credential_request: &[u8],
         server_s_pk: PublicKey<KG>,
         client_s_sk: PrivateKey<KG>,
-        id_u: Vec<u8>,
-        id_s: Vec<u8>,
+        id_u: impl IntoIterator<Item = &'a [u8]>,
+        id_s: impl IntoIterator<Item = &'a [u8]>,
         context: &[u8],
     ) -> Result<GenerateKe3Result<Self, D, KG>, ProtocolError> {
         let mut transcript_hasher = D::new()
             .chain(STR_RFC)
-            .chain(&serialize(context, 2)?)
-            .chain(&id_u)
+            .chain_iter(serialize::<U2>(context)?.into_iter())
+            .chain_iter(id_u.into_iter())
             .chain(&serialized_credential_request)
-            .chain(&id_s)
+            .chain_iter(id_s.into_iter())
             .chain(l2_component)
             .chain(&ke2_message.to_bytes_without_info_or_mac());
 
@@ -415,9 +419,9 @@ fn hkdf_expand_label_extracted<D: Hash>(
     let mut opaque_label: Vec<u8> = Vec::new();
     opaque_label.extend_from_slice(STR_OPAQUE);
     opaque_label.extend_from_slice(label);
-    hkdf_label.extend_from_slice(&serialize(&opaque_label, 1)?);
+    hkdf_label.extend(serialize::<U1>(&opaque_label)?.into_iter().flatten());
 
-    hkdf_label.extend_from_slice(&serialize(context, 1)?);
+    hkdf_label.extend(serialize::<U1>(context)?.into_iter().flatten());
 
     hkdf.expand(&hkdf_label, &mut okm)
         .map_err(|_| InternalError::HkdfError)?;

@@ -50,28 +50,28 @@ pub trait KeyExchange<D: Hash, G: KeGroup> {
     ) -> Result<(Self::KE1State, Self::KE1Message), ProtocolError>;
 
     #[allow(clippy::too_many_arguments, clippy::type_complexity)]
-    fn generate_ke2<R: RngCore + CryptoRng, S: SecretKey<G>>(
+    fn generate_ke2<'a, R: RngCore + CryptoRng, S: SecretKey<G>>(
         rng: &mut R,
         l1_bytes: Vec<u8>,
         l2_bytes: Vec<u8>,
         ke1_message: Self::KE1Message,
         client_s_pk: PublicKey<G>,
         server_s_sk: S,
-        id_u: Vec<u8>,
-        id_s: Vec<u8>,
+        id_u: impl IntoIterator<Item = &'a [u8]>,
+        id_s: impl IntoIterator<Item = &'a [u8]>,
         context: &[u8],
     ) -> Result<GenerateKe2Result<Self, D, G>, ProtocolError<S::Error>>;
 
     #[allow(clippy::too_many_arguments, clippy::type_complexity)]
-    fn generate_ke3(
+    fn generate_ke3<'a>(
         l2_component: Vec<u8>,
         ke2_message: Self::KE2Message,
         ke1_state: &Self::KE1State,
         serialized_credential_request: &[u8],
         server_s_pk: PublicKey<G>,
         client_s_sk: PrivateKey<G>,
-        id_u: Vec<u8>,
-        id_s: Vec<u8>,
+        id_u: impl IntoIterator<Item = &'a [u8]>,
+        id_s: impl IntoIterator<Item = &'a [u8]>,
         context: &[u8],
     ) -> Result<GenerateKe3Result<Self, D, G>, ProtocolError>;
 

@@ -23,7 +23,7 @@ use alloc::vec;
 use alloc::vec::Vec;
 
 use curve25519_dalek::ristretto::RistrettoPoint;
-use generic_array::typenum::Unsigned;
+use generic_array::typenum::{Unsigned, U2};
 use proptest::{collection::vec, prelude::*};
 use rand::{rngs::OsRng, RngCore};
 use voprf::group::Group;
@@ -64,11 +64,13 @@ fn client_registration_roundtrip() -> Result<(), ProtocolError> {
     let blind_result =
         &voprf::NonVerifiableClient::<RistrettoPoint, sha2::Sha512>::blind(pw.to_vec(), &mut rng)?;
 
-    let bytes: Vec<u8> = [
-        serialize(&blind_result.state.serialize(), 2)?,
-        serialize(&blind_result.message.serialize(), 2)?,
-    ]
-    .concat();
+    let bytes: Vec<u8> = chain!(
+        serialize::<U2>(&blind_result.state.serialize())?.into_iter(),
+        serialize::<U2>(&blind_result.message.serialize())?.into_iter(),
+    )
+    .flatten()
+    .cloned()
+    .collect();
 
     let reg = ClientRegistration::<Default>::deserialize(&bytes)?;
     let reg_bytes = reg.serialize()?;
@@ -179,7 +181,7 @@ fn registration_upload_roundtrip() -> Result<(), ProtocolError> {
     let (envelope, _, _) = Envelope::<Default>::seal_raw(
         randomized_pwd_hasher,
         nonce.into(),
-        &pubkey_bytes,
+        Some(pubkey_bytes.as_slice()).into_iter(),
         InnerEnvelopeMode::Internal,
     )
     .unwrap();
@@ -315,12 +317,14 @@ fn client_login_roundtrip() -> Result<(), ProtocolError> {
     let blind_result =
         &voprf::NonVerifiableClient::<RistrettoPoint, sha2::Sha512>::blind(pw.to_vec(), &mut rng)?;
 
-    let bytes: Vec<u8> = [
-        serialize(&blind_result.state.serialize(), 2)?,
-        serialize(&serialized_credential_request, 2)?,
-        serialize(&l1_data, 2)?,
-    ]
-    .concat();
+    let bytes: Vec<u8> = chain!(
+        serialize::<U2>(&blind_result.state.serialize())?.into_iter(),
+        serialize::<U2>(&serialized_credential_request)?.into_iter(),
+        serialize::<U2>(&l1_data)?.into_iter(),
+    )
+    .flatten()
+    .cloned()
+    .collect();
     let reg = ClientLogin::<Default>::deserialize(&bytes)?;
     let reg_bytes = reg.serialize()?;
     assert_eq!(reg_bytes, bytes);
@@ -387,7 +391,23 @@ proptest! {
 
 #[test]
 fn test_i2osp_os2ip(bytes in vec(any::<u8>(), 0..core::mem::size_of::<usize>())) {
-    assert_eq!(i2osp(os2ip(&bytes).unwrap(), bytes.len()).unwrap(), bytes);
+    use generic_array::typenum::{U0, U1, U2, U3, U4, U5, U6, U7};
+
+    let input = os2ip(&bytes).unwrap();
+
+    let output = match bytes.len() {
+        0 => i2osp::<U0>(input).unwrap().to_vec(),
+        1 => i2osp::<U1>(input).unwrap().to_vec(),
+        2 => i2osp::<U2>(input).unwrap().to_vec(),
+        3 => i2osp::<U3>(input).unwrap().to_vec(),
+        4 => i2osp::<U4>(input).unwrap().to_vec(),
+        5 => i2osp::<U5>(input).unwrap().to_vec(),
+        6 => i2osp::<U6>(input).unwrap().to_vec(),
+        7 => i2osp::<U7>(input).unwrap().to_vec(),
+        _ => unreachable!("unexpected size")
+    };
+
+    assert_eq!(output, bytes);
 }
 
 #[test]

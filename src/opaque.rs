@@ -18,7 +18,7 @@ use crate::{
         tripledh::NonceLen,
     },
     keypair::{KeyPair, PrivateKey, PublicKey, SecretKey},
-    serialization::{serialize, tokenize},
+    serialization::{serialize, serialize_owned, tokenize, Serialized},
     slow_hash::SlowHash,
     CredentialFinalization, CredentialRequest, CredentialResponse, RegistrationRequest,
     RegistrationResponse, RegistrationUpload,
@@ -29,7 +29,7 @@ use core::ops::{Add, Shl};
 use derive_where::DeriveWhere;
 use digest::{Digest, FixedOutput};
 use generic_array::{
-    typenum::{Double, Sum, Unsigned, B1},
+    typenum::{Double, Sum, Unsigned, B1, U2},
     ArrayLength, GenericArray,
 };
 use hkdf::Hkdf;
@@ -194,11 +194,13 @@ impl<CS: CipherSuite, S: SecretKey<CS::KeGroup>> ServerSetup<CS, S> {
 impl<CS: CipherSuite> ClientRegistration<CS> {
     /// Serialization into bytes
     pub fn serialize(&self) -> Result<Vec<u8>, ProtocolError> {
-        Ok([
-            serialize(&self.oprf_client.serialize(), 2)?,
-            serialize(&self.blinded_element.serialize(), 2)?,
-        ]
-        .concat())
+        Ok(chain!(
+            serialize::<U2>(&self.oprf_client.serialize())?.into_iter(),
+            serialize::<U2>(&self.blinded_element.serialize())?.into_iter(),
+        )
+        .flatten()
+        .cloned()
+        .collect())
     }
 
     /// Deserialization from bytes
@@ -360,13 +362,14 @@ impl<CS: CipherSuite> ServerRegistration<CS> {
 impl<CS: CipherSuite> ClientLogin<CS> {
     /// Serialization into bytes
     pub fn serialize(&self) -> Result<Vec<u8>, ProtocolError> {
-        let output: Vec<u8> = [
-            serialize(&self.oprf_client.serialize(), 2)?,
-            serialize(&self.serialized_credential_request, 2)?,
-            serialize(&self.ke1_state.to_bytes(), 2)?,
-        ]
-        .concat();
-        Ok(output)
+        Ok(chain!(
+            serialize::<U2>(&self.oprf_client.serialize())?.into_iter(),
+            serialize::<U2>(&self.serialized_credential_request)?.into_iter(),
+            serialize::<U2>(&self.ke1_state.to_bytes())?.into_iter(),
+        )
+        .flatten()
+        .cloned()
+        .collect())
     }
 
     /// Deserialization from bytes
@@ -473,14 +476,9 @@ impl<CS: CipherSuite> ClientLogin<CS> {
             ProtocolError::SerializationError => ProtocolError::InvalidLoginError,
             err => err,
         })?;
-        let server_s_pk_bytes = server_s_pk.to_arr();
 
         let opened_envelope = &envelope
-            .open(
-                randomized_pwd_hasher,
-                &server_s_pk_bytes,
-                params.identifiers,
-            )
+            .open(randomized_pwd_hasher, &server_s_pk, params.identifiers)
             .map_err(|e| match e {
                 ProtocolError::LibraryError(InternalError::SealOpenHmacError) => {
                     ProtocolError::InvalidLoginError
@@ -501,8 +499,8 @@ impl<CS: CipherSuite> ClientLogin<CS> {
             &self.serialized_credential_request,
             server_s_pk.clone(),
             opened_envelope.client_static_keypair.private().clone(),
-            opened_envelope.id_u.clone(),
-            opened_envelope.id_s.clone(),
+            &opened_envelope.id_u,
+            &opened_envelope.id_s,
             params.context.unwrap_or(&[]),
         )?;
 
@@ -585,9 +583,12 @@ impl<CS: CipherSuite> ServerLogin<CS> {
         )
         .map_err(ProtocolError::into_custom)?;
 
-        let (id_u, id_s) =
-            bytestrings_from_identifiers(identifiers, &client_s_pk.to_arr(), &server_s_pk.to_arr())
-                .map_err(ProtocolError::into_custom)?;
+        let (id_u, id_s) = bytestrings_from_identifiers::<CS::KeGroup>(
+            identifiers,
+            client_s_pk.to_arr(),
+            server_s_pk.to_arr(),
+        )
+        .map_err(ProtocolError::into_custom)?;
 
         let credential_request_bytes = credential_request
             .serialize()
@@ -618,8 +619,8 @@ impl<CS: CipherSuite> ServerLogin<CS> {
             credential_request.ke1_message,
             client_s_pk,
             server_s_sk.clone(),
-            id_u,
-            id_s,
+            &id_u,
+            &id_s,
             context,
         )?;
 
@@ -981,17 +982,24 @@ where
     Ok((server_s_pk, envelope))
 }
 
-pub(crate) fn bytestrings_from_identifiers(
+#[allow(clippy::type_complexity)]
+pub(crate) fn bytestrings_from_identifiers<KG: KeGroup>(
     ids: Identifiers,
-    client_s_pk: &[u8],
-    server_s_pk: &[u8],
-) -> Result<(Vec<u8>, Vec<u8>), ProtocolError> {
-    let client_identity = ids.client.unwrap_or(client_s_pk);
-    let server_identity = ids.server.unwrap_or(server_s_pk);
-    Ok((
-        serialize(client_identity, 2)?,
-        serialize(server_identity, 2)?,
-    ))
+    client_s_pk: GenericArray<u8, KG::PkLen>,
+    server_s_pk: GenericArray<u8, KG::PkLen>,
+) -> Result<(Serialized<U2, KG::PkLen>, Serialized<U2, KG::PkLen>), ProtocolError> {
+    let client_identity = if let Some(client) = ids.client {
+        serialize::<U2>(client)?.with_length()
+    } else {
+        serialize_owned::<U2, _>(client_s_pk)?
+    };
+    let server_identity = if let Some(server) = ids.server {
+        serialize::<U2>(server)?.with_length()
+    } else {
+        serialize_owned::<U2, _>(server_s_pk)?
+    };
+
+    Ok((client_identity, server_identity))
 }
 
 /// Internal function for computing the blind result by calling the
@@ -1010,12 +1018,10 @@ fn blind<CS: CipherSuite, R: RngCore + CryptoRng>(
 
     #[cfg(test)]
     let result = {
-        let mut blind_bytes = vec![0u8; <CS::OprfGroup as Group>::ScalarLen::USIZE];
+        let mut blind_bytes = GenericArray::default();
         let blind = loop {
             rng.fill_bytes(&mut blind_bytes);
-            let scalar = <CS::OprfGroup as Group>::from_scalar_slice_unchecked(
-                &GenericArray::clone_from_slice(&blind_bytes),
-            )?;
+            let scalar = <CS::OprfGroup as Group>::from_scalar_slice_unchecked(&blind_bytes)?;
             match scalar
                 .ct_eq(&<CS::OprfGroup as Group>::scalar_zero())
                 .into()
