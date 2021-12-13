@@ -29,6 +29,13 @@ opaque-ke = "0.6.0"
 
 Rust **1.51** or higher.
 
+Audit
+-----
+
+This library was audited by NCC Group in June of 2021. The audit was sponsored by WhatsApp for its use in [enabling end-to-end encrypted backups](https://engineering.fb.com/2021/09/10/security/whatsapp-e2ee-backups/).
+
+The audit found issues in release `v0.5.0`, and the fixes were subsequently incorporated into release `v1.2.0`. See the [full audit report here](https://research.nccgroup.com/2021/12/13/public-report-whatsapp-opaque-ke-cryptographic-implementation-review/).
+
 Resources
 ---------
 
