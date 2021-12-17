@@ -172,6 +172,7 @@ impl_serialize_and_deserialize_for!(CredentialFinalization);
 // ========================== //
 ////////////////////////////////
 
+/// Length of [`RegistrationRequest`] in bytes for serialization.
 #[allow(type_alias_bounds)]
 pub type RegistrationRequestLen<CS: CipherSuite> = <CS::OprfGroup as Group>::ElemLen;
 
@@ -197,6 +198,7 @@ impl<CS: CipherSuite> RegistrationRequest<CS> {
     }
 }
 
+/// Length of [`RegistrationResponse`] in bytes for serialization.
 #[allow(type_alias_bounds)]
 pub type RegistrationResponseLen<CS: CipherSuite> =
     Sum<<CS::OprfGroup as Group>::ElemLen, <CS::KeGroup as KeGroup>::PkLen>;
@@ -244,6 +246,7 @@ impl<CS: CipherSuite> RegistrationResponse<CS> {
     }
 }
 
+/// Length of [`RegistrationUpload`] in bytes for serialization.
 #[allow(type_alias_bounds)]
 pub type RegistrationUploadLen<CS: CipherSuite> = Sum<
     Sum<<CS::KeGroup as KeGroup>::PkLen, <CS::Hash as FixedOutput>::OutputSize>,
@@ -303,6 +306,7 @@ impl<CS: CipherSuite> RegistrationUpload<CS> {
     }
 }
 
+/// Length of [`CredentialRequest`] in bytes for serialization.
 #[allow(type_alias_bounds)]
 pub type CredentialRequestLen<CS: CipherSuite> =
     Sum<<CS::OprfGroup as Group>::ElemLen, Ke1MessageLen<CS>>;
@@ -367,13 +371,14 @@ impl<CS: CipherSuite> CredentialRequest<CS> {
     }
 }
 
-#[allow(type_alias_bounds)]
-pub type CredentialResponseWithoutKeLen<CS: CipherSuite> =
-    Sum<Sum<<CS::OprfGroup as Group>::ElemLen, NonceLen>, MaskedResponseLen<CS>>;
-
+/// Length of [`CredentialResponse`] in bytes for serialization.
 #[allow(type_alias_bounds)]
 pub type CredentialResponseLen<CS: CipherSuite> =
     Sum<CredentialResponseWithoutKeLen<CS>, Ke2MessageLen<CS>>;
+
+#[allow(type_alias_bounds)]
+pub(crate) type CredentialResponseWithoutKeLen<CS: CipherSuite> =
+    Sum<Sum<<CS::OprfGroup as Group>::ElemLen, NonceLen>, MaskedResponseLen<CS>>;
 
 impl<CS: CipherSuite> CredentialResponse<CS> {
     /// Serialization into bytes
@@ -470,6 +475,7 @@ impl<CS: CipherSuite> CredentialResponse<CS> {
     }
 }
 
+/// Length of [`CredentialFinalization`] in bytes for serialization.
 #[allow(type_alias_bounds)]
 pub type CredentialFinalizationLen<CS: CipherSuite> = Ke3MessageLen<CS>;
 

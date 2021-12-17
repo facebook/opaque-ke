@@ -324,6 +324,7 @@ impl<CS: CipherSuite> ClientRegistration<CS> {
     }
 }
 
+/// Length of [`ServerRegistration`] in bytes for serialization.
 pub type ServerRegistrationLen<CS> = RegistrationUploadLen<CS>;
 
 impl<CS: CipherSuite> ServerRegistration<CS> {

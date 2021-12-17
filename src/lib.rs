@@ -828,9 +828,10 @@
 //! - The `bench` feature is used only for running performance benchmarks for this implementation.
 //!
 
-#![cfg_attr(not(feature = "bench"), deny(missing_docs))]
 #![deny(unsafe_code)]
 #![cfg_attr(not(feature = "std"), no_std)]
+#![warn(clippy::cargo, missing_docs)]
+#![allow(clippy::multiple_crate_versions)]
 
 #[cfg(not(any(feature = "u64_backend", feature = "u32_backend",)))]
 compile_error!(
