@@ -753,7 +753,7 @@
 //! without exposing the bytes of the private key to this library.
 //! ```
 //! # use curve25519_dalek::ristretto::RistrettoPoint;
-//! # use generic_array::{GenericArray, typenum::U32};
+//! # use generic_array::{GenericArray, typenum::{U0, U32}};
 //! # use opaque_ke::{CipherSuite, errors::{InternalError}, key_exchange::group::KeGroup, keypair::{KeyPair, PrivateKey, PublicKey, SecretKey}, ServerSetup};
 //! # use rand::rngs::OsRng;
 //! # use zeroize::Zeroize;
@@ -775,6 +775,7 @@
 //! # }
 //! impl SecretKey<RistrettoPoint> for YourRemoteKey {
 //!     type Error = YourRemoteKeyError;
+//!     type Len = U0;
 //!
 //!     fn diffie_hellman(
 //!         &self,
@@ -790,7 +791,7 @@
 //!             .map_err(InternalError::Custom)
 //!     }
 //!
-//!     fn serialize(&self) -> Vec<u8> {
+//!     fn serialize(&self) -> GenericArray<u8, Self::Len> {
 //!         // if you use serde and the "serialize" crate feature, you won't need this
 //!         todo!()
 //!     }

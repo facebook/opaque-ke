@@ -185,8 +185,8 @@ impl<CS: CipherSuite, S: SecretKey<CS::KeGroup>> ServerSetup<CS, S> {
     pub fn serialize(&self) -> Vec<u8> {
         [
             self.oprf_seed.to_vec(),
-            self.keypair.private().serialize(),
-            self.fake_keypair.private().serialize(),
+            self.keypair.private().serialize().to_vec(),
+            self.fake_keypair.private().serialize().to_vec(),
         ]
         .concat()
     }

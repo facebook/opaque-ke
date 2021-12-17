@@ -11,7 +11,6 @@
 
 use crate::errors::{InternalError, ProtocolError};
 use crate::key_exchange::group::KeGroup;
-use alloc::vec::Vec;
 use core::ops::Deref;
 use derive_where::DeriveWhere;
 use generic_array::typenum::Unsigned;
@@ -164,6 +163,8 @@ impl<KG: KeGroup> PrivateKey<KG> {
 pub trait SecretKey<KG: KeGroup>: Clone + Sized + Zeroize {
     /// Custom error type that can be passed down to `InternalError::Custom`
     type Error;
+    /// Serialization size in bytes.
+    type Len: ArrayLength<u8>;
 
     /// Diffie-Hellman key exchange implementation
     fn diffie_hellman(
@@ -175,7 +176,7 @@ pub trait SecretKey<KG: KeGroup>: Clone + Sized + Zeroize {
     fn public_key(&self) -> Result<PublicKey<KG>, InternalError<Self::Error>>;
 
     /// Serialization into bytes
-    fn serialize(&self) -> Vec<u8>;
+    fn serialize(&self) -> GenericArray<u8, Self::Len>;
 
     /// Deserialization from bytes
     fn deserialize(input: &[u8]) -> Result<Self, InternalError<Self::Error>>;
@@ -183,6 +184,7 @@ pub trait SecretKey<KG: KeGroup>: Clone + Sized + Zeroize {
 
 impl<KG: KeGroup> SecretKey<KG> for PrivateKey<KG> {
     type Error = core::convert::Infallible;
+    type Len = KG::SkLen;
 
     fn diffie_hellman(
         &self,
@@ -196,8 +198,8 @@ impl<KG: KeGroup> SecretKey<KG> for PrivateKey<KG> {
         Ok(PublicKey(Key(KG::public_key(&self.0).to_arr())))
     }
 
-    fn serialize(&self) -> Vec<u8> {
-        self.to_vec()
+    fn serialize(&self) -> GenericArray<u8, Self::Len> {
+        self.to_arr()
     }
 
     fn deserialize(input: &[u8]) -> Result<Self, InternalError> {
@@ -348,6 +350,7 @@ mod tests {
 
         impl SecretKey<RistrettoPoint> for RemoteKey {
             type Error = core::convert::Infallible;
+            type Len = <RistrettoPoint as KeGroup>::SkLen;
 
             fn diffie_hellman(
                 &self,
@@ -363,7 +366,7 @@ mod tests {
                 self.0.public_key()
             }
 
-            fn serialize(&self) -> Vec<u8> {
+            fn serialize(&self) -> GenericArray<u8, Self::Len> {
                 self.0.serialize()
             }
 
