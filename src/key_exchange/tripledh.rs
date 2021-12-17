@@ -14,12 +14,12 @@ use crate::{
     hash::Hash,
     key_exchange::{
         group::KeGroup,
-        traits::{FromBytes, GenerateKe2Result, GenerateKe3Result, KeyExchange, ToBytes, ToVec},
+        traits::{FromBytes, GenerateKe2Result, GenerateKe3Result, KeyExchange, ToBytes},
     },
     keypair::{KeyPair, PrivateKey, PublicKey, SecretKey},
     serialization::{Serialize, UpdateExt},
 };
-use alloc::vec::Vec;
+use core::array::IntoIter;
 use core::convert::TryFrom;
 use core::ops::Add;
 use derive_where::DeriveWhere;
@@ -89,10 +89,10 @@ pub struct Ke1Message<KG: KeGroup> {
 )]
 #[derive(DeriveWhere)]
 #[derive_where(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, Zeroize(drop))]
-pub struct Ke2State<HashLen: ArrayLength<u8>> {
-    km3: GenericArray<u8, HashLen>,
-    hashed_transcript: GenericArray<u8, HashLen>,
-    session_key: GenericArray<u8, HashLen>,
+pub struct Ke2State<D: Hash> {
+    km3: GenericArray<u8, D::OutputSize>,
+    hashed_transcript: GenericArray<u8, D::OutputSize>,
+    session_key: GenericArray<u8, D::OutputSize>,
 }
 
 /// The second key exchange message
@@ -128,16 +128,23 @@ pub struct Ke3Message<D: Hash> {
 
 impl<D: Hash, KG: KeGroup> KeyExchange<D, KG> for TripleDH
 where
+    // Ke1State: KeSk + Nonce
+    KG::SkLen: Add<NonceLen>,
+    Sum<KG::SkLen, NonceLen>: ArrayLength<u8>,
     // Ke1Message: Nonce + KePk
     NonceLen: Add<KG::PkLen>,
     Sum<NonceLen, KG::PkLen>: ArrayLength<u8>,
+    // Ke2State: (Hash + Hash) + Hash
+    D::OutputSize: Add<D::OutputSize>,
+    Sum<D::OutputSize, D::OutputSize>: ArrayLength<u8> + Add<D::OutputSize>,
+    Sum<Sum<D::OutputSize, D::OutputSize>, D::OutputSize>: ArrayLength<u8>,
     // Ke2Message: (Nonce + KePk) + Hash
     NonceLen: Add<KG::PkLen>,
     Sum<NonceLen, KG::PkLen>: ArrayLength<u8> + Add<D::OutputSize>,
     Sum<Sum<NonceLen, KG::PkLen>, D::OutputSize>: ArrayLength<u8>,
 {
     type KE1State = Ke1State<KG>;
-    type KE2State = Ke2State<<D as FixedOutput>::OutputSize>;
+    type KE2State = Ke2State<D>;
     type KE1Message = Ke1Message<KG>;
     type KE2Message = Ke2Message<D, KG>;
     type KE3Message = Ke3Message<D>;
@@ -247,7 +254,7 @@ where
             .chain_iter(serialized_credential_request)
             .chain_iter(id_s)
             .chain_iter(l2_component)
-            .chain(&ke2_message.to_bytes_without_info_or_mac());
+            .chain_iter(ke2_message.to_bytes_without_info_or_mac());
 
         let result = derive_3dh_keys::<D, KG, PrivateKey<KG>>(
             TripleDHComponents {
@@ -465,10 +472,16 @@ impl<KG: KeGroup> FromBytes for Ke1State<KG> {
     }
 }
 
-impl<KG: KeGroup> ToVec for Ke1State<KG> {
-    fn to_vec(&self) -> Vec<u8> {
-        let output: Vec<u8> = [&self.client_e_sk.to_arr(), self.client_nonce.as_slice()].concat();
-        output
+impl<KG: KeGroup> ToBytes for Ke1State<KG>
+where
+    // Ke1State: KeSk + Nonce
+    KG::SkLen: Add<NonceLen>,
+    Sum<KG::SkLen, NonceLen>: ArrayLength<u8>,
+{
+    type Len = Sum<KG::SkLen, NonceLen>;
+
+    fn to_bytes(&self) -> GenericArray<u8, Self::Len> {
+        self.client_e_sk.to_arr().concat(self.client_nonce)
     }
 }
 
@@ -501,9 +514,9 @@ where
     }
 }
 
-impl<HashLen: ArrayLength<u8>> FromBytes for Ke2State<HashLen> {
+impl<D: Hash> FromBytes for Ke2State<D> {
     fn from_bytes(input: &[u8]) -> Result<Self, ProtocolError> {
-        let hash_len = HashLen::USIZE;
+        let hash_len = D::OutputSize::USIZE;
         let checked_bytes = check_slice_size(input, 3 * hash_len, "ke2_state")?;
 
         Ok(Self {
@@ -516,14 +529,20 @@ impl<HashLen: ArrayLength<u8>> FromBytes for Ke2State<HashLen> {
     }
 }
 
-impl<HashLen: ArrayLength<u8>> ToVec for Ke2State<HashLen> {
-    fn to_vec(&self) -> Vec<u8> {
-        [
-            self.km3.as_slice(),
-            &self.hashed_transcript,
-            &self.session_key,
-        ]
-        .concat()
+impl<D: Hash> ToBytes for Ke2State<D>
+where
+    // Ke2State: (Hash + Hash) + Hash
+    D::OutputSize: Add<D::OutputSize>,
+    Sum<D::OutputSize, D::OutputSize>: ArrayLength<u8> + Add<D::OutputSize>,
+    Sum<Sum<D::OutputSize, D::OutputSize>, D::OutputSize>: ArrayLength<u8>,
+{
+    type Len = Sum<Sum<D::OutputSize, D::OutputSize>, D::OutputSize>;
+
+    fn to_bytes(&self) -> GenericArray<u8, Self::Len> {
+        self.km3
+            .clone()
+            .concat(self.hashed_transcript.clone())
+            .concat(self.session_key.clone())
     }
 }
 
@@ -574,8 +593,10 @@ where
 }
 
 impl<D: Hash, KG: KeGroup> Ke2Message<D, KG> {
-    fn to_bytes_without_info_or_mac(&self) -> Vec<u8> {
-        [self.server_nonce.as_slice(), &self.server_e_pk.to_arr()].concat()
+    fn to_bytes_without_info_or_mac(&self) -> impl Iterator<Item = &[u8]> {
+        // MSRV: array `into_iter` isn't available in 1.51
+        #[allow(deprecated)]
+        IntoIter::new([self.server_nonce.as_slice(), self.server_e_pk.as_slice()])
     }
 }
 

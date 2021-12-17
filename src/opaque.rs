@@ -14,7 +14,7 @@ use crate::{
     hash::Hash,
     key_exchange::{
         group::KeGroup,
-        traits::{FromBytes, Ke1MessageLen, KeyExchange, ToBytes, ToVec},
+        traits::{FromBytes, Ke1MessageLen, Ke2StateLen, KeyExchange, ToBytes},
         tripledh::NonceLen,
     },
     keypair::{KeyPair, PrivateKey, PublicKey, SecretKey},
@@ -403,7 +403,7 @@ impl<CS: CipherSuite> ClientLogin<CS> {
         Ok(chain!(
             Serialize::<U2>::from(&self.oprf_client.serialize())?.iter(),
             Serialize::<U2>::from(&self.credential_request.serialize())?.iter(),
-            Serialize::<U2>::from(&self.ke1_state.to_vec())?.iter(),
+            Serialize::<U2>::from(&self.ke1_state.to_bytes())?.iter(),
         )
         .flatten()
         .cloned()
@@ -442,7 +442,7 @@ impl<CS: CipherSuite> ClientLogin<CS> {
         [
             self.oprf_client.serialize(),
             self.credential_request.serialize().to_vec(),
-            self.ke1_state.to_vec(),
+            self.ke1_state.to_bytes().to_vec(),
         ]
         .concat()
     }
@@ -574,8 +574,8 @@ impl<CS: CipherSuite> ClientLogin<CS> {
 
 impl<CS: CipherSuite> ServerLogin<CS> {
     /// Serialization into bytes
-    pub fn serialize(&self) -> Vec<u8> {
-        self.ke2_state.to_vec()
+    pub fn serialize(&self) -> GenericArray<u8, Ke2StateLen<CS>> {
+        self.ke2_state.to_bytes()
     }
 
     /// Deserialization from bytes

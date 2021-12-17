@@ -12,7 +12,6 @@ use crate::{
     hash::Hash,
     keypair::{PrivateKey, PublicKey, SecretKey},
 };
-use alloc::vec::Vec;
 use digest::Digest;
 use generic_array::{ArrayLength, GenericArray};
 use rand::{CryptoRng, RngCore};
@@ -44,9 +43,9 @@ pub type GenerateKe3Result<K, D, G> = (
 );
 
 pub trait KeyExchange<D: Hash, G: KeGroup> {
-    type KE1State: FromBytes + ToVec + Zeroize + Clone;
-    type KE2State: FromBytes + ToVec + Zeroize + Clone;
-    type KE1Message: FromBytes + ToBytes + Clone + Zeroize;
+    type KE1State: FromBytes + ToBytes + Zeroize + Clone;
+    type KE2State: FromBytes + ToBytes + Zeroize + Clone;
+    type KE1Message: FromBytes + ToBytes + Zeroize + Clone;
     type KE2Message: FromBytes + ToBytes + Clone;
     type KE3Message: FromBytes + ToBytes + Clone;
 
@@ -93,19 +92,22 @@ pub trait FromBytes: Sized {
     fn from_bytes(input: &[u8]) -> Result<Self, ProtocolError>;
 }
 
-pub trait ToVec {
-    fn to_vec(&self) -> Vec<u8>;
-}
-
 pub trait ToBytes {
     type Len: ArrayLength<u8>;
 
     fn to_bytes(&self) -> GenericArray<u8, Self::Len>;
 }
 
+#[allow(dead_code, type_alias_bounds)]
+pub type Ke1StateLen<CS: CipherSuite> =
+    <<CS::KeyExchange as KeyExchange<CS::Hash, CS::KeGroup>>::KE1State as ToBytes>::Len;
 #[allow(type_alias_bounds)]
 pub type Ke1MessageLen<CS: CipherSuite> =
     <<CS::KeyExchange as KeyExchange<CS::Hash, CS::KeGroup>>::KE1Message as ToBytes>::Len;
+#[allow(type_alias_bounds)]
+#[allow(type_alias_bounds)]
+pub type Ke2StateLen<CS: CipherSuite> =
+    <<CS::KeyExchange as KeyExchange<CS::Hash, CS::KeGroup>>::KE2State as ToBytes>::Len;
 #[allow(type_alias_bounds)]
 pub type Ke2MessageLen<CS: CipherSuite> =
     <<CS::KeyExchange as KeyExchange<CS::Hash, CS::KeGroup>>::KE2Message as ToBytes>::Len;
