@@ -110,6 +110,9 @@ type SealResult<CS> = (
     GenericArray<u8, <<CS as CipherSuite>::Hash as Digest>::OutputSize>,
 );
 
+#[allow(type_alias_bounds)]
+pub(crate) type EnvelopeLen<CS: CipherSuite> = Sum<NonceLen, <CS::Hash as FixedOutput>::OutputSize>;
+
 impl<CS: CipherSuite> Envelope<CS> {
     #[allow(clippy::type_complexity)]
     pub(crate) fn seal<R: RngCore + CryptoRng>(
@@ -156,10 +159,10 @@ impl<CS: CipherSuite> Envelope<CS> {
         let mut export_key = GenericArray::<_, <CS::Hash as Digest>::OutputSize>::default();
 
         randomized_pwd_hasher
-            .expand(&nonce.concat(STR_AUTH_KEY.into()), &mut hmac_key)
+            .expand_multi_info(&[&nonce, &STR_AUTH_KEY], &mut hmac_key)
             .map_err(|_| InternalError::HkdfError)?;
         randomized_pwd_hasher
-            .expand(&nonce.concat(STR_EXPORT_KEY.into()), &mut export_key)
+            .expand_multi_info(&[&nonce, &STR_EXPORT_KEY], &mut export_key)
             .map_err(|_| InternalError::HkdfError)?;
 
         let mut hmac =
@@ -257,15 +260,15 @@ impl<CS: CipherSuite> Envelope<CS> {
         <CS::Hash as Digest>::OutputSize::USIZE + NonceLen::USIZE
     }
 
-    pub(crate) fn serialize(
-        &self,
-    ) -> GenericArray<u8, Sum<NonceLen, <CS::Hash as FixedOutput>::OutputSize>>
+    pub(crate) fn serialize(&self) -> GenericArray<u8, EnvelopeLen<CS>>
     where
+        // Envelope: Nonce + Hash
         NonceLen: Add<<CS::Hash as FixedOutput>::OutputSize>,
-        Sum<NonceLen, <CS::Hash as FixedOutput>::OutputSize>: ArrayLength<u8>,
+        EnvelopeLen<CS>: ArrayLength<u8>,
     {
         self.nonce.concat(self.hmac.clone())
     }
+
     pub(crate) fn deserialize(bytes: &[u8]) -> Result<Self, ProtocolError> {
         let mode = InnerEnvelopeMode::Internal; // Better way to hard-code this?
 

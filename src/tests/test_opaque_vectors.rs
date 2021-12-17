@@ -7,10 +7,16 @@
 
 use crate::{
     ciphersuite::CipherSuite,
+    envelope::EnvelopeLen,
     errors::*,
     key_exchange::{
         group::KeGroup,
+        traits::{Ke1MessageLen, Ke2MessageLen},
         tripledh::{NonceLen, TripleDH},
+    },
+    messages::{
+        CredentialRequestLen, CredentialResponseLen, CredentialResponseWithoutKeLen,
+        RegistrationResponseLen, RegistrationUploadLen,
     },
     opaque::*,
     slow_hash::NoOpHash,
@@ -22,6 +28,7 @@ use core::ops::Add;
 use digest::FixedOutput;
 use generic_array::{typenum::Sum, ArrayLength};
 use json::JsonValue;
+use voprf::group::Group;
 
 #[allow(non_snake_case)]
 #[derive(Debug)]
@@ -141,18 +148,23 @@ fn populate_test_vectors(values: &JsonValue) -> OpaqueTestVectorParameters {
     }
 }
 
-fn get_password_file_bytes<CS: CipherSuite>(
-    parameters: &OpaqueTestVectorParameters,
-) -> Result<Vec<u8>, ProtocolError>
+fn get_password_file_bytes<CS: CipherSuite>(parameters: &OpaqueTestVectorParameters) -> Vec<u8>
 where
+    // Envelope: Nonce + Hash
     NonceLen: Add<<CS::Hash as FixedOutput>::OutputSize>,
-    Sum<NonceLen, <CS::Hash as FixedOutput>::OutputSize>: ArrayLength<u8>,
+    EnvelopeLen<CS>: ArrayLength<u8>,
+    // RegistrationUpload: (KePk + Hash) + Envelope
+    <CS::KeGroup as KeGroup>::PkLen: Add<<CS::Hash as FixedOutput>::OutputSize>,
+    Sum<<CS::KeGroup as KeGroup>::PkLen, <CS::Hash as FixedOutput>::OutputSize>:
+        ArrayLength<u8> + Add<EnvelopeLen<CS>>,
+    RegistrationUploadLen<CS>: ArrayLength<u8>,
+    // ServerRegistration = RegistrationUpload
 {
     let password_file = ServerRegistration::<CS>::finish(
         RegistrationUpload::deserialize(&parameters.registration_upload).unwrap(),
     );
 
-    password_file.serialize()
+    password_file.serialize().to_vec()
 }
 
 macro_rules! json_to_test_vectors {
@@ -245,7 +257,7 @@ fn test_registration_request<CS: CipherSuite>(
             ClientRegistration::<CS>::start(&mut rng, &parameters.password)?;
         assert_eq!(
             hex::encode(&parameters.registration_request),
-            hex::encode(client_registration_start_result.message.serialize()?)
+            hex::encode(client_registration_start_result.message.serialize())
         );
     }
     Ok(())
@@ -253,7 +265,12 @@ fn test_registration_request<CS: CipherSuite>(
 
 fn test_registration_response<CS: CipherSuite>(
     tvs: &[OpaqueTestVectorParameters],
-) -> Result<(), ProtocolError> {
+) -> Result<(), ProtocolError>
+where
+    // RegistrationResponse: KgPk + KePk
+    <CS::OprfGroup as Group>::ElemLen: Add<<CS::KeGroup as KeGroup>::PkLen>,
+    RegistrationResponseLen<CS>: ArrayLength<u8>,
+{
     for parameters in tvs {
         let server_setup = ServerSetup::<CS>::deserialize(
             &[
@@ -274,7 +291,7 @@ fn test_registration_response<CS: CipherSuite>(
         );
         assert_eq!(
             hex::encode(&parameters.registration_response),
-            hex::encode(server_registration_start_result.message.serialize()?)
+            hex::encode(server_registration_start_result.message.serialize())
         );
     }
     Ok(())
@@ -284,9 +301,14 @@ fn test_registration_upload<CS: CipherSuite>(
     tvs: &[OpaqueTestVectorParameters],
 ) -> Result<(), ProtocolError>
 where
+    // Envelope: Nonce + Hash
     NonceLen: Add<<CS::Hash as FixedOutput>::OutputSize>,
-    Sum<NonceLen, <CS::Hash as FixedOutput>::OutputSize>:
-        ArrayLength<u8> + Add<<CS::KeGroup as KeGroup>::PkLen>,
+    EnvelopeLen<CS>: ArrayLength<u8>,
+    // RegistrationUpload: (KePk + Hash) + Envelope
+    <CS::KeGroup as KeGroup>::PkLen: Add<<CS::Hash as FixedOutput>::OutputSize>,
+    Sum<<CS::KeGroup as KeGroup>::PkLen, <CS::Hash as FixedOutput>::OutputSize>:
+        ArrayLength<u8> + Add<EnvelopeLen<CS>>,
+    RegistrationUploadLen<CS>: ArrayLength<u8>,
 {
     for parameters in tvs {
         let mut rng = CycleRng::new(parameters.blind_registration.to_vec());
@@ -315,7 +337,7 @@ where
         );
         assert_eq!(
             hex::encode(&parameters.registration_upload),
-            hex::encode(result.message.serialize()?)
+            hex::encode(result.message.serialize())
         );
         assert_eq!(
             hex::encode(&parameters.export_key),
@@ -326,7 +348,12 @@ where
     Ok(())
 }
 
-fn test_ke1<CS: CipherSuite>(tvs: &[OpaqueTestVectorParameters]) -> Result<(), ProtocolError> {
+fn test_ke1<CS: CipherSuite>(tvs: &[OpaqueTestVectorParameters]) -> Result<(), ProtocolError>
+where
+    // CredentialRequest: KgPk + Ke1Message
+    <CS::OprfGroup as Group>::ElemLen: Add<Ke1MessageLen<CS>>,
+    CredentialRequestLen<CS>: ArrayLength<u8>,
+{
     for parameters in tvs {
         let client_login_start = [
             parameters.blind_login.as_slice(),
@@ -345,7 +372,7 @@ fn test_ke1<CS: CipherSuite>(tvs: &[OpaqueTestVectorParameters]) -> Result<(), P
             ClientLogin::<CS>::start(&mut client_login_start_rng, &parameters.password)?;
         assert_eq!(
             hex::encode(&parameters.KE1),
-            hex::encode(client_login_start_result.message.serialize()?)
+            hex::encode(client_login_start_result.message.serialize())
         );
     }
     Ok(())
@@ -353,11 +380,32 @@ fn test_ke1<CS: CipherSuite>(tvs: &[OpaqueTestVectorParameters]) -> Result<(), P
 
 fn test_ke2<CS: CipherSuite>(tvs: &[OpaqueTestVectorParameters]) -> Result<(), ProtocolError>
 where
+    // Envelope: Nonce + Hash
+    NonceLen: Add<<CS::Hash as FixedOutput>::OutputSize>,
+    EnvelopeLen<CS>: ArrayLength<u8>,
+    // RegistrationUpload: (KePk + Hash) + Envelope
+    <CS::KeGroup as KeGroup>::PkLen: Add<<CS::Hash as FixedOutput>::OutputSize>,
+    Sum<<CS::KeGroup as KeGroup>::PkLen, <CS::Hash as FixedOutput>::OutputSize>:
+        ArrayLength<u8> + Add<EnvelopeLen<CS>>,
+    RegistrationUploadLen<CS>: ArrayLength<u8>,
+    // ServerRegistration = RegistrationUpload
+    // MaskedResponse: (Nonce + Hash) + KePk
     NonceLen: Add<<CS::Hash as FixedOutput>::OutputSize>,
     Sum<NonceLen, <CS::Hash as FixedOutput>::OutputSize>:
         ArrayLength<u8> + Add<<CS::KeGroup as KeGroup>::PkLen>,
-    Sum<Sum<NonceLen, <CS::Hash as FixedOutput>::OutputSize>, <CS::KeGroup as KeGroup>::PkLen>:
-        ArrayLength<u8>,
+    MaskedResponseLen<CS>: ArrayLength<u8>,
+    // CredentialResponseWithoutKeLen: (KgPk + Nonce) + MaskedResponse
+    <CS::OprfGroup as Group>::ElemLen: Add<NonceLen>,
+    Sum<<CS::OprfGroup as Group>::ElemLen, NonceLen>: ArrayLength<u8> + Add<MaskedResponseLen<CS>>,
+    CredentialResponseWithoutKeLen<CS>: ArrayLength<u8>,
+    // MaskedResponse: (Nonce + Hash) + KePk
+    NonceLen: Add<<CS::Hash as FixedOutput>::OutputSize>,
+    Sum<NonceLen, <CS::Hash as FixedOutput>::OutputSize>:
+        ArrayLength<u8> + Add<<CS::KeGroup as KeGroup>::PkLen>,
+    MaskedResponseLen<CS>: ArrayLength<u8>,
+    // CredentialResponse: CredentialResponseWithoutKeLen + Ke2Message
+    CredentialResponseWithoutKeLen<CS>: Add<Ke2MessageLen<CS>>,
+    CredentialResponseLen<CS>: ArrayLength<u8>,
 {
     for parameters in tvs {
         let server_setup = ServerSetup::<CS>::deserialize(
@@ -370,7 +418,7 @@ where
         )?;
 
         let record =
-            ServerRegistration::<CS>::deserialize(&get_password_file_bytes::<CS>(parameters)?)?;
+            ServerRegistration::<CS>::deserialize(&get_password_file_bytes::<CS>(parameters))?;
 
         let mut server_private_keyshare_and_nonce_rng = CycleRng::new(
             [
@@ -408,7 +456,7 @@ where
         );
         assert_eq!(
             hex::encode(&parameters.KE2),
-            hex::encode(server_login_start_result.message.serialize()?)
+            hex::encode(server_login_start_result.message.serialize())
         );
     }
     Ok(())
@@ -416,11 +464,11 @@ where
 
 fn test_ke3<CS: CipherSuite>(tvs: &[OpaqueTestVectorParameters]) -> Result<(), ProtocolError>
 where
+    // MaskedResponse: (Nonce + Hash) + KePk
     NonceLen: Add<<CS::Hash as FixedOutput>::OutputSize>,
     Sum<NonceLen, <CS::Hash as FixedOutput>::OutputSize>:
         ArrayLength<u8> + Add<<CS::KeGroup as KeGroup>::PkLen>,
-    Sum<Sum<NonceLen, <CS::Hash as FixedOutput>::OutputSize>, <CS::KeGroup as KeGroup>::PkLen>:
-        ArrayLength<u8>,
+    MaskedResponseLen<CS>: ArrayLength<u8>,
 {
     for parameters in tvs {
         let client_login_start = [
@@ -459,7 +507,7 @@ where
         );
         assert_eq!(
             hex::encode(&parameters.KE3),
-            hex::encode(client_login_finish_result.message.serialize()?)
+            hex::encode(client_login_finish_result.message.serialize())
         );
         assert_eq!(
             hex::encode(&parameters.export_key),
@@ -473,11 +521,20 @@ fn test_server_login_finish<CS: CipherSuite>(
     tvs: &[OpaqueTestVectorParameters],
 ) -> Result<(), ProtocolError>
 where
+    // Envelope: Nonce + Hash
+    NonceLen: Add<<CS::Hash as FixedOutput>::OutputSize>,
+    EnvelopeLen<CS>: ArrayLength<u8>,
+    // RegistrationUpload: (KePk + Hash) + Envelope
+    <CS::KeGroup as KeGroup>::PkLen: Add<<CS::Hash as FixedOutput>::OutputSize>,
+    Sum<<CS::KeGroup as KeGroup>::PkLen, <CS::Hash as FixedOutput>::OutputSize>:
+        ArrayLength<u8> + Add<EnvelopeLen<CS>>,
+    RegistrationUploadLen<CS>: ArrayLength<u8>,
+    // ServerRegistration = RegistrationUpload
+    // MaskedResponse: (Nonce + Hash) + KePk
     NonceLen: Add<<CS::Hash as FixedOutput>::OutputSize>,
     Sum<NonceLen, <CS::Hash as FixedOutput>::OutputSize>:
         ArrayLength<u8> + Add<<CS::KeGroup as KeGroup>::PkLen>,
-    Sum<Sum<NonceLen, <CS::Hash as FixedOutput>::OutputSize>, <CS::KeGroup as KeGroup>::PkLen>:
-        ArrayLength<u8>,
+    MaskedResponseLen<CS>: ArrayLength<u8>,
 {
     for parameters in tvs {
         let server_setup = ServerSetup::<CS>::deserialize(
@@ -490,7 +547,7 @@ where
         )?;
 
         let record =
-            ServerRegistration::<CS>::deserialize(&get_password_file_bytes::<CS>(parameters)?)?;
+            ServerRegistration::<CS>::deserialize(&get_password_file_bytes::<CS>(parameters))?;
 
         let mut server_private_keyshare_and_nonce_rng = CycleRng::new(
             [
@@ -531,11 +588,18 @@ fn test_fake_vectors<CS: CipherSuite>(
     tvs: &[OpaqueTestVectorParameters],
 ) -> Result<(), ProtocolError>
 where
+    // MaskedResponse: (Nonce + Hash) + KePk
     NonceLen: Add<<CS::Hash as FixedOutput>::OutputSize>,
     Sum<NonceLen, <CS::Hash as FixedOutput>::OutputSize>:
         ArrayLength<u8> + Add<<CS::KeGroup as KeGroup>::PkLen>,
-    Sum<Sum<NonceLen, <CS::Hash as FixedOutput>::OutputSize>, <CS::KeGroup as KeGroup>::PkLen>:
-        ArrayLength<u8>,
+    MaskedResponseLen<CS>: ArrayLength<u8>,
+    // CredentialResponseWithoutKeLen: (KgPk + Nonce) + MaskedResponse
+    <CS::OprfGroup as Group>::ElemLen: Add<NonceLen>,
+    Sum<<CS::OprfGroup as Group>::ElemLen, NonceLen>: ArrayLength<u8> + Add<MaskedResponseLen<CS>>,
+    CredentialResponseWithoutKeLen<CS>: ArrayLength<u8>,
+    // CredentialResponse: CredentialResponseWithoutKeLen + Ke2Message
+    CredentialResponseWithoutKeLen<CS>: Add<Ke2MessageLen<CS>>,
+    CredentialResponseLen<CS>: ArrayLength<u8>,
 {
     for parameters in tvs {
         let server_setup = ServerSetup::<CS>::deserialize(
@@ -572,7 +636,7 @@ where
         )?;
         assert_eq!(
             hex::encode(&parameters.KE2),
-            hex::encode(server_login_start_result.message.serialize()?)
+            hex::encode(server_login_start_result.message.serialize())
         );
     }
     Ok(())

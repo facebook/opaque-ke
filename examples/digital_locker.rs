@@ -28,6 +28,8 @@
 
 use chacha20poly1305::aead::{Aead, NewAead};
 use chacha20poly1305::{ChaCha20Poly1305, Key, Nonce};
+use generic_array::GenericArray;
+use opaque_ke::ServerRegistrationLen;
 use rustyline::error::ReadlineError;
 use rustyline::Editor;
 use std::process::exit;
@@ -55,7 +57,7 @@ impl CipherSuite for Default {
 
 struct Locker {
     contents: Vec<u8>,
-    password_file: Vec<u8>,
+    password_file: GenericArray<u8, ServerRegistrationLen<Default>>,
 }
 
 // Given a key and plaintext, produce an AEAD ciphertext along with a nonce
@@ -92,10 +94,7 @@ fn register_locker(
     let mut client_rng = OsRng;
     let client_registration_start_result =
         ClientRegistration::<Default>::start(&mut client_rng, password.as_bytes()).unwrap();
-    let registration_request_bytes = client_registration_start_result
-        .message
-        .serialize()
-        .unwrap();
+    let registration_request_bytes = client_registration_start_result.message.serialize();
 
     // Client sends registration_request_bytes to server
     let server_registration_start_result = ServerRegistration::<Default>::start(
@@ -104,10 +103,7 @@ fn register_locker(
         &locker_id.to_be_bytes(),
     )
     .unwrap();
-    let registration_response_bytes = server_registration_start_result
-        .message
-        .serialize()
-        .unwrap();
+    let registration_response_bytes = server_registration_start_result.message.serialize();
 
     // Server sends registration_response_bytes to client
 
@@ -119,10 +115,7 @@ fn register_locker(
             ClientRegistrationFinishParameters::default(),
         )
         .unwrap();
-    let message_bytes = client_finish_registration_result
-        .message
-        .serialize()
-        .unwrap();
+    let message_bytes = client_finish_registration_result.message.serialize();
 
     // Client encrypts secret message using export key
     let ciphertext = encrypt(
@@ -138,7 +131,7 @@ fn register_locker(
 
     Locker {
         contents: ciphertext,
-        password_file: password_file.serialize().unwrap(),
+        password_file: password_file.serialize(),
     }
 }
 
@@ -152,7 +145,7 @@ fn open_locker(
     let mut client_rng = OsRng;
     let client_login_start_result =
         ClientLogin::<Default>::start(&mut client_rng, password.as_bytes()).unwrap();
-    let credential_request_bytes = client_login_start_result.message.serialize().unwrap();
+    let credential_request_bytes = client_login_start_result.message.serialize();
 
     // Client sends credential_request_bytes to server
 
@@ -167,7 +160,7 @@ fn open_locker(
         ServerLoginStartParameters::default(),
     )
     .unwrap();
-    let credential_response_bytes = server_login_start_result.message.serialize().unwrap();
+    let credential_response_bytes = server_login_start_result.message.serialize();
 
     // Server sends credential_response_bytes to client
 
@@ -181,7 +174,7 @@ fn open_locker(
         return Err(String::from("Incorrect password, please try again."));
     }
     let client_login_finish_result = result.unwrap();
-    let credential_finalization_bytes = client_login_finish_result.message.serialize().unwrap();
+    let credential_finalization_bytes = client_login_finish_result.message.serialize();
 
     // Client sends credential_finalization_bytes to server
 

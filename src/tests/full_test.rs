@@ -9,10 +9,16 @@
 
 use crate::{
     ciphersuite::CipherSuite,
+    envelope::EnvelopeLen,
     errors::*,
     key_exchange::{
         group::KeGroup,
+        traits::{Ke1MessageLen, Ke2MessageLen},
         tripledh::{NonceLen, TripleDH},
+    },
+    messages::{
+        CredentialRequestLen, CredentialResponseLen, CredentialResponseWithoutKeLen,
+        RegistrationResponseLen, RegistrationUploadLen,
     },
     opaque::*,
     slow_hash::NoOpHash,
@@ -23,12 +29,13 @@ use alloc::string::ToString;
 use alloc::vec;
 use alloc::vec::Vec;
 use core::ops::Add;
-use curve25519_dalek::{ristretto::RistrettoPoint, traits::Identity};
+use curve25519_dalek::ristretto::RistrettoPoint;
 use digest::FixedOutput;
 use generic_array::typenum::Sum;
 use generic_array::ArrayLength;
 use rand::rngs::OsRng;
 use serde_json::Value;
+use voprf::group::Group;
 use zeroize::Zeroize;
 
 // Tests
@@ -287,16 +294,45 @@ fn stringify_test_vectors(p: &TestVectorParameters) -> alloc::string::String {
 
 fn generate_parameters<CS: CipherSuite>() -> Result<TestVectorParameters, ProtocolError>
 where
+    // RegistrationResponse: KgPk + KePk
+    <CS::OprfGroup as Group>::ElemLen: Add<<CS::KeGroup as KeGroup>::PkLen>,
+    RegistrationResponseLen<CS>: ArrayLength<u8>,
+    // Envelope: Nonce + Hash
+    NonceLen: Add<<CS::Hash as FixedOutput>::OutputSize>,
+    EnvelopeLen<CS>: ArrayLength<u8>,
+    // RegistrationUpload: (KePk + Hash) + Envelope
+    <CS::KeGroup as KeGroup>::PkLen: Add<<CS::Hash as FixedOutput>::OutputSize>,
+    Sum<<CS::KeGroup as KeGroup>::PkLen, <CS::Hash as FixedOutput>::OutputSize>:
+        ArrayLength<u8> + Add<EnvelopeLen<CS>>,
+    RegistrationUploadLen<CS>: ArrayLength<u8>,
+    // ServerRegistration = RegistrationUpload
+    // Ke1Message: Nonce + KePk
+    NonceLen: Add<<CS::KeGroup as KeGroup>::PkLen>,
+    Ke1MessageLen<CS>: ArrayLength<u8>,
+    // CredentialRequest: KgPk + Ke1Message
+    <CS::OprfGroup as Group>::ElemLen: Add<Ke1MessageLen<CS>>,
+    CredentialRequestLen<CS>: ArrayLength<u8>,
+    // MaskedResponse: (Nonce + Hash) + KePk
     NonceLen: Add<<CS::Hash as FixedOutput>::OutputSize>,
     Sum<NonceLen, <CS::Hash as FixedOutput>::OutputSize>:
         ArrayLength<u8> + Add<<CS::KeGroup as KeGroup>::PkLen>,
-    Sum<Sum<NonceLen, <CS::Hash as FixedOutput>::OutputSize>, <CS::KeGroup as KeGroup>::PkLen>:
-        ArrayLength<u8>,
+    MaskedResponseLen<CS>: ArrayLength<u8>,
+    // CredentialResponseWithoutKeLen: (KgPk + Nonce) + MaskedResponse
+    <CS::OprfGroup as Group>::ElemLen: Add<NonceLen>,
+    Sum<<CS::OprfGroup as Group>::ElemLen, NonceLen>: ArrayLength<u8> + Add<MaskedResponseLen<CS>>,
+    CredentialResponseWithoutKeLen<CS>: ArrayLength<u8>,
+    // Ke2Message: (Nonce + KePk) + Hash
+    NonceLen: Add<<CS::KeGroup as KeGroup>::PkLen>,
+    Sum<NonceLen, <CS::KeGroup as KeGroup>::PkLen>:
+        ArrayLength<u8> + Add<<CS::Hash as FixedOutput>::OutputSize>,
+    Ke2MessageLen<CS>: ArrayLength<u8>,
+    // CredentialResponse: CredentialResponseWithoutKeLen + Ke2Message
+    CredentialResponseWithoutKeLen<CS>: Add<Ke2MessageLen<CS>>,
+    CredentialResponseLen<CS>: ArrayLength<u8>,
 {
     use crate::keypair::KeyPair;
     use generic_array::typenum::Unsigned;
     use rand::RngCore;
-    use voprf::group::Group;
 
     let mut rng = OsRng;
 
@@ -350,7 +386,7 @@ where
         hex::encode(&blinding_factor_bytes_returned)
     );
 
-    let registration_request_bytes = client_registration_start_result.message.serialize()?;
+    let registration_request_bytes = client_registration_start_result.message.serialize();
     let client_registration_state = client_registration_start_result.state.serialize()?;
 
     let server_registration_start_result = ServerRegistration::<CS>::start(
@@ -359,7 +395,7 @@ where
         credential_identifier,
     )
     .unwrap();
-    let registration_response_bytes = server_registration_start_result.message.serialize()?;
+    let registration_response_bytes = server_registration_start_result.message.serialize();
 
     let mut client_s_sk_and_nonce: Vec<u8> = Vec::new();
     client_s_sk_and_nonce.extend_from_slice(&client_s_kp.private().to_arr());
@@ -380,10 +416,10 @@ where
             ),
         )
         .unwrap();
-    let registration_upload_bytes = client_registration_finish_result.message.serialize()?;
+    let registration_upload_bytes = client_registration_finish_result.message.serialize();
 
     let password_file = ServerRegistration::finish(client_registration_finish_result.message);
-    let password_file_bytes = password_file.serialize()?;
+    let password_file_bytes = password_file.serialize();
 
     let mut client_login_start: Vec<u8> = Vec::new();
     client_login_start.extend_from_slice(&blinding_factor_bytes);
@@ -393,7 +429,7 @@ where
     let mut client_login_start_rng = CycleRng::new(client_login_start);
     let client_login_start_result =
         ClientLogin::<CS>::start(&mut client_login_start_rng, password).unwrap();
-    let credential_request_bytes = client_login_start_result.message.serialize()?;
+    let credential_request_bytes = client_login_start_result.message.serialize();
     let client_login_state = client_login_start_result
         .state
         .serialize()
@@ -423,8 +459,8 @@ where
         },
     )
     .unwrap();
-    let credential_response_bytes = server_login_start_result.message.serialize()?;
-    let server_login_state = server_login_start_result.state.serialize()?;
+    let credential_response_bytes = server_login_start_result.message.serialize();
+    let server_login_state = server_login_start_result.state.serialize();
 
     let client_login_finish_result = client_login_start_result
         .state
@@ -440,7 +476,7 @@ where
             ),
         )
         .unwrap();
-    let credential_finalization_bytes = client_login_finish_result.message.serialize()?;
+    let credential_finalization_bytes = client_login_finish_result.message.serialize();
 
     Ok(TestVectorParameters {
         client_s_pk: client_s_kp.public().to_arr().to_vec(),
@@ -463,13 +499,13 @@ where
         client_nonce: client_nonce.to_vec(),
         server_nonce: server_nonce.to_vec(),
         context: context.to_vec(),
-        registration_request: registration_request_bytes,
-        registration_response: registration_response_bytes,
-        registration_upload: registration_upload_bytes,
-        credential_request: credential_request_bytes,
-        credential_response: credential_response_bytes,
-        credential_finalization: credential_finalization_bytes,
-        password_file: password_file_bytes,
+        registration_request: registration_request_bytes.to_vec(),
+        registration_response: registration_response_bytes.to_vec(),
+        registration_upload: registration_upload_bytes.to_vec(),
+        credential_request: credential_request_bytes.to_vec(),
+        credential_response: credential_response_bytes.to_vec(),
+        credential_finalization: credential_finalization_bytes.to_vec(),
+        password_file: password_file_bytes.to_vec(),
         client_registration_state,
         client_login_state,
         server_login_state,
@@ -493,7 +529,7 @@ fn test_registration_request() -> Result<(), ProtocolError> {
         ClientRegistration::<RistrettoSha5123dhNoSlowHash>::start(&mut rng, &parameters.password)?;
     assert_eq!(
         hex::encode(&parameters.registration_request),
-        hex::encode(client_registration_start_result.message.serialize()?)
+        hex::encode(client_registration_start_result.message.serialize())
     );
     assert_eq!(
         hex::encode(&parameters.client_registration_state),
@@ -520,8 +556,8 @@ fn test_serialization() -> Result<(), ProtocolError> {
         let registration_request: RegistrationRequest<RistrettoSha5123dhNoSlowHash> =
             serde_json::from_str(&registration_request_json).unwrap();
         assert_eq!(
-            hex::encode(client_registration_start_result.message.serialize()?),
-            hex::encode(registration_request.serialize()?),
+            hex::encode(client_registration_start_result.message.serialize()),
+            hex::encode(registration_request.serialize()),
         );
     }
     {
@@ -532,8 +568,8 @@ fn test_serialization() -> Result<(), ProtocolError> {
         let registration_request: RegistrationRequest<RistrettoSha5123dhNoSlowHash> =
             bincode::deserialize(&registration_request_bin).unwrap();
         assert_eq!(
-            hex::encode(client_registration_start_result.message.serialize()?),
-            hex::encode(registration_request.serialize()?),
+            hex::encode(client_registration_start_result.message.serialize()),
+            hex::encode(registration_request.serialize()),
         );
     }
     Ok(())
@@ -561,7 +597,7 @@ fn test_registration_response() -> Result<(), ProtocolError> {
         )?;
     assert_eq!(
         hex::encode(parameters.registration_response),
-        hex::encode(server_registration_start_result.message.serialize()?)
+        hex::encode(server_registration_start_result.message.serialize())
     );
     Ok(())
 }
@@ -592,7 +628,7 @@ fn test_registration_upload() -> Result<(), ProtocolError> {
 
     assert_eq!(
         hex::encode(parameters.registration_upload),
-        hex::encode(result.message.serialize()?)
+        hex::encode(result.message.serialize())
     );
     assert_eq!(
         hex::encode(parameters.export_key),
@@ -614,7 +650,7 @@ fn test_password_file() -> Result<(), ProtocolError> {
 
     assert_eq!(
         hex::encode(parameters.password_file),
-        hex::encode(password_file.serialize()?)
+        hex::encode(password_file.serialize())
     );
     Ok(())
 }
@@ -636,7 +672,7 @@ fn test_credential_request() -> Result<(), ProtocolError> {
     )?;
     assert_eq!(
         hex::encode(&parameters.credential_request),
-        hex::encode(client_login_start_result.message.serialize()?)
+        hex::encode(client_login_start_result.message.serialize())
     );
     assert_eq!(
         hex::encode(&parameters.client_login_state),
@@ -684,11 +720,11 @@ fn test_credential_response() -> Result<(), ProtocolError> {
     )?;
     assert_eq!(
         hex::encode(&parameters.credential_response),
-        hex::encode(server_login_start_result.message.serialize()?)
+        hex::encode(server_login_start_result.message.serialize())
     );
     assert_eq!(
         hex::encode(&parameters.server_login_state),
-        hex::encode(server_login_start_result.state.serialize()?)
+        hex::encode(server_login_start_result.state.serialize())
     );
     Ok(())
 }
@@ -723,7 +759,7 @@ fn test_credential_finalization() -> Result<(), ProtocolError> {
     );
     assert_eq!(
         hex::encode(&parameters.credential_finalization),
-        hex::encode(client_login_finish_result.message.serialize()?)
+        hex::encode(client_login_finish_result.message.serialize())
     );
     assert_eq!(
         hex::encode(&parameters.export_key),
@@ -902,7 +938,7 @@ fn test_zeroize_server_registration_finish() -> Result<(), ProtocolError> {
 
     let mut state = p_file;
     Zeroize::zeroize(&mut state);
-    for byte in state.serialize()? {
+    for byte in state.serialize() {
         assert_eq!(byte, 0);
     }
 
@@ -963,7 +999,7 @@ fn test_zeroize_server_login_start() -> Result<(), ProtocolError> {
 
     let mut state = server_login_start_result.state;
     Zeroize::zeroize(&mut state);
-    for byte in state.serialize()? {
+    for byte in state.serialize() {
         assert_eq!(byte, 0);
     }
 
@@ -1062,7 +1098,7 @@ fn test_zeroize_server_login_finish() -> Result<(), ProtocolError> {
 
     let mut state = server_login_finish_result.state;
     Zeroize::zeroize(&mut state);
-    for byte in state.serialize()? {
+    for byte in state.serialize() {
         assert_eq!(byte, 0);
     }
 

@@ -7,43 +7,28 @@
 
 /// Macro used for deriving `serde`'s `Serialize` and `Deserialize` traits.
 macro_rules! impl_serialize_and_deserialize_for {
-    ($item:ident) => {
+    ($item:ident$( where $($path:ty: $bound1:path $(| $bound2:path)*),+$(,)?)?$(; $error:expr)?) => {
         #[cfg(feature = "serialize")]
         impl<CS: CipherSuite> serde::Serialize for $item<CS>
-        where
-            NonceLen: Add<<CS::Hash as FixedOutput>::OutputSize>,
-            Sum<NonceLen, <CS::Hash as FixedOutput>::OutputSize>:
-                ArrayLength<u8> + Add<<CS::KeGroup as KeGroup>::PkLen>,
-            Sum<
-                Sum<NonceLen, <CS::Hash as FixedOutput>::OutputSize>,
-                <CS::KeGroup as KeGroup>::PkLen,
-            >: ArrayLength<u8>,
+        $(where
+            $($path: $bound1 $(+ $bound2)*),+
+        )?
         {
             fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
             where
                 S: serde::Serializer,
             {
-                use serde::ser::Error;
-
                 if serializer.is_human_readable() {
                     serializer
-                        .serialize_str(&base64::encode(&self.serialize().map_err(Error::custom)?))
+                        .serialize_str(&base64::encode(&self.serialize()$(.map_err($error)?)?))
                 } else {
-                    serializer.serialize_bytes(&self.serialize().map_err(Error::custom)?)
+                    serializer.serialize_bytes(&self.serialize()$(.map_err($error)?)?)
                 }
             }
         }
 
         #[cfg(feature = "serialize")]
         impl<'de, CS: CipherSuite> serde::Deserialize<'de> for $item<CS>
-        where
-            NonceLen: Add<<CS::Hash as FixedOutput>::OutputSize>,
-            Sum<NonceLen, <CS::Hash as FixedOutput>::OutputSize>:
-                ArrayLength<u8> + Add<<CS::KeGroup as KeGroup>::PkLen>,
-            Sum<
-                Sum<NonceLen, <CS::Hash as FixedOutput>::OutputSize>,
-                <CS::KeGroup as KeGroup>::PkLen,
-            >: ArrayLength<u8>,
         {
             fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
             where
@@ -59,14 +44,6 @@ macro_rules! impl_serialize_and_deserialize_for {
                     struct ByteVisitor<CS: CipherSuite>(core::marker::PhantomData<CS>);
 
                     impl<'de, CS: CipherSuite> serde::de::Visitor<'de> for ByteVisitor<CS>
-                    where
-                        NonceLen: Add<<CS::Hash as FixedOutput>::OutputSize>,
-                        Sum<NonceLen, <CS::Hash as FixedOutput>::OutputSize>:
-                            ArrayLength<u8> + Add<<CS::KeGroup as KeGroup>::PkLen>,
-                        Sum<
-                            Sum<NonceLen, <CS::Hash as FixedOutput>::OutputSize>,
-                            <CS::KeGroup as KeGroup>::PkLen,
-                        >: ArrayLength<u8>,
                     {
                         type Value = $item<CS>;
 

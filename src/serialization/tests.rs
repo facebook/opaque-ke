@@ -11,7 +11,7 @@ use crate::{
     errors::*,
     key_exchange::{
         traits::{FromBytes, KeyExchange, ToBytes},
-        tripledh::{NonceLen, TripleDH},
+        tripledh::{Ke1Message, NonceLen, TripleDH},
     },
     keypair::KeyPair,
     serialization::{i2osp, os2ip, Serialize},
@@ -23,7 +23,10 @@ use alloc::vec;
 use alloc::vec::Vec;
 
 use curve25519_dalek::ristretto::RistrettoPoint;
-use generic_array::typenum::{Unsigned, U2};
+use generic_array::{
+    typenum::{Unsigned, U2},
+    GenericArray,
+};
 use proptest::{collection::vec, prelude::*};
 use rand::{rngs::OsRng, RngCore};
 use voprf::group::Group;
@@ -99,8 +102,8 @@ fn server_registration_roundtrip() -> Result<(), ProtocolError> {
     bytes.extend_from_slice(&masking_key);
     bytes.extend_from_slice(&mock_envelope_bytes);
     let reg = ServerRegistration::<Default>::deserialize(&bytes)?;
-    let reg_bytes = reg.serialize()?;
-    assert_eq!(reg_bytes, bytes);
+    let reg_bytes = reg.serialize();
+    assert_eq!(*reg_bytes, bytes);
     Ok(())
 }
 
@@ -110,18 +113,18 @@ fn registration_request_roundtrip() -> Result<(), ProtocolError> {
     let pt_bytes = pt.to_arr().to_vec();
 
     let mut input = Vec::new();
-    input.extend_from_slice(pt_bytes.as_slice());
+    input.extend_from_slice(&pt_bytes);
 
-    let r1 = RegistrationRequest::<Default>::deserialize(input.as_slice())?;
-    let r1_bytes = r1.serialize()?;
-    assert_eq!(input, r1_bytes);
+    let r1 = RegistrationRequest::<Default>::deserialize(&input)?;
+    let r1_bytes = r1.serialize();
+    assert_eq!(input, *r1_bytes);
 
     // Assert that identity group element is rejected
     let identity = RistrettoPoint::identity();
     let identity_bytes = identity.to_arr().to_vec();
 
     assert!(matches!(
-        RegistrationRequest::<Default>::deserialize(identity_bytes.as_slice()),
+        RegistrationRequest::<Default>::deserialize(&identity_bytes),
         Err(ProtocolError::LibraryError(InternalError::OprfError(
             voprf::errors::InternalError::PointError,
         )))
@@ -142,9 +145,9 @@ fn registration_response_roundtrip() -> Result<(), ProtocolError> {
     input.extend_from_slice(&beta_bytes);
     input.extend_from_slice(&pubkey_bytes);
 
-    let r2 = RegistrationResponse::<Default>::deserialize(input.as_slice())?;
-    let r2_bytes = r2.serialize()?;
-    assert_eq!(input, r2_bytes);
+    let r2 = RegistrationResponse::<Default>::deserialize(&input)?;
+    let r2_bytes = r2.serialize();
+    assert_eq!(input, *r2_bytes);
 
     // Assert that identity group element is rejected
     let identity = RistrettoPoint::identity();
@@ -193,8 +196,8 @@ fn registration_upload_roundtrip() -> Result<(), ProtocolError> {
     input.extend_from_slice(&envelope_bytes);
 
     let r3 = RegistrationUpload::<Default>::deserialize(&input)?;
-    let r3_bytes = r3.serialize()?;
-    assert_eq!(input, r3_bytes);
+    let r3_bytes = r3.serialize();
+    assert_eq!(input, *r3_bytes);
 
     Ok(())
 }
@@ -215,9 +218,9 @@ fn credential_request_roundtrip() -> Result<(), ProtocolError> {
     input.extend_from_slice(&alpha_bytes);
     input.extend_from_slice(&ke1m);
 
-    let l1 = CredentialRequest::<Default>::deserialize(input.as_slice())?;
-    let l1_bytes = l1.serialize()?;
-    assert_eq!(input, l1_bytes);
+    let l1 = CredentialRequest::<Default>::deserialize(&input)?;
+    let l1_bytes = l1.serialize();
+    assert_eq!(input, *l1_bytes);
 
     // Assert that identity group element is rejected
     let identity = RistrettoPoint::identity();
@@ -256,14 +259,14 @@ fn credential_response_roundtrip() -> Result<(), ProtocolError> {
     let ke2m: Vec<u8> = [server_nonce.as_slice(), server_e_kp.public(), &mac].concat();
 
     let mut input = Vec::new();
-    input.extend_from_slice(pt_bytes.as_slice());
+    input.extend_from_slice(&pt_bytes);
     input.extend_from_slice(&masking_nonce);
     input.extend_from_slice(&masked_response);
     input.extend_from_slice(&ke2m);
 
     let l2 = CredentialResponse::<Default>::deserialize(&input)?;
-    let l2_bytes = l2.serialize()?;
-    assert_eq!(input, l2_bytes);
+    let l2_bytes = l2.serialize();
+    assert_eq!(input, *l2_bytes);
 
     // Assert that identity group element is rejected
     let identity = RistrettoPoint::identity();
@@ -296,8 +299,8 @@ fn credential_finalization_roundtrip() -> Result<(), ProtocolError> {
     let input: Vec<u8> = [mac].concat();
 
     let l3 = CredentialFinalization::<Default>::deserialize(&input)?;
-    let l3_bytes = l3.serialize()?;
-    assert_eq!(input, l3_bytes);
+    let l3_bytes = l3.serialize();
+    assert_eq!(input, *l3_bytes);
 
     Ok(())
 }
@@ -308,18 +311,29 @@ fn client_login_roundtrip() -> Result<(), ProtocolError> {
     let mut rng = OsRng;
 
     let client_e_kp = KeyPair::<<Default as CipherSuite>::OprfGroup>::generate_random(&mut rng);
-    let mut client_nonce = vec![0u8; NonceLen::USIZE];
+    let mut client_nonce = GenericArray::<u8, NonceLen>::default();
     rng.fill_bytes(&mut client_nonce);
 
-    let serialized_credential_request = b"serialized credential_request".to_vec();
-    let l1_data = [client_e_kp.private().to_arr().to_vec(), client_nonce].concat();
+    let l1_data = [
+        client_e_kp.private().to_arr().to_vec(),
+        client_nonce.to_vec(),
+    ]
+    .concat();
 
     let blind_result =
-        &voprf::NonVerifiableClient::<RistrettoPoint, sha2::Sha512>::blind(pw.to_vec(), &mut rng)?;
+        voprf::NonVerifiableClient::<RistrettoPoint, sha2::Sha512>::blind(pw.to_vec(), &mut rng)?;
+
+    let credential_request = CredentialRequest::<Default> {
+        blinded_element: blind_result.message,
+        ke1_message: Ke1Message {
+            client_nonce,
+            client_e_pk: client_e_kp.public().clone(),
+        },
+    };
 
     let bytes: Vec<u8> = chain!(
         Serialize::<U2>::from(&blind_result.state.serialize())?.iter(),
-        Serialize::<U2>::from(&serialized_credential_request)?.iter(),
+        Serialize::<U2>::from(&credential_request.serialize())?.iter(),
         Serialize::<U2>::from(&l1_data)?.iter(),
     )
     .flatten()
@@ -340,11 +354,10 @@ fn ke1_message_roundtrip() -> Result<(), ProtocolError> {
     rng.fill_bytes(&mut client_nonce);
 
     let ke1m: Vec<u8> = [client_nonce.as_slice(), client_e_kp.public()].concat();
-    let reg = <TripleDH as KeyExchange<sha2::Sha512, RistrettoPoint>>::KE1Message::from_bytes::<
-        Default,
-    >(&ke1m)?;
+    let reg =
+        <TripleDH as KeyExchange<sha2::Sha512, RistrettoPoint>>::KE1Message::from_bytes(&ke1m)?;
     let reg_bytes = reg.to_bytes();
-    assert_eq!(reg_bytes, ke1m);
+    assert_eq!(*reg_bytes, ke1m);
 
     Ok(())
 }
@@ -361,11 +374,10 @@ fn ke2_message_roundtrip() -> Result<(), ProtocolError> {
 
     let ke2m: Vec<u8> = [server_nonce.as_slice(), server_e_kp.public(), &mac].concat();
 
-    let reg = <TripleDH as KeyExchange<sha2::Sha512, RistrettoPoint>>::KE2Message::from_bytes::<
-        Default,
-    >(&ke2m)?;
+    let reg =
+        <TripleDH as KeyExchange<sha2::Sha512, RistrettoPoint>>::KE2Message::from_bytes(&ke2m)?;
     let reg_bytes = reg.to_bytes();
-    assert_eq!(reg_bytes, ke2m);
+    assert_eq!(*reg_bytes, ke2m);
 
     Ok(())
 }
@@ -378,11 +390,10 @@ fn ke3_message_roundtrip() -> Result<(), ProtocolError> {
 
     let ke3m: Vec<u8> = [mac].concat();
 
-    let reg = <TripleDH as KeyExchange<sha2::Sha512, RistrettoPoint>>::KE3Message::from_bytes::<
-        Default,
-    >(&ke3m)?;
+    let reg =
+        <TripleDH as KeyExchange<sha2::Sha512, RistrettoPoint>>::KE3Message::from_bytes(&ke3m)?;
     let reg_bytes = reg.to_bytes();
-    assert_eq!(reg_bytes, ke3m);
+    assert_eq!(*reg_bytes, ke3m);
 
     Ok(())
 }

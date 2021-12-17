@@ -286,7 +286,7 @@
 //! # let server_setup = ServerSetup::<Default>::new(&mut server_rng);
 //! # let server_registration_start_result = ServerRegistration::<Default>::start(&server_setup, client_registration_start_result.message, b"alice@example.com")?;
 //! # let client_registration_finish_result = client_registration_start_result.state.finish(&mut client_rng, server_registration_start_result.message, ClientRegistrationFinishParameters::default())?;
-//! # let password_file_bytes = ServerRegistration::<Default>::finish(client_registration_finish_result.message).serialize()?;
+//! # let password_file_bytes = ServerRegistration::<Default>::finish(client_registration_finish_result.message).serialize();
 //! # let client_login_start_result = ClientLogin::<Default>::start(
 //! #   &mut client_rng,
 //! #   b"password",
@@ -340,7 +340,7 @@
 //! # let server_setup = ServerSetup::<Default>::new(&mut server_rng);
 //! # let server_registration_start_result = ServerRegistration::<Default>::start(&server_setup, client_registration_start_result.message, b"alice@example.com")?;
 //! # let client_registration_finish_result = client_registration_start_result.state.finish(&mut client_rng, server_registration_start_result.message, ClientRegistrationFinishParameters::default())?;
-//! # let password_file_bytes = ServerRegistration::<Default>::finish(client_registration_finish_result.message).serialize()?;
+//! # let password_file_bytes = ServerRegistration::<Default>::finish(client_registration_finish_result.message).serialize();
 //! # let client_login_start_result = ClientLogin::<Default>::start(
 //! #     &mut client_rng,
 //! #     b"password",
@@ -386,7 +386,7 @@
 //! # let server_setup = ServerSetup::<Default>::new(&mut server_rng);
 //! # let server_registration_start_result = ServerRegistration::<Default>::start(&server_setup, client_registration_start_result.message, b"alice@example.com")?;
 //! # let client_registration_finish_result = client_registration_start_result.state.finish(&mut client_rng, server_registration_start_result.message, ClientRegistrationFinishParameters::default())?;
-//! # let password_file_bytes = ServerRegistration::<Default>::finish(client_registration_finish_result.message).serialize()?;
+//! # let password_file_bytes = ServerRegistration::<Default>::finish(client_registration_finish_result.message).serialize();
 //! # let client_login_start_result = ClientLogin::<Default>::start(
 //! #   &mut client_rng,
 //! #   b"password",
@@ -468,7 +468,7 @@
 //!     server_registration_start_result.message,
 //!     ClientRegistrationFinishParameters::default(),
 //! )?;
-//! # let password_file_bytes = ServerRegistration::<Default>::finish(client_registration_finish_result.message).serialize()?;
+//! # let password_file_bytes = ServerRegistration::<Default>::finish(client_registration_finish_result.message).serialize();
 //! # let client_login_start_result = ClientLogin::<Default>::start(
 //! #     &mut client_rng,
 //! #     b"password",
@@ -545,7 +545,7 @@
 //!     server_registration_start_result.message,
 //!     ClientRegistrationFinishParameters::default()
 //! )?;
-//! # let password_file_bytes = ServerRegistration::<Default>::finish(client_registration_finish_result.message).serialize()?;
+//! # let password_file_bytes = ServerRegistration::<Default>::finish(client_registration_finish_result.message).serialize();
 //! # let client_login_start_result = ClientLogin::<Default>::start(
 //! #     &mut client_rng,
 //! #     b"password",
@@ -645,7 +645,7 @@
 //! # let server_setup = ServerSetup::<Default>::new(&mut server_rng);
 //! # let server_registration_start_result = ServerRegistration::<Default>::start(&server_setup, client_registration_start_result.message, b"alice@example.com")?;
 //! # let client_registration_finish_result = client_registration_start_result.state.finish(&mut client_rng, server_registration_start_result.message, ClientRegistrationFinishParameters::new(Identifiers { client: Some(b"Alice_the_Cryptographer"), server: Some(b"Facebook") }, None))?;
-//! # let password_file_bytes = ServerRegistration::<Default>::finish(client_registration_finish_result.message).serialize()?;
+//! # let password_file_bytes = ServerRegistration::<Default>::finish(client_registration_finish_result.message).serialize();
 //! # let client_login_start_result = ClientLogin::<Default>::start(
 //! #   &mut client_rng,
 //! #   b"password",
@@ -696,7 +696,7 @@
 //! # let server_setup = ServerSetup::<Default>::new(&mut server_rng);
 //! # let server_registration_start_result = ServerRegistration::<Default>::start(&server_setup, client_registration_start_result.message, b"alice@example.com")?;
 //! # let client_registration_finish_result = client_registration_start_result.state.finish(&mut client_rng, server_registration_start_result.message, ClientRegistrationFinishParameters::new(Identifiers { client: Some(b"Alice_the_Cryptographer"), server: Some(b"Facebook") }, None))?;
-//! # let password_file_bytes = ServerRegistration::<Default>::finish(client_registration_finish_result.message).serialize()?;
+//! # let password_file_bytes = ServerRegistration::<Default>::finish(client_registration_finish_result.message).serialize();
 //! # let client_login_start_result = ClientLogin::<Default>::start(
 //! #     &mut client_rng,
 //! #     b"password",
@@ -869,6 +869,11 @@ pub use crate::messages::{
     CredentialFinalization, CredentialRequest, CredentialResponse, RegistrationRequest,
     RegistrationResponse, RegistrationUpload,
 };
+pub use crate::messages::{
+    CredentialFinalizationLen, CredentialRequestLen, CredentialResponseLen, RegistrationRequestLen,
+    RegistrationResponseLen, RegistrationUploadLen,
+};
+pub use crate::opaque::ServerRegistrationLen;
 pub use crate::opaque::{
     ClientLogin, ClientRegistration, ServerLogin, ServerRegistration, ServerSetup,
 };

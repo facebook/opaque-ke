@@ -14,7 +14,7 @@ use crate::{
 };
 use alloc::vec::Vec;
 use digest::Digest;
-use generic_array::GenericArray;
+use generic_array::{ArrayLength, GenericArray};
 use rand::{CryptoRng, RngCore};
 use zeroize::Zeroize;
 
@@ -44,9 +44,9 @@ pub type GenerateKe3Result<K, D, G> = (
 );
 
 pub trait KeyExchange<D: Hash, G: KeGroup> {
-    type KE1State: FromBytes + ToBytes + Zeroize + Clone;
-    type KE2State: FromBytes + ToBytes + Zeroize + Clone;
-    type KE1Message: FromBytes + ToBytes + Clone;
+    type KE1State: FromBytes + ToVec + Zeroize + Clone;
+    type KE2State: FromBytes + ToVec + Zeroize + Clone;
+    type KE1Message: FromBytes + ToBytes + Clone + Zeroize;
     type KE2Message: FromBytes + ToBytes + Clone;
     type KE3Message: FromBytes + ToBytes + Clone;
 
@@ -55,28 +55,28 @@ pub trait KeyExchange<D: Hash, G: KeGroup> {
     ) -> Result<(Self::KE1State, Self::KE1Message), ProtocolError>;
 
     #[allow(clippy::too_many_arguments, clippy::type_complexity)]
-    fn generate_ke2<'a, R: RngCore + CryptoRng, S: SecretKey<G>>(
+    fn generate_ke2<'a, 'b, 'c, 'd, R: RngCore + CryptoRng, S: SecretKey<G>>(
         rng: &mut R,
-        l1_bytes: Vec<u8>,
-        l2_bytes: Vec<u8>,
+        l1_bytes: impl Iterator<Item = &'a [u8]>,
+        l2_bytes: impl Iterator<Item = &'b [u8]>,
         ke1_message: Self::KE1Message,
         client_s_pk: PublicKey<G>,
         server_s_sk: S,
-        id_u: impl Iterator<Item = &'a [u8]>,
-        id_s: impl Iterator<Item = &'a [u8]>,
+        id_u: impl Iterator<Item = &'c [u8]>,
+        id_s: impl Iterator<Item = &'d [u8]>,
         context: &[u8],
     ) -> Result<GenerateKe2Result<Self, D, G>, ProtocolError<S::Error>>;
 
     #[allow(clippy::too_many_arguments, clippy::type_complexity)]
-    fn generate_ke3<'a>(
-        l2_component: Vec<u8>,
+    fn generate_ke3<'a, 'b, 'c, 'd>(
+        l2_component: impl Iterator<Item = &'a [u8]>,
         ke2_message: Self::KE2Message,
         ke1_state: &Self::KE1State,
-        serialized_credential_request: &[u8],
+        serialized_credential_request: impl Iterator<Item = &'b [u8]>,
         server_s_pk: PublicKey<G>,
         client_s_sk: PrivateKey<G>,
-        id_u: impl Iterator<Item = &'a [u8]>,
-        id_s: impl Iterator<Item = &'a [u8]>,
+        id_u: impl Iterator<Item = &'c [u8]>,
+        id_s: impl Iterator<Item = &'d [u8]>,
         context: &[u8],
     ) -> Result<GenerateKe3Result<Self, D, G>, ProtocolError>;
 
@@ -90,9 +90,25 @@ pub trait KeyExchange<D: Hash, G: KeGroup> {
 }
 
 pub trait FromBytes: Sized {
-    fn from_bytes<CS: CipherSuite>(input: &[u8]) -> Result<Self, ProtocolError>;
+    fn from_bytes(input: &[u8]) -> Result<Self, ProtocolError>;
+}
+
+pub trait ToVec {
+    fn to_vec(&self) -> Vec<u8>;
 }
 
 pub trait ToBytes {
-    fn to_bytes(&self) -> Vec<u8>;
+    type Len: ArrayLength<u8>;
+
+    fn to_bytes(&self) -> GenericArray<u8, Self::Len>;
 }
+
+#[allow(type_alias_bounds)]
+pub type Ke1MessageLen<CS: CipherSuite> =
+    <<CS::KeyExchange as KeyExchange<CS::Hash, CS::KeGroup>>::KE1Message as ToBytes>::Len;
+#[allow(type_alias_bounds)]
+pub type Ke2MessageLen<CS: CipherSuite> =
+    <<CS::KeyExchange as KeyExchange<CS::Hash, CS::KeGroup>>::KE2Message as ToBytes>::Len;
+#[allow(type_alias_bounds)]
+pub type Ke3MessageLen<CS: CipherSuite> =
+    <<CS::KeyExchange as KeyExchange<CS::Hash, CS::KeGroup>>::KE3Message as ToBytes>::Len;
