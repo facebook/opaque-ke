@@ -407,13 +407,13 @@ impl<CS: CipherSuite> CredentialResponse<CS> {
     }
 
     pub(crate) fn serialize_without_ke<'a>(
-        beta: &'a [u8],
-        masking_nonce: &'a [u8],
+        beta: &'a GenericArray<u8, <CS::OprfGroup as Group>::ElemLen>,
+        masking_nonce: &'a GenericArray<u8, NonceLen>,
         masked_response: &'a MaskedResponse<CS>,
     ) -> impl Iterator<Item = &'a [u8]> {
         // MSRV: array `into_iter` isn't available in 1.51
         #[allow(deprecated)]
-        IntoIter::new([beta, masking_nonce])
+        IntoIter::new([beta.as_slice(), masking_nonce.as_slice()])
             .into_iter()
             .chain(masked_response.iter())
     }
