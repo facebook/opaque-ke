@@ -48,7 +48,7 @@ pub(crate) fn os2ip(input: &[u8]) -> Result<usize, ProtocolError> {
     Ok(usize::from_be_bytes(output_array))
 }
 
-/// Simplifies handling of [`serialize()`] output and implements [`Iterator`].
+/// Computes `I2OSP(len(input), max_bytes) || input` and helps hold output without allocation.
 pub(crate) struct Serialize<
     'a,
     L1: ArrayLength<u8>,
@@ -66,7 +66,7 @@ enum Input<'a, L1: ArrayLength<u8>, L2: ArrayLength<u8>> {
 }
 
 impl<'a, L1: ArrayLength<u8>, L2: ArrayLength<u8>, L3: ArrayLength<u8>> Serialize<'a, L1, L2, L3> {
-    // Computes I2OSP(len(input), max_bytes) || input
+    // Variation of `serialize` that takes a borrowed `input
     pub(crate) fn from(input: &'a [u8]) -> Result<Serialize<'a, L1, L2>, ProtocolError> {
         Ok(Serialize {
             octet: i2osp::<L1>(input.len())?,
