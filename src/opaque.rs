@@ -165,6 +165,11 @@ impl<CS: CipherSuite> ServerSetup<CS, PrivateKey<CS::KeGroup>> {
     }
 }
 
+/// Length of [`ServerSetup`] in bytes for serialization.
+#[allow(type_alias_bounds)]
+pub type ServerSetupLen<CS: CipherSuite, S: SecretKey<CS::KeGroup>> =
+    Sum<Sum<<CS::Hash as FixedOutput>::OutputSize, S::Len>, <CS::KeGroup as KeGroup>::SkLen>;
+
 impl<CS: CipherSuite, S: SecretKey<CS::KeGroup>> ServerSetup<CS, S> {
     /// Create [`ServerSetup`] with the given keypair
     pub fn new_with_key<R: CryptoRng + RngCore>(
@@ -182,13 +187,18 @@ impl<CS: CipherSuite, S: SecretKey<CS::KeGroup>> ServerSetup<CS, S> {
     }
 
     /// Serialization into bytes
-    pub fn serialize(&self) -> Vec<u8> {
-        [
-            self.oprf_seed.to_vec(),
-            self.keypair.private().serialize().to_vec(),
-            self.fake_keypair.private().serialize().to_vec(),
-        ]
-        .concat()
+    pub fn serialize(&self) -> GenericArray<u8, ServerSetupLen<CS, S>>
+    where
+        // ServerSetup: Hash + KeSk + KeSk
+        <CS::Hash as FixedOutput>::OutputSize: Add<S::Len>,
+        Sum<<CS::Hash as FixedOutput>::OutputSize, S::Len>:
+            ArrayLength<u8> + Add<<CS::KeGroup as KeGroup>::SkLen>,
+        ServerSetupLen<CS, S>: ArrayLength<u8>,
+    {
+        self.oprf_seed
+            .clone()
+            .concat(self.keypair.private().serialize())
+            .concat(self.fake_keypair.private().to_arr())
     }
 
     /// Deserialization from bytes
@@ -229,15 +239,15 @@ impl<CS: CipherSuite> ClientRegistration<CS> {
     /// Deserialization from bytes
     pub fn deserialize(input: &[u8]) -> Result<Self, ProtocolError> {
         let (serialized_oprf_client, remainder) = tokenize(input, 2)?;
-        let (serialized_blinded_element, remainder) = tokenize(&remainder, 2)?;
+        let (serialized_blinded_element, remainder) = tokenize(remainder, 2)?;
 
         if !remainder.is_empty() {
             return Err(ProtocolError::SerializationError);
         }
 
         Ok(Self {
-            oprf_client: voprf::NonVerifiableClient::deserialize(&serialized_oprf_client)?,
-            blinded_element: voprf::BlindedElement::deserialize(&serialized_blinded_element)?,
+            oprf_client: voprf::NonVerifiableClient::deserialize(serialized_oprf_client)?,
+            blinded_element: voprf::BlindedElement::deserialize(serialized_blinded_element)?,
         })
     }
 
@@ -413,8 +423,8 @@ impl<CS: CipherSuite> ClientLogin<CS> {
     /// Deserialization from bytes
     pub fn deserialize(input: &[u8]) -> Result<Self, ProtocolError> {
         let (serialized_oprf_client, remainder) = tokenize(input, 2)?;
-        let (serialized_credential_request, remainder) = tokenize(&remainder, 2)?;
-        let (ke1_state_bytes, remainder) = tokenize(&remainder, 2)?;
+        let (serialized_credential_request, remainder) = tokenize(remainder, 2)?;
+        let (ke1_state_bytes, remainder) = tokenize(remainder, 2)?;
 
         if !remainder.is_empty() {
             return Err(ProtocolError::SerializationError);
@@ -422,12 +432,12 @@ impl<CS: CipherSuite> ClientLogin<CS> {
 
         let ke1_state =
             <CS::KeyExchange as KeyExchange<CS::Hash, CS::KeGroup>>::KE1State::from_bytes(
-                &ke1_state_bytes,
+                ke1_state_bytes,
             )?;
         Ok(Self {
-            oprf_client: voprf::NonVerifiableClient::deserialize(&serialized_oprf_client)?,
+            oprf_client: voprf::NonVerifiableClient::deserialize(serialized_oprf_client)?,
             ke1_state,
-            credential_request: CredentialRequest::deserialize(&serialized_credential_request)?,
+            credential_request: CredentialRequest::deserialize(serialized_credential_request)?,
         })
     }
 

@@ -6,7 +6,6 @@
 // of this source tree.
 
 use crate::errors::ProtocolError;
-use alloc::vec::Vec;
 use core::marker::PhantomData;
 use digest::Update;
 use generic_array::{
@@ -135,10 +134,7 @@ impl<'a, L1: ArrayLength<u8>, L2: ArrayLength<u8>> Serialize<'a, L1, L2, U2> {
 
 // Tokenizes an input of the format I2OSP(len(input), max_bytes) || input, outputting
 // (input, remainder)
-pub(crate) fn tokenize(
-    input: &[u8],
-    size_bytes: usize,
-) -> Result<(Vec<u8>, Vec<u8>), ProtocolError> {
+pub(crate) fn tokenize(input: &[u8], size_bytes: usize) -> Result<(&[u8], &[u8]), ProtocolError> {
     if size_bytes > core::mem::size_of::<usize>() || input.len() < size_bytes {
         return Err(ProtocolError::SerializationError);
     }
@@ -149,8 +145,8 @@ pub(crate) fn tokenize(
     }
 
     Ok((
-        input[size_bytes..size_bytes + size].to_vec(),
-        input[size_bytes + size..].to_vec(),
+        &input[size_bytes..size_bytes + size],
+        &input[size_bytes + size..],
     ))
 }
 
