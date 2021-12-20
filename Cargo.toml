@@ -35,7 +35,7 @@ hkdf = "0.11"
 hmac = "0.11"
 p256_ = { package = "p256", version = "0.9", default-features = false, features = ["arithmetic", "zeroize"], optional = true }
 rand = { version = "0.8", default-features = false }
-serde = { version = "1", default-features = false, features = ["alloc", "derive"], optional = true }
+serde = { version = "1", default-features = false, features = ["derive"], optional = true }
 subtle = { version = "2.3", default-features = false }
 voprf = { git = "https://github.com/khonsulabs/voprf", rev = "f8c19eab4ecc9e7a2a5ae26c59661ce797229566", default-features = false, features = ["danger"] }
 zeroize = { version = "1", features = ["zeroize_derive"] }
