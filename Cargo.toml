@@ -20,11 +20,10 @@ bench = []
 u64_backend = ["curve25519-dalek/u64_backend", "voprf/ristretto255_u64"]
 u32_backend = ["curve25519-dalek/u32_backend", "voprf/ristretto255_u32"]
 std = ["curve25519-dalek/std", "getrandom", "rand/std", "rand/std_rng", "voprf/std"]
-serialize = ["serde", "base64", "generic-array/serde", "curve25519-dalek/serde", "voprf/serde"]
+serialize = ["serde", "generic-array/serde", "curve25519-dalek/serde", "voprf/serde"]
 
 [dependencies]
 argon2 = { version = "0.3", default-features = false, features = ["alloc"], optional = true }
-base64 = { version = "0.13", default-features = false, features = ["alloc"], optional = true }
 constant_time_eq = "0.1"
 curve25519-dalek = { version = "3", default-features = false }
 derive-where = { version = "1.0.0-rc.1", features = ["zeroize"] }

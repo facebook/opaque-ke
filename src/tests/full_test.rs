@@ -545,33 +545,18 @@ fn test_serialization() -> Result<(), ProtocolError> {
     let mut rng = CycleRng::new(parameters.blinding_factor.to_vec());
     let client_registration_start_result =
         ClientRegistration::<RistrettoSha5123dhNoSlowHash>::start(&mut rng, &parameters.password)?;
-    {
-        // Test the json serialization (human-readable, base64).
-        let registration_request_json =
-            serde_json::to_string(&client_registration_start_result.message).unwrap();
-        assert_eq!(
-            registration_request_json,
-            r#""8FBIuznz9aOkFPUCVMQls2+EIWKmML9zRW30UzUcsz0=""#
-        );
-        let registration_request: RegistrationRequest<RistrettoSha5123dhNoSlowHash> =
-            serde_json::from_str(&registration_request_json).unwrap();
-        assert_eq!(
-            hex::encode(client_registration_start_result.message.serialize()),
-            hex::encode(registration_request.serialize()),
-        );
-    }
-    {
-        // Test the bincode serialization (binary).
-        let registration_request_bin =
-            bincode::serialize(&client_registration_start_result.message).unwrap();
-        assert_eq!(registration_request_bin.len(), 40);
-        let registration_request: RegistrationRequest<RistrettoSha5123dhNoSlowHash> =
-            bincode::deserialize(&registration_request_bin).unwrap();
-        assert_eq!(
-            hex::encode(client_registration_start_result.message.serialize()),
-            hex::encode(registration_request.serialize()),
-        );
-    }
+
+    // Test the bincode serialization (binary).
+    let registration_request =
+        bincode::serialize(&client_registration_start_result.message).unwrap();
+    assert_eq!(registration_request.len(), 40);
+    let registration_request: RegistrationRequest<RistrettoSha5123dhNoSlowHash> =
+        bincode::deserialize(&registration_request).unwrap();
+    assert_eq!(
+        hex::encode(client_registration_start_result.message.serialize()),
+        hex::encode(registration_request.serialize()),
+    );
+
     Ok(())
 }
 #[test]
