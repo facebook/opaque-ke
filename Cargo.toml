@@ -22,6 +22,13 @@ ristretto255_u32 = ["curve25519-dalek/u32_backend", "ristretto255", "voprf/ristr
 ristretto255_fiat_u64 = ["curve25519-dalek/fiat_u64_backend", "ristretto255", "voprf/ristretto255_fiat_u64"]
 ristretto255_fiat_u32 = ["curve25519-dalek/fiat_u32_backend", "ristretto255", "voprf/ristretto255_fiat_u32"]
 ristretto255_simd = ["curve25519-dalek/simd_backend", "ristretto255", "voprf/ristretto255_simd"]
+x25519 = []
+x25519_u64 = ["x25519", "x25519-dalek/u64_backend"]
+x25519_u32 = ["x25519", "x25519-dalek/u32_backend"]
+x25519_fiat_u64 = ["x25519", "x25519-dalek/fiat_u64_backend"]
+x25519_fiat_u32 = ["x25519", "x25519-dalek/fiat_u32_backend"]
+# x25519-dalek isn't properly re-exposing `simd_backend`.
+x25519_simd = ["curve25519-dalek/simd_backend", "x25519", "x25519-dalek/nightly"]
 std = ["getrandom", "rand/std", "rand/std_rng", "voprf/std"]
 serde = ["serde_", "generic-array/serde", "voprf/serde"]
 
@@ -41,6 +48,7 @@ rand = { version = "0.8", default-features = false }
 serde_ = { version = "1", package = "serde", default-features = false, features = ["derive"], optional = true }
 subtle = { version = "2.3", default-features = false }
 voprf = { git = "https://github.com/khonsulabs/voprf", rev = "f8c19eab4ecc9e7a2a5ae26c59661ce797229566", default-features = false, features = ["danger"] }
+x25519-dalek = { version = "1", default-features = false, optional = true }
 zeroize = { version = "1", features = ["zeroize_derive"] }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]

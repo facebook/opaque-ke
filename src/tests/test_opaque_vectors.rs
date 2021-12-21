@@ -232,7 +232,7 @@ fn tests() -> Result<(), ProtocolError> {
         struct P256Sha256NoSlowHash;
         impl CipherSuite for P256Sha256NoSlowHash {
             type OprfGroup = p256_::ProjectivePoint;
-            type KeGroup = p256_::ProjectivePoint;
+            type KeGroup = p256_::PublicKey;
             type KeyExchange = TripleDH;
             type Hash = sha2::Sha256;
             type SlowHash = NoOpHash;

@@ -62,7 +62,7 @@
 //! # #[cfg(not(feature = "ristretto255"))]
 //! # impl CipherSuite for Default {
 //! #     type OprfGroup = p256_::ProjectivePoint;
-//! #     type KeGroup = p256_::ProjectivePoint;
+//! #     type KeGroup = p256_::PublicKey;
 //! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
 //! #     type Hash = sha2::Sha256;
 //! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
@@ -104,7 +104,7 @@
 //! # #[cfg(not(feature = "ristretto255"))]
 //! # impl CipherSuite for Default {
 //! #     type OprfGroup = p256_::ProjectivePoint;
-//! #     type KeGroup = p256_::ProjectivePoint;
+//! #     type KeGroup = p256_::PublicKey;
 //! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
 //! #     type Hash = sha2::Sha256;
 //! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
@@ -144,7 +144,7 @@
 //! # #[cfg(not(feature = "ristretto255"))]
 //! # impl CipherSuite for Default {
 //! #     type OprfGroup = p256_::ProjectivePoint;
-//! #     type KeGroup = p256_::ProjectivePoint;
+//! #     type KeGroup = p256_::PublicKey;
 //! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
 //! #     type Hash = sha2::Sha256;
 //! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
@@ -191,7 +191,7 @@
 //! # #[cfg(not(feature = "ristretto255"))]
 //! # impl CipherSuite for Default {
 //! #     type OprfGroup = p256_::ProjectivePoint;
-//! #     type KeGroup = p256_::ProjectivePoint;
+//! #     type KeGroup = p256_::PublicKey;
 //! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
 //! #     type Hash = sha2::Sha256;
 //! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
@@ -239,7 +239,7 @@
 //! # #[cfg(not(feature = "ristretto255"))]
 //! # impl CipherSuite for Default {
 //! #     type OprfGroup = p256_::ProjectivePoint;
-//! #     type KeGroup = p256_::ProjectivePoint;
+//! #     type KeGroup = p256_::PublicKey;
 //! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
 //! #     type Hash = sha2::Sha256;
 //! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
@@ -291,7 +291,7 @@
 //! # #[cfg(not(feature = "ristretto255"))]
 //! # impl CipherSuite for Default {
 //! #     type OprfGroup = p256_::ProjectivePoint;
-//! #     type KeGroup = p256_::ProjectivePoint;
+//! #     type KeGroup = p256_::PublicKey;
 //! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
 //! #     type Hash = sha2::Sha256;
 //! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
@@ -334,7 +334,7 @@
 //! # #[cfg(not(feature = "ristretto255"))]
 //! # impl CipherSuite for Default {
 //! #     type OprfGroup = p256_::ProjectivePoint;
-//! #     type KeGroup = p256_::ProjectivePoint;
+//! #     type KeGroup = p256_::PublicKey;
 //! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
 //! #     type Hash = sha2::Sha256;
 //! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
@@ -397,7 +397,7 @@
 //! # #[cfg(not(feature = "ristretto255"))]
 //! # impl CipherSuite for Default {
 //! #     type OprfGroup = p256_::ProjectivePoint;
-//! #     type KeGroup = p256_::ProjectivePoint;
+//! #     type KeGroup = p256_::PublicKey;
 //! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
 //! #     type Hash = sha2::Sha256;
 //! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
@@ -452,7 +452,7 @@
 //! # #[cfg(not(feature = "ristretto255"))]
 //! # impl CipherSuite for Default {
 //! #     type OprfGroup = p256_::ProjectivePoint;
-//! #     type KeGroup = p256_::ProjectivePoint;
+//! #     type KeGroup = p256_::PublicKey;
 //! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
 //! #     type Hash = sha2::Sha256;
 //! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
@@ -537,7 +537,7 @@
 //! # #[cfg(not(feature = "ristretto255"))]
 //! # impl CipherSuite for Default {
 //! #     type OprfGroup = p256_::ProjectivePoint;
-//! #     type KeGroup = p256_::ProjectivePoint;
+//! #     type KeGroup = p256_::PublicKey;
 //! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
 //! #     type Hash = sha2::Sha256;
 //! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
@@ -624,7 +624,7 @@
 //! # #[cfg(not(feature = "ristretto255"))]
 //! # impl CipherSuite for Default {
 //! #     type OprfGroup = p256_::ProjectivePoint;
-//! #     type KeGroup = p256_::ProjectivePoint;
+//! #     type KeGroup = p256_::PublicKey;
 //! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
 //! #     type Hash = sha2::Sha256;
 //! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
@@ -699,7 +699,7 @@
 //! # #[cfg(not(feature = "ristretto255"))]
 //! # impl CipherSuite for Default {
 //! #     type OprfGroup = p256_::ProjectivePoint;
-//! #     type KeGroup = p256_::ProjectivePoint;
+//! #     type KeGroup = p256_::PublicKey;
 //! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
 //! #     type Hash = sha2::Sha256;
 //! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
@@ -747,7 +747,7 @@
 //! # #[cfg(not(feature = "ristretto255"))]
 //! # impl CipherSuite for Default {
 //! #     type OprfGroup = p256_::ProjectivePoint;
-//! #     type KeGroup = p256_::ProjectivePoint;
+//! #     type KeGroup = p256_::PublicKey;
 //! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
 //! #     type Hash = sha2::Sha256;
 //! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
@@ -807,7 +807,7 @@
 //! # #[cfg(not(feature = "ristretto255"))]
 //! # impl CipherSuite for Default {
 //! #     type OprfGroup = p256_::ProjectivePoint;
-//! #     type KeGroup = p256_::ProjectivePoint;
+//! #     type KeGroup = p256_::PublicKey;
 //! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
 //! #     type Hash = sha2::Sha256;
 //! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
@@ -894,7 +894,7 @@
 //! # #[cfg(not(feature = "ristretto255"))]
 //! # impl CipherSuite for Default {
 //! #     type OprfGroup = p256_::ProjectivePoint;
-//! #     type KeGroup = p256_::ProjectivePoint;
+//! #     type KeGroup = p256_::PublicKey;
 //! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
 //! #     type Hash = sha2::Sha256;
 //! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
@@ -958,14 +958,18 @@
 //!   the corresponding backend for the curve arithmetic used. The `ristretto255_u64` feature is included as the default.
 //!   Other features are mapped as `ristretto255_u32`, `ristretto255_fiat_u64` and `ristretto255_fiat_u32`. Any `ristretto255_*`
 //!   backend feature will enable the `ristretto255` feature, which can be used too, but keep in mind that `curve25519-dalek`
-//!   will fail to compile without a selected backend.
+//!   will fail to compile without a selected backend. This enabled to use `curve25519_dalek::ristretto::RistrettoPoint` as a
+//!   `KeGroup` and `OprfGroup`.
+//!
+//! - The `x25519` feature is similar to the `ristretto255` feature and requires to select a backend like `x25519_u64`, other
+//!   backends are the same as in `ristretto255_*`. This enabled to use `x25519_dalek::PublicKey` as a `KeGroup`.
 //!
 //! - The `ristretto255_simd` feature is re-exported from
 //!   [curve25519-dalek](https://doc.dalek.rs/curve25519_dalek/index.html#backends-and-features) and enables parallel formulas,
 //!   using either AVX2 or AVX512-IFMA. This will automatically enable the `ristretto255_u64` feature and requires Rust nightly.
 //!
-//! - The `p256` feature enables the use of `p256::ProjectivePoint` as a `Group` for `CipherSuite`. Note that this
-//! is currently an experimental feature ⚠️, and is not yet ready for production use.
+//! - The `p256` feature enables the use of `p256::PublicKey` as a `KeGroup` and `p256::ProjectivePoint` as a `OprfGroup` for
+//!   `CipherSuite`. Note that this is currently an experimental feature ⚠️, and is not yet ready for production use.
 //!
 //! - The `bench` feature is used only for running performance benchmarks for this implementation.
 //!

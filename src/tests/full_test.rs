@@ -56,7 +56,29 @@ struct P256;
 #[cfg(feature = "p256")]
 impl CipherSuite for P256 {
     type OprfGroup = p256_::ProjectivePoint;
-    type KeGroup = p256_::ProjectivePoint;
+    type KeGroup = p256_::PublicKey;
+    type KeyExchange = TripleDH;
+    type Hash = sha2::Sha256;
+    type SlowHash = NoOpHash;
+}
+
+#[cfg(all(feature = "x25519", feature = "ristretto255"))]
+struct X25519Ristretto255;
+#[cfg(all(feature = "x25519", feature = "ristretto255"))]
+impl CipherSuite for X25519Ristretto255 {
+    type OprfGroup = curve25519_dalek::ristretto::RistrettoPoint;
+    type KeGroup = x25519_dalek::PublicKey;
+    type KeyExchange = TripleDH;
+    type Hash = sha2::Sha512;
+    type SlowHash = NoOpHash;
+}
+
+#[cfg(all(feature = "x25519", feature = "p256"))]
+struct X25519P256;
+#[cfg(all(feature = "x25519", feature = "p256"))]
+impl CipherSuite for X25519P256 {
+    type OprfGroup = p256_::ProjectivePoint;
+    type KeGroup = x25519_dalek::PublicKey;
     type KeyExchange = TripleDH;
     type Hash = sha2::Sha256;
     type SlowHash = NoOpHash;
@@ -139,7 +161,6 @@ static TEST_VECTOR_RISTRETTO255: &str = r#"
 }
 "#;
 
-// To regenerate, run: cargo test -- --nocapture generate_test_vectors
 #[cfg(feature = "p256")]
 static TEST_VECTOR_P256: &str = r#"
 {
@@ -175,6 +196,82 @@ static TEST_VECTOR_P256: &str = r#"
     "password_file": "03dd5bbddab150cf7cd793d6702741e529ee13ab4ce4cfad731dd77fc13c2310e5d82ca5e29fa03deff3ed1d8eb1353389b02a78bd48fa256915314dac55cf5e74ee7beaaed8110b155efac3af2bb97a7a45262fa5702de4721c90ebcfb098b5964788cdaf2a92a5a161a819c2aa84985f5a8ea6fbedf01c87ddaa8be23fc16721",
     "export_key": "35a93c215dc618dc3acbacc08d16e4879bf2054349facf2a33bc061dee57d787",
     "session_key": "89699ffdb9e8ba62442184bd4a696c6c5832801a425446869aefa2544260d618"
+}
+"#;
+
+#[cfg(all(feature = "x25519", feature = "ristretto255"))]
+static TEST_VECTOR_X25519_RISTRETTO255: &str = r#"
+{
+    "client_s_pk": "9b1f31c4e1a456d140ea5ae0f683c13785b4ecf473019aca643461afa09ccf1b",
+    "client_s_sk": "88e61aca2e4715cbbfa2bc3058c9ff388fc9c5a89178624d28ff14ce232e495c",
+    "client_e_pk": "3e532c63ccb8aabb87b1a724eda76b94083d7cb15174acda91635245618cde3d",
+    "client_e_sk": "18e9a925e2a1dd150f20322783a935bdfccb488478c6befcc31cce1a27643164",
+    "server_s_pk": "afe934c6742742e4f1389e42722ce080bb4c4963b1eeaeb8829ea22a11162941",
+    "server_s_sk": "f0f1348721d891985a3a92236fab57593fc3d997a649c6ce8858e8c20d7c1944",
+    "server_e_pk": "9a579563f40948693645f490ee3fb0b7ec3fd5de1331858fe95927f71a59a971",
+    "server_e_sk": "b81c82d7219bf318b75160dd010e96e83e0e080709c61edfbce206d6ec101a4a",
+    "fake_sk": "90f850aae07d8365e8d28d31ff87bbef1d50c9928c49a5b4ec7aabd4d69ddf75",
+    "credential_identifier": "637265644964656e746966696572",
+    "id_u": "696455",
+    "id_s": "696453",
+    "password": "70617373776f7264",
+    "blinding_factor": "5aa31e7d500431691fa3eb16a8a2e416b769ec3df66ace2c199e6b1cfb8a7e0e",
+    "oprf_seed": "ee0813a196ccc90a12de74c2d680eed39d6f6f16e55012881b32b4c02367f205fa5d7374a6c7119b28a586d59e9ea45760c011a3a81f064f07f80ffa23155e77",
+    "masking_nonce": "e3a3aecff193e9fbdd6677aeb1078bbf6d78f1893fd6f7acd77e9e05c4d6b35f9b267571d52e74a5b159e5ff55f93f31fa278e549802eb36b66f1ec8b77aa3be",
+    "envelope_nonce": "e2bd93bfcae01cc59e5e0d928923002682a291577b6e0e214c3a67c1ba94fd15",
+    "client_nonce": "e130bdb7b59020cd43a39fc588d5f05d33967c48b3e2a87488788897470797d5",
+    "server_nonce": "f1238020af1207007652c734b023758168c2156cc81b76a4f628f30a042e248f",
+    "context": "636f6e74657874",
+    "registration_request": "9ef8b4a7817e4932f4e9837dd54b31ce9209cad61d7ea4003283158e5566620d",
+    "registration_response": "823eb375fcea47b3b1023848dc7b159ea4b9925f725a45f9e7da0f28c04f717eafe934c6742742e4f1389e42722ce080bb4c4963b1eeaeb8829ea22a11162941",
+    "registration_upload": "fe576ba51ba994ef0cac45a5fd55f663b2fcb9377d5ea1141d24f6c1a840b71890bf61e8066f25e3ea4148a685aaa2345cfdf3cd9157765c104659fcf695cb76b43f34a46ca41f5e78ae4ac857d98c6f105902305e695bcdec10dc4eda526fac88e61aca2e4715cbbfa2bc3058c9ff388fc9c5a89178624d28ff14ce232e495c90ea3a5efe3b34d84610f458759a7864eed0773290f7a5e5115eef6e5a81164f6e6fc5d026bcbfe55195dfdaa55b13b3d7f177ab8e5e318ffcd7d2ac5daf42c4",
+    "credential_request": "9ef8b4a7817e4932f4e9837dd54b31ce9209cad61d7ea4003283158e5566620de130bdb7b59020cd43a39fc588d5f05d33967c48b3e2a87488788897470797d53e532c63ccb8aabb87b1a724eda76b94083d7cb15174acda91635245618cde3d",
+    "credential_response": "823eb375fcea47b3b1023848dc7b159ea4b9925f725a45f9e7da0f28c04f717ee3a3aecff193e9fbdd6677aeb1078bbf6d78f1893fd6f7acd77e9e05c4d6b35fc05b4023afa48dba2a9c78abfb9c93353be3ce2adabe0d4cc4f69d9c0b635cc2e5b14ccec2a9bbabb4ad3f1591a3ac3c92dd989322ad7753e7f5834186a67c94ab65c6a446dcf06f13cf5ef0502f265c3be9e03770c54fe2cee1486cddbf292fa0f44b6173faefe0c093a7797bee2b04927c009f3653b42c3319bbb817920fbdb81c82d7219bf318b75160dd010e96e83e0e080709c61edfbce206d6ec101a4ae21bc06da818572e3a7e77f0eb74bbf7375379771dd7ada27c0b9bdd584f5f142eb61b7fb2c5f7d164597ec148f74a6a168ec0d93b06fb45d48d0a0c3e92e1da80cfe439fccde489c74b801de4401fadf4dcbd61cfe559ad2cf38e83662e2b06",
+    "credential_finalization": "fd18bc8aa8d789e6d954f962b52cb700296e88efd3a26f0761ff3e367d12b94ef187b2cc250519a2193fbd3c78247d3e0121aacdcdc5b22dcc818cd964c25754",
+    "client_registration_state": "00285aa31e7d500431691fa3eb16a8a2e416b769ec3df66ace2c199e6b1cfb8a7e0e70617373776f726400209ef8b4a7817e4932f4e9837dd54b31ce9209cad61d7ea4003283158e5566620d",
+    "client_login_state": "00285aa31e7d500431691fa3eb16a8a2e416b769ec3df66ace2c199e6b1cfb8a7e0e70617373776f726400609ef8b4a7817e4932f4e9837dd54b31ce9209cad61d7ea4003283158e5566620de130bdb7b59020cd43a39fc588d5f05d33967c48b3e2a87488788897470797d53e532c63ccb8aabb87b1a724eda76b94083d7cb15174acda91635245618cde3d004018e9a925e2a1dd150f20322783a935bdfccb488478c6befcc31cce1a27643164e130bdb7b59020cd43a39fc588d5f05d33967c48b3e2a87488788897470797d5",
+    "server_login_state": "b8bb1a1ff45040bf016aeab52aceec195109233f4c0e2589d4370658bb07f1d57f65d5e3007d94ed36d974c298f21184041c08c3298c9d16fa33591c19b07b45bdaaaee9c95f286dc4ce250b684bf3c5248ca0382f682d9eddeb5bf8fa16488696f7df7dec0d5090c57153aa1b3da588469ca6be7dc25954147ad3c08367f1bb2d2e6bd1a311eb2f3960b80a72e77158fc7b072c85f134695735ffed8206d465029c3ce886fee4665e05dfca5ef778dfe851bc31a8980dae67f15672d8e3f1dd",
+    "password_file": "fe576ba51ba994ef0cac45a5fd55f663b2fcb9377d5ea1141d24f6c1a840b71890bf61e8066f25e3ea4148a685aaa2345cfdf3cd9157765c104659fcf695cb76b43f34a46ca41f5e78ae4ac857d98c6f105902305e695bcdec10dc4eda526fac88e61aca2e4715cbbfa2bc3058c9ff388fc9c5a89178624d28ff14ce232e495c90ea3a5efe3b34d84610f458759a7864eed0773290f7a5e5115eef6e5a81164f6e6fc5d026bcbfe55195dfdaa55b13b3d7f177ab8e5e318ffcd7d2ac5daf42c4",
+    "export_key": "aafb0c3bc3694314180212233e811fa44cd35896420d3f65c3696e305c177fca6850bb1b36ed5b6fa3fdca9483dd2013ad30bb84f2a94979fc1fec2e461c1515",
+    "session_key": "2d2e6bd1a311eb2f3960b80a72e77158fc7b072c85f134695735ffed8206d465029c3ce886fee4665e05dfca5ef778dfe851bc31a8980dae67f15672d8e3f1dd"
+}
+"#;
+
+#[cfg(all(feature = "x25519", feature = "p256"))]
+static TEST_VECTOR_X25519_P256: &str = r#"
+{
+    "client_s_pk": "515850c2fb8fcf90378ba5baa2e5b05fd5244f90f49e4a4e8ded4553a696835a",
+    "client_s_sk": "2894850bbca99009c3a50e648011a57edda65bf88177197fff52378bde705878",
+    "client_e_pk": "8570fc35b68cf59e9c2d3d08a2452e9eaa9089b6d4cbee4053aedcd8eb4d3555",
+    "client_e_sk": "9001cb4337b57ca2a72e1a837ab72c5ee6f41348a4c77b5720a3fc6cd6f75561",
+    "server_s_pk": "583ef921ee685fe1a9d25492ed7221bf429dd8f3093cd78bf3de4b4822f11b56",
+    "server_s_sk": "f8c0872b11bebf21c83b300dedf222340c034a9831a3d21feaf7cb51c6f7805a",
+    "server_e_pk": "303d1d7ad0d6d466ee5a98a1407b1a05a891511cbdaa38695c63f9fb47a61c6a",
+    "server_e_sk": "c8ffba68071b11cabaae1f28bc5c816132dd2e1fc2d11ecf6286855f76e4b37f",
+    "fake_sk": "48aecca7847d09a5ba8ea1243d9a3527c16dc79852fd04eeb93083ef52e8f075",
+    "credential_identifier": "637265644964656e746966696572",
+    "id_u": "696455",
+    "id_s": "696453",
+    "password": "70617373776f7264",
+    "blinding_factor": "0e2fe2a1a193da4c6739a1265cd9a2df297ac7312f2770afa9c8d6de37ead907",
+    "oprf_seed": "048e281519d6d7548d03dccc8684d91e22025fc573e076c1c5885839cf42b8ad",
+    "masking_nonce": "59ded518f0215d108d4b0ba8a34911c1d4178318816ab964e67d8315c6803c1fe403684d504bdcbbde77fb90d3824390dd7d3f04b9203636c23399ffdacf9e62",
+    "envelope_nonce": "119acabcfa0d808d0ce82b7d3de2193deb5b0e71dc111d456c8ad4ee32fa7306",
+    "client_nonce": "9e34fd4a6900a3dcb0bfcf8b6df799871bb0a11178ee0d7dad6c0fb74921f302",
+    "server_nonce": "d62fbaec787648da7900d89fd007822e79407016d98a62333239892d49375a7d",
+    "context": "636f6e74657874",
+    "registration_request": "03cc7a78723430cbfa6f337c25d3ad586e5d20e2f8e9c2126a28c08f76493088f7",
+    "registration_response": "0247b0d70311fb623ee21236536cb5df543100b44abaacc3bf2627cca77ee80185583ef921ee685fe1a9d25492ed7221bf429dd8f3093cd78bf3de4b4822f11b56",
+    "registration_upload": "e3969807b3496f7a07afa9f2288e706f71125bbe1bc659e40f9c83eb3e428e430d9dc301ff73d3b95bf0fceab01ce66dc4c2f84dbea61526e6c1ee7c4adb8c912894850bbca99009c3a50e648011a57edda65bf88177197fff52378bde705878a6ede2210483b94ff0ca04b1eda09b841a735170f79d1674aacfbd3550bba356",
+    "credential_request": "03cc7a78723430cbfa6f337c25d3ad586e5d20e2f8e9c2126a28c08f76493088f79e34fd4a6900a3dcb0bfcf8b6df799871bb0a11178ee0d7dad6c0fb74921f3028570fc35b68cf59e9c2d3d08a2452e9eaa9089b6d4cbee4053aedcd8eb4d3555",
+    "credential_response": "0247b0d70311fb623ee21236536cb5df543100b44abaacc3bf2627cca77ee8018559ded518f0215d108d4b0ba8a34911c1d4178318816ab964e67d8315c6803c1fd513bf2f3cea8283a7ba98973d1f160213586e42a5e6ae5d6ac73f5deebc609e7481e84cd4f61b844db7457a5dc18121a0a6d8776d4e29d98cdf4892c18189439a3a7692a2be2910e0ba9fd8f7a28c10733ff781c4e36dabe86a819d35ce4745c8ffba68071b11cabaae1f28bc5c816132dd2e1fc2d11ecf6286855f76e4b37f2c2ffc6b9b2f6342231d5d3a9ea28023f543c7ccf3852413e411ab011b0c06523163f82d3cf9abb5e8517d0d47ef13071ac1001c6a1e39f2cbfe7440257d4db2",
+    "credential_finalization": "de00d81621b2394b201a0c9d731b6b96e9cdab29fedb14c749c51029446da74a",
+    "client_registration_state": "00280e2fe2a1a193da4c6739a1265cd9a2df297ac7312f2770afa9c8d6de37ead90770617373776f7264002103cc7a78723430cbfa6f337c25d3ad586e5d20e2f8e9c2126a28c08f76493088f7",
+    "client_login_state": "00280e2fe2a1a193da4c6739a1265cd9a2df297ac7312f2770afa9c8d6de37ead90770617373776f7264006103cc7a78723430cbfa6f337c25d3ad586e5d20e2f8e9c2126a28c08f76493088f79e34fd4a6900a3dcb0bfcf8b6df799871bb0a11178ee0d7dad6c0fb74921f3028570fc35b68cf59e9c2d3d08a2452e9eaa9089b6d4cbee4053aedcd8eb4d355500409001cb4337b57ca2a72e1a837ab72c5ee6f41348a4c77b5720a3fc6cd6f755619e34fd4a6900a3dcb0bfcf8b6df799871bb0a11178ee0d7dad6c0fb74921f302",
+    "server_login_state": "df965dfa291f57cfead138a43802798c270c481a35b2fbf3d6d0c1860ab73a8e5f9874bbe6a329b51e9015a551a7b49809de26f74ba2ff496782d94ae01468fc63b02cf977a143ebe1a1231a28367d1be1065d5c0273f959e1e97a08a74bf6f1",
+    "password_file": "e3969807b3496f7a07afa9f2288e706f71125bbe1bc659e40f9c83eb3e428e430d9dc301ff73d3b95bf0fceab01ce66dc4c2f84dbea61526e6c1ee7c4adb8c912894850bbca99009c3a50e648011a57edda65bf88177197fff52378bde705878a6ede2210483b94ff0ca04b1eda09b841a735170f79d1674aacfbd3550bba356",
+    "export_key": "6168b6786fbded7a888067b58e62035f0f1940c0fb6448fc69093d62597f365a",
+    "session_key": "63b02cf977a143ebe1a1231a28367d1be1065d5c0273f959e1e97a08a74bf6f1"
 }
 "#;
 
@@ -575,7 +672,20 @@ fn generate_test_vectors() -> Result<(), ProtocolError> {
     #[cfg(feature = "p256")]
     {
         let parameters = generate_parameters::<P256>()?;
-        println!("P256: {}", stringify_test_vectors(&parameters));
+        println!("P-256: {}", stringify_test_vectors(&parameters));
+    }
+    #[cfg(all(feature = "x25519", feature = "ristretto255"))]
+    {
+        let parameters = generate_parameters::<X25519Ristretto255>()?;
+        println!(
+            "X25519 Ristretto255: {}",
+            stringify_test_vectors(&parameters)
+        );
+    }
+    #[cfg(all(feature = "x25519", feature = "p256"))]
+    {
+        let parameters = generate_parameters::<X25519P256>()?;
+        println!("X25519 P-256: {}", stringify_test_vectors(&parameters));
     }
 
     Ok(())
@@ -603,6 +713,10 @@ fn test_registration_request() -> Result<(), ProtocolError> {
     inner::<Ristretto255>(TEST_VECTOR_RISTRETTO255)?;
     #[cfg(feature = "p256")]
     inner::<P256>(TEST_VECTOR_P256)?;
+    #[cfg(all(feature = "x25519", feature = "ristretto255"))]
+    inner::<X25519Ristretto255>(TEST_VECTOR_X25519_RISTRETTO255)?;
+    #[cfg(all(feature = "x25519", feature = "p256"))]
+    inner::<X25519P256>(TEST_VECTOR_X25519_P256)?;
 
     Ok(())
 }
@@ -639,6 +753,10 @@ fn test_serialization() -> Result<(), ProtocolError> {
     inner::<Ristretto255>(TEST_VECTOR_RISTRETTO255)?;
     #[cfg(feature = "p256")]
     inner::<P256>(TEST_VECTOR_P256)?;
+    #[cfg(all(feature = "x25519", feature = "ristretto255"))]
+    inner::<X25519Ristretto255>(TEST_VECTOR_X25519_RISTRETTO255)?;
+    #[cfg(all(feature = "x25519", feature = "p256"))]
+    inner::<X25519P256>(TEST_VECTOR_X25519_P256)?;
 
     Ok(())
 }
@@ -680,6 +798,10 @@ fn test_registration_response() -> Result<(), ProtocolError> {
     inner::<Ristretto255>(TEST_VECTOR_RISTRETTO255)?;
     #[cfg(feature = "p256")]
     inner::<P256>(TEST_VECTOR_P256)?;
+    #[cfg(all(feature = "x25519", feature = "ristretto255"))]
+    inner::<X25519Ristretto255>(TEST_VECTOR_X25519_RISTRETTO255)?;
+    #[cfg(all(feature = "x25519", feature = "p256"))]
+    inner::<X25519P256>(TEST_VECTOR_X25519_P256)?;
 
     Ok(())
 }
@@ -733,6 +855,10 @@ fn test_registration_upload() -> Result<(), ProtocolError> {
     inner::<Ristretto255>(TEST_VECTOR_RISTRETTO255)?;
     #[cfg(feature = "p256")]
     inner::<P256>(TEST_VECTOR_P256)?;
+    #[cfg(all(feature = "x25519", feature = "ristretto255"))]
+    inner::<X25519Ristretto255>(TEST_VECTOR_X25519_RISTRETTO255)?;
+    #[cfg(all(feature = "x25519", feature = "p256"))]
+    inner::<X25519P256>(TEST_VECTOR_X25519_P256)?;
 
     Ok(())
 }
@@ -768,6 +894,10 @@ fn test_password_file() -> Result<(), ProtocolError> {
     inner::<Ristretto255>(TEST_VECTOR_RISTRETTO255)?;
     #[cfg(feature = "p256")]
     inner::<P256>(TEST_VECTOR_P256)?;
+    #[cfg(all(feature = "x25519", feature = "ristretto255"))]
+    inner::<X25519Ristretto255>(TEST_VECTOR_X25519_RISTRETTO255)?;
+    #[cfg(all(feature = "x25519", feature = "p256"))]
+    inner::<X25519P256>(TEST_VECTOR_X25519_P256)?;
 
     Ok(())
 }
@@ -806,6 +936,10 @@ fn test_credential_request() -> Result<(), ProtocolError> {
     inner::<Ristretto255>(TEST_VECTOR_RISTRETTO255)?;
     #[cfg(feature = "p256")]
     inner::<P256>(TEST_VECTOR_P256)?;
+    #[cfg(all(feature = "x25519", feature = "ristretto255"))]
+    inner::<X25519Ristretto255>(TEST_VECTOR_X25519_RISTRETTO255)?;
+    #[cfg(all(feature = "x25519", feature = "p256"))]
+    inner::<X25519P256>(TEST_VECTOR_X25519_P256)?;
 
     Ok(())
 }
@@ -876,6 +1010,10 @@ fn test_credential_response() -> Result<(), ProtocolError> {
     inner::<Ristretto255>(TEST_VECTOR_RISTRETTO255)?;
     #[cfg(feature = "p256")]
     inner::<P256>(TEST_VECTOR_P256)?;
+    #[cfg(all(feature = "x25519", feature = "ristretto255"))]
+    inner::<X25519Ristretto255>(TEST_VECTOR_X25519_RISTRETTO255)?;
+    #[cfg(all(feature = "x25519", feature = "p256"))]
+    inner::<X25519P256>(TEST_VECTOR_X25519_P256)?;
 
     Ok(())
 }
@@ -929,6 +1067,10 @@ fn test_credential_finalization() -> Result<(), ProtocolError> {
     inner::<Ristretto255>(TEST_VECTOR_RISTRETTO255)?;
     #[cfg(feature = "p256")]
     inner::<P256>(TEST_VECTOR_P256)?;
+    #[cfg(all(feature = "x25519", feature = "ristretto255"))]
+    inner::<X25519Ristretto255>(TEST_VECTOR_X25519_RISTRETTO255)?;
+    #[cfg(all(feature = "x25519", feature = "p256"))]
+    inner::<X25519P256>(TEST_VECTOR_X25519_P256)?;
 
     Ok(())
 }
@@ -955,6 +1097,10 @@ fn test_server_login_finish() -> Result<(), ProtocolError> {
     inner::<Ristretto255>(TEST_VECTOR_RISTRETTO255)?;
     #[cfg(feature = "p256")]
     inner::<P256>(TEST_VECTOR_P256)?;
+    #[cfg(all(feature = "x25519", feature = "ristretto255"))]
+    inner::<X25519Ristretto255>(TEST_VECTOR_X25519_RISTRETTO255)?;
+    #[cfg(all(feature = "x25519", feature = "p256"))]
+    inner::<X25519P256>(TEST_VECTOR_X25519_P256)?;
 
     Ok(())
 }
@@ -1032,6 +1178,10 @@ fn test_complete_flow_success() -> Result<(), ProtocolError> {
     test_complete_flow::<Ristretto255>(b"good password", b"good password")?;
     #[cfg(feature = "p256")]
     test_complete_flow::<P256>(b"good password", b"good password")?;
+    #[cfg(all(feature = "x25519", feature = "ristretto255"))]
+    test_complete_flow::<X25519Ristretto255>(b"good password", b"good password")?;
+    #[cfg(all(feature = "x25519", feature = "p256"))]
+    test_complete_flow::<X25519P256>(b"good password", b"good password")?;
 
     Ok(())
 }
@@ -1042,6 +1192,10 @@ fn test_complete_flow_fail() -> Result<(), ProtocolError> {
     test_complete_flow::<Ristretto255>(b"good password", b"bad password")?;
     #[cfg(feature = "p256")]
     test_complete_flow::<P256>(b"good password", b"bad password")?;
+    #[cfg(all(feature = "x25519", feature = "ristretto255"))]
+    test_complete_flow::<X25519Ristretto255>(b"good password", b"bad password")?;
+    #[cfg(all(feature = "x25519", feature = "p256"))]
+    test_complete_flow::<X25519P256>(b"good password", b"bad password")?;
 
     Ok(())
 }
@@ -1068,6 +1222,10 @@ fn test_zeroize_client_registration_start() -> Result<(), ProtocolError> {
     inner::<Ristretto255>()?;
     #[cfg(feature = "p256")]
     inner::<P256>()?;
+    #[cfg(all(feature = "x25519", feature = "ristretto255"))]
+    inner::<X25519Ristretto255>()?;
+    #[cfg(all(feature = "x25519", feature = "p256"))]
+    inner::<X25519P256>()?;
 
     Ok(())
 }
@@ -1104,6 +1262,10 @@ fn test_zeroize_client_registration_finish() -> Result<(), ProtocolError> {
     inner::<Ristretto255>()?;
     #[cfg(feature = "p256")]
     inner::<P256>()?;
+    #[cfg(all(feature = "x25519", feature = "ristretto255"))]
+    inner::<X25519Ristretto255>()?;
+    #[cfg(all(feature = "x25519", feature = "p256"))]
+    inner::<X25519P256>()?;
 
     Ok(())
 }
@@ -1152,6 +1314,10 @@ fn test_zeroize_server_registration_finish() -> Result<(), ProtocolError> {
     inner::<Ristretto255>()?;
     #[cfg(feature = "p256")]
     inner::<P256>()?;
+    #[cfg(all(feature = "x25519", feature = "ristretto255"))]
+    inner::<X25519Ristretto255>()?;
+    #[cfg(all(feature = "x25519", feature = "p256"))]
+    inner::<X25519P256>()?;
 
     Ok(())
 }
@@ -1181,6 +1347,10 @@ fn test_zeroize_client_login_start() -> Result<(), ProtocolError> {
     inner::<Ristretto255>()?;
     #[cfg(feature = "p256")]
     inner::<P256>()?;
+    #[cfg(all(feature = "x25519", feature = "ristretto255"))]
+    inner::<X25519Ristretto255>()?;
+    #[cfg(all(feature = "x25519", feature = "p256"))]
+    inner::<X25519P256>()?;
 
     Ok(())
 }
@@ -1235,6 +1405,10 @@ fn test_zeroize_server_login_start() -> Result<(), ProtocolError> {
     inner::<Ristretto255>()?;
     #[cfg(feature = "p256")]
     inner::<P256>()?;
+    #[cfg(all(feature = "x25519", feature = "ristretto255"))]
+    inner::<X25519Ristretto255>()?;
+    #[cfg(all(feature = "x25519", feature = "p256"))]
+    inner::<X25519P256>()?;
 
     Ok(())
 }
@@ -1296,6 +1470,10 @@ fn test_zeroize_client_login_finish() -> Result<(), ProtocolError> {
     inner::<Ristretto255>()?;
     #[cfg(feature = "p256")]
     inner::<P256>()?;
+    #[cfg(all(feature = "x25519", feature = "ristretto255"))]
+    inner::<X25519Ristretto255>()?;
+    #[cfg(all(feature = "x25519", feature = "p256"))]
+    inner::<X25519P256>()?;
 
     Ok(())
 }
@@ -1357,6 +1535,10 @@ fn test_zeroize_server_login_finish() -> Result<(), ProtocolError> {
     inner::<Ristretto255>()?;
     #[cfg(feature = "p256")]
     inner::<P256>()?;
+    #[cfg(all(feature = "x25519", feature = "ristretto255"))]
+    inner::<X25519Ristretto255>()?;
+    #[cfg(all(feature = "x25519", feature = "p256"))]
+    inner::<X25519P256>()?;
 
     Ok(())
 }
@@ -1399,6 +1581,10 @@ fn test_scalar_always_nonzero() -> Result<(), ProtocolError> {
     inner::<Ristretto255>()?;
     #[cfg(feature = "p256")]
     inner::<P256>()?;
+    #[cfg(all(feature = "x25519", feature = "ristretto255"))]
+    inner::<X25519Ristretto255>()?;
+    #[cfg(all(feature = "x25519", feature = "p256"))]
+    inner::<X25519P256>()?;
 
     Ok(())
 }
@@ -1445,6 +1631,10 @@ fn test_reflected_value_error_registration() -> Result<(), ProtocolError> {
     inner::<Ristretto255>()?;
     #[cfg(feature = "p256")]
     inner::<P256>()?;
+    #[cfg(all(feature = "x25519", feature = "ristretto255"))]
+    inner::<X25519Ristretto255>()?;
+    #[cfg(all(feature = "x25519", feature = "p256"))]
+    inner::<X25519P256>()?;
 
     Ok(())
 }
@@ -1511,6 +1701,10 @@ fn test_reflected_value_error_login() -> Result<(), ProtocolError> {
     inner::<Ristretto255>()?;
     #[cfg(feature = "p256")]
     inner::<P256>()?;
+    #[cfg(all(feature = "x25519", feature = "ristretto255"))]
+    inner::<X25519Ristretto255>()?;
+    #[cfg(all(feature = "x25519", feature = "p256"))]
+    inner::<X25519P256>()?;
 
     Ok(())
 }

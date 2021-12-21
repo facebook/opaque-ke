@@ -53,7 +53,7 @@ impl CipherSuite for Default {
 #[cfg(not(feature = "ristretto255"))]
 impl CipherSuite for Default {
     type OprfGroup = p256_::ProjectivePoint;
-    type KeGroup = p256_::ProjectivePoint;
+    type KeGroup = p256_::PublicKey;
     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
     type Hash = sha2::Sha256;
     type SlowHash = opaque_ke::slow_hash::NoOpHash;

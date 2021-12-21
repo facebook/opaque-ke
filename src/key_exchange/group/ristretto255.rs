@@ -59,7 +59,7 @@ impl KeGroup for RistrettoPoint {
         self.compress().to_bytes().into()
     }
 
-    fn diffie_hellman(&self, sk: &GenericArray<u8, Self::SkLen>) -> GenericArray<u8, Self::PkLen> {
+    fn diffie_hellman(&self, sk: &GenericArray<u8, Self::SkLen>) -> GenericArray<u8, Self::SkLen> {
         (self * Scalar::from_bits(*sk.as_ref())).to_arr()
     }
 }

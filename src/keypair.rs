@@ -273,7 +273,7 @@ mod tests {
         #[cfg(feature = "ristretto255")]
         inner::<curve25519_dalek::ristretto::RistrettoPoint>()?;
         #[cfg(feature = "p256")]
-        inner::<p256_::ProjectivePoint>()?;
+        inner::<p256_::PublicKey>()?;
 
         Ok(())
     }
@@ -300,7 +300,7 @@ mod tests {
         #[cfg(feature = "ristretto255")]
         inner::<curve25519_dalek::ristretto::RistrettoPoint>();
         #[cfg(feature = "p256")]
-        inner::<p256_::ProjectivePoint>();
+        inner::<p256_::PublicKey>();
     }
 
     macro_rules! test {
@@ -350,7 +350,7 @@ mod tests {
     #[cfg(feature = "ristretto255")]
     test!(ristretto, curve25519_dalek::ristretto::RistrettoPoint);
     #[cfg(feature = "p256")]
-    test!(p256, p256_::ProjectivePoint);
+    test!(p256, p256_::PublicKey);
 
     #[test]
     fn remote_key() {
@@ -362,16 +362,19 @@ mod tests {
             ServerRegistrationStartResult, ServerSetup,
         };
         #[cfg(feature = "ristretto255")]
-        use curve25519_dalek::ristretto::RistrettoPoint as Point;
+        use curve25519_dalek::ristretto::RistrettoPoint as KeCurve;
         #[cfg(not(feature = "ristretto255"))]
-        use p256_::ProjectivePoint as Point;
+        use p256_::PublicKey as KeCurve;
         use rand::rngs::OsRng;
 
         struct Default;
 
         impl CipherSuite for Default {
-            type OprfGroup = Point;
-            type KeGroup = Point;
+            #[cfg(feature = "ristretto255")]
+            type OprfGroup = KeCurve;
+            #[cfg(not(feature = "ristretto255"))]
+            type OprfGroup = p256_::ProjectivePoint;
+            type KeGroup = KeCurve;
             type KeyExchange = crate::key_exchange::tripledh::TripleDH;
             #[cfg(feature = "ristretto255")]
             type Hash = sha2::Sha512;
@@ -381,21 +384,21 @@ mod tests {
         }
 
         #[derive(Clone, Zeroize)]
-        struct RemoteKey(PrivateKey<Point>);
+        struct RemoteKey(PrivateKey<KeCurve>);
 
-        impl SecretKey<Point> for RemoteKey {
+        impl SecretKey<KeCurve> for RemoteKey {
             type Error = core::convert::Infallible;
-            type Len = <Point as KeGroup>::SkLen;
+            type Len = <KeCurve as KeGroup>::SkLen;
 
             fn diffie_hellman(
                 &self,
-                pk: PublicKey<Point>,
-            ) -> Result<GenericArray<u8, <Point as KeGroup>::PkLen>, InternalError<Self::Error>>
+                pk: PublicKey<KeCurve>,
+            ) -> Result<GenericArray<u8, <KeCurve as KeGroup>::PkLen>, InternalError<Self::Error>>
             {
                 self.0.diffie_hellman(pk)
             }
 
-            fn public_key(&self) -> Result<PublicKey<Point>, InternalError<Self::Error>> {
+            fn public_key(&self) -> Result<PublicKey<KeCurve>, InternalError<Self::Error>> {
                 self.0.public_key()
             }
 
@@ -410,7 +413,7 @@ mod tests {
 
         const PASSWORD: &str = "password";
 
-        let sk = Point::random_sk(&mut OsRng);
+        let sk = KeCurve::random_sk(&mut OsRng);
         let sk = RemoteKey(PrivateKey(Key(sk)));
         let keypair = KeyPair::from_private_key(sk).unwrap();
 

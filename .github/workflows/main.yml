@@ -16,6 +16,7 @@ jobs:
           - ristretto255_u64
           - ristretto255_u32
           - p256
+          - x25519_u64,ristretto255_u64
         toolchain:
           - stable
           - 1.51.0
@@ -59,6 +60,7 @@ jobs:
           - ristretto255_u64
           - ristretto255_u32
           - p256
+          - x25519_u64,ristretto255_u64
     steps:
       - uses: actions/checkout@v2
       - uses: hecrj/setup-rust-action@v1
@@ -79,6 +81,11 @@ jobs:
           - ristretto255_u32
           - p256
           - ristretto255_u64,p256
+          - x25519_u64,ristretto255_u64
+          - x25519_u32,ristretto255_u32
+          - x25519_u64,p256
+          - x25519_u32,p256
+          - x25519_u64,ristretto255_u64,p256
         frontend_feature:
           - slow-hash
           - serde
@@ -108,7 +115,6 @@ jobs:
           profile: minimal
           toolchain: ${{ matrix.toolchain }}
           override: true
-          components: rustfmt, clippy
       - name: Run expect (which then runs cargo run)
         run: expect -f scripts/simple_login.exp
 
@@ -132,7 +138,6 @@ jobs:
           profile: minimal
           toolchain: ${{ matrix.toolchain }}
           override: true
-          components: rustfmt, clippy
       - name: Run expect (which then runs cargo run)
         run: expect -f scripts/digital_locker.exp
 
@@ -151,6 +156,7 @@ jobs:
           - ristretto255_u64
           - ristretto255_u32
           - p256
+          - x25519_u64,ristretto255_u64
         frontend_feature:
           - slow-hash
           - serde
@@ -170,6 +176,7 @@ jobs:
           - ristretto255_u64
           - ristretto255_u32
           - p256
+          - x25519_u64,ristretto255_u64
     steps:
       - name: Checkout sources
         uses: actions/checkout@v2

@@ -56,7 +56,7 @@ struct P256;
 #[cfg(feature = "p256")]
 impl CipherSuite for P256 {
     type OprfGroup = p256_::ProjectivePoint;
-    type KeGroup = p256_::ProjectivePoint;
+    type KeGroup = p256_::PublicKey;
     type KeyExchange = TripleDH;
     type Hash = sha2::Sha256;
     type SlowHash = crate::slow_hash::NoOpHash;
