@@ -187,32 +187,35 @@ fn tests() -> Result<(), ProtocolError> {
     let rfc = json::parse(super::parser::rfc_to_json(super::opaque_vectors::VECTORS).as_str())
         .expect("Could not parse json");
 
-    let ristretto_real_tvs = json_to_test_vectors!(rfc, "Real", "ristretto255, SHA512",);
+    #[cfg(feature = "ristretto255")]
+    {
+        let ristretto_real_tvs = json_to_test_vectors!(rfc, "Real", "ristretto255, SHA512",);
 
-    let ristretto_fake_tvs = json_to_test_vectors!(rfc, "Fake", "ristretto255, SHA512",);
+        let ristretto_fake_tvs = json_to_test_vectors!(rfc, "Fake", "ristretto255, SHA512",);
 
-    assert!(
-        !(ristretto_real_tvs.is_empty() || ristretto_fake_tvs.is_empty()),
-        "Parsing error"
-    );
+        assert!(
+            !(ristretto_real_tvs.is_empty() || ristretto_fake_tvs.is_empty()),
+            "Parsing error"
+        );
 
-    struct Ristretto255Sha512NoSlowHash;
-    impl CipherSuite for Ristretto255Sha512NoSlowHash {
-        type OprfGroup = curve25519_dalek::ristretto::RistrettoPoint;
-        type KeGroup = curve25519_dalek::ristretto::RistrettoPoint;
-        type KeyExchange = TripleDH;
-        type Hash = sha2::Sha512;
-        type SlowHash = NoOpHash;
+        struct Ristretto255Sha512NoSlowHash;
+        impl CipherSuite for Ristretto255Sha512NoSlowHash {
+            type OprfGroup = curve25519_dalek::ristretto::RistrettoPoint;
+            type KeGroup = curve25519_dalek::ristretto::RistrettoPoint;
+            type KeyExchange = TripleDH;
+            type Hash = sha2::Sha512;
+            type SlowHash = NoOpHash;
+        }
+
+        test_registration_request::<Ristretto255Sha512NoSlowHash>(&ristretto_real_tvs)?;
+        test_registration_response::<Ristretto255Sha512NoSlowHash>(&ristretto_real_tvs)?;
+        test_registration_upload::<Ristretto255Sha512NoSlowHash>(&ristretto_real_tvs)?;
+        test_ke1::<Ristretto255Sha512NoSlowHash>(&ristretto_real_tvs)?;
+        test_ke2::<Ristretto255Sha512NoSlowHash>(&ristretto_real_tvs)?;
+        test_ke3::<Ristretto255Sha512NoSlowHash>(&ristretto_real_tvs)?;
+        test_server_login_finish::<Ristretto255Sha512NoSlowHash>(&ristretto_real_tvs)?;
+        test_fake_vectors::<Ristretto255Sha512NoSlowHash>(&ristretto_fake_tvs)?;
     }
-
-    test_registration_request::<Ristretto255Sha512NoSlowHash>(&ristretto_real_tvs)?;
-    test_registration_response::<Ristretto255Sha512NoSlowHash>(&ristretto_real_tvs)?;
-    test_registration_upload::<Ristretto255Sha512NoSlowHash>(&ristretto_real_tvs)?;
-    test_ke1::<Ristretto255Sha512NoSlowHash>(&ristretto_real_tvs)?;
-    test_ke2::<Ristretto255Sha512NoSlowHash>(&ristretto_real_tvs)?;
-    test_ke3::<Ristretto255Sha512NoSlowHash>(&ristretto_real_tvs)?;
-    test_server_login_finish::<Ristretto255Sha512NoSlowHash>(&ristretto_real_tvs)?;
-    test_fake_vectors::<Ristretto255Sha512NoSlowHash>(&ristretto_fake_tvs)?;
 
     #[cfg(feature = "p256")]
     {

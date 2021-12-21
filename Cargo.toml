@@ -13,19 +13,22 @@ resolver = "2"
 rust-version = "1.51"
 
 [features]
-default = ["u64_backend", "serialize"]
+default = ["ristretto255_u64", "serialize"]
 slow-hash = ["argon2"]
 p256 = ["p256_", "voprf/p256"]
-bench = []
-u64_backend = ["curve25519-dalek/u64_backend", "voprf/ristretto255_u64"]
-u32_backend = ["curve25519-dalek/u32_backend", "voprf/ristretto255_u32"]
-std = ["curve25519-dalek/std", "getrandom", "rand/std", "rand/std_rng", "voprf/std"]
-serialize = ["serde", "generic-array/serde", "curve25519-dalek/serde", "voprf/serde"]
+ristretto255 = []
+ristretto255_u64 = ["curve25519-dalek/u64_backend", "ristretto255", "voprf/ristretto255_u64"]
+ristretto255_u32 = ["curve25519-dalek/u32_backend", "ristretto255", "voprf/ristretto255_u32"]
+ristretto255_fiat_u64 = ["curve25519-dalek/fiat_u64_backend", "ristretto255", "voprf/ristretto255_fiat_u64"]
+ristretto255_fiat_u32 = ["curve25519-dalek/fiat_u32_backend", "ristretto255", "voprf/ristretto255_fiat_u32"]
+ristretto255_simd = ["curve25519-dalek/simd_backend", "ristretto255", "voprf/ristretto255_simd"]
+std = ["getrandom", "rand/std", "rand/std_rng", "voprf/std"]
+serialize = ["serde", "generic-array/serde", "voprf/serde"]
 
 [dependencies]
 argon2 = { version = "0.3", default-features = false, features = ["alloc"], optional = true }
 constant_time_eq = "0.1"
-curve25519-dalek = { version = "3", default-features = false }
+curve25519-dalek = { version = "3", default-features = false, optional = true }
 derive-where = { version = "1.0.0-rc.1", features = ["zeroize"] }
 digest = "0.9"
 displaydoc = { version = "0.2", default-features = false }
@@ -56,9 +59,9 @@ serde_json = "1"
 sha2 = "0.9"
 proptest = "1"
 regex = "1"
+# Version 9.1 requires an MSRV of 1.56
 rustyline = "~9.0"
 
 [[bench]]
 name = "opaque"
 harness = false
-required-features = ["bench"]

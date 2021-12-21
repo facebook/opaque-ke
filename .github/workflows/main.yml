@@ -4,7 +4,7 @@ on:
     branches:
       - main
   pull_request:
-    types: [opened, repoened, synchronize]
+    types: [opened, reopened, synchronize]
 
 jobs:
   test:
@@ -13,14 +13,14 @@ jobs:
       fail-fast: false
       matrix:
         backend_feature:
-          - u64_backend
-          - u32_backend
-          - p256,u64_backend
+          - ristretto255_u64
+          - ristretto255_u32
+          - p256
         toolchain:
           - stable
           - 1.51.0
         exclude:
-          - backend_feature: p256,u64_backend
+          - backend_feature: p256
             toolchain: 1.51.0
     name: test
     steps:
@@ -33,7 +33,6 @@ jobs:
           profile: minimal
           toolchain: ${{ matrix.toolchain }}
           override: true
-          components: rustfmt, clippy
 
       - name: Run cargo test
         uses: actions-rs/cargo@v1
@@ -57,9 +56,9 @@ jobs:
           # 32-bit x86
           - i686-unknown-linux-gnu
         backend_feature:
-          - u64_backend
-          - u32_backend
-          - p256,u64_backend
+          - ristretto255_u64
+          - ristretto255_u32
+          - p256
     steps:
       - uses: actions/checkout@v2
       - uses: hecrj/setup-rust-action@v1
@@ -76,9 +75,10 @@ jobs:
       fail-fast: false
       matrix:
         backend_feature:
-          - u64_backend
-          - u32_backend
-          - p256,u64_backend
+          - ristretto255_u64
+          - ristretto255_u32
+          - p256
+          - ristretto255_u64,p256
         frontend_feature:
           - slow-hash
           - serialize
@@ -148,9 +148,9 @@ jobs:
           # for any no_std target
           - thumbv6m-none-eabi
         backend_feature:
-          - u64_backend
-          - u32_backend
-          - p256,u64_backend
+          - ristretto255_u64
+          - ristretto255_u32
+          - p256
         frontend_feature:
           - slow-hash
           - serialize
@@ -167,9 +167,9 @@ jobs:
       fail-fast: false
       matrix:
         backend_feature:
-          - u64_backend
-          - u32_backend
-          - p256,u64_backend
+          - ristretto255_u64
+          - ristretto255_u32
+          - p256
     steps:
       - name: Checkout sources
         uses: actions/checkout@v2
@@ -185,7 +185,7 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: bench
-          args: --no-default-features --features bench --features ${{ matrix.backend_feature }} --no-run
+          args: --no-default-features --features ${{ matrix.backend_feature }} --no-run
 
   clippy:
     name: cargo clippy

@@ -47,11 +47,22 @@ use opaque_ke::{
 // that will be used in the OPAQUE protocol
 #[allow(dead_code)]
 struct Default;
+
+#[cfg(feature = "ristretto255")]
 impl CipherSuite for Default {
     type OprfGroup = curve25519_dalek::ristretto::RistrettoPoint;
     type KeGroup = curve25519_dalek::ristretto::RistrettoPoint;
     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
     type Hash = sha2::Sha512;
+    type SlowHash = opaque_ke::slow_hash::NoOpHash;
+}
+
+#[cfg(not(feature = "ristretto255"))]
+impl CipherSuite for Default {
+    type OprfGroup = p256_::ProjectivePoint;
+    type KeGroup = p256_::ProjectivePoint;
+    type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
+    type Hash = sha2::Sha256;
     type SlowHash = opaque_ke::slow_hash::NoOpHash;
 }
 

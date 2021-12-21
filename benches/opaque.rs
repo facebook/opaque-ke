@@ -12,16 +12,20 @@ use criterion::Criterion;
 use opaque_ke::*;
 use rand::rngs::OsRng;
 
-#[cfg(all(not(feature = "p256"), feature = "u64_backend"))]
-static SUFFIX: &str = "u64_backend";
-#[cfg(all(not(feature = "p256"), feature = "u32_backend"))]
-static SUFFIX: &str = "u32_backend";
-#[cfg(feature = "p256")]
+#[cfg(feature = "ristretto255_u64")]
+static SUFFIX: &str = "ristretto255_u64";
+#[cfg(feature = "ristretto255_u32")]
+static SUFFIX: &str = "ristretto255_u32";
+#[cfg(feature = "ristretto255_fiat_u64")]
+static SUFFIX: &str = "ristretto255_fiat_u64";
+#[cfg(feature = "ristretto255_fiat_u32")]
+static SUFFIX: &str = "ristretto255_fiat_u32";
+#[cfg(all(not(feature = "ristretto255"), feature = "p256"))]
 static SUFFIX: &str = "p256";
 
 struct Default;
 
-#[cfg(not(feature = "p256"))]
+#[cfg(feature = "ristretto255")]
 impl CipherSuite for Default {
     type OprfGroup = curve25519_dalek::ristretto::RistrettoPoint;
     type KeGroup = curve25519_dalek::ristretto::RistrettoPoint;
@@ -30,7 +34,7 @@ impl CipherSuite for Default {
     type SlowHash = opaque_ke::slow_hash::NoOpHash;
 }
 
-#[cfg(feature = "p256")]
+#[cfg(not(feature = "ristretto255"))]
 impl CipherSuite for Default {
     type OprfGroup = p256_::ProjectivePoint;
     type KeGroup = p256_::ProjectivePoint;

@@ -79,7 +79,7 @@ impl<KG: KeGroup> KeyPair<KG> {
 }
 
 #[cfg(test)]
-impl<KG: KeGroup + core::fmt::Debug> KeyPair<KG> {
+impl<KG: KeGroup> KeyPair<KG> {
     /// Test-only strategy returning a proptest Strategy based on
     /// generate_random
     fn uniform_keypair_strategy() -> proptest::prelude::BoxedStrategy<Self> {
@@ -246,82 +246,108 @@ mod tests {
     use super::*;
     use crate::errors::*;
     use core::slice::from_raw_parts;
-    use curve25519_dalek::ristretto::RistrettoPoint;
     use generic_array::typenum::Unsigned;
-    use proptest::prelude::*;
     use rand::rngs::OsRng;
 
     #[test]
     fn test_zeroize_key() -> Result<(), ProtocolError> {
-        let key_len = <RistrettoPoint as KeGroup>::PkLen::USIZE;
-        let mut key = Key::<<RistrettoPoint as KeGroup>::PkLen>(GenericArray::clone_from_slice(
-            &alloc::vec![
+        fn inner<G: KeGroup>() -> Result<(), ProtocolError> {
+            let key_len = G::PkLen::USIZE;
+            let mut key = Key::<G::PkLen>(GenericArray::clone_from_slice(&alloc::vec![
                 1u8;
                 key_len
-            ],
-        ));
-        let ptr = key.as_ptr();
+            ]));
+            let ptr = key.as_ptr();
 
-        Zeroize::zeroize(&mut key);
+            Zeroize::zeroize(&mut key);
 
-        let bytes = unsafe { from_raw_parts(ptr, key_len) };
-        assert!(bytes.iter().all(|&x| x == 0));
+            let bytes = unsafe { from_raw_parts(ptr, key_len) };
+            assert!(bytes.iter().all(|&x| x == 0));
+
+            Ok(())
+        }
+
+        #[cfg(feature = "ristretto255")]
+        inner::<curve25519_dalek::ristretto::RistrettoPoint>()?;
+        #[cfg(feature = "p256")]
+        inner::<p256_::ProjectivePoint>()?;
 
         Ok(())
     }
 
     #[test]
     fn test_zeroize_keypair() {
-        let mut rng = OsRng;
-        let mut keypair = KeyPair::<RistrettoPoint>::generate_random(&mut rng);
-        let pk_ptr = keypair.pk.as_ptr();
-        let sk_ptr = keypair.sk.as_ptr();
-        let pk_len = <RistrettoPoint as KeGroup>::PkLen::USIZE;
-        let sk_len = <RistrettoPoint as KeGroup>::SkLen::USIZE;
+        fn inner<G: KeGroup>() {
+            let mut rng = OsRng;
+            let mut keypair = KeyPair::<G>::generate_random(&mut rng);
+            let pk_ptr = keypair.pk.as_ptr();
+            let sk_ptr = keypair.sk.as_ptr();
+            let pk_len = G::PkLen::USIZE;
+            let sk_len = G::SkLen::USIZE;
 
-        Zeroize::zeroize(&mut keypair);
+            Zeroize::zeroize(&mut keypair);
 
-        let pk_bytes = unsafe { from_raw_parts(pk_ptr, pk_len) };
-        let sk_bytes = unsafe { from_raw_parts(sk_ptr, sk_len) };
+            let pk_bytes = unsafe { from_raw_parts(pk_ptr, pk_len) };
+            let sk_bytes = unsafe { from_raw_parts(sk_ptr, sk_len) };
 
-        assert!(pk_bytes.iter().all(|&x| x == 0));
-        assert!(sk_bytes.iter().all(|&x| x == 0));
+            assert!(pk_bytes.iter().all(|&x| x == 0));
+            assert!(sk_bytes.iter().all(|&x| x == 0));
+        }
+
+        #[cfg(feature = "ristretto255")]
+        inner::<curve25519_dalek::ristretto::RistrettoPoint>();
+        #[cfg(feature = "p256")]
+        inner::<p256_::ProjectivePoint>();
     }
 
-    proptest! {
-        #[test]
-        fn test_ristretto_check(kp in KeyPair::<RistrettoPoint>::uniform_keypair_strategy()) {
-            let pk = kp.public();
-            prop_assert!(KeyPair::<RistrettoPoint>::check_public_key(pk.clone()).is_ok());
-        }
+    macro_rules! test {
+        ($mod:ident, $point:ty) => {
+            mod $mod {
+                use super::*;
+                use proptest::prelude::*;
 
-        #[test]
-        fn test_ristretto_pub_from_priv(kp in KeyPair::<RistrettoPoint>::uniform_keypair_strategy()) {
-            let pk = kp.public();
-            let sk = kp.private();
-            prop_assert_eq!(&sk.public_key()?, pk);
-        }
+                proptest! {
+                    #[test]
+                    fn check(kp in KeyPair::<$point>::uniform_keypair_strategy()) {
+                        let pk = kp.public();
+                        prop_assert!(KeyPair::<$point>::check_public_key(pk.clone()).is_ok());
+                    }
 
-        #[test]
-        fn test_ristretto_dh(kp1 in KeyPair::<RistrettoPoint>::uniform_keypair_strategy(),
-                          kp2 in KeyPair::<RistrettoPoint>::uniform_keypair_strategy()) {
+                    #[test]
+                    fn pub_from_priv(kp in KeyPair::<$point>::uniform_keypair_strategy()) {
+                        let pk = kp.public();
+                        let sk = kp.private();
+                        prop_assert_eq!(&sk.public_key()?, pk);
+                    }
 
-            let dh1 = kp2.private().diffie_hellman(kp1.public().clone())?;
-            let dh2 = kp1.private().diffie_hellman(kp2.public().clone())?;
+                    #[test]
+                    fn dh(kp1 in KeyPair::<$point>::uniform_keypair_strategy(),
+                                      kp2 in KeyPair::<$point>::uniform_keypair_strategy()) {
 
-            prop_assert_eq!(dh1, dh2);
-        }
+                        let dh1 = kp2.private().diffie_hellman(kp1.public().clone())?;
+                        let dh2 = kp1.private().diffie_hellman(kp2.public().clone())?;
 
-        #[test]
-        fn test_private_key_slice(kp in KeyPair::<RistrettoPoint>::uniform_keypair_strategy()) {
-            let sk_bytes = kp.private().to_vec();
+                        prop_assert_eq!(dh1, dh2);
+                    }
 
-            let kp2 = KeyPair::<RistrettoPoint>::from_private_key_slice(&sk_bytes)?;
-            let kp2_private_bytes = kp2.private().to_vec();
+                    #[test]
+                    fn private_key_slice(kp in KeyPair::<$point>::uniform_keypair_strategy()) {
+                        let sk_bytes = kp.private().to_vec();
 
-            prop_assert_eq!(sk_bytes, kp2_private_bytes);
-        }
+                        let kp2 = KeyPair::<$point>::from_private_key_slice(&sk_bytes)?;
+                        let kp2_private_bytes = kp2.private().to_vec();
+
+                        prop_assert_eq!(sk_bytes, kp2_private_bytes);
+                    }
+                }
+            }
+        };
     }
+
+    #[cfg(feature = "ristretto255")]
+    test!(ristretto, curve25519_dalek::ristretto::RistrettoPoint);
+    #[cfg(feature = "p256")]
+    test!(p256, p256_::ProjectivePoint);
 
     #[test]
     fn remote_key() {
@@ -332,37 +358,41 @@ mod tests {
             ServerLoginStartParameters, ServerLoginStartResult, ServerRegistration,
             ServerRegistrationStartResult, ServerSetup,
         };
-        use curve25519_dalek::ristretto::RistrettoPoint;
+        #[cfg(feature = "ristretto255")]
+        use curve25519_dalek::ristretto::RistrettoPoint as Point;
+        #[cfg(not(feature = "ristretto255"))]
+        use p256_::ProjectivePoint as Point;
         use rand::rngs::OsRng;
 
         struct Default;
 
         impl CipherSuite for Default {
-            type OprfGroup = RistrettoPoint;
-            type KeGroup = RistrettoPoint;
+            type OprfGroup = Point;
+            type KeGroup = Point;
             type KeyExchange = crate::key_exchange::tripledh::TripleDH;
+            #[cfg(feature = "ristretto255")]
             type Hash = sha2::Sha512;
+            #[cfg(not(feature = "ristretto255"))]
+            type Hash = sha2::Sha256;
             type SlowHash = crate::slow_hash::NoOpHash;
         }
 
         #[derive(Clone, Zeroize)]
-        struct RemoteKey(PrivateKey<RistrettoPoint>);
+        struct RemoteKey(PrivateKey<Point>);
 
-        impl SecretKey<RistrettoPoint> for RemoteKey {
+        impl SecretKey<Point> for RemoteKey {
             type Error = core::convert::Infallible;
-            type Len = <RistrettoPoint as KeGroup>::SkLen;
+            type Len = <Point as KeGroup>::SkLen;
 
             fn diffie_hellman(
                 &self,
-                pk: PublicKey<RistrettoPoint>,
-            ) -> Result<
-                GenericArray<u8, <RistrettoPoint as KeGroup>::PkLen>,
-                InternalError<Self::Error>,
-            > {
+                pk: PublicKey<Point>,
+            ) -> Result<GenericArray<u8, <Point as KeGroup>::PkLen>, InternalError<Self::Error>>
+            {
                 self.0.diffie_hellman(pk)
             }
 
-            fn public_key(&self) -> Result<PublicKey<RistrettoPoint>, InternalError<Self::Error>> {
+            fn public_key(&self) -> Result<PublicKey<Point>, InternalError<Self::Error>> {
                 self.0.public_key()
             }
 
@@ -377,7 +407,7 @@ mod tests {
 
         const PASSWORD: &str = "password";
 
-        let sk = RistrettoPoint::random_sk(&mut OsRng);
+        let sk = Point::random_sk(&mut OsRng);
         let sk = RemoteKey(PrivateKey(Key(sk)));
         let keypair = KeyPair::from_private_key(sk).unwrap();
 
