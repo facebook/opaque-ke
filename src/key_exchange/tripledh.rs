@@ -57,9 +57,9 @@ pub struct TripleDH;
 
 /// The client state produced after the first key exchange message
 #[cfg_attr(
-    feature = "serialize",
-    derive(serde::Deserialize, serde::Serialize),
-    serde(bound = "")
+    feature = "serde",
+    derive(serde_::Deserialize, serde_::Serialize),
+    serde(bound = "", crate = "serde_")
 )]
 #[derive(DeriveWhere)]
 #[derive_where(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, Zeroize(drop))]
@@ -70,9 +70,9 @@ pub struct Ke1State<KG: KeGroup> {
 
 /// The first key exchange message
 #[cfg_attr(
-    feature = "serialize",
-    derive(serde::Deserialize, serde::Serialize),
-    serde(bound = "")
+    feature = "serde",
+    derive(serde_::Deserialize, serde_::Serialize),
+    serde(bound = "", crate = "serde_")
 )]
 #[derive(DeriveWhere)]
 #[derive_where(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, Zeroize)]
@@ -83,9 +83,9 @@ pub struct Ke1Message<KG: KeGroup> {
 
 /// The server state produced after the second key exchange message
 #[cfg_attr(
-    feature = "serialize",
-    derive(serde::Deserialize, serde::Serialize),
-    serde(bound = "")
+    feature = "serde",
+    derive(serde_::Deserialize, serde_::Serialize),
+    serde(bound = "", crate = "serde_")
 )]
 #[derive(DeriveWhere)]
 #[derive_where(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, Zeroize(drop))]
@@ -97,9 +97,9 @@ pub struct Ke2State<D: Hash> {
 
 /// The second key exchange message
 #[cfg_attr(
-    feature = "serialize",
-    derive(serde::Deserialize, serde::Serialize),
-    serde(bound = "")
+    feature = "serde",
+    derive(serde_::Deserialize, serde_::Serialize),
+    serde(bound = "", crate = "serde_")
 )]
 #[derive(DeriveWhere)]
 #[derive_where(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
@@ -111,9 +111,9 @@ pub struct Ke2Message<D: Hash, KG: KeGroup> {
 
 /// The third key exchange message
 #[cfg_attr(
-    feature = "serialize",
-    derive(serde::Deserialize, serde::Serialize),
-    serde(bound = "")
+    feature = "serde",
+    derive(serde_::Deserialize, serde_::Serialize),
+    serde(bound = "", crate = "serde_")
 )]
 #[derive(DeriveWhere)]
 #[derive_where(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]

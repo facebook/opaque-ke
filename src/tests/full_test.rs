@@ -607,7 +607,7 @@ fn test_registration_request() -> Result<(), ProtocolError> {
     Ok(())
 }
 
-#[cfg(feature = "serialize")]
+#[cfg(feature = "serde")]
 #[test]
 fn test_serialization() -> Result<(), ProtocolError> {
     use core::mem;

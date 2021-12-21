@@ -13,7 +13,7 @@ resolver = "2"
 rust-version = "1.51"
 
 [features]
-default = ["ristretto255_u64", "serialize"]
+default = ["ristretto255_u64", "serde"]
 slow-hash = ["argon2"]
 p256 = ["p256_", "voprf/p256"]
 ristretto255 = []
@@ -23,7 +23,7 @@ ristretto255_fiat_u64 = ["curve25519-dalek/fiat_u64_backend", "ristretto255", "v
 ristretto255_fiat_u32 = ["curve25519-dalek/fiat_u32_backend", "ristretto255", "voprf/ristretto255_fiat_u32"]
 ristretto255_simd = ["curve25519-dalek/simd_backend", "ristretto255", "voprf/ristretto255_simd"]
 std = ["getrandom", "rand/std", "rand/std_rng", "voprf/std"]
-serialize = ["serde", "generic-array/serde", "voprf/serde"]
+serde = ["serde_", "generic-array/serde", "voprf/serde"]
 
 [dependencies]
 argon2 = { version = "0.3", default-features = false, features = ["alloc"], optional = true }
@@ -38,7 +38,7 @@ hkdf = "0.11"
 hmac = "0.11"
 p256_ = { package = "p256", version = "0.9", default-features = false, features = ["arithmetic", "zeroize"], optional = true }
 rand = { version = "0.8", default-features = false }
-serde = { version = "1", default-features = false, features = ["derive"], optional = true }
+serde_ = { version = "1", package = "serde", default-features = false, features = ["derive"], optional = true }
 subtle = { version = "2.3", default-features = false }
 voprf = { git = "https://github.com/khonsulabs/voprf", rev = "f8c19eab4ecc9e7a2a5ae26c59661ce797229566", default-features = false, features = ["danger"] }
 zeroize = { version = "1", features = ["zeroize_derive"] }

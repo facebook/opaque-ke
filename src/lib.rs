@@ -926,12 +926,12 @@
 //!     }
 //!
 //!     fn serialize(&self) -> GenericArray<u8, Self::Len> {
-//!         // if you use serde and the "serialize" crate feature, you won't need this
+//!         // if you use Serde and the "serde" crate feature, you won't need this
 //!         todo!()
 //!     }
 //!
 //!     fn deserialize(input: &[u8]) -> Result<Self, InternalError<Self::Error>> {
-//!         // if you use serde and the "serialize" crate feature, you won't need this
+//!         // if you use Serde and the "serde" crate feature, you won't need this
 //!         todo!()
 //!     }
 //! }
@@ -950,7 +950,7 @@
 //! password file records will be against offline dictionary and precomputation attacks; see
 //! [the OPAQUE paper](https://eprint.iacr.org/2018/163.pdf) for more details.
 //!
-//! - The `serialize` feature, enabled by default, provides convenience functions for serializing and deserializing with
+//! - The `serde` feature, enabled by default, provides convenience functions for serializing and deserializing with
 //! [serde](https://serde.rs/).
 //!
 //! - The backend features are re-exported from

@@ -20,12 +20,15 @@ use zeroize::Zeroize;
 
 /// A Keypair trait with public-private verification
 #[cfg_attr(
-    feature = "serialize",
-    derive(serde::Deserialize, serde::Serialize),
-    serde(bound(
-        deserialize = "S: serde::Deserialize<'de>",
-        serialize = "S: serde::Serialize"
-    ))
+    feature = "serde",
+    derive(serde_::Deserialize, serde_::Serialize),
+    serde(
+        bound(
+            deserialize = "S: serde_::Deserialize<'de>",
+            serialize = "S: serde_::Serialize"
+        ),
+        crate = "serde_"
+    )
 )]
 #[derive(DeriveWhere)]
 #[derive_where(Clone, Zeroize(drop))]
@@ -100,9 +103,9 @@ impl<KG: KeGroup> KeyPair<KG> {
 
 /// A minimalist key type built around a \[u8; 32\]
 #[cfg_attr(
-    feature = "serialize",
-    derive(serde::Deserialize, serde::Serialize),
-    serde(bound = "")
+    feature = "serde",
+    derive(serde_::Deserialize, serde_::Serialize),
+    serde(bound = "", crate = "serde_")
 )]
 #[derive(DeriveWhere)]
 #[derive_where(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, Zeroize(drop))]
@@ -126,9 +129,9 @@ impl<L: ArrayLength<u8>> Key<L> {
 
 /// Wrapper around a Key to enforce that it's a private one.
 #[cfg_attr(
-    feature = "serialize",
-    derive(serde::Deserialize, serde::Serialize),
-    serde(bound = "")
+    feature = "serde",
+    derive(serde_::Deserialize, serde_::Serialize),
+    serde(bound = "", crate = "serde_")
 )]
 #[derive(DeriveWhere)]
 #[derive_where(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, Zeroize(drop))]
@@ -209,9 +212,9 @@ impl<KG: KeGroup> SecretKey<KG> for PrivateKey<KG> {
 
 /// Wrapper around a Key to enforce that it's a public one.
 #[cfg_attr(
-    feature = "serialize",
-    derive(serde::Deserialize, serde::Serialize),
-    serde(bound = "")
+    feature = "serde",
+    derive(serde_::Deserialize, serde_::Serialize),
+    serde(bound = "", crate = "serde_")
 )]
 #[derive(DeriveWhere)]
 #[derive_where(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, Zeroize(drop))]

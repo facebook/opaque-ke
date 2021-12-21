@@ -81,7 +81,7 @@ jobs:
           - ristretto255_u64,p256
         frontend_feature:
           - slow-hash
-          - serialize
+          - serde
     steps:
       - uses: actions/checkout@v2
       - uses: hecrj/setup-rust-action@v1
@@ -153,7 +153,7 @@ jobs:
           - p256
         frontend_feature:
           - slow-hash
-          - serialize
+          - serde
     steps:
       - uses: actions/checkout@v2
       - uses: hecrj/setup-rust-action@v1

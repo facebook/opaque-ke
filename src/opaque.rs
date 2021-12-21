@@ -57,12 +57,15 @@ const STR_OPAQUE_DERIVE_KEY_PAIR: &[u8; 20] = b"OPAQUE-DeriveKeyPair";
 
 /// The state elements the server holds upon setup
 #[cfg_attr(
-    feature = "serialize",
-    derive(serde::Deserialize, serde::Serialize),
-    serde(bound(
-        deserialize = "KeyPair<CS::KeGroup, S>: serde::Deserialize<'de>",
-        serialize = "KeyPair<CS::KeGroup, S>: serde::Serialize"
-    ))
+    feature = "serde",
+    derive(serde_::Deserialize, serde_::Serialize),
+    serde(
+        bound(
+            deserialize = "KeyPair<CS::KeGroup, S>: serde_::Deserialize<'de>",
+            serialize = "KeyPair<CS::KeGroup, S>: serde_::Serialize"
+        ),
+        crate = "serde_"
+    )
 )]
 #[derive(DeriveWhere)]
 #[derive_where(Clone)]
@@ -89,7 +92,7 @@ pub struct ClientRegistration<CS: CipherSuite> {
     pub(crate) blinded_element: voprf::BlindedElement<CS::OprfGroup, CS::Hash>,
 }
 
-impl_serialize_and_deserialize_for!(ClientRegistration; serde::ser::Error::custom);
+impl_serialize_and_deserialize_for!(ClientRegistration; serde_::ser::Error::custom);
 
 /// The state elements the server holds to record a registration
 #[derive(DeriveWhere)]
@@ -131,7 +134,7 @@ impl_serialize_and_deserialize_for!(
         // CredentialRequest: KgPk + Ke1Message
         <CS::OprfGroup as Group>::ElemLen: Add<Ke1MessageLen<CS>>,
         CredentialRequestLen<CS>: ArrayLength<u8>;
-    serde::ser::Error::custom
+    serde_::ser::Error::custom
 );
 
 /// The state elements the server holds to record a login
