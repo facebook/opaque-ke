@@ -962,7 +962,7 @@
 //!   `KeGroup` and `OprfGroup`.
 //!
 //! - The `x25519` feature is similar to the `ristretto255` feature and requires to select a backend like `x25519_u64`, other
-//!   backends are the same as in `ristretto255_*`. This enabled to use `x25519_dalek::PublicKey` as a `KeGroup`.
+//!   backends are the same as in `ristretto255_*`. This enables `x25519_dalek::PublicKey` as a `KeGroup`.
 //!
 //! - The `ristretto255_simd` feature is re-exported from
 //!   [curve25519-dalek](https://doc.dalek.rs/curve25519_dalek/index.html#backends-and-features) and enables parallel formulas,
