@@ -7,9 +7,11 @@
 
 use crate::errors::ProtocolError;
 use core::marker::PhantomData;
+use core::ops::Add;
 use digest::Update;
 use generic_array::{
-    typenum::{U0, U2},
+    sequence::Concat,
+    typenum::{Sum, U0, U2},
     ArrayLength, GenericArray,
 };
 use hmac::Mac;
@@ -121,6 +123,20 @@ impl<'a, L1: ArrayLength<u8>, L2: ArrayLength<u8>> Serialize<'a, L1, L2, U0> {
 
         [self.octet.as_slice(), input]
     }
+
+    pub(crate) fn serialize(self) -> GenericArray<u8, Sum<L1, L2>>
+    where
+        L1: Add<L2>,
+        Sum<L1, L2>: ArrayLength<u8>,
+    {
+        let input = if let Input::Owned(value) = self.input {
+            value
+        } else {
+            unreachable!("unexpected `Serialize` constructed with wrong generics")
+        };
+
+        self.octet.concat(input)
+    }
 }
 
 impl<'a, L1: ArrayLength<u8>, L2: ArrayLength<u8>> Serialize<'a, L1, L2, U2> {
@@ -176,17 +192,6 @@ impl<T: Mac> MacExt for T {
             self.update(bytes);
         }
     }
-}
-
-/// The purpose of this macro is to simplify [`concat`](alloc::slice::Concat::concat)ing
-/// slices into an [`Iterator`] to avoid allocation
-macro_rules! chain {
-    (
-        $item1:expr,
-        $($item2:expr),+$(,)?
-    ) => {
-        $item1$(.chain($item2))+
-    };
 }
 
 #[cfg(test)]

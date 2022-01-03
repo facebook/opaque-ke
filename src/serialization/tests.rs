@@ -12,7 +12,7 @@ use crate::{
     hash::{OutputSize, ProxyHash},
     key_exchange::{
         group::KeGroup,
-        traits::{Ke1MessageLen, Ke2MessageLen},
+        traits::{Ke1MessageLen, Ke1StateLen, Ke2MessageLen},
     },
     key_exchange::{
         traits::{FromBytes, KeyExchange, ToBytes},
@@ -20,13 +20,13 @@ use crate::{
     },
     keypair::KeyPair,
     messages::CredentialResponseWithoutKeLen,
-    opaque::MaskedResponseLen,
+    opaque::{ClientLoginLen, ClientRegistrationLen, MaskedResponseLen},
     serialization::{i2osp, os2ip, Serialize},
     *,
 };
-use alloc::vec;
-use alloc::vec::Vec;
 use core::ops::Add;
+use std::vec;
+use std::vec::Vec;
 
 use digest::core_api::{BlockSizeUser, CoreProxy};
 use digest::Output;
@@ -78,6 +78,13 @@ fn client_registration_roundtrip() -> Result<(), ProtocolError> {
         <CS::Hash as CoreProxy>::Core: ProxyHash,
         <<CS::Hash as CoreProxy>::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
         Le<<<CS::Hash as CoreProxy>::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
+        // ClientRegistration: (2 + KgSk) + (2 + KgPk)
+        U2: Add<<CS::OprfGroup as Group>::ScalarLen>,
+        Sum<U2, <CS::OprfGroup as Group>::ScalarLen>:
+            ArrayLength<u8> + Add<Sum<U2, <CS::OprfGroup as Group>::ElemLen>>,
+        U2: Add<<CS::OprfGroup as Group>::ElemLen>,
+        Sum<U2, <CS::OprfGroup as Group>::ElemLen>: ArrayLength<u8>,
+        ClientRegistrationLen<CS>: ArrayLength<u8>,
     {
         let pw = b"hunter2";
         let mut rng = OsRng;
@@ -85,17 +92,16 @@ fn client_registration_roundtrip() -> Result<(), ProtocolError> {
         let blind_result =
             &voprf::NonVerifiableClient::<CS::OprfGroup, CS::Hash>::blind(pw, &mut rng)?;
 
-        let bytes: Vec<u8> = chain!(
-            Serialize::<U2>::from(&blind_result.state.serialize())?.iter(),
-            Serialize::<U2>::from(&blind_result.message.serialize())?.iter(),
-        )
-        .flatten()
-        .cloned()
-        .collect();
+        let bytes: Vec<u8> = Serialize::<U2>::from(&blind_result.state.serialize())?
+            .iter()
+            .chain(Serialize::<U2>::from(&blind_result.message.serialize())?.iter())
+            .flatten()
+            .cloned()
+            .collect();
 
         let reg = ClientRegistration::<CS>::deserialize(&bytes)?;
         let reg_bytes = reg.serialize()?;
-        assert_eq!(reg_bytes, bytes);
+        assert_eq!(*reg_bytes, bytes);
         Ok(())
     }
 
@@ -474,6 +480,17 @@ fn client_login_roundtrip() -> Result<(), ProtocolError> {
         // CredentialRequest: KgPk + Ke1Message
         <CS::OprfGroup as Group>::ElemLen: Add<Ke1MessageLen<CS>>,
         CredentialRequestLen<CS>: ArrayLength<u8>,
+        // ClientLogin: (2 + KgSk) + (2 + CredentialRequest) + (2 + Ke1State)
+        U2: Add<<CS::OprfGroup as Group>::ScalarLen>,
+        Sum<U2, <CS::OprfGroup as Group>::ScalarLen>:
+            ArrayLength<u8> + Add<Sum<U2, CredentialRequestLen<CS>>>,
+        U2: Add<CredentialRequestLen<CS>>,
+        Sum<U2, CredentialRequestLen<CS>>: ArrayLength<u8>,
+        Sum<Sum<U2, <CS::OprfGroup as Group>::ScalarLen>, Sum<U2, CredentialRequestLen<CS>>>:
+            ArrayLength<u8> + Add<Sum<U2, Ke1StateLen<CS>>>,
+        U2: Add<Ke1StateLen<CS>>,
+        Sum<U2, Ke1StateLen<CS>>: ArrayLength<u8>,
+        ClientLoginLen<CS>: ArrayLength<u8>,
     {
         let pw = b"hunter2";
         let mut rng = OsRng;
@@ -499,17 +516,16 @@ fn client_login_roundtrip() -> Result<(), ProtocolError> {
                 )?,
         };
 
-        let bytes: Vec<u8> = chain!(
-            Serialize::<U2>::from(&blind_result.state.serialize())?.iter(),
-            Serialize::<U2>::from(&credential_request.serialize())?.iter(),
-            Serialize::<U2>::from(&l1_data)?.iter(),
-        )
-        .flatten()
-        .cloned()
-        .collect();
+        let bytes: Vec<u8> = Serialize::<U2>::from(&blind_result.state.serialize())?
+            .iter()
+            .chain(Serialize::<U2>::from(&credential_request.serialize())?.iter())
+            .chain(Serialize::<U2>::from(&l1_data)?.iter())
+            .flatten()
+            .cloned()
+            .collect();
         let reg = ClientLogin::<CS>::deserialize(&bytes)?;
         let reg_bytes = reg.serialize()?;
-        assert_eq!(reg_bytes, bytes);
+        assert_eq!(*reg_bytes, bytes);
         Ok(())
     }
 

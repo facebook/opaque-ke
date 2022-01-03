@@ -5,9 +5,9 @@
 // License, Version 2.0 found in the LICENSE-APACHE file in the root directory
 // of this source tree.
 
-use alloc::vec::Vec;
 use core::cmp::min;
 use rand::{CryptoRng, Error, RngCore};
+use std::vec::Vec;
 
 /// A simple implementation of `RngCore` for testing purposes.
 ///

@@ -251,15 +251,13 @@ mod tests {
     use core::slice::from_raw_parts;
     use generic_array::typenum::Unsigned;
     use rand::rngs::OsRng;
+    use std::vec;
 
     #[test]
     fn test_zeroize_key() -> Result<(), ProtocolError> {
         fn inner<G: KeGroup>() -> Result<(), ProtocolError> {
             let key_len = G::PkLen::USIZE;
-            let mut key = Key::<G::PkLen>(GenericArray::clone_from_slice(&alloc::vec![
-                1u8;
-                key_len
-            ]));
+            let mut key = Key::<G::PkLen>(GenericArray::clone_from_slice(&vec![1u8; key_len]));
             let ptr = key.as_ptr();
 
             Zeroize::zeroize(&mut key);
@@ -308,6 +306,7 @@ mod tests {
             mod $mod {
                 use super::*;
                 use proptest::prelude::*;
+                use std::format;
 
                 proptest! {
                     #[test]

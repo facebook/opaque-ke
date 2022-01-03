@@ -358,5 +358,5 @@ fn construct_aad<'a>(
     id_s: impl Iterator<Item = &'a [u8]>,
     server_s_pk: &'a [u8],
 ) -> impl Iterator<Item = &'a [u8]> {
-    chain!(Some(server_s_pk).into_iter(), id_s, id_u)
+    [server_s_pk].into_iter().chain(id_s).chain(id_u)
 }

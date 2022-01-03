@@ -14,7 +14,7 @@ use crate::{
     hash::{OutputSize, ProxyHash},
     key_exchange::{
         group::KeGroup,
-        traits::{Ke1MessageLen, Ke2MessageLen},
+        traits::{Ke1MessageLen, Ke1StateLen, Ke2MessageLen},
         tripledh::{NonceLen, TripleDH},
     },
     messages::{
@@ -26,15 +26,16 @@ use crate::{
     tests::mock_rng::CycleRng,
     *,
 };
-use alloc::string::ToString;
-use alloc::vec::Vec;
 use core::ops::Add;
 use digest::core_api::{BlockSizeUser, CoreProxy};
 use digest::Output;
-use generic_array::typenum::{IsLess, Le, NonZero, Sum, Unsigned, U256};
+use generic_array::typenum::{IsLess, Le, NonZero, Sum, Unsigned, U2, U256};
 use generic_array::ArrayLength;
 use rand::rngs::OsRng;
 use serde_json::Value;
+use std::string::{String, ToString};
+use std::vec::Vec;
+use std::{format, println, vec};
 use subtle::ConstantTimeEq;
 use voprf::Group;
 use zeroize::Zeroize;
@@ -320,8 +321,8 @@ fn populate_test_vectors(values: &Value) -> TestVectorParameters {
     }
 }
 
-fn stringify_test_vectors(p: &TestVectorParameters) -> alloc::string::String {
-    let mut s = alloc::string::String::new();
+fn stringify_test_vectors(p: &TestVectorParameters) -> String {
+    let mut s = String::new();
     s.push_str("{\n");
     s.push_str(format!("\"client_s_pk\": \"{}\",\n", hex::encode(&p.client_s_pk)).as_str());
     s.push_str(format!("\"client_s_sk\": \"{}\",\n", hex::encode(&p.client_s_sk)).as_str());
@@ -448,6 +449,13 @@ where
     <CS::Hash as CoreProxy>::Core: ProxyHash,
     <<CS::Hash as CoreProxy>::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
     Le<<<CS::Hash as CoreProxy>::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
+    // ClientRegistration: (2 + KgSk) + (2 + KgPk)
+    U2: Add<<CS::OprfGroup as Group>::ScalarLen>,
+    Sum<U2, <CS::OprfGroup as Group>::ScalarLen>:
+        ArrayLength<u8> + Add<Sum<U2, <CS::OprfGroup as Group>::ElemLen>>,
+    U2: Add<<CS::OprfGroup as Group>::ElemLen>,
+    Sum<U2, <CS::OprfGroup as Group>::ElemLen>: ArrayLength<u8>,
+    ClientRegistrationLen<CS>: ArrayLength<u8>,
     // RegistrationResponse: KgPk + KePk
     <CS::OprfGroup as Group>::ElemLen: Add<<CS::KeGroup as KeGroup>::PkLen>,
     RegistrationResponseLen<CS>: ArrayLength<u8>,
@@ -466,6 +474,17 @@ where
     // CredentialRequest: KgPk + Ke1Message
     <CS::OprfGroup as Group>::ElemLen: Add<Ke1MessageLen<CS>>,
     CredentialRequestLen<CS>: ArrayLength<u8>,
+    // ClientLogin: (2 + KgSk) + (2 + CredentialRequest) + (2 + Ke1State)
+    U2: Add<<CS::OprfGroup as Group>::ScalarLen>,
+    Sum<U2, <CS::OprfGroup as Group>::ScalarLen>:
+        ArrayLength<u8> + Add<Sum<U2, CredentialRequestLen<CS>>>,
+    U2: Add<CredentialRequestLen<CS>>,
+    Sum<U2, CredentialRequestLen<CS>>: ArrayLength<u8>,
+    Sum<Sum<U2, <CS::OprfGroup as Group>::ScalarLen>, Sum<U2, CredentialRequestLen<CS>>>:
+        ArrayLength<u8> + Add<Sum<U2, Ke1StateLen<CS>>>,
+    U2: Add<Ke1StateLen<CS>>,
+    Sum<U2, Ke1StateLen<CS>>: ArrayLength<u8>,
+    ClientLoginLen<CS>: ArrayLength<u8>,
     // MaskedResponse: (Nonce + Hash) + KePk
     NonceLen: Add<OutputSize<CS::Hash>>,
     Sum<NonceLen, OutputSize<CS::Hash>>: ArrayLength<u8> + Add<<CS::KeGroup as KeGroup>::PkLen>,
@@ -659,7 +678,7 @@ where
         credential_response: credential_response_bytes.to_vec(),
         credential_finalization: credential_finalization_bytes.to_vec(),
         password_file: password_file_bytes.to_vec(),
-        client_registration_state,
+        client_registration_state: client_registration_state.to_vec(),
         client_login_state,
         server_login_state: server_login_state.to_vec(),
         session_key: client_login_finish_result.session_key.to_vec(),
@@ -703,6 +722,13 @@ fn test_registration_request() -> Result<(), ProtocolError> {
         <CS::Hash as CoreProxy>::Core: ProxyHash,
         <<CS::Hash as CoreProxy>::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
         Le<<<CS::Hash as CoreProxy>::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
+        // ClientRegistration: (2 + KgSk) + (2 + KgPk)
+        U2: Add<<CS::OprfGroup as Group>::ScalarLen>,
+        Sum<U2, <CS::OprfGroup as Group>::ScalarLen>:
+            ArrayLength<u8> + Add<Sum<U2, <CS::OprfGroup as Group>::ElemLen>>,
+        U2: Add<<CS::OprfGroup as Group>::ElemLen>,
+        Sum<U2, <CS::OprfGroup as Group>::ElemLen>: ArrayLength<u8>,
+        ClientRegistrationLen<CS>: ArrayLength<u8>,
     {
         let parameters = populate_test_vectors(&serde_json::from_str(test_vector).unwrap());
         let mut rng = CycleRng::new(parameters.blinding_factor.to_vec());
@@ -937,6 +963,17 @@ fn test_credential_request() -> Result<(), ProtocolError> {
         // CredentialRequest: KgPk + Ke1Message
         <CS::OprfGroup as Group>::ElemLen: Add<Ke1MessageLen<CS>>,
         CredentialRequestLen<CS>: ArrayLength<u8>,
+        // ClientLogin: (2 + KgSk) + (2 + CredentialRequest) + (2 + Ke1State)
+        U2: Add<<CS::OprfGroup as Group>::ScalarLen>,
+        Sum<U2, <CS::OprfGroup as Group>::ScalarLen>:
+            ArrayLength<u8> + Add<Sum<U2, CredentialRequestLen<CS>>>,
+        U2: Add<CredentialRequestLen<CS>>,
+        Sum<U2, CredentialRequestLen<CS>>: ArrayLength<u8>,
+        Sum<Sum<U2, <CS::OprfGroup as Group>::ScalarLen>, Sum<U2, CredentialRequestLen<CS>>>:
+            ArrayLength<u8> + Add<Sum<U2, Ke1StateLen<CS>>>,
+        U2: Add<Ke1StateLen<CS>>,
+        Sum<U2, Ke1StateLen<CS>>: ArrayLength<u8>,
+        ClientLoginLen<CS>: ArrayLength<u8>,
     {
         let parameters = populate_test_vectors(&serde_json::from_str(test_vector).unwrap());
 

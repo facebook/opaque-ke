@@ -14,7 +14,7 @@ use crate::{
     hash::{Hash, OutputSize, ProxyHash},
     key_exchange::{
         group::KeGroup,
-        traits::{FromBytes, Ke1MessageLen, Ke2StateLen, KeyExchange, ToBytes},
+        traits::{FromBytes, Ke1MessageLen, Ke1StateLen, Ke2StateLen, KeyExchange, ToBytes},
         tripledh::NonceLen,
     },
     keypair::{KeyPair, PrivateKey, PublicKey, SecretKey},
@@ -24,7 +24,6 @@ use crate::{
     CredentialFinalization, CredentialRequest, CredentialResponse, RegistrationRequest,
     RegistrationResponse, RegistrationUpload,
 };
-use alloc::vec::Vec;
 use core::marker::PhantomData;
 use core::ops::Add;
 use derive_where::DeriveWhere;
@@ -101,7 +100,17 @@ where
     pub(crate) blinded_element: voprf::BlindedElement<CS::OprfGroup, CS::Hash>,
 }
 
-impl_serialize_and_deserialize_for!(ClientRegistration; serde_::ser::Error::custom);
+impl_serialize_and_deserialize_for!(
+    ClientRegistration
+    where
+        // ClientRegistration: (2 + KgSk) + (2 + KgPk)
+        U2: Add<<CS::OprfGroup as Group>::ScalarLen>,
+        Sum<U2, <CS::OprfGroup as Group>::ScalarLen>:
+            ArrayLength<u8> | Add<Sum<U2, <CS::OprfGroup as Group>::ElemLen>>,
+        U2: Add<<CS::OprfGroup as Group>::ElemLen>,
+        Sum<U2, <CS::OprfGroup as Group>::ElemLen>: ArrayLength<u8>,
+        ClientRegistrationLen<CS>: ArrayLength<u8>;
+    serde_::ser::Error::custom);
 
 /// The state elements the server holds to record a registration
 #[derive(DeriveWhere)]
@@ -151,7 +160,18 @@ impl_serialize_and_deserialize_for!(
     where
         // CredentialRequest: KgPk + Ke1Message
         <CS::OprfGroup as Group>::ElemLen: Add<Ke1MessageLen<CS>>,
-        CredentialRequestLen<CS>: ArrayLength<u8>;
+        CredentialRequestLen<CS>: ArrayLength<u8>,
+        // ClientLogin: (2 + KgSk) + (2 + CredentialRequest) + (2 + Ke1State)
+        U2: Add<<CS::OprfGroup as Group>::ScalarLen>,
+        Sum<U2, <CS::OprfGroup as Group>::ScalarLen>:
+            ArrayLength<u8> | Add<Sum<U2, CredentialRequestLen<CS>>>,
+        U2: Add<CredentialRequestLen<CS>>,
+        Sum<U2, CredentialRequestLen<CS>>: ArrayLength<u8>,
+        Sum<Sum<U2, <CS::OprfGroup as Group>::ScalarLen>, Sum<U2, CredentialRequestLen<CS>>>:
+            ArrayLength<u8> | Add<Sum<U2, Ke1StateLen<CS>>>,
+        U2: Add<Ke1StateLen<CS>>,
+        Sum<U2, Ke1StateLen<CS>>: ArrayLength<u8>,
+        ClientLoginLen<CS>: ArrayLength<u8>;
     serde_::ser::Error::custom
 );
 
@@ -259,6 +279,9 @@ where
 // Registration
 // ============
 
+pub(crate) type ClientRegistrationLen<CS: CipherSuite> =
+    Sum<Sum<U2, <CS::OprfGroup as Group>::ScalarLen>, Sum<U2, <CS::OprfGroup as Group>::ElemLen>>;
+
 impl<CS: CipherSuite> ClientRegistration<CS>
 where
     <CS::Hash as CoreProxy>::Core: ProxyHash,
@@ -266,14 +289,23 @@ where
     Le<<<CS::Hash as CoreProxy>::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
 {
     /// Serialization into bytes
-    pub fn serialize(&self) -> Result<Vec<u8>, ProtocolError> {
-        Ok(chain!(
-            Serialize::<U2>::from(&self.oprf_client.serialize())?.iter(),
-            Serialize::<U2>::from(&self.blinded_element.serialize())?.iter(),
+    pub fn serialize(&self) -> Result<GenericArray<u8, ClientRegistrationLen<CS>>, ProtocolError>
+    where
+        // ClientRegistration: (2 + KgSk) + (2 + KgPk)
+        U2: Add<<CS::OprfGroup as Group>::ScalarLen>,
+        Sum<U2, <CS::OprfGroup as Group>::ScalarLen>:
+            ArrayLength<u8> + Add<Sum<U2, <CS::OprfGroup as Group>::ElemLen>>,
+        U2: Add<<CS::OprfGroup as Group>::ElemLen>,
+        Sum<U2, <CS::OprfGroup as Group>::ElemLen>: ArrayLength<u8>,
+        ClientRegistrationLen<CS>: ArrayLength<u8>,
+    {
+        Ok(
+            Serialize::<U2, _>::from_owned(self.oprf_client.serialize())?
+                .serialize()
+                .concat(
+                    Serialize::<U2, _>::from_owned(self.blinded_element.serialize())?.serialize(),
+                ),
         )
-        .flatten()
-        .cloned()
-        .collect())
     }
 
     /// Deserialization from bytes
@@ -293,7 +325,7 @@ where
 
     /// Only used for testing zeroize
     #[cfg(test)]
-    pub(crate) fn to_vec(&self) -> Vec<u8> {
+    pub(crate) fn to_vec(&self) -> std::vec::Vec<u8> {
         [
             self.oprf_client.serialize().to_vec(),
             self.blinded_element.serialize().to_vec(),
@@ -449,6 +481,11 @@ where
 // Login
 // =====
 
+pub(crate) type ClientLoginLen<CS: CipherSuite> = Sum<
+    Sum<Sum<U2, <CS::OprfGroup as Group>::ScalarLen>, Sum<U2, CredentialRequestLen<CS>>>,
+    Sum<U2, Ke1StateLen<CS>>,
+>;
+
 impl<CS: CipherSuite> ClientLogin<CS>
 where
     <CS::Hash as CoreProxy>::Core: ProxyHash,
@@ -456,20 +493,32 @@ where
     Le<<<CS::Hash as CoreProxy>::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
 {
     /// Serialization into bytes
-    pub fn serialize(&self) -> Result<Vec<u8>, ProtocolError>
+    pub fn serialize(&self) -> Result<GenericArray<u8, ClientLoginLen<CS>>, ProtocolError>
     where
         // CredentialRequest: KgPk + Ke1Message
         <CS::OprfGroup as Group>::ElemLen: Add<Ke1MessageLen<CS>>,
         CredentialRequestLen<CS>: ArrayLength<u8>,
+        // ClientLogin: (2 + KgSk) + (2 + CredentialRequest) + (2 + Ke1State)
+        U2: Add<<CS::OprfGroup as Group>::ScalarLen>,
+        Sum<U2, <CS::OprfGroup as Group>::ScalarLen>:
+            ArrayLength<u8> + Add<Sum<U2, CredentialRequestLen<CS>>>,
+        U2: Add<CredentialRequestLen<CS>>,
+        Sum<U2, CredentialRequestLen<CS>>: ArrayLength<u8>,
+        Sum<Sum<U2, <CS::OprfGroup as Group>::ScalarLen>, Sum<U2, CredentialRequestLen<CS>>>:
+            ArrayLength<u8> + Add<Sum<U2, Ke1StateLen<CS>>>,
+        U2: Add<Ke1StateLen<CS>>,
+        Sum<U2, Ke1StateLen<CS>>: ArrayLength<u8>,
+        ClientLoginLen<CS>: ArrayLength<u8>,
     {
-        Ok(chain!(
-            Serialize::<U2>::from(&self.oprf_client.serialize())?.iter(),
-            Serialize::<U2>::from(&self.credential_request.serialize())?.iter(),
-            Serialize::<U2>::from(&self.ke1_state.to_bytes())?.iter(),
+        Ok(
+            Serialize::<U2, _>::from_owned(self.oprf_client.serialize())?
+                .serialize()
+                .concat(
+                    Serialize::<U2, _>::from_owned(self.credential_request.serialize())?
+                        .serialize(),
+                )
+                .concat(Serialize::<U2, _>::from_owned(self.ke1_state.to_bytes())?.serialize()),
         )
-        .flatten()
-        .cloned()
-        .collect())
     }
 
     /// Deserialization from bytes
@@ -495,7 +544,7 @@ where
 
     /// Only used for testing zeroize
     #[cfg(test)]
-    pub(crate) fn to_vec(&self) -> Vec<u8>
+    pub(crate) fn to_vec(&self) -> std::vec::Vec<u8>
     where
         // CredentialRequest: KgPk + Ke1Message
         <CS::OprfGroup as Group>::ElemLen: Add<Ke1MessageLen<CS>>,
@@ -1216,12 +1265,12 @@ pub(crate) fn bytestrings_from_identifiers<KG: KeGroup>(
     server_s_pk: GenericArray<u8, KG::PkLen>,
 ) -> Result<(Serialize<U2, KG::PkLen>, Serialize<U2, KG::PkLen>), ProtocolError> {
     let client_identity = if let Some(client) = ids.client {
-        Serialize::<U2, KG::PkLen>::from(client)?
+        Serialize::<U2, _>::from(client)?
     } else {
         Serialize::<U2, _>::from_owned(client_s_pk)?
     };
     let server_identity = if let Some(server) = ids.server {
-        Serialize::<U2, KG::PkLen>::from(server)?
+        Serialize::<U2, _>::from(server)?
     } else {
         Serialize::<U2, _>::from_owned(server_s_pk)?
     };

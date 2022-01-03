@@ -984,19 +984,18 @@
 //!
 
 #![deny(unsafe_code)]
-#![cfg_attr(not(feature = "std"), no_std)]
+#![no_std]
 #![warn(clippy::cargo, missing_docs)]
 #![allow(clippy::multiple_crate_versions, type_alias_bounds)]
 
-extern crate alloc;
+#[cfg(any(feature = "std", test))]
+extern crate std;
 
 // Error types
 pub mod errors;
 
 #[macro_use]
 mod impls;
-#[macro_use]
-mod serialization;
 pub mod ciphersuite;
 mod envelope;
 pub mod hash;
@@ -1004,6 +1003,7 @@ pub mod key_exchange;
 pub mod keypair;
 mod messages;
 mod opaque;
+mod serialization;
 pub mod slow_hash;
 
 #[cfg(test)]

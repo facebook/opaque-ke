@@ -24,7 +24,6 @@ use crate::{
     tests::mock_rng::CycleRng,
     *,
 };
-use alloc::{string::ToString, vec, vec::Vec};
 use core::ops::Add;
 use digest::core_api::{BlockSizeUser, CoreProxy};
 use generic_array::{
@@ -32,6 +31,7 @@ use generic_array::{
     ArrayLength,
 };
 use json::JsonValue;
+use std::{println, string::ToString, vec, vec::Vec};
 use voprf::Group;
 
 #[allow(non_snake_case)]

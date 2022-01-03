@@ -5,7 +5,9 @@
 // License, Version 2.0 found in the LICENSE-APACHE file in the root directory
 // of this source tree.
 
-use alloc::string::String;
+use std::string::{String, ToString};
+use std::vec::Vec;
+use std::{format, vec};
 
 pub(crate) fn rfc_to_json(input: &str) -> String {
     format!("{{\n{}\n}}", parse_vector_types(input))
