@@ -26,11 +26,13 @@ impl KeGroup for PublicKey<NistP256> {
     }
 
     fn random_sk<R: RngCore + CryptoRng>(rng: &mut R) -> GenericArray<u8, Self::SkLen> {
-        SecretKey::<NistP256>::random(rng).to_bytes()
+        SecretKey::<NistP256>::random(rng).to_be_bytes()
     }
 
     fn public_key(sk: &GenericArray<u8, Self::SkLen>) -> Self {
-        SecretKey::<NistP256>::from_bytes(sk).unwrap().public_key()
+        SecretKey::<NistP256>::from_be_bytes(sk)
+            .unwrap()
+            .public_key()
     }
 
     fn to_arr(&self) -> GenericArray<u8, Self::PkLen> {
@@ -39,9 +41,9 @@ impl KeGroup for PublicKey<NistP256> {
 
     fn diffie_hellman(&self, sk: &GenericArray<u8, Self::SkLen>) -> GenericArray<u8, Self::PkLen> {
         (self.to_projective()
-            * SecretKey::<NistP256>::from_bytes(sk)
+            * SecretKey::<NistP256>::from_be_bytes(sk)
                 .unwrap()
-                .to_secret_scalar()
+                .to_nonzero_scalar()
                 .as_ref())
         .to_affine()
         .to_bytes()

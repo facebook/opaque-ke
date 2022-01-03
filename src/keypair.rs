@@ -428,6 +428,7 @@ mod tests {
         let ClientRegistrationFinishResult { message, .. } = client
             .finish(
                 &mut OsRng,
+                PASSWORD.as_bytes(),
                 message,
                 ClientRegistrationFinishParameters::default(),
             )
@@ -452,7 +453,11 @@ mod tests {
         )
         .unwrap();
         let ClientLoginFinishResult { message, .. } = client
-            .finish(message, ClientLoginFinishParameters::default())
+            .finish(
+                PASSWORD.as_bytes(),
+                message,
+                ClientLoginFinishParameters::default(),
+            )
             .unwrap();
         server.finish(message).unwrap();
     }

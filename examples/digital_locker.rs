@@ -122,6 +122,7 @@ fn register_locker(
         .state
         .finish(
             &mut client_rng,
+            password.as_bytes(),
             RegistrationResponse::deserialize(&registration_response_bytes).unwrap(),
             ClientRegistrationFinishParameters::default(),
         )
@@ -176,6 +177,7 @@ fn open_locker(
     // Server sends credential_response_bytes to client
 
     let result = client_login_start_result.state.finish(
+        password.as_bytes(),
         CredentialResponse::deserialize(&credential_response_bytes).unwrap(),
         ClientLoginFinishParameters::default(),
     );

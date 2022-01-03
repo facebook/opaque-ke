@@ -113,6 +113,7 @@ fn client_registration_finish(c: &mut Criterion) {
                     .state
                     .finish(
                         &mut rng,
+                        password,
                         server_registration_start_result.message.clone(),
                         ClientRegistrationFinishParameters::default(),
                     )
@@ -139,6 +140,7 @@ fn server_registration_finish(c: &mut Criterion) {
         .state
         .finish(
             &mut rng,
+            password,
             server_registration_start_result.message,
             ClientRegistrationFinishParameters::default(),
         )
@@ -182,6 +184,7 @@ fn server_login_start_real(c: &mut Criterion) {
         .state
         .finish(
             &mut rng,
+            password,
             server_registration_start_result.message,
             ClientRegistrationFinishParameters::default(),
         )
@@ -249,6 +252,7 @@ fn client_login_finish(c: &mut Criterion) {
         .state
         .finish(
             &mut rng,
+            password,
             server_registration_start_result.message,
             ClientRegistrationFinishParameters::default(),
         )
@@ -271,6 +275,7 @@ fn client_login_finish(c: &mut Criterion) {
                 .clone()
                 .state
                 .finish(
+                    password,
                     server_login_start.clone().message,
                     ClientLoginFinishParameters::default(),
                 )
@@ -296,6 +301,7 @@ fn server_login_finish(c: &mut Criterion) {
         .state
         .finish(
             &mut rng,
+            password,
             server_registration_start_result.message,
             ClientRegistrationFinishParameters::default(),
         )
@@ -314,6 +320,7 @@ fn server_login_finish(c: &mut Criterion) {
     let client_login_finish_result = client_login_start_result
         .state
         .finish(
+            password,
             server_login_start_result.clone().message,
             ClientLoginFinishParameters::default(),
         )

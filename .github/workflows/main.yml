@@ -19,10 +19,7 @@ jobs:
           - x25519_u64,ristretto255_u64
         toolchain:
           - stable
-          - 1.51.0
-        exclude:
-          - backend_feature: p256
-            toolchain: 1.51.0
+          - 1.56.1
     name: test
     steps:
       - name: Checkout sources
@@ -102,7 +99,7 @@ jobs:
       matrix:
         toolchain:
           - stable
-          - 1.51.0
+          - 1.56.1
     name: test simple_login command-line example
     steps:
       - name: install expect
@@ -125,7 +122,7 @@ jobs:
       matrix:
         toolchain:
           - stable
-          - 1.51.0
+          - 1.56.1
     name: test digital_locker command-line example
     steps:
       - name: install expect
