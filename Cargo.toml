@@ -7,9 +7,8 @@ categories = ["no-std"]
 description = "An implementation of the OPAQUE password-authenticated key exchange protocol"
 authors = ["Kevin Lewi <klewi@fb.com>", "François Garillot <fga@fb.com>"]
 license = "Apache-2.0 OR MIT"
-edition = "2018"
+edition = "2021"
 readme = "README.md"
-resolver = "2"
 rust-version = "1.56"
 
 [features]

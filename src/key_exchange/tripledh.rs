@@ -19,7 +19,6 @@ use crate::{
     keypair::{KeyPair, PrivateKey, PublicKey, SecretKey},
     serialization::{Serialize, UpdateExt},
 };
-use core::array::IntoIter;
 use core::convert::TryFrom;
 use core::ops::Add;
 use derive_where::DeriveWhere;
@@ -645,9 +644,7 @@ where
     Le<<D::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
 {
     fn to_bytes_without_info_or_mac(&self) -> impl Iterator<Item = &[u8]> {
-        // MSRV: array `into_iter` isn't available in 1.51
-        #[allow(deprecated)]
-        IntoIter::new([self.server_nonce.as_slice(), self.server_e_pk.as_slice()])
+        [self.server_nonce.as_slice(), self.server_e_pk.as_slice()].into_iter()
     }
 }
 

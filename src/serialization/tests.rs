@@ -278,7 +278,7 @@ fn registration_upload_roundtrip() -> Result<(), ProtocolError> {
         let (envelope, _, _) = Envelope::<CS>::seal_raw(
             randomized_pwd_hasher,
             nonce.into(),
-            Some(pubkey_bytes.as_slice()).into_iter(),
+            [pubkey_bytes.as_slice()].into_iter(),
             InnerEnvelopeMode::Internal,
         )
         .unwrap();

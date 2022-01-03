@@ -322,7 +322,7 @@ where
         .map_err(|_| InternalError::HkdfError)?;
     let client_static_keypair = KeyPair::<CS::KeGroup>::from_private_key_slice(
         &CS::OprfGroup::scalar_as_bytes(CS::OprfGroup::hash_to_scalar::<CS::Hash, _, _>(
-            Some(keypair_seed.as_slice()),
+            [keypair_seed.as_slice()],
             GenericArray::from(STR_OPAQUE_DERIVE_AUTH_KEY_PAIR),
         )?),
     )?;
@@ -345,7 +345,7 @@ where
         .map_err(|_| InternalError::HkdfError)?;
     let client_static_keypair = KeyPair::<CS::KeGroup>::from_private_key_slice(
         &CS::OprfGroup::scalar_as_bytes(CS::OprfGroup::hash_to_scalar::<CS::Hash, _, _>(
-            Some(keypair_seed.as_slice()),
+            [keypair_seed.as_slice()],
             GenericArray::from(STR_OPAQUE_DERIVE_AUTH_KEY_PAIR),
         )?),
     )?;

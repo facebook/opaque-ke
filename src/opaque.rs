@@ -25,7 +25,6 @@ use crate::{
     RegistrationResponse, RegistrationUpload,
 };
 use alloc::vec::Vec;
-use core::array::IntoIter;
 use core::marker::PhantomData;
 use core::ops::Add;
 use derive_where::DeriveWhere;
@@ -1082,7 +1081,7 @@ where
         })
         .ok_or(InternalError::HkdfError)?;
     Ok(G::scalar_as_bytes(G::hash_to_scalar::<D, _, _>(
-        Some(ikm.as_slice()),
+        [ikm.as_slice()],
         GenericArray::from(*STR_OPAQUE_DERIVE_KEY_PAIR),
     )?))
 }
@@ -1134,9 +1133,7 @@ where
     }
 
     pub(crate) fn iter(&self) -> impl Iterator<Item = &[u8]> {
-        // MSRV: array `into_iter` isn't available in 1.51
-        #[allow(deprecated)]
-        IntoIter::new([self.nonce.as_slice(), &self.hash, &self.pk])
+        [self.nonce.as_slice(), &self.hash, &self.pk].into_iter()
     }
 }
 

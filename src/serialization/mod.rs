@@ -96,17 +96,17 @@ impl<'a, L1: ArrayLength<u8>, L2: ArrayLength<u8>, L3: ArrayLength<u8>> Serializ
 
     pub(crate) fn iter(&self) -> impl Iterator<Item = &[u8]> {
         // Some magic to make it output the same type in all branches.
-        Some(self.octet.as_slice())
+        [self.octet.as_slice()]
             .into_iter()
             .chain(match &self.input {
-                Input::Owned(bytes) => Some(bytes.as_slice()),
-                Input::Borrowed(bytes) => Some(*bytes),
-                Input::Label(_) => None,
+                Input::Owned(bytes) => [bytes.as_slice()],
+                Input::Borrowed(bytes) => [*bytes],
+                Input::Label((iter, _)) => [iter[0]],
             })
             .chain(if let Input::Label((iter, _)) = &self.input {
-                Some(iter[0]).into_iter().chain(Some(iter[1]).into_iter())
+                Some(iter[1])
             } else {
-                None.into_iter().chain(None)
+                None
             })
     }
 }

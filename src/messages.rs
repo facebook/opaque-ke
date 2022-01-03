@@ -23,7 +23,6 @@ use crate::{
     keypair::{KeyPair, PublicKey, SecretKey},
     opaque::{MaskedResponse, MaskedResponseLen, ServerSetup},
 };
-use core::array::IntoIter;
 use core::ops::Add;
 use derive_where::DeriveWhere;
 use digest::core_api::{BlockSizeUser, CoreProxy};
@@ -379,9 +378,7 @@ where
         blinded_element: &'a GenericArray<u8, <CS::OprfGroup as Group>::ElemLen>,
         ke1_message: &'a GenericArray<u8, Ke1MessageLen<CS>>,
     ) -> impl Iterator<Item = &'a [u8]> {
-        // MSRV: array `into_iter` isn't available in 1.51
-        #[allow(deprecated)]
-        IntoIter::new([blinded_element.as_slice(), ke1_message])
+        [blinded_element.as_slice(), ke1_message].into_iter()
     }
 
     /// Deserialization from bytes
@@ -465,9 +462,7 @@ where
         masking_nonce: &'a GenericArray<u8, NonceLen>,
         masked_response: &'a MaskedResponse<CS>,
     ) -> impl Iterator<Item = &'a [u8]> {
-        // MSRV: array `into_iter` isn't available in 1.51
-        #[allow(deprecated)]
-        IntoIter::new([beta.as_slice(), masking_nonce.as_slice()])
+        [beta.as_slice(), masking_nonce.as_slice()]
             .into_iter()
             .chain(masked_response.iter())
     }
