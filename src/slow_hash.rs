@@ -14,7 +14,6 @@ use crate::{
 use digest::core_api::BlockSizeUser;
 use digest::Output;
 use generic_array::typenum::{IsLess, Le, NonZero, U256};
-use generic_array::GenericArray;
 
 /// Used for the slow hashing function in OPAQUE
 pub trait SlowHash<D: Hash>: Default
@@ -50,7 +49,7 @@ where
     Le<<D::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
 {
     fn hash(&self, input: Output<D>) -> Result<Output<D>, InternalError> {
-        let mut output = GenericArray::default();
+        let mut output = Output::<D>::default();
         self.hash_password_into(&input, &[0; argon2::MIN_SALT_LEN], &mut output)
             .map_err(|_| InternalError::SlowHashError)?;
         Ok(output)
