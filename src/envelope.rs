@@ -115,7 +115,6 @@ type SealResult<CS: CipherSuite> = (
     Output<CS::Hash>,
 );
 
-#[allow(type_alias_bounds)]
 pub(crate) type EnvelopeLen<CS: CipherSuite> = Sum<NonceLen, OutputSize<CS::Hash>>;
 
 impl<CS: CipherSuite> Envelope<CS>

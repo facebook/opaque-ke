@@ -217,7 +217,6 @@ where
 }
 
 /// Length of [`ServerSetup`] in bytes for serialization.
-#[allow(type_alias_bounds)]
 pub type ServerSetupLen<CS: CipherSuite, S: SecretKey<CS::KeGroup>> =
     Sum<Sum<OutputSize<CS::Hash>, S::Len>, <CS::KeGroup as KeGroup>::SkLen>;
 
@@ -1149,7 +1148,6 @@ where
     pub(crate) pk: GenericArray<u8, <CS::KeGroup as KeGroup>::PkLen>,
 }
 
-#[allow(type_alias_bounds)]
 pub(crate) type MaskedResponseLen<CS: CipherSuite> =
     Sum<Sum<NonceLen, OutputSize<CS::Hash>>, <CS::KeGroup as KeGroup>::PkLen>;
 

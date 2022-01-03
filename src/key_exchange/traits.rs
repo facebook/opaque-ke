@@ -103,19 +103,14 @@ pub trait ToBytes {
     fn to_bytes(&self) -> GenericArray<u8, Self::Len>;
 }
 
-#[allow(dead_code, type_alias_bounds)]
+#[allow(dead_code)]
 pub type Ke1StateLen<CS: CipherSuite> =
     <<CS::KeyExchange as KeyExchange<CS::Hash, CS::KeGroup>>::KE1State as ToBytes>::Len;
-#[allow(type_alias_bounds)]
 pub type Ke1MessageLen<CS: CipherSuite> =
     <<CS::KeyExchange as KeyExchange<CS::Hash, CS::KeGroup>>::KE1Message as ToBytes>::Len;
-#[allow(type_alias_bounds)]
-#[allow(type_alias_bounds)]
 pub type Ke2StateLen<CS: CipherSuite> =
     <<CS::KeyExchange as KeyExchange<CS::Hash, CS::KeGroup>>::KE2State as ToBytes>::Len;
-#[allow(type_alias_bounds)]
 pub type Ke2MessageLen<CS: CipherSuite> =
     <<CS::KeyExchange as KeyExchange<CS::Hash, CS::KeGroup>>::KE2Message as ToBytes>::Len;
-#[allow(type_alias_bounds)]
 pub type Ke3MessageLen<CS: CipherSuite> =
     <<CS::KeyExchange as KeyExchange<CS::Hash, CS::KeGroup>>::KE3Message as ToBytes>::Len;

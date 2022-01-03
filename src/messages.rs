@@ -204,7 +204,6 @@ impl_serialize_and_deserialize_for!(CredentialFinalization);
 ////////////////////////////////
 
 /// Length of [`RegistrationRequest`] in bytes for serialization.
-#[allow(type_alias_bounds)]
 pub type RegistrationRequestLen<CS: CipherSuite> = <CS::OprfGroup as Group>::ElemLen;
 
 impl<CS: CipherSuite> RegistrationRequest<CS>
@@ -235,7 +234,6 @@ where
 }
 
 /// Length of [`RegistrationResponse`] in bytes for serialization.
-#[allow(type_alias_bounds)]
 pub type RegistrationResponseLen<CS: CipherSuite> =
     Sum<<CS::OprfGroup as Group>::ElemLen, <CS::KeGroup as KeGroup>::PkLen>;
 
@@ -288,7 +286,6 @@ where
 }
 
 /// Length of [`RegistrationUpload`] in bytes for serialization.
-#[allow(type_alias_bounds)]
 pub type RegistrationUploadLen<CS: CipherSuite> =
     Sum<Sum<<CS::KeGroup as KeGroup>::PkLen, OutputSize<CS::Hash>>, EnvelopeLen<CS>>;
 
@@ -351,7 +348,6 @@ where
 }
 
 /// Length of [`CredentialRequest`] in bytes for serialization.
-#[allow(type_alias_bounds)]
 pub type CredentialRequestLen<CS: CipherSuite> =
     Sum<<CS::OprfGroup as Group>::ElemLen, Ke1MessageLen<CS>>;
 
@@ -419,11 +415,9 @@ where
 }
 
 /// Length of [`CredentialResponse`] in bytes for serialization.
-#[allow(type_alias_bounds)]
 pub type CredentialResponseLen<CS: CipherSuite> =
     Sum<CredentialResponseWithoutKeLen<CS>, Ke2MessageLen<CS>>;
 
-#[allow(type_alias_bounds)]
 pub(crate) type CredentialResponseWithoutKeLen<CS: CipherSuite> =
     Sum<Sum<<CS::OprfGroup as Group>::ElemLen, NonceLen>, MaskedResponseLen<CS>>;
 
@@ -525,7 +519,6 @@ where
 }
 
 /// Length of [`CredentialFinalization`] in bytes for serialization.
-#[allow(type_alias_bounds)]
 pub type CredentialFinalizationLen<CS: CipherSuite> = Ke3MessageLen<CS>;
 
 impl<CS: CipherSuite> CredentialFinalization<CS>
