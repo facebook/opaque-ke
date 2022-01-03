@@ -12,12 +12,17 @@ use crate::{
     key_exchange::group::KeGroup,
     keypair::{KeyPair, PublicKey},
     opaque::{bytestrings_from_identifiers, Identifiers},
+    serialization::{MacExt, Serialize},
 };
-use alloc::vec;
-use alloc::vec::Vec;
 use core::convert::TryFrom;
-use digest::Digest;
-use generic_array::{typenum::Unsigned, GenericArray};
+use core::ops::Add;
+use derive_where::DeriveWhere;
+use digest::{Digest, FixedOutput};
+use generic_array::{
+    sequence::Concat,
+    typenum::{Sum, Unsigned, U2, U32},
+    ArrayLength, GenericArray,
+};
 use hkdf::Hkdf;
 use hmac::{Hmac, Mac, NewMac};
 use rand::{CryptoRng, RngCore};
@@ -25,13 +30,13 @@ use voprf::group::Group;
 use zeroize::Zeroize;
 
 // Constant string used as salt for HKDF computation
-const STR_AUTH_KEY: &[u8; 7] = b"AuthKey";
-const STR_EXPORT_KEY: &[u8; 9] = b"ExportKey";
-const STR_PRIVATE_KEY: &[u8; 10] = b"PrivateKey";
-const STR_OPAQUE_DERIVE_AUTH_KEY_PAIR: &[u8; 24] = b"OPAQUE-DeriveAuthKeyPair";
-const NONCE_LEN: usize = 32;
+const STR_AUTH_KEY: [u8; 7] = *b"AuthKey";
+const STR_EXPORT_KEY: [u8; 9] = *b"ExportKey";
+const STR_PRIVATE_KEY: [u8; 10] = *b"PrivateKey";
+const STR_OPAQUE_DERIVE_AUTH_KEY_PAIR: [u8; 24] = *b"OPAQUE-DeriveAuthKeyPair";
+type NonceLen = U32;
 
-#[derive(Clone, Debug, Eq, Hash, PartialEq, Zeroize)]
+#[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, Zeroize)]
 #[zeroize(drop)]
 pub(crate) enum InnerEnvelopeMode {
     Zero = 0,
@@ -49,42 +54,31 @@ impl TryFrom<u8> for InnerEnvelopeMode {
 }
 
 /// This struct is an instantiation of the envelope as described in
-/// https://tools.ietf.org/html/draft-krawczyk-cfrg-opaque-06#section-4
+/// <https://tools.ietf.org/html/draft-krawczyk-cfrg-opaque-06#section-4>
 ///
 /// Note that earlier versions of this specification described an
 /// implementation of this envelope using an encryption scheme that
 /// satisfied random-key robustness
-/// (https://tools.ietf.org/html/draft-krawczyk-cfrg-opaque-05#section-4).
+/// (<https://tools.ietf.org/html/draft-krawczyk-cfrg-opaque-05#section-4>).
 /// The specification update has simplified this assumption by taking
 /// an XOR-based approach without compromising on security, and to avoid
 /// the confusion around the implementation of an RKR-secure encryption.
+#[derive(DeriveWhere)]
+#[derive_where(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, Zeroize(drop))]
 pub(crate) struct Envelope<CS: CipherSuite> {
     mode: InnerEnvelopeMode,
-    nonce: Vec<u8>,
+    nonce: GenericArray<u8, NonceLen>,
     hmac: GenericArray<u8, <CS::Hash as Digest>::OutputSize>,
 }
-
-// Cannot be derived because it would require for CS to be Clone.
-impl<CS: CipherSuite> Clone for Envelope<CS> {
-    fn clone(&self) -> Self {
-        Self {
-            mode: self.mode.clone(),
-            nonce: self.nonce.clone(),
-            hmac: self.hmac.clone(),
-        }
-    }
-}
-
-impl_debug_eq_hash_for!(struct Envelope<CS: CipherSuite>, [mode, nonce, hmac]);
 
 // Note that this struct represents an envelope that has been "opened" with the asssociated
 // key. This key is also used to derive the export_key parameter, which is technically
 // unrelated to the envelope's encrypted and authenticated contents.
-pub(crate) struct OpenedEnvelope<CS: CipherSuite> {
+pub(crate) struct OpenedEnvelope<'a, CS: CipherSuite> {
     pub(crate) client_static_keypair: KeyPair<CS::KeGroup>,
     pub(crate) export_key: GenericArray<u8, <CS::Hash as Digest>::OutputSize>,
-    pub(crate) id_u: Vec<u8>,
-    pub(crate) id_s: Vec<u8>,
+    pub(crate) id_u: Serialize<'a, U2, <CS::KeGroup as KeGroup>::PkLen>,
+    pub(crate) id_s: Serialize<'a, U2, <CS::KeGroup as KeGroup>::PkLen>,
 }
 
 pub(crate) struct OpenedInnerEnvelope<D: Hash> {
@@ -100,7 +94,7 @@ type SealRawResult<CS> = (
 type SealRawResult<CS> = (
     Envelope<CS>,
     GenericArray<u8, <<CS as CipherSuite>::Hash as Digest>::OutputSize>,
-    Vec<u8>,
+    GenericArray<u8, <<CS as CipherSuite>::Hash as Digest>::OutputSize>,
 );
 #[cfg(not(test))]
 type SealResult<CS> = (
@@ -113,30 +107,36 @@ type SealResult<CS> = (
     Envelope<CS>,
     PublicKey<<CS as CipherSuite>::KeGroup>,
     GenericArray<u8, <<CS as CipherSuite>::Hash as Digest>::OutputSize>,
-    Vec<u8>,
+    GenericArray<u8, <<CS as CipherSuite>::Hash as Digest>::OutputSize>,
 );
+
+#[allow(type_alias_bounds)]
+pub(crate) type EnvelopeLen<CS: CipherSuite> = Sum<NonceLen, <CS::Hash as FixedOutput>::OutputSize>;
 
 impl<CS: CipherSuite> Envelope<CS> {
     #[allow(clippy::type_complexity)]
     pub(crate) fn seal<R: RngCore + CryptoRng>(
         rng: &mut R,
         randomized_pwd_hasher: Hkdf<CS::Hash>,
-        server_s_pk: &[u8],
-        optional_ids: Option<Identifiers>,
+        server_s_pk: &PublicKey<CS::KeGroup>,
+        ids: Identifiers,
     ) -> Result<SealResult<CS>, ProtocolError> {
-        let mut nonce = vec![0u8; NONCE_LEN];
+        let mut nonce = GenericArray::default();
         rng.fill_bytes(&mut nonce);
 
         let (mode, client_s_pk) = (
             InnerEnvelopeMode::Internal,
-            build_inner_envelope_internal::<CS>(randomized_pwd_hasher.clone(), &nonce)?,
+            build_inner_envelope_internal::<CS>(randomized_pwd_hasher.clone(), nonce)?,
         );
 
-        let (id_u, id_s) =
-            bytestrings_from_identifiers(&optional_ids, &client_s_pk.to_arr(), server_s_pk)?;
-        let aad = construct_aad(&id_u, &id_s, server_s_pk);
+        let (id_u, id_s) = bytestrings_from_identifiers::<CS::KeGroup>(
+            ids,
+            client_s_pk.to_arr(),
+            server_s_pk.to_arr(),
+        )?;
+        let aad = construct_aad(id_u.iter(), id_s.iter(), server_s_pk);
 
-        let result = Self::seal_raw(randomized_pwd_hasher, &nonce, &aad, mode)?;
+        let result = Self::seal_raw(randomized_pwd_hasher, nonce, aad, mode)?;
         Ok((
             result.0,
             client_s_pk,
@@ -149,64 +149,64 @@ impl<CS: CipherSuite> Envelope<CS> {
     /// Uses a key to convert the plaintext into an envelope, authenticated by the aad field.
     /// Note that a new nonce is sampled for each call to seal.
     #[allow(clippy::type_complexity)]
-    pub(crate) fn seal_raw(
+    pub(crate) fn seal_raw<'a>(
         randomized_pwd_hasher: Hkdf<CS::Hash>,
-        nonce: &[u8],
-        aad: &[u8],
+        nonce: GenericArray<u8, NonceLen>,
+        aad: impl Iterator<Item = &'a [u8]>,
         mode: InnerEnvelopeMode,
     ) -> Result<SealRawResult<CS>, InternalError> {
-        let mut hmac_key = vec![0u8; Self::hmac_key_size()];
-        let mut export_key = vec![0u8; Self::export_key_size()];
+        let mut hmac_key = GenericArray::<_, <CS::Hash as Digest>::OutputSize>::default();
+        let mut export_key = GenericArray::<_, <CS::Hash as Digest>::OutputSize>::default();
 
         randomized_pwd_hasher
-            .expand(&[nonce, STR_AUTH_KEY].concat(), &mut hmac_key)
+            .expand_multi_info(&[&nonce, &STR_AUTH_KEY], &mut hmac_key)
             .map_err(|_| InternalError::HkdfError)?;
         randomized_pwd_hasher
-            .expand(&[nonce, STR_EXPORT_KEY].concat(), &mut export_key)
+            .expand_multi_info(&[&nonce, &STR_EXPORT_KEY], &mut export_key)
             .map_err(|_| InternalError::HkdfError)?;
 
         let mut hmac =
             Hmac::<CS::Hash>::new_from_slice(&hmac_key).map_err(|_| InternalError::HmacError)?;
-        hmac.update(nonce);
-        hmac.update(aad);
+        hmac.update(&nonce);
+        hmac.update_iter(aad);
 
         let hmac_bytes = hmac.finalize().into_bytes();
 
         Ok((
             Self {
                 mode,
-                nonce: nonce.to_vec(),
+                nonce,
                 hmac: hmac_bytes,
             },
-            GenericArray::clone_from_slice(&export_key),
+            export_key,
             #[cfg(test)]
             hmac_key,
         ))
     }
 
-    pub(crate) fn open(
+    pub(crate) fn open<'a>(
         &self,
         randomized_pwd_hasher: Hkdf<CS::Hash>,
-        server_s_pk: &[u8],
-        optional_ids: &Option<Identifiers>,
-    ) -> Result<OpenedEnvelope<CS>, ProtocolError> {
+        server_s_pk: PublicKey<CS::KeGroup>,
+        optional_ids: Identifiers<'a>,
+    ) -> Result<OpenedEnvelope<'a, CS>, ProtocolError> {
         let client_static_keypair = match self.mode {
             InnerEnvelopeMode::Zero => {
                 return Err(InternalError::IncompatibleEnvelopeModeError.into())
             }
             InnerEnvelopeMode::Internal => {
-                recover_keys_internal::<CS>(randomized_pwd_hasher.clone(), &self.nonce)?
+                recover_keys_internal::<CS>(randomized_pwd_hasher.clone(), self.nonce)?
             }
         };
 
-        let (id_u, id_s) = bytestrings_from_identifiers(
+        let (id_u, id_s) = bytestrings_from_identifiers::<CS::KeGroup>(
             optional_ids,
-            &client_static_keypair.public().to_arr(),
-            server_s_pk,
+            client_static_keypair.public().to_arr(),
+            server_s_pk.to_arr(),
         )?;
-        let aad = construct_aad(&id_u, &id_s, server_s_pk);
+        let aad = construct_aad(id_u.iter(), id_s.iter(), &server_s_pk);
 
-        let opened = self.open_raw(randomized_pwd_hasher, &aad)?;
+        let opened = self.open_raw(randomized_pwd_hasher, aad)?;
 
         Ok(OpenedEnvelope {
             client_static_keypair,
@@ -218,51 +218,37 @@ impl<CS: CipherSuite> Envelope<CS> {
 
     /// Attempts to decrypt the envelope using a key, which is successful only if the key and
     /// aad used to construct the envelope are the same.
-    pub(crate) fn open_raw(
+    pub(crate) fn open_raw<'a>(
         &self,
         randomized_pwd_hasher: Hkdf<CS::Hash>,
-        aad: &[u8],
+        aad: impl Iterator<Item = &'a [u8]>,
     ) -> Result<OpenedInnerEnvelope<CS::Hash>, InternalError> {
-        let mut hmac_key = vec![0u8; Self::hmac_key_size()];
-        let mut export_key = vec![0u8; Self::export_key_size()];
+        let mut hmac_key = GenericArray::<_, <CS::Hash as Digest>::OutputSize>::default();
+        let mut export_key = GenericArray::<_, <CS::Hash as Digest>::OutputSize>::default();
 
         randomized_pwd_hasher
-            .expand(
-                &[self.nonce.clone(), STR_AUTH_KEY.to_vec()].concat(),
-                &mut hmac_key,
-            )
+            .expand(&self.nonce.concat(STR_AUTH_KEY.into()), &mut hmac_key)
             .map_err(|_| InternalError::HkdfError)?;
         randomized_pwd_hasher
-            .expand(
-                &[self.nonce.clone(), STR_EXPORT_KEY.to_vec()].concat(),
-                &mut export_key,
-            )
+            .expand(&self.nonce.concat(STR_EXPORT_KEY.into()), &mut export_key)
             .map_err(|_| InternalError::HkdfError)?;
 
         let mut hmac =
             Hmac::<CS::Hash>::new_from_slice(&hmac_key).map_err(|_| InternalError::HmacError)?;
         hmac.update(&self.nonce);
-        hmac.update(aad);
-        if hmac.verify(&self.hmac).is_err() {
-            return Err(InternalError::SealOpenHmacError);
-        }
+        hmac.update_iter(aad);
+        hmac.verify(&self.hmac)
+            .map_err(|_| InternalError::SealOpenHmacError)?;
 
-        Ok(OpenedInnerEnvelope {
-            export_key: GenericArray::<u8, <CS::Hash as Digest>::OutputSize>::clone_from_slice(
-                &export_key,
-            ),
-        })
+        Ok(OpenedInnerEnvelope { export_key })
     }
 
     // Creates a dummy envelope object that serializes to the all-zeros byte string
     pub(crate) fn dummy() -> Self {
         Self {
             mode: InnerEnvelopeMode::Zero,
-            nonce: vec![0u8; NONCE_LEN],
-            hmac: GenericArray::clone_from_slice(&vec![
-                0u8;
-                <CS::Hash as Digest>::OutputSize::USIZE
-            ]),
+            nonce: GenericArray::default(),
+            hmac: GenericArray::default(),
         }
     }
 
@@ -270,34 +256,36 @@ impl<CS: CipherSuite> Envelope<CS> {
         <CS::Hash as Digest>::OutputSize::USIZE
     }
 
-    fn export_key_size() -> usize {
-        <CS::Hash as Digest>::OutputSize::USIZE
-    }
-
     pub(crate) fn len() -> usize {
-        <CS::Hash as Digest>::OutputSize::USIZE + NONCE_LEN
+        <CS::Hash as Digest>::OutputSize::USIZE + NonceLen::USIZE
     }
 
-    pub(crate) fn serialize(&self) -> Vec<u8> {
-        [&self.nonce[..], &self.hmac[..]].concat()
+    pub(crate) fn serialize(&self) -> GenericArray<u8, EnvelopeLen<CS>>
+    where
+        // Envelope: Nonce + Hash
+        NonceLen: Add<<CS::Hash as FixedOutput>::OutputSize>,
+        EnvelopeLen<CS>: ArrayLength<u8>,
+    {
+        self.nonce.concat(self.hmac.clone())
     }
+
     pub(crate) fn deserialize(bytes: &[u8]) -> Result<Self, ProtocolError> {
         let mode = InnerEnvelopeMode::Internal; // Better way to hard-code this?
 
-        if bytes.len() < NONCE_LEN {
+        if bytes.len() < NonceLen::USIZE {
             return Err(ProtocolError::SerializationError);
         }
-        let nonce = bytes[..NONCE_LEN].to_vec();
+        let nonce = GenericArray::clone_from_slice(&bytes[..NonceLen::USIZE]);
 
         let remainder = match mode {
             InnerEnvelopeMode::Zero => {
                 return Err(InternalError::IncompatibleEnvelopeModeError.into())
             }
-            InnerEnvelopeMode::Internal => bytes[NONCE_LEN..].to_vec(),
+            InnerEnvelopeMode::Internal => &bytes[NonceLen::USIZE..],
         };
 
         let hmac_key_size = Self::hmac_key_size();
-        let hmac = check_slice_size(&remainder, hmac_key_size, "hmac_key_size")?;
+        let hmac = check_slice_size(remainder, hmac_key_size, "hmac_key_size")?;
 
         Ok(Self {
             mode,
@@ -307,35 +295,20 @@ impl<CS: CipherSuite> Envelope<CS> {
     }
 }
 
-// This can't be derived because of the use of a phantom parameter
-impl<CS: CipherSuite> Zeroize for Envelope<CS> {
-    fn zeroize(&mut self) {
-        self.mode.zeroize();
-        self.nonce.zeroize();
-        self.hmac.zeroize();
-    }
-}
-
-impl<CS: CipherSuite> Drop for Envelope<CS> {
-    fn drop(&mut self) {
-        self.zeroize();
-    }
-}
-
 // Helper functions
 
 fn build_inner_envelope_internal<CS: CipherSuite>(
     randomized_pwd_hasher: Hkdf<CS::Hash>,
-    nonce: &[u8],
+    nonce: GenericArray<u8, NonceLen>,
 ) -> Result<PublicKey<CS::KeGroup>, ProtocolError> {
-    let mut keypair_seed = vec![0u8; <CS::KeGroup as KeGroup>::SkLen::USIZE];
+    let mut keypair_seed = GenericArray::<_, <CS::KeGroup as KeGroup>::SkLen>::default();
     randomized_pwd_hasher
-        .expand(&[nonce, STR_PRIVATE_KEY].concat(), &mut keypair_seed)
+        .expand(&nonce.concat(STR_PRIVATE_KEY.into()), &mut keypair_seed)
         .map_err(|_| InternalError::HkdfError)?;
     let client_static_keypair = KeyPair::<CS::KeGroup>::from_private_key_slice(
         &CS::OprfGroup::scalar_as_bytes(CS::OprfGroup::hash_to_scalar::<CS::Hash, _, _>(
-            Some(&keypair_seed[..]),
-            GenericArray::from(*STR_OPAQUE_DERIVE_AUTH_KEY_PAIR),
+            Some(keypair_seed.as_slice()),
+            GenericArray::from(STR_OPAQUE_DERIVE_AUTH_KEY_PAIR),
         )?),
     )?;
 
@@ -344,22 +317,26 @@ fn build_inner_envelope_internal<CS: CipherSuite>(
 
 fn recover_keys_internal<CS: CipherSuite>(
     randomized_pwd_hasher: Hkdf<CS::Hash>,
-    nonce: &[u8],
+    nonce: GenericArray<u8, NonceLen>,
 ) -> Result<KeyPair<CS::KeGroup>, ProtocolError> {
-    let mut keypair_seed = vec![0u8; <CS::KeGroup as KeGroup>::SkLen::USIZE];
+    let mut keypair_seed = GenericArray::<_, <CS::KeGroup as KeGroup>::SkLen>::default();
     randomized_pwd_hasher
-        .expand(&[nonce, STR_PRIVATE_KEY].concat(), &mut keypair_seed)
+        .expand(&nonce.concat(STR_PRIVATE_KEY.into()), &mut keypair_seed)
         .map_err(|_| InternalError::HkdfError)?;
     let client_static_keypair = KeyPair::<CS::KeGroup>::from_private_key_slice(
         &CS::OprfGroup::scalar_as_bytes(CS::OprfGroup::hash_to_scalar::<CS::Hash, _, _>(
-            Some(&keypair_seed[..]),
-            GenericArray::from(*STR_OPAQUE_DERIVE_AUTH_KEY_PAIR),
+            Some(keypair_seed.as_slice()),
+            GenericArray::from(STR_OPAQUE_DERIVE_AUTH_KEY_PAIR),
         )?),
     )?;
 
     Ok(client_static_keypair)
 }
 
-fn construct_aad(id_u: &[u8], id_s: &[u8], server_s_pk: &[u8]) -> Vec<u8> {
-    [server_s_pk, id_s, id_u].concat()
+fn construct_aad<'a>(
+    id_u: impl Iterator<Item = &'a [u8]>,
+    id_s: impl Iterator<Item = &'a [u8]>,
+    server_s_pk: &'a [u8],
+) -> impl Iterator<Item = &'a [u8]> {
+    chain!(Some(server_s_pk).into_iter(), id_s, id_u)
 }

@@ -37,5 +37,7 @@ pub trait KeGroup: Sized + Clone {
 
 #[cfg(feature = "p256")]
 pub mod p256;
+#[cfg(feature = "ristretto255")]
 pub mod ristretto255;
+#[cfg(feature = "x25519")]
 pub mod x25519;

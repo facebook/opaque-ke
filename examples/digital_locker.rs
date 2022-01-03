@@ -28,6 +28,8 @@
 
 use chacha20poly1305::aead::{Aead, NewAead};
 use chacha20poly1305::{ChaCha20Poly1305, Key, Nonce};
+use generic_array::GenericArray;
+use opaque_ke::ServerRegistrationLen;
 use rustyline::error::ReadlineError;
 use rustyline::Editor;
 use std::process::exit;
@@ -45,6 +47,8 @@ use opaque_ke::{
 // that will be used in the OPAQUE protocol
 #[allow(dead_code)]
 struct Default;
+
+#[cfg(feature = "ristretto255")]
 impl CipherSuite for Default {
     type OprfGroup = curve25519_dalek::ristretto::RistrettoPoint;
     type KeGroup = curve25519_dalek::ristretto::RistrettoPoint;
@@ -53,9 +57,18 @@ impl CipherSuite for Default {
     type SlowHash = opaque_ke::slow_hash::NoOpHash;
 }
 
+#[cfg(not(feature = "ristretto255"))]
+impl CipherSuite for Default {
+    type OprfGroup = p256_::ProjectivePoint;
+    type KeGroup = p256_::PublicKey;
+    type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
+    type Hash = sha2::Sha256;
+    type SlowHash = opaque_ke::slow_hash::NoOpHash;
+}
+
 struct Locker {
     contents: Vec<u8>,
-    password_file: Vec<u8>,
+    password_file: GenericArray<u8, ServerRegistrationLen<Default>>,
 }
 
 // Given a key and plaintext, produce an AEAD ciphertext along with a nonce
@@ -92,22 +105,16 @@ fn register_locker(
     let mut client_rng = OsRng;
     let client_registration_start_result =
         ClientRegistration::<Default>::start(&mut client_rng, password.as_bytes()).unwrap();
-    let registration_request_bytes = client_registration_start_result
-        .message
-        .serialize()
-        .unwrap();
+    let registration_request_bytes = client_registration_start_result.message.serialize();
 
     // Client sends registration_request_bytes to server
     let server_registration_start_result = ServerRegistration::<Default>::start(
-        &server_setup,
-        RegistrationRequest::deserialize(&registration_request_bytes[..]).unwrap(),
+        server_setup,
+        RegistrationRequest::deserialize(&registration_request_bytes).unwrap(),
         &locker_id.to_be_bytes(),
     )
     .unwrap();
-    let registration_response_bytes = server_registration_start_result
-        .message
-        .serialize()
-        .unwrap();
+    let registration_response_bytes = server_registration_start_result.message.serialize();
 
     // Server sends registration_response_bytes to client
 
@@ -115,14 +122,11 @@ fn register_locker(
         .state
         .finish(
             &mut client_rng,
-            RegistrationResponse::deserialize(&registration_response_bytes[..]).unwrap(),
+            RegistrationResponse::deserialize(&registration_response_bytes).unwrap(),
             ClientRegistrationFinishParameters::default(),
         )
         .unwrap();
-    let message_bytes = client_finish_registration_result
-        .message
-        .serialize()
-        .unwrap();
+    let message_bytes = client_finish_registration_result.message.serialize();
 
     // Client encrypts secret message using export key
     let ciphertext = encrypt(
@@ -133,12 +137,12 @@ fn register_locker(
     // Client sends message_bytes to server
 
     let password_file = ServerRegistration::finish(
-        RegistrationUpload::<Default>::deserialize(&message_bytes[..]).unwrap(),
+        RegistrationUpload::<Default>::deserialize(&message_bytes).unwrap(),
     );
 
     Locker {
         contents: ciphertext,
-        password_file: password_file.serialize().unwrap(),
+        password_file: password_file.serialize(),
     }
 }
 
@@ -152,28 +156,27 @@ fn open_locker(
     let mut client_rng = OsRng;
     let client_login_start_result =
         ClientLogin::<Default>::start(&mut client_rng, password.as_bytes()).unwrap();
-    let credential_request_bytes = client_login_start_result.message.serialize().unwrap();
+    let credential_request_bytes = client_login_start_result.message.serialize();
 
     // Client sends credential_request_bytes to server
 
-    let password_file =
-        ServerRegistration::<Default>::deserialize(&locker.password_file[..]).unwrap();
+    let password_file = ServerRegistration::<Default>::deserialize(&locker.password_file).unwrap();
     let mut server_rng = OsRng;
     let server_login_start_result = ServerLogin::start(
         &mut server_rng,
-        &server_setup,
+        server_setup,
         Some(password_file),
-        CredentialRequest::deserialize(&credential_request_bytes[..]).unwrap(),
+        CredentialRequest::deserialize(&credential_request_bytes).unwrap(),
         &locker_id.to_be_bytes(),
         ServerLoginStartParameters::default(),
     )
     .unwrap();
-    let credential_response_bytes = server_login_start_result.message.serialize().unwrap();
+    let credential_response_bytes = server_login_start_result.message.serialize();
 
     // Server sends credential_response_bytes to client
 
     let result = client_login_start_result.state.finish(
-        CredentialResponse::deserialize(&credential_response_bytes[..]).unwrap(),
+        CredentialResponse::deserialize(&credential_response_bytes).unwrap(),
         ClientLoginFinishParameters::default(),
     );
 
@@ -182,13 +185,13 @@ fn open_locker(
         return Err(String::from("Incorrect password, please try again."));
     }
     let client_login_finish_result = result.unwrap();
-    let credential_finalization_bytes = client_login_finish_result.message.serialize().unwrap();
+    let credential_finalization_bytes = client_login_finish_result.message.serialize();
 
     // Client sends credential_finalization_bytes to server
 
     let server_login_finish_result = server_login_start_result
         .state
-        .finish(CredentialFinalization::deserialize(&credential_finalization_bytes[..]).unwrap())
+        .finish(CredentialFinalization::deserialize(&credential_finalization_bytes).unwrap())
         .unwrap();
 
     // Server sends locker contents, encrypted under the session key, to the client
@@ -208,7 +211,7 @@ fn open_locker(
 
 fn main() {
     let mut rng = OsRng;
-    let server_setup = ServerSetup::<Default>::new(&mut rng).unwrap();
+    let server_setup = ServerSetup::<Default>::new(&mut rng);
 
     let mut rl = Editor::<()>::new();
     let mut registered_lockers: Vec<Locker> = vec![];
@@ -292,7 +295,7 @@ fn main() {
 
 // Helper functions
 
-fn display_lockers(lockers: &Vec<Locker>) {
+fn display_lockers(lockers: &[Locker]) {
     let mut locker_numbers = vec![];
     for (i, _) in lockers.iter().enumerate() {
         locker_numbers.push(i);

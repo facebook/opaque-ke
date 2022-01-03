@@ -8,26 +8,79 @@
 #![allow(unsafe_code)]
 
 use crate::{
-    ciphersuite::CipherSuite, errors::*, key_exchange::tripledh::TripleDH, opaque::*,
-    slow_hash::NoOpHash, tests::mock_rng::CycleRng, *,
+    ciphersuite::CipherSuite,
+    envelope::EnvelopeLen,
+    errors::*,
+    key_exchange::{
+        group::KeGroup,
+        traits::{Ke1MessageLen, Ke2MessageLen},
+        tripledh::{NonceLen, TripleDH},
+    },
+    messages::{
+        CredentialRequestLen, CredentialResponseLen, CredentialResponseWithoutKeLen,
+        RegistrationResponseLen, RegistrationUploadLen,
+    },
+    opaque::*,
+    slow_hash::NoOpHash,
+    tests::mock_rng::CycleRng,
+    *,
 };
 use alloc::string::ToString;
-use alloc::vec;
 use alloc::vec::Vec;
-use curve25519_dalek::{ristretto::RistrettoPoint, traits::Identity};
+use core::ops::Add;
+use digest::{Digest, FixedOutput};
+use generic_array::typenum::{Sum, Unsigned};
+use generic_array::{ArrayLength, GenericArray};
 use rand::rngs::OsRng;
 use serde_json::Value;
+use subtle::ConstantTimeEq;
+use voprf::group::Group;
 use zeroize::Zeroize;
 
 // Tests
 // =====
 
-struct RistrettoSha5123dhNoSlowHash;
-impl CipherSuite for RistrettoSha5123dhNoSlowHash {
-    type OprfGroup = RistrettoPoint;
-    type KeGroup = RistrettoPoint;
+#[cfg(feature = "ristretto255")]
+struct Ristretto255;
+#[cfg(feature = "ristretto255")]
+impl CipherSuite for Ristretto255 {
+    type OprfGroup = curve25519_dalek::ristretto::RistrettoPoint;
+    type KeGroup = curve25519_dalek::ristretto::RistrettoPoint;
     type KeyExchange = TripleDH;
     type Hash = sha2::Sha512;
+    type SlowHash = NoOpHash;
+}
+
+#[cfg(feature = "p256")]
+struct P256;
+#[cfg(feature = "p256")]
+impl CipherSuite for P256 {
+    type OprfGroup = p256_::ProjectivePoint;
+    type KeGroup = p256_::PublicKey;
+    type KeyExchange = TripleDH;
+    type Hash = sha2::Sha256;
+    type SlowHash = NoOpHash;
+}
+
+#[cfg(all(feature = "x25519", feature = "ristretto255"))]
+struct X25519Ristretto255;
+#[cfg(all(feature = "x25519", feature = "ristretto255"))]
+impl CipherSuite for X25519Ristretto255 {
+    type OprfGroup = curve25519_dalek::ristretto::RistrettoPoint;
+    type KeGroup = x25519_dalek::PublicKey;
+    type KeyExchange = TripleDH;
+    type Hash = sha2::Sha512;
+    type SlowHash = NoOpHash;
+}
+
+#[cfg(all(feature = "x25519", feature = "p256"))]
+struct X25519P256;
+#[cfg(all(feature = "x25519", feature = "p256"))]
+impl CipherSuite for X25519P256 {
+    type OprfGroup = p256_::ProjectivePoint;
+    type KeGroup = x25519_dalek::PublicKey;
+    type KeyExchange = TripleDH;
+    type Hash = sha2::Sha256;
     type SlowHash = NoOpHash;
 }
 
@@ -70,7 +123,8 @@ static STR_PASSWORD: &str = "password";
 static STR_CREDENTIAL_IDENTIFIER: &str = "credential_identifier";
 
 // To regenerate, run: cargo test -- --nocapture generate_test_vectors
-static TEST_VECTOR: &str = r#"
+#[cfg(feature = "ristretto255")]
+static TEST_VECTOR_RISTRETTO255: &str = r#"
 {
     "client_s_pk": "181bbea01a5e444390c4b335f8bcb9a846a1c60042669ce6d731af4587960c06",
     "client_s_sk": "2f21529b9fb27c8c12770b765dc36750c4a51c5ccaf2f83d0182504a85a22c0b",
@@ -107,6 +161,120 @@ static TEST_VECTOR: &str = r#"
 }
 "#;
 
+#[cfg(feature = "p256")]
+static TEST_VECTOR_P256: &str = r#"
+{
+    "client_s_pk": "022bb70342affe88f4f3c5d5fc4991bfc1f4758651d59d50c25815ffc4d13eeae3",
+    "client_s_sk": "ee7beaaed8110b155efac3af2bb97a7a45262fa5702de4721c90ebcfb098b596",
+    "client_e_pk": "02faf2a785a7de0d59c240b235ab7559820f682a7930fb546ecabddee2de091043",
+    "client_e_sk": "755577ce43627c5201af2bd35bc17bb7a4c9945acbadbb08962a0236a860ce80",
+    "server_s_pk": "025e6c524abf252eadf812d3ef46dd7afbeb2f65d76269d1a1288fb0be82b378cb",
+    "server_s_sk": "5f044f77db085dd5ebeb0ffbe69166057c586719f5ff277a4488b3202c720258",
+    "server_e_pk": "039e7fc9dcf8e9f50405d228a70c1d9bf5eb283b7e156774125b876819d0349630",
+    "server_e_sk": "5158264e39bd1234ab785701b47d697b07db92eb4f5dc0f206607edf69f66476",
+    "fake_sk": "402eaf9bf6d4b1501a2eae8ebb76d4970060decd43944c4bd601602c23a23093",
+    "credential_identifier": "637265644964656e746966696572",
+    "id_u": "696455",
+    "id_s": "696453",
+    "password": "70617373776f7264",
+    "blinding_factor": "a383673cc3fc95652d0fd6fdfaaff8c2db97c0cb55706499a7e719a28f93ba49",
+    "oprf_seed": "84618864bc307f9c178cb5c156865094c8f3737e6ea4e46dc965ddbd4b2332f2",
+    "masking_nonce": "ec5bb47a34e050136fb97a513ddf182ccc498ffb7d70d94954cc013db934c2716f35c5a1adb5c220194bbb1e8159bbfbcabeb7d94215476bdf29e5dad3919b2c",
+    "envelope_nonce": "a9a9de9d77fae996ffa597928b12c83ff44e56b2e7d4f79dd561132800d63a2c",
+    "client_nonce": "51710b892007ef555ffd08452d9f9078165c2e7fd3695ad8020d74a8c20bb8b1",
+    "server_nonce": "68f4bc84db8af9940f41e8e91a5d39800e1eacdecd124918d24dc5eb8d5ed840",
+    "context": "636f6e74657874",
+    "registration_request": "0397d002bed42dfd7a104348c29e82c0bab8a5871846d8c6159e511d3c681fc2be",
+    "registration_response": "0357c5ca3794429f3111026c79925ffa597c7e518ac787ed49fe152d083d07c846025e6c524abf252eadf812d3ef46dd7afbeb2f65d76269d1a1288fb0be82b378cb",
+    "registration_upload": "03dd5bbddab150cf7cd793d6702741e529ee13ab4ce4cfad731dd77fc13c2310e5d82ca5e29fa03deff3ed1d8eb1353389b02a78bd48fa256915314dac55cf5e74ee7beaaed8110b155efac3af2bb97a7a45262fa5702de4721c90ebcfb098b5964788cdaf2a92a5a161a819c2aa84985f5a8ea6fbedf01c87ddaa8be23fc16721",
+    "credential_request": "0397d002bed42dfd7a104348c29e82c0bab8a5871846d8c6159e511d3c681fc2be51710b892007ef555ffd08452d9f9078165c2e7fd3695ad8020d74a8c20bb8b102faf2a785a7de0d59c240b235ab7559820f682a7930fb546ecabddee2de091043",
+    "credential_response": "0357c5ca3794429f3111026c79925ffa597c7e518ac787ed49fe152d083d07c846ec5bb47a34e050136fb97a513ddf182ccc498ffb7d70d94954cc013db934c27117a3467e180aa4144edd4122e53e2f9fe4d1c1363796e5820d92489e94c5fcabda33f5e886cfee0da967b28cc2a06674cf5d050125ac1136a44284520fcde7f7de6af0ab5f26f57d682c5d389298d5ebd38e7ca7f8bf5456ed0ac9f9ac6f4b7cbe5158264e39bd1234ab785701b47d697b07db92eb4f5dc0f206607edf69f66476039cb032462240ab63f406935a398ef593655ed0617147a952a249ca81bfda7d4ad872b9829967987a74514454b1ee3776debcae819c526ac33f838a81edb234b3",
+    "credential_finalization": "35395199a2e317c5f08f55f67f9f5565d1d0c856572876b1b4e447925a36eb60",
+    "client_registration_state": "0028a383673cc3fc95652d0fd6fdfaaff8c2db97c0cb55706499a7e719a28f93ba4970617373776f726400210397d002bed42dfd7a104348c29e82c0bab8a5871846d8c6159e511d3c681fc2be",
+    "client_login_state": "0028a383673cc3fc95652d0fd6fdfaaff8c2db97c0cb55706499a7e719a28f93ba4970617373776f726400620397d002bed42dfd7a104348c29e82c0bab8a5871846d8c6159e511d3c681fc2be51710b892007ef555ffd08452d9f9078165c2e7fd3695ad8020d74a8c20bb8b102faf2a785a7de0d59c240b235ab7559820f682a7930fb546ecabddee2de0910430040755577ce43627c5201af2bd35bc17bb7a4c9945acbadbb08962a0236a860ce8051710b892007ef555ffd08452d9f9078165c2e7fd3695ad8020d74a8c20bb8b1",
+    "server_login_state": "5c2ec839d40694328ed6133cc12b8da7ec4300589849eb193eb673d35e4645c8bce86cbd880012967dae7c0f1ac2a90a4d6ea9f3ee5c521c77a20600de4528ee89699ffdb9e8ba62442184bd4a696c6c5832801a425446869aefa2544260d618",
+    "password_file": "03dd5bbddab150cf7cd793d6702741e529ee13ab4ce4cfad731dd77fc13c2310e5d82ca5e29fa03deff3ed1d8eb1353389b02a78bd48fa256915314dac55cf5e74ee7beaaed8110b155efac3af2bb97a7a45262fa5702de4721c90ebcfb098b5964788cdaf2a92a5a161a819c2aa84985f5a8ea6fbedf01c87ddaa8be23fc16721",
+    "export_key": "35a93c215dc618dc3acbacc08d16e4879bf2054349facf2a33bc061dee57d787",
+    "session_key": "89699ffdb9e8ba62442184bd4a696c6c5832801a425446869aefa2544260d618"
+}
+"#;
+
+#[cfg(all(feature = "x25519", feature = "ristretto255"))]
+static TEST_VECTOR_X25519_RISTRETTO255: &str = r#"
+{
+    "client_s_pk": "9b1f31c4e1a456d140ea5ae0f683c13785b4ecf473019aca643461afa09ccf1b",
+    "client_s_sk": "88e61aca2e4715cbbfa2bc3058c9ff388fc9c5a89178624d28ff14ce232e495c",
+    "client_e_pk": "3e532c63ccb8aabb87b1a724eda76b94083d7cb15174acda91635245618cde3d",
+    "client_e_sk": "18e9a925e2a1dd150f20322783a935bdfccb488478c6befcc31cce1a27643164",
+    "server_s_pk": "afe934c6742742e4f1389e42722ce080bb4c4963b1eeaeb8829ea22a11162941",
+    "server_s_sk": "f0f1348721d891985a3a92236fab57593fc3d997a649c6ce8858e8c20d7c1944",
+    "server_e_pk": "9a579563f40948693645f490ee3fb0b7ec3fd5de1331858fe95927f71a59a971",
+    "server_e_sk": "b81c82d7219bf318b75160dd010e96e83e0e080709c61edfbce206d6ec101a4a",
+    "fake_sk": "90f850aae07d8365e8d28d31ff87bbef1d50c9928c49a5b4ec7aabd4d69ddf75",
+    "credential_identifier": "637265644964656e746966696572",
+    "id_u": "696455",
+    "id_s": "696453",
+    "password": "70617373776f7264",
+    "blinding_factor": "5aa31e7d500431691fa3eb16a8a2e416b769ec3df66ace2c199e6b1cfb8a7e0e",
+    "oprf_seed": "ee0813a196ccc90a12de74c2d680eed39d6f6f16e55012881b32b4c02367f205fa5d7374a6c7119b28a586d59e9ea45760c011a3a81f064f07f80ffa23155e77",
+    "masking_nonce": "e3a3aecff193e9fbdd6677aeb1078bbf6d78f1893fd6f7acd77e9e05c4d6b35f9b267571d52e74a5b159e5ff55f93f31fa278e549802eb36b66f1ec8b77aa3be",
+    "envelope_nonce": "e2bd93bfcae01cc59e5e0d928923002682a291577b6e0e214c3a67c1ba94fd15",
+    "client_nonce": "e130bdb7b59020cd43a39fc588d5f05d33967c48b3e2a87488788897470797d5",
+    "server_nonce": "f1238020af1207007652c734b023758168c2156cc81b76a4f628f30a042e248f",
+    "context": "636f6e74657874",
+    "registration_request": "9ef8b4a7817e4932f4e9837dd54b31ce9209cad61d7ea4003283158e5566620d",
+    "registration_response": "823eb375fcea47b3b1023848dc7b159ea4b9925f725a45f9e7da0f28c04f717eafe934c6742742e4f1389e42722ce080bb4c4963b1eeaeb8829ea22a11162941",
+    "registration_upload": "fe576ba51ba994ef0cac45a5fd55f663b2fcb9377d5ea1141d24f6c1a840b71890bf61e8066f25e3ea4148a685aaa2345cfdf3cd9157765c104659fcf695cb76b43f34a46ca41f5e78ae4ac857d98c6f105902305e695bcdec10dc4eda526fac88e61aca2e4715cbbfa2bc3058c9ff388fc9c5a89178624d28ff14ce232e495c90ea3a5efe3b34d84610f458759a7864eed0773290f7a5e5115eef6e5a81164f6e6fc5d026bcbfe55195dfdaa55b13b3d7f177ab8e5e318ffcd7d2ac5daf42c4",
+    "credential_request": "9ef8b4a7817e4932f4e9837dd54b31ce9209cad61d7ea4003283158e5566620de130bdb7b59020cd43a39fc588d5f05d33967c48b3e2a87488788897470797d53e532c63ccb8aabb87b1a724eda76b94083d7cb15174acda91635245618cde3d",
+    "credential_response": "823eb375fcea47b3b1023848dc7b159ea4b9925f725a45f9e7da0f28c04f717ee3a3aecff193e9fbdd6677aeb1078bbf6d78f1893fd6f7acd77e9e05c4d6b35fc05b4023afa48dba2a9c78abfb9c93353be3ce2adabe0d4cc4f69d9c0b635cc2e5b14ccec2a9bbabb4ad3f1591a3ac3c92dd989322ad7753e7f5834186a67c94ab65c6a446dcf06f13cf5ef0502f265c3be9e03770c54fe2cee1486cddbf292fa0f44b6173faefe0c093a7797bee2b04927c009f3653b42c3319bbb817920fbdb81c82d7219bf318b75160dd010e96e83e0e080709c61edfbce206d6ec101a4ae21bc06da818572e3a7e77f0eb74bbf7375379771dd7ada27c0b9bdd584f5f142eb61b7fb2c5f7d164597ec148f74a6a168ec0d93b06fb45d48d0a0c3e92e1da80cfe439fccde489c74b801de4401fadf4dcbd61cfe559ad2cf38e83662e2b06",
+    "credential_finalization": "fd18bc8aa8d789e6d954f962b52cb700296e88efd3a26f0761ff3e367d12b94ef187b2cc250519a2193fbd3c78247d3e0121aacdcdc5b22dcc818cd964c25754",
+    "client_registration_state": "00285aa31e7d500431691fa3eb16a8a2e416b769ec3df66ace2c199e6b1cfb8a7e0e70617373776f726400209ef8b4a7817e4932f4e9837dd54b31ce9209cad61d7ea4003283158e5566620d",
+    "client_login_state": "00285aa31e7d500431691fa3eb16a8a2e416b769ec3df66ace2c199e6b1cfb8a7e0e70617373776f726400609ef8b4a7817e4932f4e9837dd54b31ce9209cad61d7ea4003283158e5566620de130bdb7b59020cd43a39fc588d5f05d33967c48b3e2a87488788897470797d53e532c63ccb8aabb87b1a724eda76b94083d7cb15174acda91635245618cde3d004018e9a925e2a1dd150f20322783a935bdfccb488478c6befcc31cce1a27643164e130bdb7b59020cd43a39fc588d5f05d33967c48b3e2a87488788897470797d5",
+    "server_login_state": "b8bb1a1ff45040bf016aeab52aceec195109233f4c0e2589d4370658bb07f1d57f65d5e3007d94ed36d974c298f21184041c08c3298c9d16fa33591c19b07b45bdaaaee9c95f286dc4ce250b684bf3c5248ca0382f682d9eddeb5bf8fa16488696f7df7dec0d5090c57153aa1b3da588469ca6be7dc25954147ad3c08367f1bb2d2e6bd1a311eb2f3960b80a72e77158fc7b072c85f134695735ffed8206d465029c3ce886fee4665e05dfca5ef778dfe851bc31a8980dae67f15672d8e3f1dd",
+    "password_file": "fe576ba51ba994ef0cac45a5fd55f663b2fcb9377d5ea1141d24f6c1a840b71890bf61e8066f25e3ea4148a685aaa2345cfdf3cd9157765c104659fcf695cb76b43f34a46ca41f5e78ae4ac857d98c6f105902305e695bcdec10dc4eda526fac88e61aca2e4715cbbfa2bc3058c9ff388fc9c5a89178624d28ff14ce232e495c90ea3a5efe3b34d84610f458759a7864eed0773290f7a5e5115eef6e5a81164f6e6fc5d026bcbfe55195dfdaa55b13b3d7f177ab8e5e318ffcd7d2ac5daf42c4",
+    "export_key": "aafb0c3bc3694314180212233e811fa44cd35896420d3f65c3696e305c177fca6850bb1b36ed5b6fa3fdca9483dd2013ad30bb84f2a94979fc1fec2e461c1515",
+    "session_key": "2d2e6bd1a311eb2f3960b80a72e77158fc7b072c85f134695735ffed8206d465029c3ce886fee4665e05dfca5ef778dfe851bc31a8980dae67f15672d8e3f1dd"
+}
+"#;
+
+#[cfg(all(feature = "x25519", feature = "p256"))]
+static TEST_VECTOR_X25519_P256: &str = r#"
+{
+    "client_s_pk": "515850c2fb8fcf90378ba5baa2e5b05fd5244f90f49e4a4e8ded4553a696835a",
+    "client_s_sk": "2894850bbca99009c3a50e648011a57edda65bf88177197fff52378bde705878",
+    "client_e_pk": "8570fc35b68cf59e9c2d3d08a2452e9eaa9089b6d4cbee4053aedcd8eb4d3555",
+    "client_e_sk": "9001cb4337b57ca2a72e1a837ab72c5ee6f41348a4c77b5720a3fc6cd6f75561",
+    "server_s_pk": "583ef921ee685fe1a9d25492ed7221bf429dd8f3093cd78bf3de4b4822f11b56",
+    "server_s_sk": "f8c0872b11bebf21c83b300dedf222340c034a9831a3d21feaf7cb51c6f7805a",
+    "server_e_pk": "303d1d7ad0d6d466ee5a98a1407b1a05a891511cbdaa38695c63f9fb47a61c6a",
+    "server_e_sk": "c8ffba68071b11cabaae1f28bc5c816132dd2e1fc2d11ecf6286855f76e4b37f",
+    "fake_sk": "48aecca7847d09a5ba8ea1243d9a3527c16dc79852fd04eeb93083ef52e8f075",
+    "credential_identifier": "637265644964656e746966696572",
+    "id_u": "696455",
+    "id_s": "696453",
+    "password": "70617373776f7264",
+    "blinding_factor": "0e2fe2a1a193da4c6739a1265cd9a2df297ac7312f2770afa9c8d6de37ead907",
+    "oprf_seed": "048e281519d6d7548d03dccc8684d91e22025fc573e076c1c5885839cf42b8ad",
+    "masking_nonce": "59ded518f0215d108d4b0ba8a34911c1d4178318816ab964e67d8315c6803c1fe403684d504bdcbbde77fb90d3824390dd7d3f04b9203636c23399ffdacf9e62",
+    "envelope_nonce": "119acabcfa0d808d0ce82b7d3de2193deb5b0e71dc111d456c8ad4ee32fa7306",
+    "client_nonce": "9e34fd4a6900a3dcb0bfcf8b6df799871bb0a11178ee0d7dad6c0fb74921f302",
+    "server_nonce": "d62fbaec787648da7900d89fd007822e79407016d98a62333239892d49375a7d",
+    "context": "636f6e74657874",
+    "registration_request": "03cc7a78723430cbfa6f337c25d3ad586e5d20e2f8e9c2126a28c08f76493088f7",
+    "registration_response": "0247b0d70311fb623ee21236536cb5df543100b44abaacc3bf2627cca77ee80185583ef921ee685fe1a9d25492ed7221bf429dd8f3093cd78bf3de4b4822f11b56",
+    "registration_upload": "e3969807b3496f7a07afa9f2288e706f71125bbe1bc659e40f9c83eb3e428e430d9dc301ff73d3b95bf0fceab01ce66dc4c2f84dbea61526e6c1ee7c4adb8c912894850bbca99009c3a50e648011a57edda65bf88177197fff52378bde705878a6ede2210483b94ff0ca04b1eda09b841a735170f79d1674aacfbd3550bba356",
+    "credential_request": "03cc7a78723430cbfa6f337c25d3ad586e5d20e2f8e9c2126a28c08f76493088f79e34fd4a6900a3dcb0bfcf8b6df799871bb0a11178ee0d7dad6c0fb74921f3028570fc35b68cf59e9c2d3d08a2452e9eaa9089b6d4cbee4053aedcd8eb4d3555",
+    "credential_response": "0247b0d70311fb623ee21236536cb5df543100b44abaacc3bf2627cca77ee8018559ded518f0215d108d4b0ba8a34911c1d4178318816ab964e67d8315c6803c1fd513bf2f3cea8283a7ba98973d1f160213586e42a5e6ae5d6ac73f5deebc609e7481e84cd4f61b844db7457a5dc18121a0a6d8776d4e29d98cdf4892c18189439a3a7692a2be2910e0ba9fd8f7a28c10733ff781c4e36dabe86a819d35ce4745c8ffba68071b11cabaae1f28bc5c816132dd2e1fc2d11ecf6286855f76e4b37f2c2ffc6b9b2f6342231d5d3a9ea28023f543c7ccf3852413e411ab011b0c06523163f82d3cf9abb5e8517d0d47ef13071ac1001c6a1e39f2cbfe7440257d4db2",
+    "credential_finalization": "de00d81621b2394b201a0c9d731b6b96e9cdab29fedb14c749c51029446da74a",
+    "client_registration_state": "00280e2fe2a1a193da4c6739a1265cd9a2df297ac7312f2770afa9c8d6de37ead90770617373776f7264002103cc7a78723430cbfa6f337c25d3ad586e5d20e2f8e9c2126a28c08f76493088f7",
+    "client_login_state": "00280e2fe2a1a193da4c6739a1265cd9a2df297ac7312f2770afa9c8d6de37ead90770617373776f7264006103cc7a78723430cbfa6f337c25d3ad586e5d20e2f8e9c2126a28c08f76493088f79e34fd4a6900a3dcb0bfcf8b6df799871bb0a11178ee0d7dad6c0fb74921f3028570fc35b68cf59e9c2d3d08a2452e9eaa9089b6d4cbee4053aedcd8eb4d355500409001cb4337b57ca2a72e1a837ab72c5ee6f41348a4c77b5720a3fc6cd6f755619e34fd4a6900a3dcb0bfcf8b6df799871bb0a11178ee0d7dad6c0fb74921f302",
+    "server_login_state": "df965dfa291f57cfead138a43802798c270c481a35b2fbf3d6d0c1860ab73a8e5f9874bbe6a329b51e9015a551a7b49809de26f74ba2ff496782d94ae01468fc63b02cf977a143ebe1a1231a28367d1be1065d5c0273f959e1e97a08a74bf6f1",
+    "password_file": "e3969807b3496f7a07afa9f2288e706f71125bbe1bc659e40f9c83eb3e428e430d9dc301ff73d3b95bf0fceab01ce66dc4c2f84dbea61526e6c1ee7c4adb8c912894850bbca99009c3a50e648011a57edda65bf88177197fff52378bde705878a6ede2210483b94ff0ca04b1eda09b841a735170f79d1674aacfbd3550bba356",
+    "export_key": "6168b6786fbded7a888067b58e62035f0f1940c0fb6448fc69093d62597f365a",
+    "session_key": "63b02cf977a143ebe1a1231a28367d1be1065d5c0273f959e1e97a08a74bf6f1"
+}
+"#;
+
 fn decode(values: &Value, key: &str) -> Option<Vec<u8>> {
     values[key]
         .as_str()
@@ -115,38 +283,38 @@ fn decode(values: &Value, key: &str) -> Option<Vec<u8>> {
 
 fn populate_test_vectors(values: &Value) -> TestVectorParameters {
     TestVectorParameters {
-        client_s_pk: decode(&values, "client_s_pk").unwrap(),
-        client_s_sk: decode(&values, "client_s_sk").unwrap(),
-        client_e_pk: decode(&values, "client_e_pk").unwrap(),
-        client_e_sk: decode(&values, "client_e_sk").unwrap(),
-        server_s_pk: decode(&values, "server_s_pk").unwrap(),
-        server_s_sk: decode(&values, "server_s_sk").unwrap(),
-        server_e_pk: decode(&values, "server_e_pk").unwrap(),
-        server_e_sk: decode(&values, "server_e_sk").unwrap(),
-        fake_sk: decode(&values, "fake_sk").unwrap(),
-        credential_identifier: decode(&values, "credential_identifier").unwrap(),
-        id_u: decode(&values, "id_u").unwrap(),
-        id_s: decode(&values, "id_s").unwrap(),
-        password: decode(&values, "password").unwrap(),
-        blinding_factor: decode(&values, "blinding_factor").unwrap(),
-        oprf_seed: decode(&values, "oprf_seed").unwrap(),
-        masking_nonce: decode(&values, "masking_nonce").unwrap(),
-        envelope_nonce: decode(&values, "envelope_nonce").unwrap(),
-        client_nonce: decode(&values, "client_nonce").unwrap(),
-        server_nonce: decode(&values, "server_nonce").unwrap(),
-        context: decode(&values, "context").unwrap(),
-        registration_request: decode(&values, "registration_request").unwrap(),
-        registration_response: decode(&values, "registration_response").unwrap(),
-        registration_upload: decode(&values, "registration_upload").unwrap(),
-        credential_request: decode(&values, "credential_request").unwrap(),
-        credential_response: decode(&values, "credential_response").unwrap(),
-        credential_finalization: decode(&values, "credential_finalization").unwrap(),
-        client_registration_state: decode(&values, "client_registration_state").unwrap(),
-        client_login_state: decode(&values, "client_login_state").unwrap(),
-        server_login_state: decode(&values, "server_login_state").unwrap(),
-        password_file: decode(&values, "password_file").unwrap(),
-        export_key: decode(&values, "export_key").unwrap(),
-        session_key: decode(&values, "session_key").unwrap(),
+        client_s_pk: decode(values, "client_s_pk").unwrap(),
+        client_s_sk: decode(values, "client_s_sk").unwrap(),
+        client_e_pk: decode(values, "client_e_pk").unwrap(),
+        client_e_sk: decode(values, "client_e_sk").unwrap(),
+        server_s_pk: decode(values, "server_s_pk").unwrap(),
+        server_s_sk: decode(values, "server_s_sk").unwrap(),
+        server_e_pk: decode(values, "server_e_pk").unwrap(),
+        server_e_sk: decode(values, "server_e_sk").unwrap(),
+        fake_sk: decode(values, "fake_sk").unwrap(),
+        credential_identifier: decode(values, "credential_identifier").unwrap(),
+        id_u: decode(values, "id_u").unwrap(),
+        id_s: decode(values, "id_s").unwrap(),
+        password: decode(values, "password").unwrap(),
+        blinding_factor: decode(values, "blinding_factor").unwrap(),
+        oprf_seed: decode(values, "oprf_seed").unwrap(),
+        masking_nonce: decode(values, "masking_nonce").unwrap(),
+        envelope_nonce: decode(values, "envelope_nonce").unwrap(),
+        client_nonce: decode(values, "client_nonce").unwrap(),
+        server_nonce: decode(values, "server_nonce").unwrap(),
+        context: decode(values, "context").unwrap(),
+        registration_request: decode(values, "registration_request").unwrap(),
+        registration_response: decode(values, "registration_response").unwrap(),
+        registration_upload: decode(values, "registration_upload").unwrap(),
+        credential_request: decode(values, "credential_request").unwrap(),
+        credential_response: decode(values, "credential_response").unwrap(),
+        credential_finalization: decode(values, "credential_finalization").unwrap(),
+        client_registration_state: decode(values, "client_registration_state").unwrap(),
+        client_login_state: decode(values, "client_login_state").unwrap(),
+        server_login_state: decode(values, "server_login_state").unwrap(),
+        password_file: decode(values, "password_file").unwrap(),
+        export_key: decode(values, "export_key").unwrap(),
+        session_key: decode(values, "session_key").unwrap(),
     }
 }
 
@@ -273,39 +441,79 @@ fn stringify_test_vectors(p: &TestVectorParameters) -> alloc::string::String {
     s
 }
 
-fn generate_parameters<CS: CipherSuite>() -> Result<TestVectorParameters, ProtocolError> {
-    use crate::{key_exchange::tripledh::NonceLen, keypair::KeyPair};
-    use generic_array::typenum::Unsigned;
+fn generate_parameters<CS: CipherSuite>() -> Result<TestVectorParameters, ProtocolError>
+where
+    // RegistrationResponse: KgPk + KePk
+    <CS::OprfGroup as Group>::ElemLen: Add<<CS::KeGroup as KeGroup>::PkLen>,
+    RegistrationResponseLen<CS>: ArrayLength<u8>,
+    // Envelope: Nonce + Hash
+    NonceLen: Add<<CS::Hash as FixedOutput>::OutputSize>,
+    EnvelopeLen<CS>: ArrayLength<u8>,
+    // RegistrationUpload: (KePk + Hash) + Envelope
+    <CS::KeGroup as KeGroup>::PkLen: Add<<CS::Hash as FixedOutput>::OutputSize>,
+    Sum<<CS::KeGroup as KeGroup>::PkLen, <CS::Hash as FixedOutput>::OutputSize>:
+        ArrayLength<u8> + Add<EnvelopeLen<CS>>,
+    RegistrationUploadLen<CS>: ArrayLength<u8>,
+    // ServerRegistration = RegistrationUpload
+    // Ke1Message: Nonce + KePk
+    NonceLen: Add<<CS::KeGroup as KeGroup>::PkLen>,
+    Ke1MessageLen<CS>: ArrayLength<u8>,
+    // CredentialRequest: KgPk + Ke1Message
+    <CS::OprfGroup as Group>::ElemLen: Add<Ke1MessageLen<CS>>,
+    CredentialRequestLen<CS>: ArrayLength<u8>,
+    // MaskedResponse: (Nonce + Hash) + KePk
+    NonceLen: Add<<CS::Hash as FixedOutput>::OutputSize>,
+    Sum<NonceLen, <CS::Hash as FixedOutput>::OutputSize>:
+        ArrayLength<u8> + Add<<CS::KeGroup as KeGroup>::PkLen>,
+    MaskedResponseLen<CS>: ArrayLength<u8>,
+    // CredentialResponseWithoutKeLen: (KgPk + Nonce) + MaskedResponse
+    <CS::OprfGroup as Group>::ElemLen: Add<NonceLen>,
+    Sum<<CS::OprfGroup as Group>::ElemLen, NonceLen>: ArrayLength<u8> + Add<MaskedResponseLen<CS>>,
+    CredentialResponseWithoutKeLen<CS>: ArrayLength<u8>,
+    // Ke2Message: (Nonce + KePk) + Hash
+    NonceLen: Add<<CS::KeGroup as KeGroup>::PkLen>,
+    Sum<NonceLen, <CS::KeGroup as KeGroup>::PkLen>:
+        ArrayLength<u8> + Add<<CS::Hash as FixedOutput>::OutputSize>,
+    Ke2MessageLen<CS>: ArrayLength<u8>,
+    // CredentialResponse: CredentialResponseWithoutKeLen + Ke2Message
+    CredentialResponseWithoutKeLen<CS>: Add<Ke2MessageLen<CS>>,
+    CredentialResponseLen<CS>: ArrayLength<u8>,
+{
+    use crate::keypair::KeyPair;
     use rand::RngCore;
-    use voprf::group::Group;
 
     let mut rng = OsRng;
 
     // Inputs
-    let server_s_kp = KeyPair::<CS::KeGroup>::generate_random(&mut rng)?;
-    let server_e_kp = KeyPair::<CS::KeGroup>::generate_random(&mut rng)?;
-    let client_s_kp = KeyPair::<CS::KeGroup>::generate_random(&mut rng)?;
-    let client_e_kp = KeyPair::<CS::KeGroup>::generate_random(&mut rng)?;
-    let fake_kp = KeyPair::<CS::KeGroup>::generate_random(&mut rng)?;
+    let server_s_kp = KeyPair::<CS::KeGroup>::generate_random(&mut rng);
+    let server_e_kp = KeyPair::<CS::KeGroup>::generate_random(&mut rng);
+    let client_s_kp = KeyPair::<CS::KeGroup>::generate_random(&mut rng);
+    let client_e_kp = KeyPair::<CS::KeGroup>::generate_random(&mut rng);
+    let fake_kp = KeyPair::<CS::KeGroup>::generate_random(&mut rng);
     let credential_identifier = b"credIdentifier";
     let id_u = b"idU";
     let id_s = b"idS";
     let password = b"password";
     let context = b"context";
-    let mut oprf_seed = [0u8; 64];
+    let mut oprf_seed = GenericArray::<_, <CS::Hash as Digest>::OutputSize>::default();
     rng.fill_bytes(&mut oprf_seed);
     let mut masking_nonce = [0u8; 64];
     rng.fill_bytes(&mut masking_nonce);
     let mut envelope_nonce = [0u8; 32];
     rng.fill_bytes(&mut envelope_nonce);
-    let mut client_nonce = vec![0u8; NonceLen::USIZE];
+    let mut client_nonce = [0u8; NonceLen::USIZE];
     rng.fill_bytes(&mut client_nonce);
-    let mut server_nonce = vec![0u8; NonceLen::USIZE];
+    let mut server_nonce = [0u8; NonceLen::USIZE];
     rng.fill_bytes(&mut server_nonce);
 
     let fake_sk: Vec<u8> = fake_kp.private().to_vec();
     let server_setup = ServerSetup::<CS>::deserialize(
-        &[&oprf_seed, &server_s_kp.private().to_arr()[..], &fake_sk].concat(),
+        &[
+            oprf_seed.as_ref(),
+            &server_s_kp.private().to_arr(),
+            &fake_sk,
+        ]
+        .concat(),
     )
     .unwrap();
 
@@ -326,16 +534,16 @@ fn generate_parameters<CS: CipherSuite>() -> Result<TestVectorParameters, Protoc
         hex::encode(&blinding_factor_bytes_returned)
     );
 
-    let registration_request_bytes = client_registration_start_result.message.serialize()?;
+    let registration_request_bytes = client_registration_start_result.message.serialize();
     let client_registration_state = client_registration_start_result.state.serialize()?;
 
     let server_registration_start_result = ServerRegistration::<CS>::start(
         &server_setup,
         client_registration_start_result.message,
-        &credential_identifier[..],
+        credential_identifier,
     )
     .unwrap();
-    let registration_response_bytes = server_registration_start_result.message.serialize()?;
+    let registration_response_bytes = server_registration_start_result.message.serialize();
 
     let mut client_s_sk_and_nonce: Vec<u8> = Vec::new();
     client_s_sk_and_nonce.extend_from_slice(&client_s_kp.private().to_arr());
@@ -348,18 +556,18 @@ fn generate_parameters<CS: CipherSuite>() -> Result<TestVectorParameters, Protoc
             &mut finish_registration_rng,
             server_registration_start_result.message,
             ClientRegistrationFinishParameters::new(
-                Some(Identifiers::ClientAndServerIdentifiers(
-                    id_u.to_vec(),
-                    id_s.to_vec(),
-                )),
+                Identifiers {
+                    client: Some(id_u),
+                    server: Some(id_s),
+                },
                 None,
             ),
         )
         .unwrap();
-    let registration_upload_bytes = client_registration_finish_result.message.serialize()?;
+    let registration_upload_bytes = client_registration_finish_result.message.serialize();
 
     let password_file = ServerRegistration::finish(client_registration_finish_result.message);
-    let password_file_bytes = password_file.serialize()?;
+    let password_file_bytes = password_file.serialize();
 
     let mut client_login_start: Vec<u8> = Vec::new();
     client_login_start.extend_from_slice(&blinding_factor_bytes);
@@ -369,7 +577,7 @@ fn generate_parameters<CS: CipherSuite>() -> Result<TestVectorParameters, Protoc
     let mut client_login_start_rng = CycleRng::new(client_login_start);
     let client_login_start_result =
         ClientLogin::<CS>::start(&mut client_login_start_rng, password).unwrap();
-    let credential_request_bytes = client_login_start_result.message.serialize()?;
+    let credential_request_bytes = client_login_start_result.message.serialize();
     let client_login_state = client_login_start_result
         .state
         .serialize()
@@ -390,30 +598,33 @@ fn generate_parameters<CS: CipherSuite>() -> Result<TestVectorParameters, Protoc
         Some(password_file),
         client_login_start_result.message,
         credential_identifier,
-        ServerLoginStartParameters::WithContextAndIdentifiers(
-            context.to_vec(),
-            Identifiers::ClientAndServerIdentifiers(id_u.to_vec(), id_s.to_vec()),
-        ),
+        ServerLoginStartParameters {
+            context: Some(context),
+            identifiers: Identifiers {
+                client: Some(id_u),
+                server: Some(id_s),
+            },
+        },
     )
     .unwrap();
-    let credential_response_bytes = server_login_start_result.message.serialize()?;
-    let server_login_state = server_login_start_result.state.serialize()?;
+    let credential_response_bytes = server_login_start_result.message.serialize();
+    let server_login_state = server_login_start_result.state.serialize();
 
     let client_login_finish_result = client_login_start_result
         .state
         .finish(
             server_login_start_result.message,
             ClientLoginFinishParameters::new(
-                Some(context.to_vec()),
-                Some(Identifiers::ClientAndServerIdentifiers(
-                    id_u.to_vec(),
-                    id_s.to_vec(),
-                )),
+                Some(context),
+                Identifiers {
+                    client: Some(id_u),
+                    server: Some(id_s),
+                },
                 None,
             ),
         )
         .unwrap();
-    let credential_finalization_bytes = client_login_finish_result.message.serialize()?;
+    let credential_finalization_bytes = client_login_finish_result.message.serialize();
 
     Ok(TestVectorParameters {
         client_s_pk: client_s_kp.public().to_arr().to_vec(),
@@ -436,323 +647,494 @@ fn generate_parameters<CS: CipherSuite>() -> Result<TestVectorParameters, Protoc
         client_nonce: client_nonce.to_vec(),
         server_nonce: server_nonce.to_vec(),
         context: context.to_vec(),
-        registration_request: registration_request_bytes,
-        registration_response: registration_response_bytes,
-        registration_upload: registration_upload_bytes,
-        credential_request: credential_request_bytes,
-        credential_response: credential_response_bytes,
-        credential_finalization: credential_finalization_bytes,
-        password_file: password_file_bytes,
+        registration_request: registration_request_bytes.to_vec(),
+        registration_response: registration_response_bytes.to_vec(),
+        registration_upload: registration_upload_bytes.to_vec(),
+        credential_request: credential_request_bytes.to_vec(),
+        credential_response: credential_response_bytes.to_vec(),
+        credential_finalization: credential_finalization_bytes.to_vec(),
+        password_file: password_file_bytes.to_vec(),
         client_registration_state,
         client_login_state,
-        server_login_state,
-        session_key: client_login_finish_result.session_key,
+        server_login_state: server_login_state.to_vec(),
+        session_key: client_login_finish_result.session_key.to_vec(),
         export_key: client_registration_finish_result.export_key.to_vec(),
     })
 }
 
 #[test]
 fn generate_test_vectors() -> Result<(), ProtocolError> {
-    let parameters = generate_parameters::<RistrettoSha5123dhNoSlowHash>()?;
-    println!("{}", stringify_test_vectors(&parameters));
+    #[cfg(feature = "ristretto255")]
+    {
+        let parameters = generate_parameters::<Ristretto255>()?;
+        println!("Ristretto255: {}", stringify_test_vectors(&parameters));
+    }
+    #[cfg(feature = "p256")]
+    {
+        let parameters = generate_parameters::<P256>()?;
+        println!("P-256: {}", stringify_test_vectors(&parameters));
+    }
+    #[cfg(all(feature = "x25519", feature = "ristretto255"))]
+    {
+        let parameters = generate_parameters::<X25519Ristretto255>()?;
+        println!(
+            "X25519 Ristretto255: {}",
+            stringify_test_vectors(&parameters)
+        );
+    }
+    #[cfg(all(feature = "x25519", feature = "p256"))]
+    {
+        let parameters = generate_parameters::<X25519P256>()?;
+        println!("X25519 P-256: {}", stringify_test_vectors(&parameters));
+    }
+
     Ok(())
 }
 
 #[test]
 fn test_registration_request() -> Result<(), ProtocolError> {
-    let parameters = populate_test_vectors(&serde_json::from_str(TEST_VECTOR).unwrap());
-    let mut rng = CycleRng::new(parameters.blinding_factor.to_vec());
-    let client_registration_start_result =
-        ClientRegistration::<RistrettoSha5123dhNoSlowHash>::start(&mut rng, &parameters.password)?;
-    assert_eq!(
-        hex::encode(&parameters.registration_request),
-        hex::encode(client_registration_start_result.message.serialize()?)
-    );
-    assert_eq!(
-        hex::encode(&parameters.client_registration_state),
-        hex::encode(client_registration_start_result.state.serialize()?)
-    );
+    fn inner<CS: CipherSuite>(test_vector: &str) -> Result<(), ProtocolError> {
+        let parameters = populate_test_vectors(&serde_json::from_str(test_vector).unwrap());
+        let mut rng = CycleRng::new(parameters.blinding_factor.to_vec());
+        let client_registration_start_result =
+            ClientRegistration::<CS>::start(&mut rng, &parameters.password)?;
+        assert_eq!(
+            hex::encode(&parameters.registration_request),
+            hex::encode(client_registration_start_result.message.serialize())
+        );
+        assert_eq!(
+            hex::encode(&parameters.client_registration_state),
+            hex::encode(client_registration_start_result.state.serialize()?)
+        );
+        Ok(())
+    }
+
+    #[cfg(feature = "ristretto255")]
+    inner::<Ristretto255>(TEST_VECTOR_RISTRETTO255)?;
+    #[cfg(feature = "p256")]
+    inner::<P256>(TEST_VECTOR_P256)?;
+    #[cfg(all(feature = "x25519", feature = "ristretto255"))]
+    inner::<X25519Ristretto255>(TEST_VECTOR_X25519_RISTRETTO255)?;
+    #[cfg(all(feature = "x25519", feature = "p256"))]
+    inner::<X25519P256>(TEST_VECTOR_X25519_P256)?;
+
     Ok(())
 }
 
-#[cfg(feature = "serialize")]
+#[cfg(feature = "serde")]
 #[test]
 fn test_serialization() -> Result<(), ProtocolError> {
-    let parameters = populate_test_vectors(&serde_json::from_str(TEST_VECTOR).unwrap());
-    let mut rng = CycleRng::new(parameters.blinding_factor.to_vec());
-    let client_registration_start_result =
-        ClientRegistration::<RistrettoSha5123dhNoSlowHash>::start(&mut rng, &parameters.password)?;
-    {
-        // Test the json serialization (human-readable, base64).
-        let registration_request_json =
-            serde_json::to_string(&client_registration_start_result.message).unwrap();
-        assert_eq!(
-            registration_request_json,
-            r#""8FBIuznz9aOkFPUCVMQls2+EIWKmML9zRW30UzUcsz0=""#
-        );
-        let registration_request: RegistrationRequest<RistrettoSha5123dhNoSlowHash> =
-            serde_json::from_str(&registration_request_json).unwrap();
-        assert_eq!(
-            hex::encode(client_registration_start_result.message.serialize()?),
-            hex::encode(registration_request.serialize()?),
-        );
-    }
-    {
+    use core::mem;
+
+    fn inner<CS: CipherSuite>(test_vector: &str) -> Result<(), ProtocolError> {
+        let parameters = populate_test_vectors(&serde_json::from_str(test_vector).unwrap());
+        let mut rng = CycleRng::new(parameters.blinding_factor.to_vec());
+        let client_registration_start_result =
+            ClientRegistration::<CS>::start(&mut rng, &parameters.password)?;
+
         // Test the bincode serialization (binary).
-        let registration_request_bin =
+        let registration_request =
             bincode::serialize(&client_registration_start_result.message).unwrap();
-        assert_eq!(registration_request_bin.len(), 40);
-        let registration_request: RegistrationRequest<RistrettoSha5123dhNoSlowHash> =
-            bincode::deserialize(&registration_request_bin).unwrap();
         assert_eq!(
-            hex::encode(client_registration_start_result.message.serialize()?),
-            hex::encode(registration_request.serialize()?),
+            registration_request.len(),
+            RegistrationRequestLen::<CS>::USIZE + mem::size_of::<usize>()
         );
+        let registration_request: RegistrationRequest<CS> =
+            bincode::deserialize(&registration_request).unwrap();
+        assert_eq!(
+            hex::encode(client_registration_start_result.message.serialize()),
+            hex::encode(registration_request.serialize()),
+        );
+
+        Ok(())
     }
+
+    #[cfg(feature = "ristretto255")]
+    inner::<Ristretto255>(TEST_VECTOR_RISTRETTO255)?;
+    #[cfg(feature = "p256")]
+    inner::<P256>(TEST_VECTOR_P256)?;
+    #[cfg(all(feature = "x25519", feature = "ristretto255"))]
+    inner::<X25519Ristretto255>(TEST_VECTOR_X25519_RISTRETTO255)?;
+    #[cfg(all(feature = "x25519", feature = "p256"))]
+    inner::<X25519P256>(TEST_VECTOR_X25519_P256)?;
+
     Ok(())
 }
+
 #[test]
 fn test_registration_response() -> Result<(), ProtocolError> {
-    let parameters = populate_test_vectors(
-        &serde_json::from_str(TEST_VECTOR).map_err(|_| ProtocolError::SerializationError)?,
-    );
+    fn inner<CS: CipherSuite>(test_vector: &str) -> Result<(), ProtocolError>
+    where
+        // RegistrationResponse: KgPk + KePk
+        <CS::OprfGroup as Group>::ElemLen: Add<<CS::KeGroup as KeGroup>::PkLen>,
+        RegistrationResponseLen<CS>: ArrayLength<u8>,
+    {
+        let parameters = populate_test_vectors(
+            &serde_json::from_str(test_vector).map_err(|_| ProtocolError::SerializationError)?,
+        );
 
-    let server_setup = ServerSetup::<RistrettoSha5123dhNoSlowHash>::deserialize(
-        &[
-            &parameters.oprf_seed[..],
-            &parameters.server_s_sk[..],
-            &parameters.fake_sk[..],
-        ]
-        .concat(),
-    )?;
+        let server_setup = ServerSetup::<CS>::deserialize(
+            &[
+                parameters.oprf_seed,
+                parameters.server_s_sk,
+                parameters.fake_sk,
+            ]
+            .concat(),
+        )?;
 
-    let server_registration_start_result =
-        ServerRegistration::<RistrettoSha5123dhNoSlowHash>::start(
+        let server_registration_start_result = ServerRegistration::<CS>::start(
             &server_setup,
-            RegistrationRequest::deserialize(&parameters.registration_request[..])?,
+            RegistrationRequest::deserialize(&parameters.registration_request)?,
             &parameters.credential_identifier,
         )?;
-    assert_eq!(
-        hex::encode(parameters.registration_response),
-        hex::encode(server_registration_start_result.message.serialize()?)
-    );
+        assert_eq!(
+            hex::encode(parameters.registration_response),
+            hex::encode(server_registration_start_result.message.serialize())
+        );
+        Ok(())
+    }
+
+    #[cfg(feature = "ristretto255")]
+    inner::<Ristretto255>(TEST_VECTOR_RISTRETTO255)?;
+    #[cfg(feature = "p256")]
+    inner::<P256>(TEST_VECTOR_P256)?;
+    #[cfg(all(feature = "x25519", feature = "ristretto255"))]
+    inner::<X25519Ristretto255>(TEST_VECTOR_X25519_RISTRETTO255)?;
+    #[cfg(all(feature = "x25519", feature = "p256"))]
+    inner::<X25519P256>(TEST_VECTOR_X25519_P256)?;
+
     Ok(())
 }
 
 #[test]
 fn test_registration_upload() -> Result<(), ProtocolError> {
-    let parameters = populate_test_vectors(
-        &serde_json::from_str(TEST_VECTOR).map_err(|_| ProtocolError::SerializationError)?,
-    );
+    fn inner<CS: CipherSuite>(test_vector: &str) -> Result<(), ProtocolError>
+    where
+        // Envelope: Nonce + Hash
+        NonceLen: Add<<CS::Hash as FixedOutput>::OutputSize>,
+        EnvelopeLen<CS>: ArrayLength<u8>,
+        // RegistrationUpload: (KePk + Hash) + Envelope
+        <CS::KeGroup as KeGroup>::PkLen: Add<<CS::Hash as FixedOutput>::OutputSize>,
+        Sum<<CS::KeGroup as KeGroup>::PkLen, <CS::Hash as FixedOutput>::OutputSize>:
+            ArrayLength<u8> + Add<EnvelopeLen<CS>>,
+        RegistrationUploadLen<CS>: ArrayLength<u8>,
+    {
+        let parameters = populate_test_vectors(
+            &serde_json::from_str(test_vector).map_err(|_| ProtocolError::SerializationError)?,
+        );
 
-    let client_s_sk_and_nonce: Vec<u8> =
-        [parameters.client_s_sk, parameters.envelope_nonce].concat();
-    let mut finish_registration_rng = CycleRng::new(client_s_sk_and_nonce);
-    let result = ClientRegistration::<RistrettoSha5123dhNoSlowHash>::deserialize(
-        &parameters.client_registration_state[..],
-    )?
-    .finish(
-        &mut finish_registration_rng,
-        RegistrationResponse::deserialize(&parameters.registration_response[..])?,
-        ClientRegistrationFinishParameters::new(
-            Some(Identifiers::ClientAndServerIdentifiers(
-                parameters.id_u,
-                parameters.id_s,
-            )),
-            None,
-        ),
-    )?;
+        let client_s_sk_and_nonce: Vec<u8> =
+            [parameters.client_s_sk, parameters.envelope_nonce].concat();
+        let mut finish_registration_rng = CycleRng::new(client_s_sk_and_nonce);
+        let result = ClientRegistration::<CS>::deserialize(&parameters.client_registration_state)?
+            .finish(
+                &mut finish_registration_rng,
+                RegistrationResponse::deserialize(&parameters.registration_response)?,
+                ClientRegistrationFinishParameters::new(
+                    Identifiers {
+                        client: Some(&parameters.id_u),
+                        server: Some(&parameters.id_s),
+                    },
+                    None,
+                ),
+            )?;
 
-    assert_eq!(
-        hex::encode(parameters.registration_upload),
-        hex::encode(result.message.serialize()?)
-    );
-    assert_eq!(
-        hex::encode(parameters.export_key),
-        hex::encode(result.export_key.to_vec())
-    );
+        assert_eq!(
+            hex::encode(parameters.registration_upload),
+            hex::encode(result.message.serialize())
+        );
+        assert_eq!(
+            hex::encode(parameters.export_key),
+            hex::encode(result.export_key.to_vec())
+        );
+
+        Ok(())
+    }
+
+    #[cfg(feature = "ristretto255")]
+    inner::<Ristretto255>(TEST_VECTOR_RISTRETTO255)?;
+    #[cfg(feature = "p256")]
+    inner::<P256>(TEST_VECTOR_P256)?;
+    #[cfg(all(feature = "x25519", feature = "ristretto255"))]
+    inner::<X25519Ristretto255>(TEST_VECTOR_X25519_RISTRETTO255)?;
+    #[cfg(all(feature = "x25519", feature = "p256"))]
+    inner::<X25519P256>(TEST_VECTOR_X25519_P256)?;
 
     Ok(())
 }
 
 #[test]
 fn test_password_file() -> Result<(), ProtocolError> {
-    let parameters = populate_test_vectors(&serde_json::from_str(TEST_VECTOR).unwrap());
+    fn inner<CS: CipherSuite>(test_vector: &str) -> Result<(), ProtocolError>
+    where
+        // Envelope: Nonce + Hash
+        NonceLen: Add<<CS::Hash as FixedOutput>::OutputSize>,
+        EnvelopeLen<CS>: ArrayLength<u8>,
+        // RegistrationUpload: (KePk + Hash) + Envelope
+        <CS::KeGroup as KeGroup>::PkLen: Add<<CS::Hash as FixedOutput>::OutputSize>,
+        Sum<<CS::KeGroup as KeGroup>::PkLen, <CS::Hash as FixedOutput>::OutputSize>:
+            ArrayLength<u8> + Add<EnvelopeLen<CS>>,
+        RegistrationUploadLen<CS>: ArrayLength<u8>,
+        // ServerRegistration = RegistrationUpload
+    {
+        let parameters = populate_test_vectors(&serde_json::from_str(test_vector).unwrap());
 
-    let password_file = ServerRegistration::finish(RegistrationUpload::<
-        RistrettoSha5123dhNoSlowHash,
-    >::deserialize(
-        &parameters.registration_upload[..]
-    )?);
+        let password_file = ServerRegistration::finish(RegistrationUpload::<CS>::deserialize(
+            &parameters.registration_upload,
+        )?);
 
-    assert_eq!(
-        hex::encode(parameters.password_file),
-        hex::encode(password_file.serialize()?)
-    );
+        assert_eq!(
+            hex::encode(parameters.password_file),
+            hex::encode(password_file.serialize())
+        );
+        Ok(())
+    }
+
+    #[cfg(feature = "ristretto255")]
+    inner::<Ristretto255>(TEST_VECTOR_RISTRETTO255)?;
+    #[cfg(feature = "p256")]
+    inner::<P256>(TEST_VECTOR_P256)?;
+    #[cfg(all(feature = "x25519", feature = "ristretto255"))]
+    inner::<X25519Ristretto255>(TEST_VECTOR_X25519_RISTRETTO255)?;
+    #[cfg(all(feature = "x25519", feature = "p256"))]
+    inner::<X25519P256>(TEST_VECTOR_X25519_P256)?;
+
     Ok(())
 }
 
 #[test]
 fn test_credential_request() -> Result<(), ProtocolError> {
-    let parameters = populate_test_vectors(&serde_json::from_str(TEST_VECTOR).unwrap());
+    fn inner<CS: CipherSuite>(test_vector: &str) -> Result<(), ProtocolError>
+    where
+        // CredentialRequest: KgPk + Ke1Message
+        <CS::OprfGroup as Group>::ElemLen: Add<Ke1MessageLen<CS>>,
+        CredentialRequestLen<CS>: ArrayLength<u8>,
+    {
+        let parameters = populate_test_vectors(&serde_json::from_str(test_vector).unwrap());
 
-    let client_login_start_rng = [
-        parameters.blinding_factor,
-        parameters.client_e_sk,
-        parameters.client_nonce,
-    ]
-    .concat();
-    let mut client_login_start_rng = CycleRng::new(client_login_start_rng);
-    let client_login_start_result = ClientLogin::<RistrettoSha5123dhNoSlowHash>::start(
-        &mut client_login_start_rng,
-        &parameters.password,
-    )?;
-    assert_eq!(
-        hex::encode(&parameters.credential_request),
-        hex::encode(client_login_start_result.message.serialize()?)
-    );
-    assert_eq!(
-        hex::encode(&parameters.client_login_state),
-        hex::encode(client_login_start_result.state.serialize()?)
-    );
+        let client_login_start_rng = [
+            parameters.blinding_factor,
+            parameters.client_e_sk,
+            parameters.client_nonce,
+        ]
+        .concat();
+        let mut client_login_start_rng = CycleRng::new(client_login_start_rng);
+        let client_login_start_result =
+            ClientLogin::<CS>::start(&mut client_login_start_rng, &parameters.password)?;
+        assert_eq!(
+            hex::encode(&parameters.credential_request),
+            hex::encode(client_login_start_result.message.serialize())
+        );
+        assert_eq!(
+            hex::encode(&parameters.client_login_state),
+            hex::encode(client_login_start_result.state.serialize()?)
+        );
+        Ok(())
+    }
+
+    #[cfg(feature = "ristretto255")]
+    inner::<Ristretto255>(TEST_VECTOR_RISTRETTO255)?;
+    #[cfg(feature = "p256")]
+    inner::<P256>(TEST_VECTOR_P256)?;
+    #[cfg(all(feature = "x25519", feature = "ristretto255"))]
+    inner::<X25519Ristretto255>(TEST_VECTOR_X25519_RISTRETTO255)?;
+    #[cfg(all(feature = "x25519", feature = "p256"))]
+    inner::<X25519P256>(TEST_VECTOR_X25519_P256)?;
+
     Ok(())
 }
 
 #[test]
 fn test_credential_response() -> Result<(), ProtocolError> {
-    let parameters = populate_test_vectors(&serde_json::from_str(TEST_VECTOR).unwrap());
+    fn inner<CS: CipherSuite>(test_vector: &str) -> Result<(), ProtocolError>
+    where
+        // MaskedResponse: (Nonce + Hash) + KePk
+        NonceLen: Add<<CS::Hash as FixedOutput>::OutputSize>,
+        Sum<NonceLen, <CS::Hash as FixedOutput>::OutputSize>:
+            ArrayLength<u8> + Add<<CS::KeGroup as KeGroup>::PkLen>,
+        MaskedResponseLen<CS>: ArrayLength<u8>,
+        // CredentialResponseWithoutKeLen: (KgPk + Nonce) + MaskedResponse
+        <CS::OprfGroup as Group>::ElemLen: Add<NonceLen>,
+        Sum<<CS::OprfGroup as Group>::ElemLen, NonceLen>:
+            ArrayLength<u8> + Add<MaskedResponseLen<CS>>,
+        CredentialResponseWithoutKeLen<CS>: ArrayLength<u8>,
+        // CredentialResponse: CredentialResponseWithoutKeLen + Ke2Message
+        CredentialResponseWithoutKeLen<CS>: Add<Ke2MessageLen<CS>>,
+        CredentialResponseLen<CS>: ArrayLength<u8>,
+    {
+        let parameters = populate_test_vectors(&serde_json::from_str(test_vector).unwrap());
 
-    let server_setup = ServerSetup::<RistrettoSha5123dhNoSlowHash>::deserialize(
-        &[
-            &parameters.oprf_seed[..],
-            &parameters.server_s_sk[..],
-            &parameters.fake_sk[..],
-        ]
-        .concat(),
-    )?;
+        let server_setup = ServerSetup::<CS>::deserialize(
+            &[
+                parameters.oprf_seed,
+                parameters.server_s_sk,
+                parameters.fake_sk,
+            ]
+            .concat(),
+        )?;
 
-    let mut server_e_sk_and_nonce_rng = CycleRng::new(
-        [
-            parameters.masking_nonce,
-            parameters.server_e_sk,
-            parameters.server_nonce,
-        ]
-        .concat(),
-    );
-    let server_login_start_result = ServerLogin::<RistrettoSha5123dhNoSlowHash>::start(
-        &mut server_e_sk_and_nonce_rng,
-        &server_setup,
-        Some(ServerRegistration::deserialize(
-            &parameters.password_file[..],
-        )?),
-        CredentialRequest::<RistrettoSha5123dhNoSlowHash>::deserialize(
-            &parameters.credential_request[..],
-        )?,
-        &parameters.credential_identifier,
-        ServerLoginStartParameters::WithContextAndIdentifiers(
-            parameters.context,
-            Identifiers::ClientAndServerIdentifiers(parameters.id_u, parameters.id_s),
-        ),
-    )?;
-    assert_eq!(
-        hex::encode(&parameters.credential_response),
-        hex::encode(server_login_start_result.message.serialize()?)
-    );
-    assert_eq!(
-        hex::encode(&parameters.server_login_state),
-        hex::encode(server_login_start_result.state.serialize()?)
-    );
+        let mut server_e_sk_and_nonce_rng = CycleRng::new(
+            [
+                parameters.masking_nonce,
+                parameters.server_e_sk,
+                parameters.server_nonce,
+            ]
+            .concat(),
+        );
+        let server_login_start_result = ServerLogin::<CS>::start(
+            &mut server_e_sk_and_nonce_rng,
+            &server_setup,
+            Some(ServerRegistration::deserialize(&parameters.password_file)?),
+            CredentialRequest::<CS>::deserialize(&parameters.credential_request)?,
+            &parameters.credential_identifier,
+            ServerLoginStartParameters {
+                context: Some(&parameters.context),
+                identifiers: Identifiers {
+                    client: Some(&parameters.id_u),
+                    server: Some(&parameters.id_s),
+                },
+            },
+        )?;
+        assert_eq!(
+            hex::encode(&parameters.credential_response),
+            hex::encode(server_login_start_result.message.serialize())
+        );
+        assert_eq!(
+            hex::encode(&parameters.server_login_state),
+            hex::encode(server_login_start_result.state.serialize())
+        );
+        Ok(())
+    }
+
+    #[cfg(feature = "ristretto255")]
+    inner::<Ristretto255>(TEST_VECTOR_RISTRETTO255)?;
+    #[cfg(feature = "p256")]
+    inner::<P256>(TEST_VECTOR_P256)?;
+    #[cfg(all(feature = "x25519", feature = "ristretto255"))]
+    inner::<X25519Ristretto255>(TEST_VECTOR_X25519_RISTRETTO255)?;
+    #[cfg(all(feature = "x25519", feature = "p256"))]
+    inner::<X25519P256>(TEST_VECTOR_X25519_P256)?;
+
     Ok(())
 }
 
 #[test]
 fn test_credential_finalization() -> Result<(), ProtocolError> {
-    let parameters = populate_test_vectors(&serde_json::from_str(TEST_VECTOR).unwrap());
+    fn inner<CS: CipherSuite>(test_vector: &str) -> Result<(), ProtocolError>
+    where
+        // MaskedResponse: (Nonce + Hash) + KePk
+        NonceLen: Add<<CS::Hash as FixedOutput>::OutputSize>,
+        Sum<NonceLen, <CS::Hash as FixedOutput>::OutputSize>:
+            ArrayLength<u8> + Add<<CS::KeGroup as KeGroup>::PkLen>,
+        MaskedResponseLen<CS>: ArrayLength<u8>,
+    {
+        let parameters = populate_test_vectors(&serde_json::from_str(test_vector).unwrap());
 
-    let client_login_finish_result = ClientLogin::<RistrettoSha5123dhNoSlowHash>::deserialize(
-        &parameters.client_login_state[..],
-    )?
-    .finish(
-        CredentialResponse::<RistrettoSha5123dhNoSlowHash>::deserialize(
-            &parameters.credential_response[..],
-        )?,
-        ClientLoginFinishParameters::new(
-            Some(parameters.context),
-            Some(Identifiers::ClientAndServerIdentifiers(
-                parameters.id_u,
-                parameters.id_s,
-            )),
-            None,
-        ),
-    )?;
+        let client_login_finish_result =
+            ClientLogin::<CS>::deserialize(&parameters.client_login_state)?.finish(
+                CredentialResponse::<CS>::deserialize(&parameters.credential_response)?,
+                ClientLoginFinishParameters::new(
+                    Some(&parameters.context),
+                    Identifiers {
+                        client: Some(&parameters.id_u),
+                        server: Some(&parameters.id_s),
+                    },
+                    None,
+                ),
+            )?;
 
-    assert_eq!(
-        hex::encode(&parameters.server_s_pk),
-        hex::encode(&client_login_finish_result.server_s_pk.to_arr().to_vec())
-    );
-    assert_eq!(
-        hex::encode(&parameters.session_key),
-        hex::encode(&client_login_finish_result.session_key)
-    );
-    assert_eq!(
-        hex::encode(&parameters.credential_finalization),
-        hex::encode(client_login_finish_result.message.serialize()?)
-    );
-    assert_eq!(
-        hex::encode(&parameters.export_key),
-        hex::encode(client_login_finish_result.export_key)
-    );
+        assert_eq!(
+            hex::encode(&parameters.server_s_pk),
+            hex::encode(&client_login_finish_result.server_s_pk.to_arr().to_vec())
+        );
+        assert_eq!(
+            hex::encode(&parameters.session_key),
+            hex::encode(&client_login_finish_result.session_key)
+        );
+        assert_eq!(
+            hex::encode(&parameters.credential_finalization),
+            hex::encode(client_login_finish_result.message.serialize())
+        );
+        assert_eq!(
+            hex::encode(&parameters.export_key),
+            hex::encode(client_login_finish_result.export_key)
+        );
+
+        Ok(())
+    }
+
+    #[cfg(feature = "ristretto255")]
+    inner::<Ristretto255>(TEST_VECTOR_RISTRETTO255)?;
+    #[cfg(feature = "p256")]
+    inner::<P256>(TEST_VECTOR_P256)?;
+    #[cfg(all(feature = "x25519", feature = "ristretto255"))]
+    inner::<X25519Ristretto255>(TEST_VECTOR_X25519_RISTRETTO255)?;
+    #[cfg(all(feature = "x25519", feature = "p256"))]
+    inner::<X25519P256>(TEST_VECTOR_X25519_P256)?;
 
     Ok(())
 }
 
 #[test]
 fn test_server_login_finish() -> Result<(), ProtocolError> {
-    let parameters = populate_test_vectors(&serde_json::from_str(TEST_VECTOR).unwrap());
+    fn inner<CS: CipherSuite>(test_vector: &str) -> Result<(), ProtocolError> {
+        let parameters = populate_test_vectors(&serde_json::from_str(test_vector).unwrap());
 
-    let server_login_result = ServerLogin::<RistrettoSha5123dhNoSlowHash>::deserialize(
-        &parameters.server_login_state[..],
-    )?
-    .finish(CredentialFinalization::deserialize(
-        &parameters.credential_finalization[..],
-    )?)?;
+        let server_login_result = ServerLogin::<CS>::deserialize(&parameters.server_login_state)?
+            .finish(CredentialFinalization::deserialize(
+            &parameters.credential_finalization,
+        )?)?;
 
-    assert_eq!(
-        hex::encode(parameters.session_key),
-        hex::encode(&server_login_result.session_key)
-    );
+        assert_eq!(
+            hex::encode(parameters.session_key),
+            hex::encode(&server_login_result.session_key)
+        );
+
+        Ok(())
+    }
+
+    #[cfg(feature = "ristretto255")]
+    inner::<Ristretto255>(TEST_VECTOR_RISTRETTO255)?;
+    #[cfg(feature = "p256")]
+    inner::<P256>(TEST_VECTOR_P256)?;
+    #[cfg(all(feature = "x25519", feature = "ristretto255"))]
+    inner::<X25519Ristretto255>(TEST_VECTOR_X25519_RISTRETTO255)?;
+    #[cfg(all(feature = "x25519", feature = "p256"))]
+    inner::<X25519P256>(TEST_VECTOR_X25519_P256)?;
 
     Ok(())
 }
 
-fn test_complete_flow(
+fn test_complete_flow<CS: CipherSuite>(
     registration_password: &[u8],
     login_password: &[u8],
-) -> Result<(), ProtocolError> {
+) -> Result<(), ProtocolError>
+where
+    // MaskedResponse: (Nonce + Hash) + KePk
+    NonceLen: Add<<CS::Hash as FixedOutput>::OutputSize>,
+    Sum<NonceLen, <CS::Hash as FixedOutput>::OutputSize>:
+        ArrayLength<u8> + Add<<CS::KeGroup as KeGroup>::PkLen>,
+    MaskedResponseLen<CS>: ArrayLength<u8>,
+{
     let credential_identifier = b"credentialIdentifier";
     let mut client_rng = OsRng;
     let mut server_rng = OsRng;
-    let server_setup = ServerSetup::<RistrettoSha5123dhNoSlowHash>::new(&mut server_rng)?;
+    let server_setup = ServerSetup::<CS>::new(&mut server_rng);
     let client_registration_start_result =
-        ClientRegistration::<RistrettoSha5123dhNoSlowHash>::start(
-            &mut client_rng,
-            registration_password,
-        )?;
-    let server_registration_start_result =
-        ServerRegistration::<RistrettoSha5123dhNoSlowHash>::start(
-            &server_setup,
-            client_registration_start_result.message,
-            credential_identifier,
-        )?;
+        ClientRegistration::<CS>::start(&mut client_rng, registration_password)?;
+    let server_registration_start_result = ServerRegistration::<CS>::start(
+        &server_setup,
+        client_registration_start_result.message,
+        credential_identifier,
+    )?;
     let client_registration_finish_result = client_registration_start_result.state.finish(
         &mut client_rng,
         server_registration_start_result.message,
         ClientRegistrationFinishParameters::default(),
     )?;
     let p_file = ServerRegistration::finish(client_registration_finish_result.message);
-    let client_login_start_result =
-        ClientLogin::<RistrettoSha5123dhNoSlowHash>::start(&mut client_rng, login_password)?;
-    let server_login_start_result = ServerLogin::<RistrettoSha5123dhNoSlowHash>::start(
+    let client_login_start_result = ClientLogin::<CS>::start(&mut client_rng, login_password)?;
+    let server_login_start_result = ServerLogin::<CS>::start(
         &mut server_rng,
         &server_setup,
         Some(p_file),
@@ -781,10 +1163,10 @@ fn test_complete_flow(
             hex::encode(client_login_finish_result.export_key)
         );
     } else {
-        assert!(match client_login_result {
-            Err(ProtocolError::InvalidLoginError) => true,
-            _ => false,
-        });
+        assert!(matches!(
+            client_login_result,
+            Err(ProtocolError::InvalidLoginError)
+        ));
     }
 
     Ok(())
@@ -792,379 +1174,537 @@ fn test_complete_flow(
 
 #[test]
 fn test_complete_flow_success() -> Result<(), ProtocolError> {
-    test_complete_flow(b"good password", b"good password")
+    #[cfg(feature = "ristretto255")]
+    test_complete_flow::<Ristretto255>(b"good password", b"good password")?;
+    #[cfg(feature = "p256")]
+    test_complete_flow::<P256>(b"good password", b"good password")?;
+    #[cfg(all(feature = "x25519", feature = "ristretto255"))]
+    test_complete_flow::<X25519Ristretto255>(b"good password", b"good password")?;
+    #[cfg(all(feature = "x25519", feature = "p256"))]
+    test_complete_flow::<X25519P256>(b"good password", b"good password")?;
+
+    Ok(())
 }
 
 #[test]
 fn test_complete_flow_fail() -> Result<(), ProtocolError> {
-    test_complete_flow(b"good password", b"bad password")
+    #[cfg(feature = "ristretto255")]
+    test_complete_flow::<Ristretto255>(b"good password", b"bad password")?;
+    #[cfg(feature = "p256")]
+    test_complete_flow::<P256>(b"good password", b"bad password")?;
+    #[cfg(all(feature = "x25519", feature = "ristretto255"))]
+    test_complete_flow::<X25519Ristretto255>(b"good password", b"bad password")?;
+    #[cfg(all(feature = "x25519", feature = "p256"))]
+    test_complete_flow::<X25519P256>(b"good password", b"bad password")?;
+
+    Ok(())
 }
 
 // Zeroize tests
 
 #[test]
 fn test_zeroize_client_registration_start() -> Result<(), ProtocolError> {
-    let mut client_rng = OsRng;
-    let client_registration_start_result =
-        ClientRegistration::<RistrettoSha5123dhNoSlowHash>::start(
-            &mut client_rng,
-            STR_PASSWORD.as_bytes(),
-        )?;
+    fn inner<CS: CipherSuite>() -> Result<(), ProtocolError> {
+        let mut client_rng = OsRng;
+        let client_registration_start_result =
+            ClientRegistration::<CS>::start(&mut client_rng, STR_PASSWORD.as_bytes())?;
 
-    let mut state = client_registration_start_result.state;
-    Zeroize::zeroize(&mut state);
-    for bytes in state.to_vec() {
-        assert!(bytes.iter().all(|&x| x == 0));
+        let mut state = client_registration_start_result.state;
+        Zeroize::zeroize(&mut state);
+        for byte in state.to_vec() {
+            assert_eq!(byte, 0);
+        }
+
+        Ok(())
     }
+
+    #[cfg(feature = "ristretto255")]
+    inner::<Ristretto255>()?;
+    #[cfg(feature = "p256")]
+    inner::<P256>()?;
+    #[cfg(all(feature = "x25519", feature = "ristretto255"))]
+    inner::<X25519Ristretto255>()?;
+    #[cfg(all(feature = "x25519", feature = "p256"))]
+    inner::<X25519P256>()?;
 
     Ok(())
 }
 
 #[test]
 fn test_zeroize_client_registration_finish() -> Result<(), ProtocolError> {
-    let mut client_rng = OsRng;
-    let mut server_rng = OsRng;
-    let server_setup = ServerSetup::<RistrettoSha5123dhNoSlowHash>::new(&mut server_rng)?;
-    let client_registration_start_result =
-        ClientRegistration::<RistrettoSha5123dhNoSlowHash>::start(
-            &mut client_rng,
-            STR_PASSWORD.as_bytes(),
-        )?;
-    let server_registration_start_result =
-        ServerRegistration::<RistrettoSha5123dhNoSlowHash>::start(
+    fn inner<CS: CipherSuite>() -> Result<(), ProtocolError> {
+        let mut client_rng = OsRng;
+        let mut server_rng = OsRng;
+        let server_setup = ServerSetup::<CS>::new(&mut server_rng);
+        let client_registration_start_result =
+            ClientRegistration::<CS>::start(&mut client_rng, STR_PASSWORD.as_bytes())?;
+        let server_registration_start_result = ServerRegistration::<CS>::start(
             &server_setup,
             client_registration_start_result.message,
             STR_CREDENTIAL_IDENTIFIER.as_bytes(),
         )?;
-    let client_registration_finish_result = client_registration_start_result.state.finish(
-        &mut client_rng,
-        server_registration_start_result.message,
-        ClientRegistrationFinishParameters::default(),
-    )?;
+        let client_registration_finish_result = client_registration_start_result.state.finish(
+            &mut client_rng,
+            server_registration_start_result.message,
+            ClientRegistrationFinishParameters::default(),
+        )?;
 
-    let mut state = client_registration_finish_result.state;
-    Zeroize::zeroize(&mut state);
-    for bytes in state.to_vec() {
-        assert!(bytes.iter().all(|&x| x == 0));
+        let mut state = client_registration_finish_result.state;
+        Zeroize::zeroize(&mut state);
+        for byte in state.to_vec() {
+            assert_eq!(byte, 0);
+        }
+
+        Ok(())
     }
+
+    #[cfg(feature = "ristretto255")]
+    inner::<Ristretto255>()?;
+    #[cfg(feature = "p256")]
+    inner::<P256>()?;
+    #[cfg(all(feature = "x25519", feature = "ristretto255"))]
+    inner::<X25519Ristretto255>()?;
+    #[cfg(all(feature = "x25519", feature = "p256"))]
+    inner::<X25519P256>()?;
 
     Ok(())
 }
 
 #[test]
 fn test_zeroize_server_registration_finish() -> Result<(), ProtocolError> {
-    let mut client_rng = OsRng;
-    let mut server_rng = OsRng;
-    let server_setup = ServerSetup::<RistrettoSha5123dhNoSlowHash>::new(&mut server_rng)?;
-    let client_registration_start_result =
-        ClientRegistration::<RistrettoSha5123dhNoSlowHash>::start(
-            &mut client_rng,
-            STR_PASSWORD.as_bytes(),
-        )?;
-    let server_registration_start_result =
-        ServerRegistration::<RistrettoSha5123dhNoSlowHash>::start(
+    fn inner<CS: CipherSuite>() -> Result<(), ProtocolError>
+    where
+        // Envelope: Nonce + Hash
+        NonceLen: Add<<CS::Hash as FixedOutput>::OutputSize>,
+        EnvelopeLen<CS>: ArrayLength<u8>,
+        // RegistrationUpload: (KePk + Hash) + Envelope
+        <CS::KeGroup as KeGroup>::PkLen: Add<<CS::Hash as FixedOutput>::OutputSize>,
+        Sum<<CS::KeGroup as KeGroup>::PkLen, <CS::Hash as FixedOutput>::OutputSize>:
+            ArrayLength<u8> + Add<EnvelopeLen<CS>>,
+        RegistrationUploadLen<CS>: ArrayLength<u8>,
+        // ServerRegistration = RegistrationUpload
+    {
+        let mut client_rng = OsRng;
+        let mut server_rng = OsRng;
+        let server_setup = ServerSetup::<CS>::new(&mut server_rng);
+        let client_registration_start_result =
+            ClientRegistration::<CS>::start(&mut client_rng, STR_PASSWORD.as_bytes())?;
+        let server_registration_start_result = ServerRegistration::<CS>::start(
             &server_setup,
             client_registration_start_result.message,
             STR_CREDENTIAL_IDENTIFIER.as_bytes(),
         )?;
-    let client_registration_finish_result = client_registration_start_result.state.finish(
-        &mut client_rng,
-        server_registration_start_result.message,
-        ClientRegistrationFinishParameters::default(),
-    )?;
-    let p_file = ServerRegistration::finish(client_registration_finish_result.message);
+        let client_registration_finish_result = client_registration_start_result.state.finish(
+            &mut client_rng,
+            server_registration_start_result.message,
+            ClientRegistrationFinishParameters::default(),
+        )?;
+        let p_file = ServerRegistration::finish(client_registration_finish_result.message);
 
-    let mut state = p_file;
-    Zeroize::zeroize(&mut state);
-    for bytes in state.serialize() {
-        assert!(bytes.iter().all(|&x| x == 0));
+        let mut state = p_file;
+        Zeroize::zeroize(&mut state);
+        for byte in state.serialize() {
+            assert_eq!(byte, 0);
+        }
+
+        Ok(())
     }
+
+    #[cfg(feature = "ristretto255")]
+    inner::<Ristretto255>()?;
+    #[cfg(feature = "p256")]
+    inner::<P256>()?;
+    #[cfg(all(feature = "x25519", feature = "ristretto255"))]
+    inner::<X25519Ristretto255>()?;
+    #[cfg(all(feature = "x25519", feature = "p256"))]
+    inner::<X25519P256>()?;
 
     Ok(())
 }
 
 #[test]
 fn test_zeroize_client_login_start() -> Result<(), ProtocolError> {
-    let mut client_rng = OsRng;
-    let client_login_start_result = ClientLogin::<RistrettoSha5123dhNoSlowHash>::start(
-        &mut client_rng,
-        STR_PASSWORD.as_bytes(),
-    )?;
+    fn inner<CS: CipherSuite>() -> Result<(), ProtocolError>
+    where
+        // CredentialRequest: KgPk + Ke1Message
+        <CS::OprfGroup as Group>::ElemLen: Add<Ke1MessageLen<CS>>,
+        CredentialRequestLen<CS>: ArrayLength<u8>,
+    {
+        let mut client_rng = OsRng;
+        let client_login_start_result =
+            ClientLogin::<CS>::start(&mut client_rng, STR_PASSWORD.as_bytes())?;
 
-    let mut state = client_login_start_result.state;
-    Zeroize::zeroize(&mut state);
-    for bytes in state.to_vec() {
-        assert!(bytes.iter().all(|&x| x == 0));
+        let mut state = client_login_start_result.state;
+        Zeroize::zeroize(&mut state);
+        for byte in state.to_vec() {
+            assert_eq!(byte, 0);
+        }
+
+        Ok(())
     }
+
+    #[cfg(feature = "ristretto255")]
+    inner::<Ristretto255>()?;
+    #[cfg(feature = "p256")]
+    inner::<P256>()?;
+    #[cfg(all(feature = "x25519", feature = "ristretto255"))]
+    inner::<X25519Ristretto255>()?;
+    #[cfg(all(feature = "x25519", feature = "p256"))]
+    inner::<X25519P256>()?;
 
     Ok(())
 }
 
 #[test]
 fn test_zeroize_server_login_start() -> Result<(), ProtocolError> {
-    let mut client_rng = OsRng;
-    let mut server_rng = OsRng;
-    let server_setup = ServerSetup::<RistrettoSha5123dhNoSlowHash>::new(&mut server_rng)?;
-    let client_registration_start_result =
-        ClientRegistration::<RistrettoSha5123dhNoSlowHash>::start(
-            &mut client_rng,
-            STR_PASSWORD.as_bytes(),
-        )?;
-    let server_registration_start_result =
-        ServerRegistration::<RistrettoSha5123dhNoSlowHash>::start(
+    fn inner<CS: CipherSuite>() -> Result<(), ProtocolError>
+    where
+        // MaskedResponse: (Nonce + Hash) + KePk
+        NonceLen: Add<<CS::Hash as FixedOutput>::OutputSize>,
+        Sum<NonceLen, <CS::Hash as FixedOutput>::OutputSize>:
+            ArrayLength<u8> + Add<<CS::KeGroup as KeGroup>::PkLen>,
+        MaskedResponseLen<CS>: ArrayLength<u8>,
+    {
+        let mut client_rng = OsRng;
+        let mut server_rng = OsRng;
+        let server_setup = ServerSetup::<CS>::new(&mut server_rng);
+        let client_registration_start_result =
+            ClientRegistration::<CS>::start(&mut client_rng, STR_PASSWORD.as_bytes())?;
+        let server_registration_start_result = ServerRegistration::<CS>::start(
             &server_setup,
             client_registration_start_result.message,
             STR_CREDENTIAL_IDENTIFIER.as_bytes(),
         )?;
-    let client_registration_finish_result = client_registration_start_result.state.finish(
-        &mut client_rng,
-        server_registration_start_result.message,
-        ClientRegistrationFinishParameters::default(),
-    )?;
-    let p_file = ServerRegistration::finish(client_registration_finish_result.message);
-    let client_login_start_result = ClientLogin::<RistrettoSha5123dhNoSlowHash>::start(
-        &mut client_rng,
-        STR_PASSWORD.as_bytes(),
-    )?;
-    let server_login_start_result = ServerLogin::<RistrettoSha5123dhNoSlowHash>::start(
-        &mut server_rng,
-        &server_setup,
-        Some(p_file),
-        client_login_start_result.message,
-        STR_CREDENTIAL_IDENTIFIER.as_bytes(),
-        ServerLoginStartParameters::default(),
-    )?;
+        let client_registration_finish_result = client_registration_start_result.state.finish(
+            &mut client_rng,
+            server_registration_start_result.message,
+            ClientRegistrationFinishParameters::default(),
+        )?;
+        let p_file = ServerRegistration::finish(client_registration_finish_result.message);
+        let client_login_start_result =
+            ClientLogin::<CS>::start(&mut client_rng, STR_PASSWORD.as_bytes())?;
+        let server_login_start_result = ServerLogin::<CS>::start(
+            &mut server_rng,
+            &server_setup,
+            Some(p_file),
+            client_login_start_result.message,
+            STR_CREDENTIAL_IDENTIFIER.as_bytes(),
+            ServerLoginStartParameters::default(),
+        )?;
 
-    let mut state = server_login_start_result.state;
-    Zeroize::zeroize(&mut state);
-    for bytes in state.serialize() {
-        assert!(bytes.iter().all(|&x| x == 0));
+        let mut state = server_login_start_result.state;
+        Zeroize::zeroize(&mut state);
+        for byte in state.serialize() {
+            assert_eq!(byte, 0);
+        }
+
+        Ok(())
     }
+
+    #[cfg(feature = "ristretto255")]
+    inner::<Ristretto255>()?;
+    #[cfg(feature = "p256")]
+    inner::<P256>()?;
+    #[cfg(all(feature = "x25519", feature = "ristretto255"))]
+    inner::<X25519Ristretto255>()?;
+    #[cfg(all(feature = "x25519", feature = "p256"))]
+    inner::<X25519P256>()?;
 
     Ok(())
 }
 
 #[test]
 fn test_zeroize_client_login_finish() -> Result<(), ProtocolError> {
-    let mut client_rng = OsRng;
-    let mut server_rng = OsRng;
-    let server_setup = ServerSetup::<RistrettoSha5123dhNoSlowHash>::new(&mut server_rng)?;
-    let client_registration_start_result =
-        ClientRegistration::<RistrettoSha5123dhNoSlowHash>::start(
-            &mut client_rng,
-            STR_PASSWORD.as_bytes(),
-        )?;
-    let server_registration_start_result =
-        ServerRegistration::<RistrettoSha5123dhNoSlowHash>::start(
+    fn inner<CS: CipherSuite>() -> Result<(), ProtocolError>
+    where
+        // MaskedResponse: (Nonce + Hash) + KePk
+        NonceLen: Add<<CS::Hash as FixedOutput>::OutputSize>,
+        Sum<NonceLen, <CS::Hash as FixedOutput>::OutputSize>:
+            ArrayLength<u8> + Add<<CS::KeGroup as KeGroup>::PkLen>,
+        MaskedResponseLen<CS>: ArrayLength<u8>,
+        // CredentialRequest: KgPk + Ke1Message
+        <CS::OprfGroup as Group>::ElemLen: Add<Ke1MessageLen<CS>>,
+        CredentialRequestLen<CS>: ArrayLength<u8>,
+    {
+        let mut client_rng = OsRng;
+        let mut server_rng = OsRng;
+        let server_setup = ServerSetup::<CS>::new(&mut server_rng);
+        let client_registration_start_result =
+            ClientRegistration::<CS>::start(&mut client_rng, STR_PASSWORD.as_bytes())?;
+        let server_registration_start_result = ServerRegistration::<CS>::start(
             &server_setup,
             client_registration_start_result.message,
             STR_CREDENTIAL_IDENTIFIER.as_bytes(),
         )?;
-    let client_registration_finish_result = client_registration_start_result.state.finish(
-        &mut client_rng,
-        server_registration_start_result.message,
-        ClientRegistrationFinishParameters::default(),
-    )?;
-    let p_file = ServerRegistration::finish(client_registration_finish_result.message);
-    let client_login_start_result = ClientLogin::<RistrettoSha5123dhNoSlowHash>::start(
-        &mut client_rng,
-        STR_PASSWORD.as_bytes(),
-    )?;
-    let server_login_start_result = ServerLogin::<RistrettoSha5123dhNoSlowHash>::start(
-        &mut server_rng,
-        &server_setup,
-        Some(p_file),
-        client_login_start_result.message,
-        STR_CREDENTIAL_IDENTIFIER.as_bytes(),
-        ServerLoginStartParameters::default(),
-    )?;
-    let client_login_finish_result = client_login_start_result.state.finish(
-        server_login_start_result.message,
-        ClientLoginFinishParameters::default(),
-    )?;
+        let client_registration_finish_result = client_registration_start_result.state.finish(
+            &mut client_rng,
+            server_registration_start_result.message,
+            ClientRegistrationFinishParameters::default(),
+        )?;
+        let p_file = ServerRegistration::finish(client_registration_finish_result.message);
+        let client_login_start_result =
+            ClientLogin::<CS>::start(&mut client_rng, STR_PASSWORD.as_bytes())?;
+        let server_login_start_result = ServerLogin::<CS>::start(
+            &mut server_rng,
+            &server_setup,
+            Some(p_file),
+            client_login_start_result.message,
+            STR_CREDENTIAL_IDENTIFIER.as_bytes(),
+            ServerLoginStartParameters::default(),
+        )?;
+        let client_login_finish_result = client_login_start_result.state.finish(
+            server_login_start_result.message,
+            ClientLoginFinishParameters::default(),
+        )?;
 
-    let mut state = client_login_finish_result.state;
-    Zeroize::zeroize(&mut state);
-    for bytes in state.to_vec() {
-        assert!(bytes.iter().all(|&x| x == 0));
+        let mut state = client_login_finish_result.state;
+        Zeroize::zeroize(&mut state);
+        for byte in state.to_vec() {
+            assert_eq!(byte, 0);
+        }
+
+        Ok(())
     }
+
+    #[cfg(feature = "ristretto255")]
+    inner::<Ristretto255>()?;
+    #[cfg(feature = "p256")]
+    inner::<P256>()?;
+    #[cfg(all(feature = "x25519", feature = "ristretto255"))]
+    inner::<X25519Ristretto255>()?;
+    #[cfg(all(feature = "x25519", feature = "p256"))]
+    inner::<X25519P256>()?;
 
     Ok(())
 }
 
 #[test]
 fn test_zeroize_server_login_finish() -> Result<(), ProtocolError> {
-    let mut client_rng = OsRng;
-    let mut server_rng = OsRng;
-    let server_setup = ServerSetup::<RistrettoSha5123dhNoSlowHash>::new(&mut server_rng)?;
-    let client_registration_start_result =
-        ClientRegistration::<RistrettoSha5123dhNoSlowHash>::start(
-            &mut client_rng,
-            STR_PASSWORD.as_bytes(),
-        )?;
-    let server_registration_start_result =
-        ServerRegistration::<RistrettoSha5123dhNoSlowHash>::start(
+    fn inner<CS: CipherSuite>() -> Result<(), ProtocolError>
+    where
+        // MaskedResponse: (Nonce + Hash) + KePk
+        NonceLen: Add<<CS::Hash as FixedOutput>::OutputSize>,
+        Sum<NonceLen, <CS::Hash as FixedOutput>::OutputSize>:
+            ArrayLength<u8> + Add<<CS::KeGroup as KeGroup>::PkLen>,
+        MaskedResponseLen<CS>: ArrayLength<u8>,
+    {
+        let mut client_rng = OsRng;
+        let mut server_rng = OsRng;
+        let server_setup = ServerSetup::<CS>::new(&mut server_rng);
+        let client_registration_start_result =
+            ClientRegistration::<CS>::start(&mut client_rng, STR_PASSWORD.as_bytes())?;
+        let server_registration_start_result = ServerRegistration::<CS>::start(
             &server_setup,
             client_registration_start_result.message,
             STR_CREDENTIAL_IDENTIFIER.as_bytes(),
         )?;
-    let client_registration_finish_result = client_registration_start_result.state.finish(
-        &mut client_rng,
-        server_registration_start_result.message,
-        ClientRegistrationFinishParameters::default(),
-    )?;
-    let p_file = ServerRegistration::finish(client_registration_finish_result.message);
-    let client_login_start_result = ClientLogin::<RistrettoSha5123dhNoSlowHash>::start(
-        &mut client_rng,
-        STR_PASSWORD.as_bytes(),
-    )?;
-    let server_login_start_result = ServerLogin::<RistrettoSha5123dhNoSlowHash>::start(
-        &mut server_rng,
-        &server_setup,
-        Some(p_file),
-        client_login_start_result.message,
-        STR_CREDENTIAL_IDENTIFIER.as_bytes(),
-        ServerLoginStartParameters::default(),
-    )?;
-    let client_login_finish_result = client_login_start_result.state.finish(
-        server_login_start_result.message,
-        ClientLoginFinishParameters::default(),
-    )?;
-    let server_login_finish_result = server_login_start_result
-        .state
-        .finish(client_login_finish_result.message)?;
+        let client_registration_finish_result = client_registration_start_result.state.finish(
+            &mut client_rng,
+            server_registration_start_result.message,
+            ClientRegistrationFinishParameters::default(),
+        )?;
+        let p_file = ServerRegistration::finish(client_registration_finish_result.message);
+        let client_login_start_result =
+            ClientLogin::<CS>::start(&mut client_rng, STR_PASSWORD.as_bytes())?;
+        let server_login_start_result = ServerLogin::<CS>::start(
+            &mut server_rng,
+            &server_setup,
+            Some(p_file),
+            client_login_start_result.message,
+            STR_CREDENTIAL_IDENTIFIER.as_bytes(),
+            ServerLoginStartParameters::default(),
+        )?;
+        let client_login_finish_result = client_login_start_result.state.finish(
+            server_login_start_result.message,
+            ClientLoginFinishParameters::default(),
+        )?;
+        let server_login_finish_result = server_login_start_result
+            .state
+            .finish(client_login_finish_result.message)?;
 
-    let mut state = server_login_finish_result.state;
-    Zeroize::zeroize(&mut state);
-    for bytes in state.serialize() {
-        assert!(bytes.iter().all(|&x| x == 0));
+        let mut state = server_login_finish_result.state;
+        Zeroize::zeroize(&mut state);
+        for byte in state.serialize() {
+            assert_eq!(byte, 0);
+        }
+
+        Ok(())
     }
+
+    #[cfg(feature = "ristretto255")]
+    inner::<Ristretto255>()?;
+    #[cfg(feature = "p256")]
+    inner::<P256>()?;
+    #[cfg(all(feature = "x25519", feature = "ristretto255"))]
+    inner::<X25519Ristretto255>()?;
+    #[cfg(all(feature = "x25519", feature = "p256"))]
+    inner::<X25519P256>()?;
 
     Ok(())
 }
 
 #[test]
 fn test_scalar_always_nonzero() -> Result<(), ProtocolError> {
-    // Start out with a bunch of zeros to force resampling of scalar
-    let mut client_registration_rng = CycleRng::new([vec![0u8; 128], vec![1u8; 128]].concat());
-    let client_registration_start_result =
-        ClientRegistration::<RistrettoSha5123dhNoSlowHash>::start(
-            &mut client_registration_rng,
-            STR_PASSWORD.as_bytes(),
-        )?;
+    fn inner<CS: CipherSuite>() -> Result<(), ProtocolError> {
+        // Start out with a bunch of zeros to force resampling of scalar
+        let mut client_registration_rng = CycleRng::new([vec![0u8; 128], vec![1u8; 128]].concat());
+        let client_registration_start_result =
+            ClientRegistration::<CS>::start(&mut client_registration_rng, STR_PASSWORD.as_bytes())?;
 
-    assert_ne!(
-        RistrettoPoint::identity(),
-        client_registration_start_result
-            .message
-            .get_blinded_element_for_testing()
-            .value(),
-    );
+        assert!(!bool::from(
+            CS::OprfGroup::identity().ct_eq(
+                &client_registration_start_result
+                    .message
+                    .get_blinded_element_for_testing()
+                    .value(),
+            )
+        ));
 
-    // Start out with a bunch of zeros to force resampling of scalar
-    let mut client_login_rng = CycleRng::new([vec![0u8; 128], vec![1u8; 128]].concat());
-    let client_login_start_result = ClientLogin::<RistrettoSha5123dhNoSlowHash>::start(
-        &mut client_login_rng,
-        STR_PASSWORD.as_bytes(),
-    )?;
+        // Start out with a bunch of zeros to force resampling of scalar
+        let mut client_login_rng = CycleRng::new([vec![0u8; 128], vec![1u8; 128]].concat());
+        let client_login_start_result =
+            ClientLogin::<CS>::start(&mut client_login_rng, STR_PASSWORD.as_bytes())?;
 
-    assert_ne!(
-        RistrettoPoint::identity(),
-        client_login_start_result
-            .message
-            .get_blinded_element_for_testing()
-            .value(),
-    );
+        assert!(!bool::from(
+            CS::OprfGroup::identity().ct_eq(
+                &client_login_start_result
+                    .message
+                    .get_blinded_element_for_testing()
+                    .value(),
+            )
+        ));
+
+        Ok(())
+    }
+
+    #[cfg(feature = "ristretto255")]
+    inner::<Ristretto255>()?;
+    #[cfg(feature = "p256")]
+    inner::<P256>()?;
+    #[cfg(all(feature = "x25519", feature = "ristretto255"))]
+    inner::<X25519Ristretto255>()?;
+    #[cfg(all(feature = "x25519", feature = "p256"))]
+    inner::<X25519P256>()?;
 
     Ok(())
 }
 
 #[test]
 fn test_reflected_value_error_registration() -> Result<(), ProtocolError> {
-    let credential_identifier = b"credentialIdentifier";
-    let password = b"password";
-    let mut client_rng = OsRng;
-    let mut server_rng = OsRng;
-    let server_setup = ServerSetup::<RistrettoSha5123dhNoSlowHash>::new(&mut server_rng)?;
-    let client_registration_start_result =
-        ClientRegistration::<RistrettoSha5123dhNoSlowHash>::start(&mut client_rng, password)?;
-    let alpha = client_registration_start_result
-        .message
-        .get_blinded_element_for_testing()
-        .value();
-    let server_registration_start_result =
-        ServerRegistration::<RistrettoSha5123dhNoSlowHash>::start(
+    fn inner<CS: CipherSuite>() -> Result<(), ProtocolError> {
+        let credential_identifier = b"credentialIdentifier";
+        let password = b"password";
+        let mut client_rng = OsRng;
+        let mut server_rng = OsRng;
+        let server_setup = ServerSetup::<CS>::new(&mut server_rng);
+        let client_registration_start_result =
+            ClientRegistration::<CS>::start(&mut client_rng, password)?;
+        let alpha = client_registration_start_result
+            .message
+            .get_blinded_element_for_testing()
+            .value();
+        let server_registration_start_result = ServerRegistration::<CS>::start(
             &server_setup,
             client_registration_start_result.message,
             credential_identifier,
         )?;
 
-    let reflected_registration_response = server_registration_start_result
-        .message
-        .set_evaluation_element_for_testing(alpha);
+        let reflected_registration_response = server_registration_start_result
+            .message
+            .set_evaluation_element_for_testing(alpha);
 
-    let client_registration_finish_result = client_registration_start_result.state.finish(
-        &mut client_rng,
-        reflected_registration_response,
-        ClientRegistrationFinishParameters::default(),
-    );
+        let client_registration_finish_result = client_registration_start_result.state.finish(
+            &mut client_rng,
+            reflected_registration_response,
+            ClientRegistrationFinishParameters::default(),
+        );
 
-    assert!(match client_registration_finish_result {
-        Err(ProtocolError::ReflectedValueError) => true,
-        _ => false,
-    });
+        assert!(matches!(
+            client_registration_finish_result,
+            Err(ProtocolError::ReflectedValueError)
+        ));
+
+        Ok(())
+    }
+
+    #[cfg(feature = "ristretto255")]
+    inner::<Ristretto255>()?;
+    #[cfg(feature = "p256")]
+    inner::<P256>()?;
+    #[cfg(all(feature = "x25519", feature = "ristretto255"))]
+    inner::<X25519Ristretto255>()?;
+    #[cfg(all(feature = "x25519", feature = "p256"))]
+    inner::<X25519P256>()?;
 
     Ok(())
 }
 
 #[test]
 fn test_reflected_value_error_login() -> Result<(), ProtocolError> {
-    let credential_identifier = b"credentialIdentifier";
-    let password = b"password";
-    let mut client_rng = OsRng;
-    let mut server_rng = OsRng;
-    let server_setup = ServerSetup::<RistrettoSha5123dhNoSlowHash>::new(&mut server_rng)?;
-    let client_registration_start_result =
-        ClientRegistration::<RistrettoSha5123dhNoSlowHash>::start(&mut client_rng, password)?;
-    let server_registration_start_result =
-        ServerRegistration::<RistrettoSha5123dhNoSlowHash>::start(
+    fn inner<CS: CipherSuite>() -> Result<(), ProtocolError>
+    where
+        // MaskedResponse: (Nonce + Hash) + KePk
+        NonceLen: Add<<CS::Hash as FixedOutput>::OutputSize>,
+        Sum<NonceLen, <CS::Hash as FixedOutput>::OutputSize>:
+            ArrayLength<u8> + Add<<CS::KeGroup as KeGroup>::PkLen>,
+        MaskedResponseLen<CS>: ArrayLength<u8>,
+    {
+        let credential_identifier = b"credentialIdentifier";
+        let password = b"password";
+        let mut client_rng = OsRng;
+        let mut server_rng = OsRng;
+        let server_setup = ServerSetup::<CS>::new(&mut server_rng);
+        let client_registration_start_result =
+            ClientRegistration::<CS>::start(&mut client_rng, password)?;
+        let server_registration_start_result = ServerRegistration::<CS>::start(
             &server_setup,
             client_registration_start_result.message,
             credential_identifier,
         )?;
-    let client_registration_finish_result = client_registration_start_result.state.finish(
-        &mut client_rng,
-        server_registration_start_result.message,
-        ClientRegistrationFinishParameters::default(),
-    )?;
-    let p_file = ServerRegistration::finish(client_registration_finish_result.message);
-    let client_login_start_result =
-        ClientLogin::<RistrettoSha5123dhNoSlowHash>::start(&mut client_rng, password)?;
-    let alpha = client_login_start_result
-        .message
-        .get_blinded_element_for_testing()
-        .value();
-    let server_login_start_result = ServerLogin::<RistrettoSha5123dhNoSlowHash>::start(
-        &mut server_rng,
-        &server_setup,
-        Some(p_file),
-        client_login_start_result.message,
-        credential_identifier,
-        ServerLoginStartParameters::default(),
-    )?;
+        let client_registration_finish_result = client_registration_start_result.state.finish(
+            &mut client_rng,
+            server_registration_start_result.message,
+            ClientRegistrationFinishParameters::default(),
+        )?;
+        let p_file = ServerRegistration::finish(client_registration_finish_result.message);
+        let client_login_start_result = ClientLogin::<CS>::start(&mut client_rng, password)?;
+        let alpha = client_login_start_result
+            .message
+            .get_blinded_element_for_testing()
+            .value();
+        let server_login_start_result = ServerLogin::<CS>::start(
+            &mut server_rng,
+            &server_setup,
+            Some(p_file),
+            client_login_start_result.message,
+            credential_identifier,
+            ServerLoginStartParameters::default(),
+        )?;
 
-    let reflected_credential_response = server_login_start_result
-        .message
-        .set_evaluation_element_for_testing(alpha);
+        let reflected_credential_response = server_login_start_result
+            .message
+            .set_evaluation_element_for_testing(alpha);
 
-    let client_login_result = client_login_start_result.state.finish(
-        reflected_credential_response,
-        ClientLoginFinishParameters::default(),
-    );
+        let client_login_result = client_login_start_result.state.finish(
+            reflected_credential_response,
+            ClientLoginFinishParameters::default(),
+        );
 
-    assert!(match client_login_result {
-        Err(ProtocolError::ReflectedValueError) => true,
-        _ => false,
-    });
+        assert!(matches!(
+            client_login_result,
+            Err(ProtocolError::ReflectedValueError)
+        ));
+        Ok(())
+    }
+
+    #[cfg(feature = "ristretto255")]
+    inner::<Ristretto255>()?;
+    #[cfg(feature = "p256")]
+    inner::<P256>()?;
+    #[cfg(all(feature = "x25519", feature = "ristretto255"))]
+    inner::<X25519Ristretto255>()?;
+    #[cfg(all(feature = "x25519", feature = "p256"))]
+    inner::<X25519P256>()?;
+
     Ok(())
 }

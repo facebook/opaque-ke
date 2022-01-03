@@ -22,6 +22,7 @@
 //! messages over "the wire" to the server. These bytes are serialized
 //! and explicitly annotated in the below functions.
 
+use generic_array::GenericArray;
 use rustyline::error::ReadlineError;
 use rustyline::Editor;
 use std::collections::HashMap;
@@ -31,13 +32,16 @@ use opaque_ke::{
     ciphersuite::CipherSuite, rand::rngs::OsRng, ClientLogin, ClientLoginFinishParameters,
     ClientRegistration, ClientRegistrationFinishParameters, CredentialFinalization,
     CredentialRequest, CredentialResponse, RegistrationRequest, RegistrationResponse,
-    RegistrationUpload, ServerLogin, ServerLoginStartParameters, ServerRegistration, ServerSetup,
+    RegistrationUpload, ServerLogin, ServerLoginStartParameters, ServerRegistration,
+    ServerRegistrationLen, ServerSetup,
 };
 
 // The ciphersuite trait allows to specify the underlying primitives
 // that will be used in the OPAQUE protocol
 #[allow(dead_code)]
 struct Default;
+
+#[cfg(feature = "ristretto255")]
 impl CipherSuite for Default {
     type OprfGroup = curve25519_dalek::ristretto::RistrettoPoint;
     type KeGroup = curve25519_dalek::ristretto::RistrettoPoint;
@@ -46,32 +50,35 @@ impl CipherSuite for Default {
     type SlowHash = opaque_ke::slow_hash::NoOpHash;
 }
 
+#[cfg(not(feature = "ristretto255"))]
+impl CipherSuite for Default {
+    type OprfGroup = p256_::ProjectivePoint;
+    type KeGroup = p256_::PublicKey;
+    type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
+    type Hash = sha2::Sha256;
+    type SlowHash = opaque_ke::slow_hash::NoOpHash;
+}
+
 // Password-based registration between a client and server
 fn account_registration(
     server_setup: &ServerSetup<Default>,
     username: String,
     password: String,
-) -> Vec<u8> {
+) -> GenericArray<u8, ServerRegistrationLen<Default>> {
     let mut client_rng = OsRng;
     let client_registration_start_result =
         ClientRegistration::<Default>::start(&mut client_rng, password.as_bytes()).unwrap();
-    let registration_request_bytes = client_registration_start_result
-        .message
-        .serialize()
-        .unwrap();
+    let registration_request_bytes = client_registration_start_result.message.serialize();
 
     // Client sends registration_request_bytes to server
 
     let server_registration_start_result = ServerRegistration::<Default>::start(
-        &server_setup,
-        RegistrationRequest::deserialize(&registration_request_bytes[..]).unwrap(),
+        server_setup,
+        RegistrationRequest::deserialize(&registration_request_bytes).unwrap(),
         username.as_bytes(),
     )
     .unwrap();
-    let registration_response_bytes = server_registration_start_result
-        .message
-        .serialize()
-        .unwrap();
+    let registration_response_bytes = server_registration_start_result.message.serialize();
 
     // Server sends registration_response_bytes to client
 
@@ -79,21 +86,18 @@ fn account_registration(
         .state
         .finish(
             &mut client_rng,
-            RegistrationResponse::deserialize(&registration_response_bytes[..]).unwrap(),
+            RegistrationResponse::deserialize(&registration_response_bytes).unwrap(),
             ClientRegistrationFinishParameters::default(),
         )
         .unwrap();
-    let message_bytes = client_finish_registration_result
-        .message
-        .serialize()
-        .unwrap();
+    let message_bytes = client_finish_registration_result.message.serialize();
 
     // Client sends message_bytes to server
 
     let password_file = ServerRegistration::finish(
-        RegistrationUpload::<Default>::deserialize(&message_bytes[..]).unwrap(),
+        RegistrationUpload::<Default>::deserialize(&message_bytes).unwrap(),
     );
-    password_file.serialize().unwrap()
+    password_file.serialize()
 }
 
 // Password-based login between a client and server
@@ -106,7 +110,7 @@ fn account_login(
     let mut client_rng = OsRng;
     let client_login_start_result =
         ClientLogin::<Default>::start(&mut client_rng, password.as_bytes()).unwrap();
-    let credential_request_bytes = client_login_start_result.message.serialize().unwrap();
+    let credential_request_bytes = client_login_start_result.message.serialize();
 
     // Client sends credential_request_bytes to server
 
@@ -114,19 +118,19 @@ fn account_login(
     let mut server_rng = OsRng;
     let server_login_start_result = ServerLogin::start(
         &mut server_rng,
-        &server_setup,
+        server_setup,
         Some(password_file),
-        CredentialRequest::deserialize(&credential_request_bytes[..]).unwrap(),
+        CredentialRequest::deserialize(&credential_request_bytes).unwrap(),
         username.as_bytes(),
         ServerLoginStartParameters::default(),
     )
     .unwrap();
-    let credential_response_bytes = server_login_start_result.message.serialize().unwrap();
+    let credential_response_bytes = server_login_start_result.message.serialize();
 
     // Server sends credential_response_bytes to client
 
     let result = client_login_start_result.state.finish(
-        CredentialResponse::deserialize(&credential_response_bytes[..]).unwrap(),
+        CredentialResponse::deserialize(&credential_response_bytes).unwrap(),
         ClientLoginFinishParameters::default(),
     );
 
@@ -135,13 +139,13 @@ fn account_login(
         return false;
     }
     let client_login_finish_result = result.unwrap();
-    let credential_finalization_bytes = client_login_finish_result.message.serialize().unwrap();
+    let credential_finalization_bytes = client_login_finish_result.message.serialize();
 
     // Client sends credential_finalization_bytes to server
 
     let server_login_finish_result = server_login_start_result
         .state
-        .finish(CredentialFinalization::deserialize(&credential_finalization_bytes[..]).unwrap())
+        .finish(CredentialFinalization::deserialize(&credential_finalization_bytes).unwrap())
         .unwrap();
 
     client_login_finish_result.session_key == server_login_finish_result.session_key
@@ -149,10 +153,11 @@ fn account_login(
 
 fn main() {
     let mut rng = OsRng;
-    let server_setup = ServerSetup::<Default>::new(&mut rng).unwrap();
+    let server_setup = ServerSetup::<Default>::new(&mut rng);
 
     let mut rl = Editor::<()>::new();
-    let mut registered_users = HashMap::<String, Vec<u8>>::new();
+    let mut registered_users =
+        HashMap::<String, GenericArray<u8, ServerRegistrationLen<Default>>>::new();
     loop {
         println!(
             "\nCurrently registered usernames: {:?}\n",

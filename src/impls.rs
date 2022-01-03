@@ -5,139 +5,67 @@
 // License, Version 2.0 found in the LICENSE-APACHE file in the root directory
 // of this source tree.
 
-macro_rules! impl_debug_eq_hash_for {
-    (struct $name:ident$(<$($gen:ident$(: $bound:tt)?),+$(,)?>)?, [$field1:ident$(, $field2:ident)*$(,)?]$(, )?$([$($type:ty),+$(,)?]$(,)?)?) => {
-        impl$(<$($gen$(: $bound)?),+>)? core::fmt::Debug for $name$(<$($gen),+>)?
-        $(where $($type: core::fmt::Debug,)+)?
-        {
-            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-                f.debug_struct("$name")
-                .field("$field1", &self.$field1)
-                $(.field("$field2", &self.$field2))*
-                .finish()
-            }
-        }
-
-        impl$(<$($gen$(: $bound)?),+>)? Eq for $name$(<$($gen),+>)?
-        $(where $($type: Eq,)+)?
-        {}
-
-        impl$(<$($gen$(: $bound)?),+>)? PartialEq for $name$(<$($gen),+>)?
-        $(where $($type: PartialEq,)+)?
-        {
-            fn eq(&self, other: &Self) -> bool {
-                PartialEq::eq(&self.$field1, &other.$field1)
-                $(&& PartialEq::eq(&self.$field2, &other.$field2))*
-            }
-        }
-
-        impl$(<$($gen$(: $bound)?),+>)? core::hash::Hash for $name$(<$($gen),+>)?
-        $(where $($type: core::hash::Hash,)+)?
-        {
-            fn hash<H: core::hash::Hasher>(&self, state: &mut H) {
-                core::hash::Hash::hash(&self.$field1, state);
-                $(core::hash::Hash::hash(&self.$field2, state);)*
-            }
-        }
-    };
-    (tuple $name:ident$(<$($gen:ident$(: $bound:tt)?),+$(,)?>)?, [$field1:tt$(, $field2:tt)*$(,)?]$(, )?$([$($type:ty),+$(,)?]$(,)?)?) => {
-        impl$(<$($gen$(: $bound)?),+>)? core::fmt::Debug for $name$(<$($gen),+>)?
-        $(where $($type: core::fmt::Debug,)+)?
-        {
-            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-                f.debug_tuple("$name")
-                .field(&self.$field1)
-                $(.field(&self.$field2))*
-                .finish()
-            }
-        }
-
-        impl$(<$($gen$(: $bound)?),+>)? Eq for $name$(<$($gen),+>)?
-        $(where $($type: Eq,)+)?
-        {}
-
-        impl$(<$($gen$(: $bound)?),+>)? PartialEq for $name$(<$($gen),+>)?
-        $(where $($type: PartialEq,)+)?
-        {
-            fn eq(&self, other: &Self) -> bool {
-                PartialEq::eq(&self.$field1, &other.$field1)
-                $(&& PartialEq::eq(&self.$field2, &other.$field2))*
-            }
-        }
-
-        impl$(<$($gen$(: $bound)?),+>)? core::hash::Hash for $name$(<$($gen),+>)?
-        $(where $($type: core::hash::Hash,)+)?
-        {
-            fn hash<H: core::hash::Hasher>(&self, state: &mut H) {
-                core::hash::Hash::hash(&self.$field1, state);
-                $(core::hash::Hash::hash(&self.$field2, state);)*
-            }
-        }
-    };
-}
-
-macro_rules! impl_clone_for {
-    (struct $name:ident$(<$($gen:ident$(: $bound:tt)?),+$(,)?>)?, [$field1:ident$(, $field2:ident)*$(,)?]$(, )?$([$($type:ty),+$(,)?]$(,)?)?) => {
-        impl$(<$($gen$(: $bound)?),+>)? Clone for $name$(<$($gen),+>)?
-        $(where $($type: Clone,)+)?
-        {
-            fn clone(&self) -> Self {
-                Self {
-                    $field1: self.$field1.clone(),
-                    $($field2: self.$field2.clone(),)*
-                }
-            }
-        }
-    };
-    (tuple $name:ident$(<$($gen:ident$(: $bound:tt)?),+$(,)?>)?, [$field1:tt$(, $field2:tt)*$(,)?]$(, )?$([$($type:ty),+$(,)?]$(,)?)?) => {
-        impl$(<$($gen$(: $bound)?),+>)? Clone for $name$(<$($gen),+>)?
-        $(where $($type: Clone,)+)?
-        {
-            fn clone(&self) -> Self {
-                Self(
-                    self.$field1.clone(),
-                    $(self.$field2.clone(),)*
-                )
-            }
-        }
-    };
-}
-
-/// Inner macro used for deriving `serde`'s `Serialize` and `Deserialize` traits.
+/// Macro used for deriving `serde`'s `Serialize` and `Deserialize` traits.
 macro_rules! impl_serialize_and_deserialize_for {
-    ($t:ident) => {
-        #[cfg(feature = "serialize")]
-        impl<CS: CipherSuite> serde::Serialize for $t<CS> {
+    ($item:ident$( where $($path:ty: $bound1:path $(| $bound2:path)*),+$(,)?)?$(; $error:expr)?) => {
+        #[cfg(feature = "serde")]
+        impl<CS: CipherSuite> serde_::Serialize for $item<CS>
+        $(where
+            $($path: $bound1 $(+ $bound2)*),+
+        )?
+        {
             fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
             where
-                S: serde::Serializer,
+                S: serde_::Serializer,
             {
-                use serde::ser::Error;
-
-                if serializer.is_human_readable() {
-                    serializer
-                        .serialize_str(&base64::encode(&self.serialize().map_err(Error::custom)?))
-                } else {
-                    serializer.serialize_bytes(&self.serialize().map_err(Error::custom)?)
-                }
+                serializer.serialize_bytes(&self.serialize()$(.map_err($error)?)?)
             }
         }
 
-        #[cfg(feature = "serialize")]
-        impl<'de, CS: CipherSuite> serde::Deserialize<'de> for $t<CS> {
+        #[cfg(feature = "serde")]
+        impl<'de, CS: CipherSuite> serde_::Deserialize<'de> for $item<CS>
+        {
             fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
             where
-                D: serde::Deserializer<'de>,
+                D: serde_::Deserializer<'de>,
             {
-                use serde::de::Error;
+                use serde_::de::Error;
 
-                if deserializer.is_human_readable() {
-                    let s = <&str>::deserialize(deserializer)?;
-                    Self::deserialize(&base64::decode(s).map_err(Error::custom)?)
-                } else {
-                    Self::deserialize(<&[u8]>::deserialize(deserializer)?)
+                struct ByteVisitor<CS: CipherSuite>(core::marker::PhantomData<CS>);
+
+                impl<'de, CS: CipherSuite> serde_::de::Visitor<'de> for ByteVisitor<CS>
+                {
+                    type Value = $item<CS>;
+
+                    fn expecting(
+                        &self,
+                        formatter: &mut core::fmt::Formatter,
+                    ) -> core::fmt::Result {
+                        formatter.write_str(core::concat!(
+                            "the byte representation of a ",
+                            core::stringify!($t)
+                        ))
+                    }
+
+                    fn visit_bytes<E>(self, value: &[u8]) -> Result<Self::Value, E>
+                    where
+                        E: Error,
+                    {
+                        $item::<CS>::deserialize(value).map_err(|_| {
+                            Error::invalid_value(
+                                serde_::de::Unexpected::Bytes(value),
+                                &core::concat!(
+                                    "invalid byte sequence for ",
+                                    core::stringify!($t)
+                                ),
+                            )
+                        })
+                    }
                 }
-                .map_err(Error::custom)
+
+                deserializer
+                    .deserialize_bytes(ByteVisitor::<CS>(core::marker::PhantomData))
+                    .map_err(Error::custom)
             }
         }
     };

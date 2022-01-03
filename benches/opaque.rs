@@ -12,16 +12,20 @@ use criterion::Criterion;
 use opaque_ke::*;
 use rand::rngs::OsRng;
 
-#[cfg(all(not(feature = "p256"), feature = "u64_backend"))]
-static SUFFIX: &str = "u64_backend";
-#[cfg(all(not(feature = "p256"), feature = "u32_backend"))]
-static SUFFIX: &str = "u32_backend";
-#[cfg(feature = "p256")]
+#[cfg(feature = "ristretto255_u64")]
+static SUFFIX: &str = "ristretto255_u64";
+#[cfg(feature = "ristretto255_u32")]
+static SUFFIX: &str = "ristretto255_u32";
+#[cfg(feature = "ristretto255_fiat_u64")]
+static SUFFIX: &str = "ristretto255_fiat_u64";
+#[cfg(feature = "ristretto255_fiat_u32")]
+static SUFFIX: &str = "ristretto255_fiat_u32";
+#[cfg(all(not(feature = "ristretto255"), feature = "p256"))]
 static SUFFIX: &str = "p256";
 
 struct Default;
 
-#[cfg(not(feature = "p256"))]
+#[cfg(feature = "ristretto255")]
 impl CipherSuite for Default {
     type OprfGroup = curve25519_dalek::ristretto::RistrettoPoint;
     type KeGroup = curve25519_dalek::ristretto::RistrettoPoint;
@@ -30,10 +34,10 @@ impl CipherSuite for Default {
     type SlowHash = opaque_ke::slow_hash::NoOpHash;
 }
 
-#[cfg(feature = "p256")]
+#[cfg(not(feature = "ristretto255"))]
 impl CipherSuite for Default {
     type OprfGroup = p256_::ProjectivePoint;
-    type KeGroup = p256_::ProjectivePoint;
+    type KeGroup = p256_::PublicKey;
     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
     type Hash = sha2::Sha256;
     type SlowHash = opaque_ke::slow_hash::NoOpHash;
@@ -44,7 +48,7 @@ fn server_setup(c: &mut Criterion) {
 
     c.bench_function(&format!("server setup ({})", SUFFIX), move |b| {
         b.iter(|| {
-            ServerSetup::<Default>::new(&mut rng).unwrap();
+            ServerSetup::<Default>::new(&mut rng);
         })
     });
 }
@@ -57,7 +61,7 @@ fn client_registration_start(c: &mut Criterion) {
         &format!("client registration start ({})", SUFFIX),
         move |b| {
             b.iter(|| {
-                ClientRegistration::<Default>::start(&mut rng, &password[..]).unwrap();
+                ClientRegistration::<Default>::start(&mut rng, password).unwrap();
             })
         },
     );
@@ -67,9 +71,9 @@ fn server_registration_start(c: &mut Criterion) {
     let mut rng = OsRng;
     let username = b"username";
     let password = b"password";
-    let server_setup = ServerSetup::<Default>::new(&mut rng).unwrap();
+    let server_setup = ServerSetup::<Default>::new(&mut rng);
     let client_registration_start_result =
-        ClientRegistration::<Default>::start(&mut rng, &password[..]).unwrap();
+        ClientRegistration::<Default>::start(&mut rng, password).unwrap();
 
     c.bench_function(
         &format!("server registration start ({})", SUFFIX),
@@ -78,7 +82,7 @@ fn server_registration_start(c: &mut Criterion) {
                 ServerRegistration::<Default>::start(
                     &server_setup,
                     client_registration_start_result.message.clone(),
-                    &username[..],
+                    username,
                 )
                 .unwrap();
             })
@@ -90,13 +94,13 @@ fn client_registration_finish(c: &mut Criterion) {
     let mut rng = OsRng;
     let username = b"username";
     let password = b"password";
-    let server_setup = ServerSetup::<Default>::new(&mut rng).unwrap();
+    let server_setup = ServerSetup::<Default>::new(&mut rng);
     let client_registration_start_result =
-        ClientRegistration::<Default>::start(&mut rng, &password[..]).unwrap();
+        ClientRegistration::<Default>::start(&mut rng, password).unwrap();
     let server_registration_start_result = ServerRegistration::<Default>::start(
         &server_setup,
         client_registration_start_result.message.clone(),
-        &username[..],
+        username,
     )
     .unwrap();
 
@@ -122,21 +126,20 @@ fn server_registration_finish(c: &mut Criterion) {
     let mut rng = OsRng;
     let username = b"username";
     let password = b"password";
-    let server_setup = ServerSetup::<Default>::new(&mut rng).unwrap();
+    let server_setup = ServerSetup::<Default>::new(&mut rng);
     let client_registration_start_result =
-        ClientRegistration::<Default>::start(&mut rng, &password[..]).unwrap();
+        ClientRegistration::<Default>::start(&mut rng, password).unwrap();
     let server_registration_start_result = ServerRegistration::<Default>::start(
         &server_setup,
         client_registration_start_result.message.clone(),
-        &username[..],
+        username,
     )
     .unwrap();
     let client_registration_finish_result = client_registration_start_result
-        .clone()
         .state
         .finish(
             &mut rng,
-            server_registration_start_result.message.clone(),
+            server_registration_start_result.message,
             ClientRegistrationFinishParameters::default(),
         )
         .unwrap();
@@ -157,7 +160,7 @@ fn client_login_start(c: &mut Criterion) {
 
     c.bench_function(&format!("client login start ({})", SUFFIX), move |b| {
         b.iter(|| {
-            ClientLogin::<Default>::start(&mut rng, &password[..]).unwrap();
+            ClientLogin::<Default>::start(&mut rng, password).unwrap();
         })
     });
 }
@@ -166,26 +169,25 @@ fn server_login_start_real(c: &mut Criterion) {
     let mut rng = OsRng;
     let username = b"username";
     let password = b"password";
-    let server_setup = ServerSetup::<Default>::new(&mut rng).unwrap();
+    let server_setup = ServerSetup::<Default>::new(&mut rng);
     let client_registration_start_result =
-        ClientRegistration::<Default>::start(&mut rng, &password[..]).unwrap();
+        ClientRegistration::<Default>::start(&mut rng, password).unwrap();
     let server_registration_start_result = ServerRegistration::<Default>::start(
         &server_setup,
         client_registration_start_result.message.clone(),
-        &username[..],
+        username,
     )
     .unwrap();
     let client_registration_finish_result = client_registration_start_result
-        .clone()
         .state
         .finish(
             &mut rng,
-            server_registration_start_result.message.clone(),
+            server_registration_start_result.message,
             ClientRegistrationFinishParameters::default(),
         )
         .unwrap();
     let password_file = ServerRegistration::finish(client_registration_finish_result.message);
-    let client_login_start_result = ClientLogin::<Default>::start(&mut rng, &password[..]).unwrap();
+    let client_login_start_result = ClientLogin::<Default>::start(&mut rng, password).unwrap();
 
     c.bench_function(
         &format!("server login start (real) ({})", SUFFIX),
@@ -196,7 +198,7 @@ fn server_login_start_real(c: &mut Criterion) {
                     &server_setup,
                     Some(password_file.clone()),
                     client_login_start_result.clone().message,
-                    &username[..],
+                    username,
                     ServerLoginStartParameters::default(),
                 )
                 .unwrap();
@@ -209,8 +211,8 @@ fn server_login_start_fake(c: &mut Criterion) {
     let mut rng = OsRng;
     let username = b"username";
     let password = b"password";
-    let server_setup = ServerSetup::<Default>::new(&mut rng).unwrap();
-    let client_login_start_result = ClientLogin::<Default>::start(&mut rng, &password[..]).unwrap();
+    let server_setup = ServerSetup::<Default>::new(&mut rng);
+    let client_login_start_result = ClientLogin::<Default>::start(&mut rng, password).unwrap();
 
     c.bench_function(
         &format!("server login start (fake) ({})", SUFFIX),
@@ -221,7 +223,7 @@ fn server_login_start_fake(c: &mut Criterion) {
                     &server_setup,
                     None,
                     client_login_start_result.clone().message,
-                    &username[..],
+                    username,
                     ServerLoginStartParameters::default(),
                 )
                 .unwrap();
@@ -234,32 +236,31 @@ fn client_login_finish(c: &mut Criterion) {
     let mut rng = OsRng;
     let username = b"username";
     let password = b"password";
-    let server_setup = ServerSetup::<Default>::new(&mut rng).unwrap();
+    let server_setup = ServerSetup::<Default>::new(&mut rng);
     let client_registration_start_result =
-        ClientRegistration::<Default>::start(&mut rng, &password[..]).unwrap();
+        ClientRegistration::<Default>::start(&mut rng, password).unwrap();
     let server_registration_start_result = ServerRegistration::<Default>::start(
         &server_setup,
         client_registration_start_result.message.clone(),
-        &username[..],
+        username,
     )
     .unwrap();
     let client_registration_finish_result = client_registration_start_result
-        .clone()
         .state
         .finish(
             &mut rng,
-            server_registration_start_result.message.clone(),
+            server_registration_start_result.message,
             ClientRegistrationFinishParameters::default(),
         )
         .unwrap();
     let password_file = ServerRegistration::finish(client_registration_finish_result.message);
-    let client_login_start_result = ClientLogin::<Default>::start(&mut rng, &password[..]).unwrap();
+    let client_login_start_result = ClientLogin::<Default>::start(&mut rng, password).unwrap();
     let server_login_start = ServerLogin::start(
         &mut rng,
         &server_setup,
-        Some(password_file.clone()),
+        Some(password_file),
         client_login_start_result.clone().message,
-        &username[..],
+        username,
         ServerLoginStartParameters::default(),
     )
     .unwrap();
@@ -282,37 +283,35 @@ fn server_login_finish(c: &mut Criterion) {
     let mut rng = OsRng;
     let username = b"username";
     let password = b"password";
-    let server_setup = ServerSetup::<Default>::new(&mut rng).unwrap();
+    let server_setup = ServerSetup::<Default>::new(&mut rng);
     let client_registration_start_result =
-        ClientRegistration::<Default>::start(&mut rng, &password[..]).unwrap();
+        ClientRegistration::<Default>::start(&mut rng, password).unwrap();
     let server_registration_start_result = ServerRegistration::<Default>::start(
         &server_setup,
         client_registration_start_result.message.clone(),
-        &username[..],
+        username,
     )
     .unwrap();
     let client_registration_finish_result = client_registration_start_result
-        .clone()
         .state
         .finish(
             &mut rng,
-            server_registration_start_result.message.clone(),
+            server_registration_start_result.message,
             ClientRegistrationFinishParameters::default(),
         )
         .unwrap();
     let password_file = ServerRegistration::finish(client_registration_finish_result.message);
-    let client_login_start_result = ClientLogin::<Default>::start(&mut rng, &password[..]).unwrap();
+    let client_login_start_result = ClientLogin::<Default>::start(&mut rng, password).unwrap();
     let server_login_start_result = ServerLogin::start(
         &mut rng,
         &server_setup,
-        Some(password_file.clone()),
+        Some(password_file),
         client_login_start_result.clone().message,
-        &username[..],
+        username,
         ServerLoginStartParameters::default(),
     )
     .unwrap();
     let client_login_finish_result = client_login_start_result
-        .clone()
         .state
         .finish(
             server_login_start_result.clone().message,

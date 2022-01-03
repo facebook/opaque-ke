@@ -14,7 +14,7 @@ use std::error::Error;
 use displaydoc::Display;
 
 /// Represents an error in the manipulation of internal cryptographic data
-#[derive(Clone, Display, Eq, Hash, PartialEq)]
+#[derive(Clone, Copy, Display, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub enum InternalError<T = Infallible> {
     /// Custom [`SecretKey`](crate::keypair::SecretKey) error type
     Custom(T),
@@ -129,7 +129,7 @@ impl From<voprf::errors::InternalError> for ProtocolError {
 }
 
 /// Represents an error in protocol handling
-#[derive(Clone, Display, Eq, Hash, PartialEq)]
+#[derive(Clone, Copy, Display, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub enum ProtocolError<T = Infallible> {
     /// Internal error encountered
     LibraryError(InternalError<T>),

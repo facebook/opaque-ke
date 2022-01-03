@@ -9,29 +9,36 @@
 
 use crate::{
     ciphersuite::CipherSuite,
-    envelope::Envelope,
+    envelope::{Envelope, EnvelopeLen},
     errors::{utils::check_slice_size, InternalError, ProtocolError},
     hash::Hash,
     key_exchange::{
         group::KeGroup,
-        traits::{FromBytes, KeyExchange, ToBytes},
+        traits::{FromBytes, Ke1MessageLen, Ke2StateLen, KeyExchange, ToBytes},
+        tripledh::NonceLen,
     },
     keypair::{KeyPair, PrivateKey, PublicKey, SecretKey},
-    serialization::{serialize, tokenize},
+    messages::{CredentialRequestLen, RegistrationUploadLen},
+    serialization::{tokenize, Serialize},
     slow_hash::SlowHash,
     CredentialFinalization, CredentialRequest, CredentialResponse, RegistrationRequest,
     RegistrationResponse, RegistrationUpload,
 };
-use alloc::vec;
 use alloc::vec::Vec;
+use core::array::IntoIter;
 use core::marker::PhantomData;
-use digest::Digest;
-use generic_array::{typenum::Unsigned, GenericArray};
-use hkdf::Hkdf;
+use core::ops::Add;
+use derive_where::DeriveWhere;
+use digest::{Digest, FixedOutput};
+use generic_array::sequence::Concat;
+use generic_array::{
+    typenum::{Sum, Unsigned, U2},
+    ArrayLength, GenericArray,
+};
+use hkdf::{Hkdf, HkdfExtract};
 use rand::{CryptoRng, RngCore};
 use subtle::ConstantTimeEq;
 use voprf::group::Group;
-use zeroize::Zeroize;
 
 ///////////////
 // Constants //
@@ -50,13 +57,19 @@ const STR_OPAQUE_DERIVE_KEY_PAIR: &[u8; 20] = b"OPAQUE-DeriveKeyPair";
 
 /// The state elements the server holds upon setup
 #[cfg_attr(
-    feature = "serialize",
-    derive(serde::Deserialize, serde::Serialize),
-    serde(bound(
-        deserialize = "KeyPair<CS::KeGroup, S>: serde::Deserialize<'de>",
-        serialize = "KeyPair<CS::KeGroup, S>: serde::Serialize"
-    ))
+    feature = "serde",
+    derive(serde_::Deserialize, serde_::Serialize),
+    serde(
+        bound(
+            deserialize = "KeyPair<CS::KeGroup, S>: serde_::Deserialize<'de>",
+            serialize = "KeyPair<CS::KeGroup, S>: serde_::Serialize"
+        ),
+        crate = "serde_"
+    )
 )]
+#[derive(DeriveWhere)]
+#[derive_where(Clone)]
+#[derive_where(Debug, Eq, Hash, Ord, PartialEq, PartialOrd; S)]
 pub struct ServerSetup<
     CS: CipherSuite,
     S: SecretKey<CS::KeGroup> = PrivateKey<<CS as CipherSuite>::KeGroup>,
@@ -66,67 +79,77 @@ pub struct ServerSetup<
     pub(crate) fake_keypair: KeyPair<CS::KeGroup>,
 }
 
-// Cannot be derived because it would require for CS to be bound.
-impl_clone_for!(
-    struct ServerSetup<CS: CipherSuite>,
-    [oprf_seed, keypair, fake_keypair],
-);
-impl_debug_eq_hash_for!(
-    struct ServerSetup<CS: CipherSuite>,
-    [oprf_seed, oprf_seed, fake_keypair],
-);
-
 /// The state elements the client holds to register itself
+#[derive(DeriveWhere)]
+#[derive_where(Clone, Zeroize(drop))]
+#[derive_where(
+    Debug, Eq, Hash, PartialEq;
+    voprf::NonVerifiableClient<CS::OprfGroup, CS::Hash>,
+    voprf::BlindedElement<CS::OprfGroup, CS::Hash>,
+)]
 pub struct ClientRegistration<CS: CipherSuite> {
     pub(crate) oprf_client: voprf::NonVerifiableClient<CS::OprfGroup, CS::Hash>,
     pub(crate) blinded_element: voprf::BlindedElement<CS::OprfGroup, CS::Hash>,
 }
 
-impl_clone_for!(struct ClientRegistration<CS: CipherSuite>, [oprf_client, blinded_element]);
-impl_debug_eq_hash_for!(
-    struct ClientRegistration<CS: CipherSuite>,
-    [oprf_client],
-    [voprf::NonVerifiableClient<CS::OprfGroup, CS::Hash>],
-);
-impl_serialize_and_deserialize_for!(ClientRegistration);
+impl_serialize_and_deserialize_for!(ClientRegistration; serde_::ser::Error::custom);
 
 /// The state elements the server holds to record a registration
+#[derive(DeriveWhere)]
+#[derive_where(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, Zeroize(drop))]
 pub struct ServerRegistration<CS: CipherSuite>(RegistrationUpload<CS>);
 
-impl_clone_for!(tuple ServerRegistration<CS: CipherSuite>, [0]);
-impl_debug_eq_hash_for!(
-    tuple ServerRegistration<CS: CipherSuite>,
-    [0],
+impl_serialize_and_deserialize_for!(
+    ServerRegistration
+    where
+        // Envelope: Nonce + Hash
+        NonceLen: Add<<CS::Hash as FixedOutput>::OutputSize>,
+        EnvelopeLen<CS>: ArrayLength<u8>,
+        // RegistrationUpload: (KePk + Hash) + Envelope
+        <CS::KeGroup as KeGroup>::PkLen: Add<<CS::Hash as FixedOutput>::OutputSize>,
+        Sum<<CS::KeGroup as KeGroup>::PkLen, <CS::Hash as FixedOutput>::OutputSize>:
+            ArrayLength<u8> | Add<EnvelopeLen<CS>>,
+        RegistrationUploadLen<CS>: ArrayLength<u8>,
+        // ServerRegistration = RegistrationUpload
 );
-impl_serialize_and_deserialize_for!(ServerRegistration);
 
 /// The state elements the client holds to perform a login
+#[derive(DeriveWhere)]
+#[derive_where(Clone, Zeroize(drop))]
+#[derive_where(
+    Debug, Eq, Hash, PartialEq;
+    voprf::NonVerifiableClient<CS::OprfGroup, CS::Hash>,
+    <CS::KeyExchange as KeyExchange<CS::Hash, CS::KeGroup>>::KE1State,
+    CredentialRequest<CS>,
+)]
 pub struct ClientLogin<CS: CipherSuite> {
     oprf_client: voprf::NonVerifiableClient<CS::OprfGroup, CS::Hash>,
     ke1_state: <CS::KeyExchange as KeyExchange<CS::Hash, CS::KeGroup>>::KE1State,
-    serialized_credential_request: Vec<u8>,
+    credential_request: CredentialRequest<CS>,
 }
 
-impl_clone_for!(struct ClientLogin<CS: CipherSuite>, [oprf_client, ke1_state, serialized_credential_request]);
-impl_debug_eq_hash_for!(
-    struct ClientLogin<CS: CipherSuite>,
-    [oprf_client, ke1_state, serialized_credential_request],
-    [voprf::NonVerifiableClient<CS::OprfGroup, CS::Hash>, <CS::KeyExchange as KeyExchange<CS::Hash, CS::KeGroup>>::KE1State],
+impl_serialize_and_deserialize_for!(
+    ClientLogin
+    where
+        // CredentialRequest: KgPk + Ke1Message
+        <CS::OprfGroup as Group>::ElemLen: Add<Ke1MessageLen<CS>>,
+        CredentialRequestLen<CS>: ArrayLength<u8>;
+    serde_::ser::Error::custom
 );
-impl_serialize_and_deserialize_for!(ClientLogin);
 
 /// The state elements the server holds to record a login
+#[derive(DeriveWhere)]
+#[derive_where(Clone, Zeroize(drop))]
+#[derive_where(
+    Debug, Eq, Hash, PartialEq;
+    <CS::KeyExchange as KeyExchange<CS::Hash, CS::KeGroup>>::KE2State,
+)]
 pub struct ServerLogin<CS: CipherSuite> {
     ke2_state: <CS::KeyExchange as KeyExchange<CS::Hash, CS::KeGroup>>::KE2State,
+    #[derive_where(skip(Zeroize))]
     _cs: PhantomData<CS>,
 }
 
-impl_clone_for!(struct ServerLogin<CS: CipherSuite>, [ke2_state, _cs]);
-impl_debug_eq_hash_for!(
-    struct ServerLogin<CS: CipherSuite>,
-    [ke2_state, _cs],
-    [<CS::KeyExchange as KeyExchange<CS::Hash, CS::KeGroup>>::KE2State],
-);
 impl_serialize_and_deserialize_for!(ServerLogin);
 
 ////////////////////////////////
@@ -139,36 +162,46 @@ impl_serialize_and_deserialize_for!(ServerLogin);
 
 impl<CS: CipherSuite> ServerSetup<CS, PrivateKey<CS::KeGroup>> {
     /// Generate a new instance of server setup
-    pub fn new<R: CryptoRng + RngCore>(rng: &mut R) -> Result<Self, InternalError> {
-        let keypair = KeyPair::<CS::KeGroup>::generate_random(rng)?;
+    pub fn new<R: CryptoRng + RngCore>(rng: &mut R) -> Self {
+        let keypair = KeyPair::generate_random(rng);
         Self::new_with_key(rng, keypair)
     }
 }
+
+/// Length of [`ServerSetup`] in bytes for serialization.
+#[allow(type_alias_bounds)]
+pub type ServerSetupLen<CS: CipherSuite, S: SecretKey<CS::KeGroup>> =
+    Sum<Sum<<CS::Hash as FixedOutput>::OutputSize, S::Len>, <CS::KeGroup as KeGroup>::SkLen>;
 
 impl<CS: CipherSuite, S: SecretKey<CS::KeGroup>> ServerSetup<CS, S> {
     /// Create [`ServerSetup`] with the given keypair
     pub fn new_with_key<R: CryptoRng + RngCore>(
         rng: &mut R,
         keypair: KeyPair<CS::KeGroup, S>,
-    ) -> Result<Self, InternalError> {
-        let mut seed = vec![0u8; <CS::Hash as Digest>::OutputSize::USIZE];
-        rng.fill_bytes(&mut seed);
+    ) -> Self {
+        let mut oprf_seed = GenericArray::default();
+        rng.fill_bytes(&mut oprf_seed);
 
-        Ok(Self {
-            oprf_seed: GenericArray::clone_from_slice(&seed[..]),
+        Self {
+            oprf_seed,
             keypair,
-            fake_keypair: KeyPair::<CS::KeGroup>::generate_random(rng)?,
-        })
+            fake_keypair: KeyPair::<CS::KeGroup>::generate_random(rng),
+        }
     }
 
     /// Serialization into bytes
-    pub fn serialize(&self) -> Result<Vec<u8>, ProtocolError> {
-        Ok([
-            self.oprf_seed.to_vec(),
-            self.keypair.private().serialize(),
-            self.fake_keypair.private().serialize(),
-        ]
-        .concat())
+    pub fn serialize(&self) -> GenericArray<u8, ServerSetupLen<CS, S>>
+    where
+        // ServerSetup: Hash + KeSk + KeSk
+        <CS::Hash as FixedOutput>::OutputSize: Add<S::Len>,
+        Sum<<CS::Hash as FixedOutput>::OutputSize, S::Len>:
+            ArrayLength<u8> + Add<<CS::KeGroup as KeGroup>::SkLen>,
+        ServerSetupLen<CS, S>: ArrayLength<u8>,
+    {
+        self.oprf_seed
+            .clone()
+            .concat(self.keypair.private().serialize())
+            .concat(self.fake_keypair.private().to_arr())
     }
 
     /// Deserialization from bytes
@@ -197,36 +230,38 @@ impl<CS: CipherSuite, S: SecretKey<CS::KeGroup>> ServerSetup<CS, S> {
 impl<CS: CipherSuite> ClientRegistration<CS> {
     /// Serialization into bytes
     pub fn serialize(&self) -> Result<Vec<u8>, ProtocolError> {
-        Ok([
-            serialize(&self.oprf_client.serialize(), 2)?,
-            serialize(&self.blinded_element.serialize(), 2)?,
-        ]
-        .concat())
+        Ok(chain!(
+            Serialize::<U2>::from(&self.oprf_client.serialize())?.iter(),
+            Serialize::<U2>::from(&self.blinded_element.serialize())?.iter(),
+        )
+        .flatten()
+        .cloned()
+        .collect())
     }
 
     /// Deserialization from bytes
     pub fn deserialize(input: &[u8]) -> Result<Self, ProtocolError> {
         let (serialized_oprf_client, remainder) = tokenize(input, 2)?;
-        let (serialized_blinded_element, remainder) = tokenize(&remainder, 2)?;
+        let (serialized_blinded_element, remainder) = tokenize(remainder, 2)?;
 
         if !remainder.is_empty() {
             return Err(ProtocolError::SerializationError);
         }
 
         Ok(Self {
-            oprf_client: voprf::NonVerifiableClient::deserialize(&serialized_oprf_client)?,
-            blinded_element: voprf::BlindedElement::deserialize(&serialized_blinded_element)?,
+            oprf_client: voprf::NonVerifiableClient::deserialize(serialized_oprf_client)?,
+            blinded_element: voprf::BlindedElement::deserialize(serialized_blinded_element)?,
         })
     }
 
-    #[cfg(test)]
     /// Only used for testing zeroize
-    pub(crate) fn to_vec(&self) -> Result<Vec<u8>, ProtocolError> {
-        Ok([
+    #[cfg(test)]
+    pub(crate) fn to_vec(&self) -> Vec<u8> {
+        [
             self.oprf_client.serialize(),
             self.blinded_element.serialize(),
         ]
-        .concat())
+        .concat()
     }
 
     /// Returns an initial "blinded" request to send to the server, as well as a ClientRegistration
@@ -237,7 +272,7 @@ impl<CS: CipherSuite> ClientRegistration<CS> {
         let blind_result = blind::<CS, _>(blinding_factor_rng, password)?;
 
         Ok(ClientRegistrationStartResult {
-            message: RegistrationRequest::<CS> {
+            message: RegistrationRequest {
                 blinded_element: blind_result.message.clone(),
             },
             state: Self {
@@ -272,7 +307,7 @@ impl<CS: CipherSuite> ClientRegistration<CS> {
             params.slow_hash,
         )?;
 
-        let mut masking_key = vec![0u8; <CS::Hash as Digest>::OutputSize::USIZE];
+        let mut masking_key = GenericArray::<_, <CS::Hash as Digest>::OutputSize>::default();
         randomized_pwd_hasher
             .expand(STR_MASKING_KEY, &mut masking_key)
             .map_err(|_| InternalError::HkdfError)?;
@@ -287,7 +322,7 @@ impl<CS: CipherSuite> ClientRegistration<CS> {
         Ok(ClientRegistrationFinishResult {
             message: RegistrationUpload {
                 envelope: result.0,
-                masking_key: GenericArray::clone_from_slice(&masking_key[..]),
+                masking_key,
                 client_s_pk: result.1,
             },
             export_key: result.2,
@@ -302,9 +337,23 @@ impl<CS: CipherSuite> ClientRegistration<CS> {
     }
 }
 
+/// Length of [`ServerRegistration`] in bytes for serialization.
+pub type ServerRegistrationLen<CS> = RegistrationUploadLen<CS>;
+
 impl<CS: CipherSuite> ServerRegistration<CS> {
     /// Serialization into bytes
-    pub fn serialize(&self) -> Result<Vec<u8>, ProtocolError> {
+    pub fn serialize(&self) -> GenericArray<u8, ServerRegistrationLen<CS>>
+    where
+        // Envelope: Nonce + Hash
+        NonceLen: Add<<CS::Hash as FixedOutput>::OutputSize>,
+        EnvelopeLen<CS>: ArrayLength<u8>,
+        // RegistrationUpload: (KePk + Hash) + Envelope
+        <CS::KeGroup as KeGroup>::PkLen: Add<<CS::Hash as FixedOutput>::OutputSize>,
+        Sum<<CS::KeGroup as KeGroup>::PkLen, <CS::Hash as FixedOutput>::OutputSize>:
+            ArrayLength<u8> + Add<EnvelopeLen<CS>>,
+        RegistrationUploadLen<CS>: ArrayLength<u8>,
+        // ServerRegistration = RegistrationUpload
+    {
         self.0.serialize()
     }
 
@@ -334,7 +383,7 @@ impl<CS: CipherSuite> ServerRegistration<CS> {
                 server_s_pk: server_setup.keypair.public().clone(),
             },
             #[cfg(test)]
-            oprf_key: GenericArray::clone_from_slice(&oprf_key),
+            oprf_key,
         })
     }
 
@@ -358,46 +407,57 @@ impl<CS: CipherSuite> ServerRegistration<CS> {
 
 impl<CS: CipherSuite> ClientLogin<CS> {
     /// Serialization into bytes
-    pub fn serialize(&self) -> Result<Vec<u8>, ProtocolError> {
-        let output: Vec<u8> = [
-            serialize(&self.oprf_client.serialize(), 2)?,
-            serialize(&self.serialized_credential_request, 2)?,
-            serialize(&self.ke1_state.to_bytes(), 2)?,
-        ]
-        .concat();
-        Ok(output)
+    pub fn serialize(&self) -> Result<Vec<u8>, ProtocolError>
+    where
+        // CredentialRequest: KgPk + Ke1Message
+        <CS::OprfGroup as Group>::ElemLen: Add<Ke1MessageLen<CS>>,
+        CredentialRequestLen<CS>: ArrayLength<u8>,
+    {
+        Ok(chain!(
+            Serialize::<U2>::from(&self.oprf_client.serialize())?.iter(),
+            Serialize::<U2>::from(&self.credential_request.serialize())?.iter(),
+            Serialize::<U2>::from(&self.ke1_state.to_bytes())?.iter(),
+        )
+        .flatten()
+        .cloned()
+        .collect())
     }
 
     /// Deserialization from bytes
     pub fn deserialize(input: &[u8]) -> Result<Self, ProtocolError> {
         let (serialized_oprf_client, remainder) = tokenize(input, 2)?;
-        let (serialized_credential_request, remainder) = tokenize(&remainder, 2)?;
-        let (ke1_state_bytes, remainder) = tokenize(&remainder, 2)?;
+        let (serialized_credential_request, remainder) = tokenize(remainder, 2)?;
+        let (ke1_state_bytes, remainder) = tokenize(remainder, 2)?;
 
         if !remainder.is_empty() {
             return Err(ProtocolError::SerializationError);
         }
 
         let ke1_state =
-            <CS::KeyExchange as KeyExchange<CS::Hash, CS::KeGroup>>::KE1State::from_bytes::<CS>(
-                &ke1_state_bytes[..],
+            <CS::KeyExchange as KeyExchange<CS::Hash, CS::KeGroup>>::KE1State::from_bytes(
+                ke1_state_bytes,
             )?;
         Ok(Self {
-            oprf_client: voprf::NonVerifiableClient::deserialize(&serialized_oprf_client)?,
+            oprf_client: voprf::NonVerifiableClient::deserialize(serialized_oprf_client)?,
             ke1_state,
-            serialized_credential_request,
+            credential_request: CredentialRequest::deserialize(serialized_credential_request)?,
         })
     }
 
-    #[cfg(test)]
     /// Only used for testing zeroize
-    pub(crate) fn to_vec(&self) -> Result<Vec<u8>, ProtocolError> {
-        Ok([
+    #[cfg(test)]
+    pub(crate) fn to_vec(&self) -> Vec<u8>
+    where
+        // CredentialRequest: KgPk + Ke1Message
+        <CS::OprfGroup as Group>::ElemLen: Add<Ke1MessageLen<CS>>,
+        CredentialRequestLen<CS>: ArrayLength<u8>,
+    {
+        [
             self.oprf_client.serialize(),
-            self.serialized_credential_request.clone(),
-            self.ke1_state.to_bytes(),
+            self.credential_request.serialize().to_vec(),
+            self.ke1_state.to_bytes().to_vec(),
         ]
-        .concat())
+        .concat()
     }
 }
 
@@ -414,14 +474,13 @@ impl<CS: CipherSuite> ClientLogin<CS> {
             blinded_element: blind_result.message,
             ke1_message,
         };
-        let serialized_credential_request = credential_request.serialize()?;
 
         Ok(ClientLoginStartResult {
-            message: credential_request,
+            message: credential_request.clone(),
             state: Self {
                 oprf_client: blind_result.state,
                 ke1_state,
-                serialized_credential_request,
+                credential_request,
             },
         })
     }
@@ -432,11 +491,17 @@ impl<CS: CipherSuite> ClientLogin<CS> {
         self,
         credential_response: CredentialResponse<CS>,
         params: ClientLoginFinishParameters<CS>,
-    ) -> Result<ClientLoginFinishResult<CS>, ProtocolError> {
+    ) -> Result<ClientLoginFinishResult<CS>, ProtocolError>
+    where
+        // MaskedResponse: (Nonce + Hash) + KePk
+        NonceLen: Add<<CS::Hash as FixedOutput>::OutputSize>,
+        Sum<NonceLen, <CS::Hash as FixedOutput>::OutputSize>:
+            ArrayLength<u8> + Add<<CS::KeGroup as KeGroup>::PkLen>,
+        MaskedResponseLen<CS>: ArrayLength<u8>,
+    {
         // Check if beta value from server is equal to alpha value from client
-        let credential_request =
-            CredentialRequest::<CS>::deserialize(&self.serialized_credential_request[..])?;
-        if credential_request
+        if self
+            .credential_request
             .blinded_element
             .value()
             .ct_eq(&credential_response.evaluation_element.value())
@@ -451,7 +516,7 @@ impl<CS: CipherSuite> ClientLogin<CS> {
             params.slow_hash,
         )?;
 
-        let mut masking_key = vec![0u8; <CS::Hash as Digest>::OutputSize::USIZE];
+        let mut masking_key = GenericArray::<_, <CS::Hash as Digest>::OutputSize>::default();
         randomized_pwd_hasher
             .expand(STR_MASKING_KEY, &mut masking_key)
             .map_err(|_| InternalError::HkdfError)?;
@@ -465,13 +530,12 @@ impl<CS: CipherSuite> ClientLogin<CS> {
             ProtocolError::SerializationError => ProtocolError::InvalidLoginError,
             err => err,
         })?;
-        let server_s_pk_bytes = server_s_pk.to_arr().to_vec();
 
-        let opened_envelope = &envelope
+        let opened_envelope = envelope
             .open(
                 randomized_pwd_hasher,
-                &server_s_pk_bytes,
-                &params.identifiers,
+                server_s_pk.clone(),
+                params.identifiers,
             )
             .map_err(|e| match e {
                 ProtocolError::LibraryError(InternalError::SealOpenHmacError) => {
@@ -480,22 +544,28 @@ impl<CS: CipherSuite> ClientLogin<CS> {
                 err => err,
             })?;
 
+        let beta = credential_response.evaluation_element.value().to_arr();
         let credential_response_component = CredentialResponse::<CS>::serialize_without_ke(
-            &credential_response.evaluation_element.value(),
+            &beta,
             &credential_response.masking_nonce,
             &credential_response.masked_response,
         );
+
+        let blinded_element = self.credential_request.blinded_element.value().to_arr();
+        let ke1_message = self.credential_request.ke1_message.to_bytes();
+        let serialized_credential_request =
+            CredentialRequest::<CS>::serialize_iter(&blinded_element, &ke1_message);
 
         let result = CS::KeyExchange::generate_ke3(
             credential_response_component,
             credential_response.ke2_message,
             &self.ke1_state,
-            &self.serialized_credential_request,
+            serialized_credential_request,
             server_s_pk.clone(),
             opened_envelope.client_static_keypair.private().clone(),
-            opened_envelope.id_u.clone(),
-            opened_envelope.id_s.clone(),
-            params.context.unwrap_or_default(),
+            opened_envelope.id_u.iter(),
+            opened_envelope.id_s.iter(),
+            params.context.unwrap_or(&[]),
         )?;
 
         Ok(ClientLoginFinishResult {
@@ -503,7 +573,7 @@ impl<CS: CipherSuite> ClientLogin<CS> {
                 ke3_message: result.1,
             },
             session_key: result.0,
-            export_key: opened_envelope.export_key.clone(),
+            export_key: opened_envelope.export_key,
             server_s_pk,
             #[cfg(test)]
             state: self,
@@ -517,8 +587,8 @@ impl<CS: CipherSuite> ClientLogin<CS> {
 
 impl<CS: CipherSuite> ServerLogin<CS> {
     /// Serialization into bytes
-    pub fn serialize(&self) -> Result<Vec<u8>, ProtocolError> {
-        Ok(self.ke2_state.to_bytes())
+    pub fn serialize(&self) -> GenericArray<u8, Ke2StateLen<CS>> {
+        self.ke2_state.to_bytes()
     }
 
     /// Deserialization from bytes
@@ -526,7 +596,7 @@ impl<CS: CipherSuite> ServerLogin<CS> {
         Ok(Self {
             _cs: PhantomData,
             ke2_state:
-                <CS::KeyExchange as KeyExchange<CS::Hash, CS::KeGroup>>::KE2State::from_bytes::<CS>(
+                <CS::KeyExchange as KeyExchange<CS::Hash, CS::KeGroup>>::KE2State::from_bytes(
                     bytes,
                 )?,
         })
@@ -540,8 +610,18 @@ impl<CS: CipherSuite> ServerLogin<CS> {
         password_file: Option<ServerRegistration<CS>>,
         credential_request: CredentialRequest<CS>,
         credential_identifier: &[u8],
-        params: ServerLoginStartParameters,
-    ) -> Result<ServerLoginStartResult<CS>, ProtocolError<S::Error>> {
+        ServerLoginStartParameters {
+            context,
+            identifiers,
+        }: ServerLoginStartParameters,
+    ) -> Result<ServerLoginStartResult<CS>, ProtocolError<S::Error>>
+    where
+        // MaskedResponse: (Nonce + Hash) + KePk
+        NonceLen: Add<<CS::Hash as FixedOutput>::OutputSize>,
+        Sum<NonceLen, <CS::Hash as FixedOutput>::OutputSize>:
+            ArrayLength<u8> + Add<<CS::KeGroup as KeGroup>::PkLen>,
+        MaskedResponseLen<CS>: ArrayLength<u8>,
+    {
         let record = match password_file {
             Some(x) => x,
             None => ServerRegistration::dummy(rng, server_setup),
@@ -549,38 +629,37 @@ impl<CS: CipherSuite> ServerLogin<CS> {
 
         let client_s_pk = record.0.client_s_pk.clone();
 
-        let (context, optional_ids) = match params {
-            ServerLoginStartParameters::WithContext(context) => (context, None),
-            ServerLoginStartParameters::WithIdentifiers(ids) => (Vec::new(), Some(ids)),
-            ServerLoginStartParameters::WithContextAndIdentifiers(context, ids) => {
-                (context, Some(ids))
-            }
+        let context = if let Some(context) = context {
+            context
+        } else {
+            &[]
         };
 
         let server_s_sk = server_setup.keypair.private();
         let server_s_pk = server_s_sk.public_key()?;
 
-        let mut masking_nonce = vec![0u8; 32];
+        let mut masking_nonce = GenericArray::<_, NonceLen>::default();
         rng.fill_bytes(&mut masking_nonce);
 
         let masked_response = mask_response(
             &record.0.masking_key,
-            &masking_nonce,
+            masking_nonce.as_slice(),
             &server_s_pk,
             &record.0.envelope,
         )
         .map_err(ProtocolError::into_custom)?;
 
-        let (id_u, id_s) = bytestrings_from_identifiers(
-            &optional_ids,
-            &client_s_pk.to_arr(),
-            &server_s_pk.to_arr(),
+        let (id_u, id_s) = bytestrings_from_identifiers::<CS::KeGroup>(
+            identifiers,
+            client_s_pk.to_arr(),
+            server_s_pk.to_arr(),
         )
         .map_err(ProtocolError::into_custom)?;
 
-        let credential_request_bytes = credential_request
-            .serialize()
-            .map_err(ProtocolError::into_custom)?;
+        let blinded_element = credential_request.blinded_element.value().to_arr();
+        let ke1_message = credential_request.ke1_message.to_bytes();
+        let credential_request_bytes =
+            CredentialRequest::<CS>::serialize_iter(&blinded_element, &ke1_message);
 
         let oprf_key = oprf_key_from_seed::<CS::OprfGroup, CS::Hash>(
             &server_setup.oprf_seed,
@@ -594,11 +673,9 @@ impl<CS: CipherSuite> ServerLogin<CS> {
             .map_err(|e| ProtocolError::into_custom(e.into()))?;
         let evaluation_element = evaluate_result.message;
 
-        let credential_response_component = CredentialResponse::<CS>::serialize_without_ke(
-            &evaluation_element.value(),
-            &masking_nonce,
-            &masked_response,
-        );
+        let beta = evaluation_element.value().to_arr();
+        let credential_response_component =
+            CredentialResponse::<CS>::serialize_without_ke(&beta, &masking_nonce, &masked_response);
 
         let result = CS::KeyExchange::generate_ke2(
             rng,
@@ -607,8 +684,8 @@ impl<CS: CipherSuite> ServerLogin<CS> {
             credential_request.ke1_message,
             client_s_pk,
             server_s_sk.clone(),
-            id_u,
-            id_s,
+            id_u.iter(),
+            id_s.iter(),
             context,
         )?;
 
@@ -660,37 +737,27 @@ impl<CS: CipherSuite> ServerLogin<CS> {
 /////////////////////////
 
 /// Options for specifying custom identifiers
-#[derive(Clone)]
-pub enum Identifiers {
-    /// Supply only a client identifier
-    ClientIdentifier(Vec<u8>),
-    /// Supply only a server identifier
-    ServerIdentifier(Vec<u8>),
-    /// Supply a client and server identifier
-    ClientAndServerIdentifiers(Vec<u8>, Vec<u8>),
+#[derive(Clone, Copy, Debug, Default)]
+pub struct Identifiers<'a> {
+    /// Client identifier
+    pub client: Option<&'a [u8]>,
+    /// Server identifier
+    pub server: Option<&'a [u8]>,
 }
 
 /// Optional parameters for client registration finish
-#[derive(Clone)]
-pub struct ClientRegistrationFinishParameters<'h, CS: CipherSuite> {
+#[derive(DeriveWhere)]
+#[derive_where(Clone, Default)]
+pub struct ClientRegistrationFinishParameters<'i, 'h, CS: CipherSuite> {
     /// Specifying the identifiers idU and idS
-    pub identifiers: Option<Identifiers>,
+    pub identifiers: Identifiers<'i>,
     /// Specifying a configuration for the slow hash
     pub slow_hash: Option<&'h CS::SlowHash>,
 }
 
-impl<'h, CS: CipherSuite> Default for ClientRegistrationFinishParameters<'h, CS> {
-    fn default() -> Self {
-        Self {
-            identifiers: None,
-            slow_hash: None,
-        }
-    }
-}
-
-impl<'h, CS: CipherSuite> ClientRegistrationFinishParameters<'h, CS> {
+impl<'i, 'h, CS: CipherSuite> ClientRegistrationFinishParameters<'i, 'h, CS> {
     /// Create a new [`ClientRegistrationFinishParameters`]
-    pub fn new(identifiers: Option<Identifiers>, slow_hash: Option<&'h CS::SlowHash>) -> Self {
+    pub fn new(identifiers: Identifiers<'i>, slow_hash: Option<&'h CS::SlowHash>) -> Self {
         Self {
             identifiers,
             slow_hash,
@@ -699,6 +766,8 @@ impl<'h, CS: CipherSuite> ClientRegistrationFinishParameters<'h, CS> {
 }
 
 /// Contains the fields that are returned by a client registration start
+#[derive(DeriveWhere)]
+#[derive_where(Clone)]
 pub struct ClientRegistrationStartResult<CS: CipherSuite> {
     /// The registration request message to be sent to the server
     pub message: RegistrationRequest<CS>,
@@ -706,17 +775,9 @@ pub struct ClientRegistrationStartResult<CS: CipherSuite> {
     pub state: ClientRegistration<CS>,
 }
 
-// Cannot be derived because it would require for CS to be Clone.
-impl<CS: CipherSuite> Clone for ClientRegistrationStartResult<CS> {
-    fn clone(&self) -> Self {
-        Self {
-            message: self.message.clone(),
-            state: self.state.clone(),
-        }
-    }
-}
-
 /// Contains the fields that are returned by a client registration finish
+#[derive(DeriveWhere)]
+#[derive_where(Clone)]
 pub struct ClientRegistrationFinishResult<CS: CipherSuite> {
     /// The registration upload message to be sent to the server
     pub message: RegistrationUpload<CS>,
@@ -729,31 +790,16 @@ pub struct ClientRegistrationFinishResult<CS: CipherSuite> {
     pub state: ClientRegistration<CS>,
     /// AuthKey, only used in tests
     #[cfg(test)]
-    pub auth_key: Vec<u8>,
+    pub auth_key: GenericArray<u8, <CS::Hash as Digest>::OutputSize>,
     /// Password derived key, only used in tests
     #[cfg(test)]
     pub randomized_pwd: GenericArray<u8, <CS::Hash as Digest>::OutputSize>,
 }
 
-// Cannot be derived because it would require for CS to be Clone.
-impl<CS: CipherSuite> Clone for ClientRegistrationFinishResult<CS> {
-    fn clone(&self) -> Self {
-        Self {
-            message: self.message.clone(),
-            export_key: self.export_key.clone(),
-            server_s_pk: self.server_s_pk.clone(),
-            #[cfg(test)]
-            state: self.state.clone(),
-            #[cfg(test)]
-            auth_key: self.auth_key.clone(),
-            #[cfg(test)]
-            randomized_pwd: self.randomized_pwd.clone(),
-        }
-    }
-}
-
 /// Contains the fields that are returned by a server registration start.
 /// Note that there is no state output in this step
+#[derive(DeriveWhere)]
+#[derive_where(Clone)]
 pub struct ServerRegistrationStartResult<CS: CipherSuite> {
     /// The registration resposne message to send to the client
     pub message: RegistrationResponse<CS>,
@@ -762,18 +808,9 @@ pub struct ServerRegistrationStartResult<CS: CipherSuite> {
     pub oprf_key: GenericArray<u8, <CS::OprfGroup as Group>::ScalarLen>,
 }
 
-// Cannot be derived because it would require for CS to be Clone.
-impl<CS: CipherSuite> Clone for ServerRegistrationStartResult<CS> {
-    fn clone(&self) -> Self {
-        Self {
-            message: self.message.clone(),
-            #[cfg(test)]
-            oprf_key: self.oprf_key.clone(),
-        }
-    }
-}
-
 /// Contains the fields that are returned by a client login start
+#[derive(DeriveWhere)]
+#[derive_where(Clone)]
 pub struct ClientLoginStartResult<CS: CipherSuite> {
     /// The message to send to the server to begin the login protocol
     pub message: CredentialRequest<CS>,
@@ -781,42 +818,23 @@ pub struct ClientLoginStartResult<CS: CipherSuite> {
     pub state: ClientLogin<CS>,
 }
 
-// Cannot be derived because it would require for CS to be Clone.
-impl<CS: CipherSuite> Clone for ClientLoginStartResult<CS> {
-    fn clone(&self) -> Self {
-        Self {
-            message: self.message.clone(),
-            state: self.state.clone(),
-        }
-    }
-}
-
 /// Optional parameters for client login finish
-#[derive(Clone)]
-pub struct ClientLoginFinishParameters<'h, CS: CipherSuite> {
+#[derive(DeriveWhere)]
+#[derive_where(Clone, Default)]
+pub struct ClientLoginFinishParameters<'c, 'i, 'h, CS: CipherSuite> {
     /// Specifying a context field that the server must agree on
-    pub context: Option<Vec<u8>>,
+    pub context: Option<&'c [u8]>,
     /// Specifying a user identifier and server identifier that will be matched against the server
-    pub identifiers: Option<Identifiers>,
+    pub identifiers: Identifiers<'i>,
     /// Specifying a configuration for the slow hash
     pub slow_hash: Option<&'h CS::SlowHash>,
 }
 
-impl<'h, CS: CipherSuite> Default for ClientLoginFinishParameters<'h, CS> {
-    fn default() -> Self {
-        Self {
-            context: None,
-            identifiers: None,
-            slow_hash: None,
-        }
-    }
-}
-
-impl<'h, CS: CipherSuite> ClientLoginFinishParameters<'h, CS> {
+impl<'c, 'i, 'h, CS: CipherSuite> ClientLoginFinishParameters<'c, 'i, 'h, CS> {
     /// Create a new [`ClientLoginFinishParameters`]
     pub fn new(
-        context: Option<Vec<u8>>,
-        identifiers: Option<Identifiers>,
+        context: Option<&'c [u8]>,
+        identifiers: Identifiers<'i>,
         slow_hash: Option<&'h CS::SlowHash>,
     ) -> Self {
         Self {
@@ -828,11 +846,13 @@ impl<'h, CS: CipherSuite> ClientLoginFinishParameters<'h, CS> {
 }
 
 /// Contains the fields that are returned by a client login finish
+#[derive(DeriveWhere)]
+#[derive_where(Clone)]
 pub struct ClientLoginFinishResult<CS: CipherSuite> {
     /// The message to send to the server to complete the protocol
     pub message: CredentialFinalization<CS>,
     /// The session key
-    pub session_key: Vec<u8>,
+    pub session_key: GenericArray<u8, <CS::Hash as Digest>::OutputSize>,
     /// The client-side export key
     pub export_key: GenericArray<u8, <CS::Hash as Digest>::OutputSize>,
     /// The server's static public key
@@ -842,72 +862,44 @@ pub struct ClientLoginFinishResult<CS: CipherSuite> {
     pub state: ClientLogin<CS>,
     /// Handshake secret, only used in tests
     #[cfg(test)]
-    pub handshake_secret: Vec<u8>,
+    pub handshake_secret: GenericArray<u8, <CS::Hash as Digest>::OutputSize>,
     /// Client MAC key, only used in tests
     #[cfg(test)]
     pub client_mac_key: GenericArray<u8, <CS::Hash as Digest>::OutputSize>,
 }
 
-// Cannot be derived because it would require for CS to be Clone.
-impl<CS: CipherSuite> Clone for ClientLoginFinishResult<CS> {
-    fn clone(&self) -> Self {
-        Self {
-            message: self.message.clone(),
-            session_key: self.session_key.clone(),
-            export_key: self.export_key.clone(),
-            server_s_pk: self.server_s_pk.clone(),
-            #[cfg(test)]
-            state: self.state.clone(),
-            #[cfg(test)]
-            handshake_secret: self.handshake_secret.clone(),
-            #[cfg(test)]
-            client_mac_key: self.client_mac_key.clone(),
-        }
-    }
-}
-
 /// Contains the fields that are returned by a server login finish
+#[derive(DeriveWhere)]
+#[derive_where(Clone)]
+#[cfg_attr(not(test), derive_where(Debug))]
+#[cfg_attr(test, derive_where(Debug; ServerLogin<CS>))]
 pub struct ServerLoginFinishResult<CS: CipherSuite> {
     /// The session key between client and server
-    pub session_key: Vec<u8>,
+    pub session_key: GenericArray<u8, <CS::Hash as Digest>::OutputSize>,
     _cs: PhantomData<CS>,
     /// Instance of the ClientRegistration, only used in tests for checking zeroize
     #[cfg(test)]
     pub state: ServerLogin<CS>,
 }
 
-// Cannot be derived because it would require for CS to be Clone.
-impl<CS: CipherSuite> Clone for ServerLoginFinishResult<CS> {
-    fn clone(&self) -> Self {
-        Self {
-            session_key: self.session_key.clone(),
-            _cs: PhantomData,
-            #[cfg(test)]
-            state: self.state.clone(),
-        }
-    }
-}
-
 /// Optional parameters for server login start
-#[derive(Clone)]
-pub enum ServerLoginStartParameters {
+#[derive(Clone, Debug, Default)]
+pub struct ServerLoginStartParameters<'c, 'i> {
     /// Specifying a context field that the client must agree on
-    WithContext(Vec<u8>),
+    pub context: Option<&'c [u8]>,
     /// Specifying a user identifier and server identifier that will be matched against the client
-    WithIdentifiers(Identifiers),
-    /// Specifying a context field that the client must agree on,
-    /// along with a user identifier and and server identifier that will be matched against the client
-    /// (in that order)
-    WithContextAndIdentifiers(Vec<u8>, Identifiers),
-}
-
-impl Default for ServerLoginStartParameters {
-    fn default() -> Self {
-        Self::WithContext(Vec::new())
-    }
+    pub identifiers: Identifiers<'i>,
 }
 
 /// Contains the fields that are returned by a server login start
+#[derive(DeriveWhere)]
+#[derive_where(Clone)]
+#[derive_where(
+    Debug;
+    CS::OprfGroup,
+    <CS::KeyExchange as KeyExchange<CS::Hash, CS::KeGroup>>::KE2Message,
+    <CS::KeyExchange as KeyExchange<CS::Hash, CS::KeGroup>>::KE2State,
+)]
 pub struct ServerLoginStartResult<CS: CipherSuite> {
     /// The message to send back to the client
     pub message: CredentialResponse<CS>,
@@ -915,29 +907,13 @@ pub struct ServerLoginStartResult<CS: CipherSuite> {
     pub state: ServerLogin<CS>,
     /// Handshake secret, only used in tests
     #[cfg(test)]
-    pub handshake_secret: Vec<u8>,
+    pub handshake_secret: GenericArray<u8, <CS::Hash as Digest>::OutputSize>,
     /// Server MAC key, only used in tests
     #[cfg(test)]
     pub server_mac_key: GenericArray<u8, <CS::Hash as Digest>::OutputSize>,
     /// OPRF key, only used in tests
     #[cfg(test)]
     pub oprf_key: GenericArray<u8, <CS::OprfGroup as Group>::ScalarLen>,
-}
-
-// Cannot be derived because it would require for CS to be Clone.
-impl<CS: CipherSuite> Clone for ServerLoginStartResult<CS> {
-    fn clone(&self) -> Self {
-        Self {
-            message: self.message.clone(),
-            state: self.state.clone(),
-            #[cfg(test)]
-            handshake_secret: self.handshake_secret.clone(),
-            #[cfg(test)]
-            server_mac_key: self.server_mac_key.clone(),
-            #[cfg(test)]
-            oprf_key: self.oprf_key.clone(),
-        }
-    }
 }
 
 ////////////////////////////////////////////////
@@ -968,26 +944,72 @@ fn get_password_derived_key<CS: CipherSuite>(
     }
     .map_err(ProtocolError::from)?;
 
-    Ok(Hkdf::<CS::Hash>::extract(
-        None,
-        &[oprf_output.to_vec(), hardened_output].concat(),
-    ))
+    let mut hkdf = HkdfExtract::<CS::Hash>::new(None);
+    hkdf.input_ikm(&oprf_output);
+    hkdf.input_ikm(&hardened_output);
+    Ok(hkdf.finalize())
 }
 
 fn oprf_key_from_seed<G: Group, D: Hash>(
     oprf_seed: &GenericArray<u8, D::OutputSize>,
     credential_identifier: &[u8],
-) -> Result<Vec<u8>, ProtocolError> {
-    let mut ikm = vec![0u8; G::ScalarLen::USIZE];
+) -> Result<GenericArray<u8, G::ScalarLen>, ProtocolError> {
+    let mut ikm = GenericArray::<_, G::ScalarLen>::default();
     Hkdf::<D>::from_prk(oprf_seed)
-        .map_err(|_| InternalError::HkdfError)?
-        .expand(&[credential_identifier, STR_OPRF_KEY].concat(), &mut ikm)
-        .map_err(|_| InternalError::HkdfError)?;
+        .ok()
+        .and_then(|hkdf| {
+            hkdf.expand_multi_info(&[credential_identifier, STR_OPRF_KEY], &mut ikm)
+                .ok()
+        })
+        .ok_or(InternalError::HkdfError)?;
     Ok(G::scalar_as_bytes(G::hash_to_scalar::<D, _, _>(
-        Some(&ikm[..]),
+        Some(ikm.as_slice()),
         GenericArray::from(*STR_OPAQUE_DERIVE_KEY_PAIR),
-    )?)
-    .to_vec())
+    )?))
+}
+
+#[derive(DeriveWhere)]
+#[derive_where(Clone)]
+#[derive_where(Debug, Eq, Hash, PartialEq)]
+pub(crate) struct MaskedResponse<CS: CipherSuite> {
+    pub(crate) nonce: GenericArray<u8, NonceLen>,
+    pub(crate) hash: GenericArray<u8, <CS::Hash as FixedOutput>::OutputSize>,
+    pub(crate) pk: GenericArray<u8, <CS::KeGroup as KeGroup>::PkLen>,
+}
+
+#[allow(type_alias_bounds)]
+pub(crate) type MaskedResponseLen<CS: CipherSuite> =
+    Sum<Sum<NonceLen, <CS::Hash as FixedOutput>::OutputSize>, <CS::KeGroup as KeGroup>::PkLen>;
+
+impl<CS: CipherSuite> MaskedResponse<CS> {
+    pub(crate) fn serialize(&self) -> GenericArray<u8, MaskedResponseLen<CS>>
+    where
+        // MaskedResponse: (Nonce + Hash) + KePk
+        NonceLen: Add<<CS::Hash as FixedOutput>::OutputSize>,
+        Sum<NonceLen, <CS::Hash as FixedOutput>::OutputSize>:
+            ArrayLength<u8> + Add<<CS::KeGroup as KeGroup>::PkLen>,
+        MaskedResponseLen<CS>: ArrayLength<u8>,
+    {
+        self.nonce.concat(self.hash.clone()).concat(self.pk.clone())
+    }
+
+    pub(crate) fn deserialize(bytes: &[u8]) -> Self {
+        let nonce = NonceLen::USIZE;
+        let hash = nonce + <CS::Hash as FixedOutput>::OutputSize::USIZE;
+        let pk = hash + <CS::KeGroup as KeGroup>::PkLen::USIZE;
+
+        Self {
+            nonce: GenericArray::clone_from_slice(&bytes[..nonce]),
+            hash: GenericArray::clone_from_slice(&bytes[nonce..hash]),
+            pk: GenericArray::clone_from_slice(&bytes[hash..pk]),
+        }
+    }
+
+    pub(crate) fn iter(&self) -> impl Iterator<Item = &[u8]> {
+        // MSRV: array `into_iter` isn't available in 1.51
+        #[allow(deprecated)]
+        IntoIter::new([self.nonce.as_slice(), &self.hash, &self.pk])
+    }
 }
 
 fn mask_response<CS: CipherSuite>(
@@ -995,46 +1017,60 @@ fn mask_response<CS: CipherSuite>(
     masking_nonce: &[u8],
     server_s_pk: &PublicKey<CS::KeGroup>,
     envelope: &Envelope<CS>,
-) -> Result<Vec<u8>, ProtocolError> {
-    let mut xor_pad = vec![0u8; <CS::KeGroup as KeGroup>::PkLen::USIZE + Envelope::<CS>::len()];
+) -> Result<MaskedResponse<CS>, ProtocolError>
+where
+    // MaskedResponse: (Nonce + Hash) + KePk
+    NonceLen: Add<<CS::Hash as FixedOutput>::OutputSize>,
+    Sum<NonceLen, <CS::Hash as FixedOutput>::OutputSize>:
+        ArrayLength<u8> + Add<<CS::KeGroup as KeGroup>::PkLen>,
+    MaskedResponseLen<CS>: ArrayLength<u8>,
+{
+    let mut xor_pad = GenericArray::<_, MaskedResponseLen<CS>>::default();
+
     Hkdf::<CS::Hash>::from_prk(masking_key)
         .map_err(|_| InternalError::HkdfError)?
-        .expand(
-            &[masking_nonce, STR_CREDENTIAL_RESPONSE_PAD].concat(),
-            &mut xor_pad,
-        )
+        .expand_multi_info(&[masking_nonce, STR_CREDENTIAL_RESPONSE_PAD], &mut xor_pad)
         .map_err(|_| InternalError::HkdfError)?;
 
-    let plaintext = [&server_s_pk.to_arr()[..], &envelope.serialize()].concat();
+    for (x1, x2) in xor_pad.iter_mut().zip(
+        server_s_pk
+            .to_arr()
+            .as_slice()
+            .iter()
+            .chain(envelope.serialize().iter()),
+    ) {
+        *x1 ^= x2
+    }
 
-    Ok(xor_pad
-        .iter()
-        .zip(plaintext.iter())
-        .map(|(&x1, &x2)| x1 ^ x2)
-        .collect())
+    Ok(MaskedResponse::deserialize(&xor_pad))
 }
 
 fn unmask_response<CS: CipherSuite>(
     masking_key: &[u8],
     masking_nonce: &[u8],
-    masked_response: &[u8],
-) -> Result<(PublicKey<CS::KeGroup>, Envelope<CS>), ProtocolError> {
-    let mut xor_pad = vec![0u8; <CS::KeGroup as KeGroup>::PkLen::USIZE + Envelope::<CS>::len()];
+    masked_response: &MaskedResponse<CS>,
+) -> Result<(PublicKey<CS::KeGroup>, Envelope<CS>), ProtocolError>
+where
+    // MaskedResponse: (Nonce + Hash) + KePk
+    NonceLen: Add<<CS::Hash as FixedOutput>::OutputSize>,
+    Sum<NonceLen, <CS::Hash as FixedOutput>::OutputSize>:
+        ArrayLength<u8> + Add<<CS::KeGroup as KeGroup>::PkLen>,
+    MaskedResponseLen<CS>: ArrayLength<u8>,
+{
+    let mut xor_pad = GenericArray::<_, MaskedResponseLen<CS>>::default();
+
     Hkdf::<CS::Hash>::from_prk(masking_key)
         .map_err(|_| InternalError::HkdfError)?
-        .expand(
-            &[masking_nonce, STR_CREDENTIAL_RESPONSE_PAD].concat(),
-            &mut xor_pad,
-        )
+        .expand_multi_info(&[masking_nonce, STR_CREDENTIAL_RESPONSE_PAD], &mut xor_pad)
         .map_err(|_| InternalError::HkdfError)?;
-    let plaintext: Vec<u8> = xor_pad
-        .iter()
-        .zip(masked_response.iter())
-        .map(|(&x1, &x2)| x1 ^ x2)
-        .collect();
+
+    for (x1, x2) in xor_pad.iter_mut().zip(masked_response.iter().flatten()) {
+        *x1 ^= x2
+    }
+
     let key_len = <CS::KeGroup as KeGroup>::PkLen::USIZE;
-    let unchecked_server_s_pk = PublicKey::from_bytes(&plaintext[..key_len])?;
-    let envelope = Envelope::deserialize(&plaintext[key_len..])?;
+    let unchecked_server_s_pk = PublicKey::from_bytes(&xor_pad[..key_len])?;
+    let envelope = Envelope::deserialize(&xor_pad[key_len..])?;
 
     // Ensure that public key is valid
     let server_s_pk = KeyPair::<CS::KeGroup>::check_public_key(unchecked_server_s_pk)
@@ -1043,21 +1079,24 @@ fn unmask_response<CS: CipherSuite>(
     Ok((server_s_pk, envelope))
 }
 
-pub(crate) fn bytestrings_from_identifiers(
-    ids: &Option<Identifiers>,
-    client_s_pk: &[u8],
-    server_s_pk: &[u8],
-) -> Result<(Vec<u8>, Vec<u8>), ProtocolError> {
-    let (client_identity, server_identity): (Vec<u8>, Vec<u8>) = match ids {
-        None => (client_s_pk.to_vec(), server_s_pk.to_vec()),
-        Some(Identifiers::ClientIdentifier(id_u)) => (id_u.clone(), server_s_pk.to_vec()),
-        Some(Identifiers::ServerIdentifier(id_s)) => (client_s_pk.to_vec(), id_s.clone()),
-        Some(Identifiers::ClientAndServerIdentifiers(id_u, id_s)) => (id_u.clone(), id_s.clone()),
+#[allow(clippy::type_complexity)]
+pub(crate) fn bytestrings_from_identifiers<KG: KeGroup>(
+    ids: Identifiers,
+    client_s_pk: GenericArray<u8, KG::PkLen>,
+    server_s_pk: GenericArray<u8, KG::PkLen>,
+) -> Result<(Serialize<U2, KG::PkLen>, Serialize<U2, KG::PkLen>), ProtocolError> {
+    let client_identity = if let Some(client) = ids.client {
+        Serialize::<U2, KG::PkLen>::from(client)?
+    } else {
+        Serialize::<U2, _>::from_owned(client_s_pk)?
     };
-    Ok((
-        serialize(&client_identity, 2)?,
-        serialize(&server_identity, 2)?,
-    ))
+    let server_identity = if let Some(server) = ids.server {
+        Serialize::<U2, KG::PkLen>::from(server)?
+    } else {
+        Serialize::<U2, _>::from_owned(server_s_pk)?
+    };
+
+    Ok((client_identity, server_identity))
 }
 
 /// Internal function for computing the blind result by calling the
@@ -1076,12 +1115,10 @@ fn blind<CS: CipherSuite, R: RngCore + CryptoRng>(
 
     #[cfg(test)]
     let result = {
-        let mut blind_bytes = vec![0u8; <CS::OprfGroup as Group>::ScalarLen::USIZE];
+        let mut blind_bytes = GenericArray::default();
         let blind = loop {
             rng.fill_bytes(&mut blind_bytes);
-            let scalar = <CS::OprfGroup as Group>::from_scalar_slice_unchecked(
-                &GenericArray::clone_from_slice(&blind_bytes),
-            )?;
+            let scalar = <CS::OprfGroup as Group>::from_scalar_slice_unchecked(&blind_bytes)?;
             match scalar
                 .ct_eq(&<CS::OprfGroup as Group>::scalar_zero())
                 .into()
@@ -1094,63 +1131,4 @@ fn blind<CS: CipherSuite, R: RngCore + CryptoRng>(
     };
 
     Ok(result)
-}
-
-// Zeroize on drop implementations
-
-// This can't be derived because of the use of a phantom parameter
-impl<CS: CipherSuite> Zeroize for ClientRegistration<CS> {
-    fn zeroize(&mut self) {
-        self.oprf_client.zeroize();
-        self.blinded_element.zeroize();
-    }
-}
-
-impl<CS: CipherSuite> Drop for ClientRegistration<CS> {
-    fn drop(&mut self) {
-        self.zeroize();
-    }
-}
-
-// This can't be derived because of the use of a phantom parameter
-impl<CS: CipherSuite> Zeroize for ServerRegistration<CS> {
-    fn zeroize(&mut self) {
-        self.0.envelope.zeroize();
-        self.0.masking_key.zeroize();
-        self.0.client_s_pk.zeroize();
-    }
-}
-
-impl<CS: CipherSuite> Drop for ServerRegistration<CS> {
-    fn drop(&mut self) {
-        self.zeroize();
-    }
-}
-
-// This can't be derived because of the use of a phantom parameter
-impl<CS: CipherSuite> Zeroize for ClientLogin<CS> {
-    fn zeroize(&mut self) {
-        self.oprf_client.zeroize();
-        self.ke1_state.zeroize();
-        self.serialized_credential_request.zeroize();
-    }
-}
-
-impl<CS: CipherSuite> Drop for ClientLogin<CS> {
-    fn drop(&mut self) {
-        self.zeroize();
-    }
-}
-
-// This can't be derived because of the use of a phantom parameter
-impl<CS: CipherSuite> Zeroize for ServerLogin<CS> {
-    fn zeroize(&mut self) {
-        self.ke2_state.zeroize();
-    }
-}
-
-impl<CS: CipherSuite> Drop for ServerLogin<CS> {
-    fn drop(&mut self) {
-        self.zeroize();
-    }
 }

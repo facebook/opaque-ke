@@ -26,7 +26,7 @@
 //! * a slow hashing function.
 //!
 //! We will use the following choices in this example:
-//! ```
+//! ```ignore
 //! use opaque_ke::CipherSuite;
 //! struct Default;
 //! impl CipherSuite for Default {
@@ -51,11 +51,20 @@
 //! # use opaque_ke::CipherSuite;
 //! # use opaque_ke::ServerSetup;
 //! # struct Default;
+//! # #[cfg(feature = "ristretto255")]
 //! # impl CipherSuite for Default {
 //! #     type OprfGroup = curve25519_dalek::ristretto::RistrettoPoint;
 //! #     type KeGroup = curve25519_dalek::ristretto::RistrettoPoint;
 //! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
 //! #     type Hash = sha2::Sha512;
+//! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
+//! # }
+//! # #[cfg(not(feature = "ristretto255"))]
+//! # impl CipherSuite for Default {
+//! #     type OprfGroup = p256_::ProjectivePoint;
+//! #     type KeGroup = p256_::PublicKey;
+//! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
+//! #     type Hash = sha2::Sha256;
 //! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
 //! # }
 //! use rand::{rngs::OsRng, RngCore};
@@ -84,11 +93,20 @@
 //! # };
 //! # use opaque_ke::CipherSuite;
 //! # struct Default;
+//! # #[cfg(feature = "ristretto255")]
 //! # impl CipherSuite for Default {
 //! #     type OprfGroup = curve25519_dalek::ristretto::RistrettoPoint;
 //! #     type KeGroup = curve25519_dalek::ristretto::RistrettoPoint;
 //! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
 //! #     type Hash = sha2::Sha512;
+//! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
+//! # }
+//! # #[cfg(not(feature = "ristretto255"))]
+//! # impl CipherSuite for Default {
+//! #     type OprfGroup = p256_::ProjectivePoint;
+//! #     type KeGroup = p256_::PublicKey;
+//! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
+//! #     type Hash = sha2::Sha256;
 //! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
 //! # }
 //! use opaque_ke::ClientRegistration;
@@ -115,11 +133,20 @@
 //! # };
 //! # use opaque_ke::CipherSuite;
 //! # struct Default;
+//! # #[cfg(feature = "ristretto255")]
 //! # impl CipherSuite for Default {
 //! #     type OprfGroup = curve25519_dalek::ristretto::RistrettoPoint;
 //! #     type KeGroup = curve25519_dalek::ristretto::RistrettoPoint;
 //! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
 //! #     type Hash = sha2::Sha512;
+//! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
+//! # }
+//! # #[cfg(not(feature = "ristretto255"))]
+//! # impl CipherSuite for Default {
+//! #     type OprfGroup = p256_::ProjectivePoint;
+//! #     type KeGroup = p256_::PublicKey;
+//! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
+//! #     type Hash = sha2::Sha256;
 //! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
 //! # }
 //! # use rand::{rngs::OsRng, RngCore};
@@ -130,7 +157,7 @@
 //! # )?;
 //! use opaque_ke::ServerRegistration;
 //! # let mut server_rng = OsRng;
-//! # let server_setup = ServerSetup::<Default>::new(&mut server_rng)?;
+//! # let server_setup = ServerSetup::<Default>::new(&mut server_rng);
 //! let server_registration_start_result = ServerRegistration::<Default>::start(
 //!     &server_setup,
 //!     client_registration_start_result.message,
@@ -153,11 +180,20 @@
 //! # };
 //! # use opaque_ke::CipherSuite;
 //! # struct Default;
+//! # #[cfg(feature = "ristretto255")]
 //! # impl CipherSuite for Default {
 //! #     type OprfGroup = curve25519_dalek::ristretto::RistrettoPoint;
 //! #     type KeGroup = curve25519_dalek::ristretto::RistrettoPoint;
 //! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
 //! #     type Hash = sha2::Sha512;
+//! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
+//! # }
+//! # #[cfg(not(feature = "ristretto255"))]
+//! # impl CipherSuite for Default {
+//! #     type OprfGroup = p256_::ProjectivePoint;
+//! #     type KeGroup = p256_::PublicKey;
+//! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
+//! #     type Hash = sha2::Sha256;
 //! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
 //! # }
 //! # use rand::{rngs::OsRng, RngCore};
@@ -167,7 +203,7 @@
 //! #     b"password",
 //! # )?;
 //! # let mut server_rng = OsRng;
-//! # let server_setup = ServerSetup::<Default>::new(&mut server_rng)?;
+//! # let server_setup = ServerSetup::<Default>::new(&mut server_rng);
 //! # let server_registration_start_result = ServerRegistration::<Default>::start(&server_setup, client_registration_start_result.message, b"alice@example.com")?;
 //! let client_registration_finish_result = client_registration_start_result.state.finish(
 //!     &mut client_rng,
@@ -192,11 +228,20 @@
 //! # };
 //! # use opaque_ke::CipherSuite;
 //! # struct Default;
+//! # #[cfg(feature = "ristretto255")]
 //! # impl CipherSuite for Default {
 //! #     type OprfGroup = curve25519_dalek::ristretto::RistrettoPoint;
 //! #     type KeGroup = curve25519_dalek::ristretto::RistrettoPoint;
 //! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
 //! #     type Hash = sha2::Sha512;
+//! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
+//! # }
+//! # #[cfg(not(feature = "ristretto255"))]
+//! # impl CipherSuite for Default {
+//! #     type OprfGroup = p256_::ProjectivePoint;
+//! #     type KeGroup = p256_::PublicKey;
+//! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
+//! #     type Hash = sha2::Sha256;
 //! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
 //! # }
 //! # use rand::{rngs::OsRng, RngCore};
@@ -206,7 +251,7 @@
 //! #     b"password",
 //! # )?;
 //! # let mut server_rng = OsRng;
-//! # let server_setup = ServerSetup::<Default>::new(&mut server_rng)?;
+//! # let server_setup = ServerSetup::<Default>::new(&mut server_rng);
 //! # let server_registration_start_result = ServerRegistration::<Default>::start(&server_setup, client_registration_start_result.message, b"alice@example.com")?;
 //! # let client_registration_finish_result = client_registration_start_result.state.finish(&mut client_rng, server_registration_start_result.message, ClientRegistrationFinishParameters::default())?;
 //! let password_file = ServerRegistration::<Default>::finish(
@@ -235,11 +280,20 @@
 //! # };
 //! # use opaque_ke::CipherSuite;
 //! # struct Default;
+//! # #[cfg(feature = "ristretto255")]
 //! # impl CipherSuite for Default {
 //! #     type OprfGroup = curve25519_dalek::ristretto::RistrettoPoint;
 //! #     type KeGroup = curve25519_dalek::ristretto::RistrettoPoint;
 //! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
 //! #     type Hash = sha2::Sha512;
+//! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
+//! # }
+//! # #[cfg(not(feature = "ristretto255"))]
+//! # impl CipherSuite for Default {
+//! #     type OprfGroup = p256_::ProjectivePoint;
+//! #     type KeGroup = p256_::PublicKey;
+//! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
+//! #     type Hash = sha2::Sha256;
 //! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
 //! # }
 //! # use rand::{rngs::OsRng, RngCore};
@@ -269,11 +323,20 @@
 //! # };
 //! # use opaque_ke::CipherSuite;
 //! # struct Default;
+//! # #[cfg(feature = "ristretto255")]
 //! # impl CipherSuite for Default {
 //! #     type OprfGroup = curve25519_dalek::ristretto::RistrettoPoint;
 //! #     type KeGroup = curve25519_dalek::ristretto::RistrettoPoint;
 //! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
 //! #     type Hash = sha2::Sha512;
+//! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
+//! # }
+//! # #[cfg(not(feature = "ristretto255"))]
+//! # impl CipherSuite for Default {
+//! #     type OprfGroup = p256_::ProjectivePoint;
+//! #     type KeGroup = p256_::PublicKey;
+//! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
+//! #     type Hash = sha2::Sha256;
 //! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
 //! # }
 //! # use rand::{rngs::OsRng, RngCore};
@@ -283,16 +346,16 @@
 //! #     b"password",
 //! # )?;
 //! # let mut server_rng = OsRng;
-//! # let server_setup = ServerSetup::<Default>::new(&mut server_rng)?;
+//! # let server_setup = ServerSetup::<Default>::new(&mut server_rng);
 //! # let server_registration_start_result = ServerRegistration::<Default>::start(&server_setup, client_registration_start_result.message, b"alice@example.com")?;
 //! # let client_registration_finish_result = client_registration_start_result.state.finish(&mut client_rng, server_registration_start_result.message, ClientRegistrationFinishParameters::default())?;
-//! # let password_file_bytes = ServerRegistration::<Default>::finish(client_registration_finish_result.message).serialize()?;
+//! # let password_file_bytes = ServerRegistration::<Default>::finish(client_registration_finish_result.message).serialize();
 //! # let client_login_start_result = ClientLogin::<Default>::start(
 //! #   &mut client_rng,
 //! #   b"password",
 //! # )?;
 //! use opaque_ke::{ServerLogin, ServerLoginStartParameters};
-//! let password_file = ServerRegistration::<Default>::deserialize(&password_file_bytes[..])?;
+//! let password_file = ServerRegistration::<Default>::deserialize(&password_file_bytes)?;
 //! let mut server_rng = OsRng;
 //! let server_login_start_result = ServerLogin::start(
 //!     &mut server_rng,
@@ -323,11 +386,20 @@
 //! # };
 //! # use opaque_ke::CipherSuite;
 //! # struct Default;
+//! # #[cfg(feature = "ristretto255")]
 //! # impl CipherSuite for Default {
 //! #     type OprfGroup = curve25519_dalek::ristretto::RistrettoPoint;
 //! #     type KeGroup = curve25519_dalek::ristretto::RistrettoPoint;
 //! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
 //! #     type Hash = sha2::Sha512;
+//! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
+//! # }
+//! # #[cfg(not(feature = "ristretto255"))]
+//! # impl CipherSuite for Default {
+//! #     type OprfGroup = p256_::ProjectivePoint;
+//! #     type KeGroup = p256_::PublicKey;
+//! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
+//! #     type Hash = sha2::Sha256;
 //! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
 //! # }
 //! # use rand::{rngs::OsRng, RngCore};
@@ -337,17 +409,17 @@
 //! #     b"password",
 //! # )?;
 //! # let mut server_rng = OsRng;
-//! # let server_setup = ServerSetup::<Default>::new(&mut server_rng)?;
+//! # let server_setup = ServerSetup::<Default>::new(&mut server_rng);
 //! # let server_registration_start_result = ServerRegistration::<Default>::start(&server_setup, client_registration_start_result.message, b"alice@example.com")?;
 //! # let client_registration_finish_result = client_registration_start_result.state.finish(&mut client_rng, server_registration_start_result.message, ClientRegistrationFinishParameters::default())?;
-//! # let password_file_bytes = ServerRegistration::<Default>::finish(client_registration_finish_result.message).serialize()?;
+//! # let password_file_bytes = ServerRegistration::<Default>::finish(client_registration_finish_result.message).serialize();
 //! # let client_login_start_result = ClientLogin::<Default>::start(
 //! #     &mut client_rng,
 //! #     b"password",
 //! # )?;
 //! # let password_file =
 //! #   ServerRegistration::<Default>::deserialize(
-//! #     &password_file_bytes[..],
+//! #     &password_file_bytes,
 //! #   )?;
 //! # let server_login_start_result =
 //! #     ServerLogin::start(&mut server_rng, &server_setup, Some(password_file), client_login_start_result.message, b"alice@example.com", ServerLoginStartParameters::default())?;
@@ -369,11 +441,20 @@
 //! # };
 //! # use opaque_ke::CipherSuite;
 //! # struct Default;
+//! # #[cfg(feature = "ristretto255")]
 //! # impl CipherSuite for Default {
 //! #     type OprfGroup = curve25519_dalek::ristretto::RistrettoPoint;
 //! #     type KeGroup = curve25519_dalek::ristretto::RistrettoPoint;
 //! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
 //! #     type Hash = sha2::Sha512;
+//! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
+//! # }
+//! # #[cfg(not(feature = "ristretto255"))]
+//! # impl CipherSuite for Default {
+//! #     type OprfGroup = p256_::ProjectivePoint;
+//! #     type KeGroup = p256_::PublicKey;
+//! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
+//! #     type Hash = sha2::Sha256;
 //! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
 //! # }
 //! # use rand::{rngs::OsRng, RngCore};
@@ -383,17 +464,17 @@
 //! #     b"password",
 //! # )?;
 //! # let mut server_rng = OsRng;
-//! # let server_setup = ServerSetup::<Default>::new(&mut server_rng)?;
+//! # let server_setup = ServerSetup::<Default>::new(&mut server_rng);
 //! # let server_registration_start_result = ServerRegistration::<Default>::start(&server_setup, client_registration_start_result.message, b"alice@example.com")?;
 //! # let client_registration_finish_result = client_registration_start_result.state.finish(&mut client_rng, server_registration_start_result.message, ClientRegistrationFinishParameters::default())?;
-//! # let password_file_bytes = ServerRegistration::<Default>::finish(client_registration_finish_result.message).serialize()?;
+//! # let password_file_bytes = ServerRegistration::<Default>::finish(client_registration_finish_result.message).serialize();
 //! # let client_login_start_result = ClientLogin::<Default>::start(
 //! #   &mut client_rng,
 //! #   b"password",
 //! # )?;
 //! # let password_file =
 //! #   ServerRegistration::<Default>::deserialize(
-//! #     &password_file_bytes[..],
+//! #     &password_file_bytes,
 //! #   )?;
 //! # let server_login_start_result =
 //! #     ServerLogin::start(&mut server_rng, &server_setup, Some(password_file), client_login_start_result.message, b"alice@example.com", ServerLoginStartParameters::default())?;
@@ -445,11 +526,20 @@
 //! # };
 //! # use opaque_ke::CipherSuite;
 //! # struct Default;
+//! # #[cfg(feature = "ristretto255")]
 //! # impl CipherSuite for Default {
 //! #     type OprfGroup = curve25519_dalek::ristretto::RistrettoPoint;
 //! #     type KeGroup = curve25519_dalek::ristretto::RistrettoPoint;
 //! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
 //! #     type Hash = sha2::Sha512;
+//! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
+//! # }
+//! # #[cfg(not(feature = "ristretto255"))]
+//! # impl CipherSuite for Default {
+//! #     type OprfGroup = p256_::ProjectivePoint;
+//! #     type KeGroup = p256_::PublicKey;
+//! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
+//! #     type Hash = sha2::Sha256;
 //! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
 //! # }
 //! # use rand::{rngs::OsRng, RngCore};
@@ -459,7 +549,7 @@
 //! #     b"password",
 //! # )?;
 //! # let mut server_rng = OsRng;
-//! # let server_setup = ServerSetup::<Default>::new(&mut server_rng)?;
+//! # let server_setup = ServerSetup::<Default>::new(&mut server_rng);
 //! # let server_registration_start_result = ServerRegistration::<Default>::start(&server_setup, client_registration_start_result.message, b"alice@example.com")?;
 //! // During registration, the client obtains a ClientRegistrationFinishResult with
 //! // a server_s_pk field
@@ -468,14 +558,14 @@
 //!     server_registration_start_result.message,
 //!     ClientRegistrationFinishParameters::default(),
 //! )?;
-//! # let password_file_bytes = ServerRegistration::<Default>::finish(client_registration_finish_result.message).serialize()?;
+//! # let password_file_bytes = ServerRegistration::<Default>::finish(client_registration_finish_result.message).serialize();
 //! # let client_login_start_result = ClientLogin::<Default>::start(
 //! #     &mut client_rng,
 //! #     b"password",
 //! # )?;
 //! # let password_file =
 //! #   ServerRegistration::<Default>::deserialize(
-//! #     &password_file_bytes[..],
+//! #     &password_file_bytes,
 //! #   )?;
 //! # let server_login_start_result =
 //! #     ServerLogin::start(&mut server_rng, &server_setup, Some(password_file), client_login_start_result.message, b"alice@example.com", ServerLoginStartParameters::default())?;
@@ -523,11 +613,20 @@
 //! # };
 //! # use opaque_ke::CipherSuite;
 //! # struct Default;
+//! # #[cfg(feature = "ristretto255")]
 //! # impl CipherSuite for Default {
 //! #     type OprfGroup = curve25519_dalek::ristretto::RistrettoPoint;
 //! #     type KeGroup = curve25519_dalek::ristretto::RistrettoPoint;
 //! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
 //! #     type Hash = sha2::Sha512;
+//! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
+//! # }
+//! # #[cfg(not(feature = "ristretto255"))]
+//! # impl CipherSuite for Default {
+//! #     type OprfGroup = p256_::ProjectivePoint;
+//! #     type KeGroup = p256_::PublicKey;
+//! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
+//! #     type Hash = sha2::Sha256;
 //! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
 //! # }
 //! # use rand::{rngs::OsRng, RngCore};
@@ -537,7 +636,7 @@
 //! #     b"password",
 //! # )?;
 //! # let mut server_rng = OsRng;
-//! # let server_setup = ServerSetup::<Default>::new(&mut server_rng)?;
+//! # let server_setup = ServerSetup::<Default>::new(&mut server_rng);
 //! # let server_registration_start_result = ServerRegistration::<Default>::start(&server_setup, client_registration_start_result.message, b"alice@example.com")?;
 //! // During registration...
 //! let client_registration_finish_result = client_registration_start_result.state.finish(
@@ -545,14 +644,14 @@
 //!     server_registration_start_result.message,
 //!     ClientRegistrationFinishParameters::default()
 //! )?;
-//! # let password_file_bytes = ServerRegistration::<Default>::finish(client_registration_finish_result.message).serialize()?;
+//! # let password_file_bytes = ServerRegistration::<Default>::finish(client_registration_finish_result.message).serialize();
 //! # let client_login_start_result = ClientLogin::<Default>::start(
 //! #     &mut client_rng,
 //! #     b"password",
 //! # )?;
 //! # let password_file =
 //! #   ServerRegistration::<Default>::deserialize(
-//! #     &password_file_bytes[..],
+//! #     &password_file_bytes,
 //! #   )?;
 //! # let server_login_start_result =
 //! #     ServerLogin::start(&mut server_rng, &server_setup, Some(password_file), client_login_start_result.message, b"alice@example.com", ServerLoginStartParameters::default())?;
@@ -589,11 +688,20 @@
 //! # };
 //! # use opaque_ke::CipherSuite;
 //! # struct Default;
+//! # #[cfg(feature = "ristretto255")]
 //! # impl CipherSuite for Default {
 //! #     type OprfGroup = curve25519_dalek::ristretto::RistrettoPoint;
 //! #     type KeGroup = curve25519_dalek::ristretto::RistrettoPoint;
 //! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
 //! #     type Hash = sha2::Sha512;
+//! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
+//! # }
+//! # #[cfg(not(feature = "ristretto255"))]
+//! # impl CipherSuite for Default {
+//! #     type OprfGroup = p256_::ProjectivePoint;
+//! #     type KeGroup = p256_::PublicKey;
+//! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
+//! #     type Hash = sha2::Sha256;
 //! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
 //! # }
 //! # use rand::{rngs::OsRng, RngCore};
@@ -603,23 +711,23 @@
 //! #     b"password",
 //! # )?;
 //! # let mut server_rng = OsRng;
-//! # let server_setup = ServerSetup::<Default>::new(&mut server_rng)?;
+//! # let server_setup = ServerSetup::<Default>::new(&mut server_rng);
 //! # let server_registration_start_result = ServerRegistration::<Default>::start(&server_setup, client_registration_start_result.message, b"alice@example.com")?;
 //! let client_registration_finish_result = client_registration_start_result.state.finish(
 //!     &mut client_rng,
 //!     server_registration_start_result.message,
 //!     ClientRegistrationFinishParameters::new(
-//!         Some(Identifiers::ClientAndServerIdentifiers(
-//!             b"Alice_the_Cryptographer".to_vec(),
-//!             b"Facebook".to_vec(),
-//!         )),
+//!         Identifiers {
+//!             client: Some(b"Alice_the_Cryptographer"),
+//!             server: Some(b"Facebook"),
+//!         },
 //!         None,
 //!     ),
 //! )?;
 //! # Ok::<(), ProtocolError>(())
 //! ```
 //!
-//! The same identifiers must also be supplied using [ServerLoginStartParameters::WithIdentifiers] in [Server Login Start](#server-login-start):
+//! The same identifiers must also be supplied using [ServerLoginStartParameters] in [Server Login Start](#server-login-start):
 //! ```
 //! # use opaque_ke::{
 //! #   errors::ProtocolError,
@@ -628,11 +736,20 @@
 //! # };
 //! # use opaque_ke::CipherSuite;
 //! # struct Default;
+//! # #[cfg(feature = "ristretto255")]
 //! # impl CipherSuite for Default {
 //! #     type OprfGroup = curve25519_dalek::ristretto::RistrettoPoint;
 //! #     type KeGroup = curve25519_dalek::ristretto::RistrettoPoint;
 //! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
 //! #     type Hash = sha2::Sha512;
+//! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
+//! # }
+//! # #[cfg(not(feature = "ristretto255"))]
+//! # impl CipherSuite for Default {
+//! #     type OprfGroup = p256_::ProjectivePoint;
+//! #     type KeGroup = p256_::PublicKey;
+//! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
+//! #     type Hash = sha2::Sha256;
 //! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
 //! # }
 //! # use rand::{rngs::OsRng, RngCore};
@@ -642,16 +759,16 @@
 //! #     b"password",
 //! # )?;
 //! # let mut server_rng = OsRng;
-//! # let server_setup = ServerSetup::<Default>::new(&mut server_rng)?;
+//! # let server_setup = ServerSetup::<Default>::new(&mut server_rng);
 //! # let server_registration_start_result = ServerRegistration::<Default>::start(&server_setup, client_registration_start_result.message, b"alice@example.com")?;
-//! # let client_registration_finish_result = client_registration_start_result.state.finish(&mut client_rng, server_registration_start_result.message, ClientRegistrationFinishParameters::new(Some(Identifiers::ClientAndServerIdentifiers(b"Alice_the_Cryptographer".to_vec(), b"Facebook".to_vec())), None))?;
-//! # let password_file_bytes = ServerRegistration::<Default>::finish(client_registration_finish_result.message).serialize()?;
+//! # let client_registration_finish_result = client_registration_start_result.state.finish(&mut client_rng, server_registration_start_result.message, ClientRegistrationFinishParameters::new(Identifiers { client: Some(b"Alice_the_Cryptographer"), server: Some(b"Facebook") }, None))?;
+//! # let password_file_bytes = ServerRegistration::<Default>::finish(client_registration_finish_result.message).serialize();
 //! # let client_login_start_result = ClientLogin::<Default>::start(
 //! #   &mut client_rng,
 //! #   b"password",
 //! # )?;
 //! # use opaque_ke::{ServerLogin, ServerLoginStartParameters};
-//! # let password_file = ServerRegistration::<Default>::deserialize(&password_file_bytes[..])?;
+//! # let password_file = ServerRegistration::<Default>::deserialize(&password_file_bytes)?;
 //! # let mut server_rng = OsRng;
 //! let server_login_start_result = ServerLogin::start(
 //!     &mut server_rng,
@@ -659,12 +776,13 @@
 //!     Some(password_file),
 //!     client_login_start_result.message,
 //!     b"alice@example.com",
-//!     ServerLoginStartParameters::WithIdentifiers(
-//!         Identifiers::ClientAndServerIdentifiers(
-//!             b"Alice_the_Cryptographer".to_vec(),
-//!             b"Facebook".to_vec(),
-//!         ),
-//!     ),
+//!     ServerLoginStartParameters {
+//!         context: None,
+//!         identifiers: Identifiers {
+//!             client: Some(b"Alice_the_Cryptographer"),
+//!             server: Some(b"Facebook"),
+//!         },
+//!     },
 //! )?;
 //! # Ok::<(), ProtocolError>(())
 //! ```
@@ -678,11 +796,20 @@
 //! # };
 //! # use opaque_ke::CipherSuite;
 //! # struct Default;
+//! # #[cfg(feature = "ristretto255")]
 //! # impl CipherSuite for Default {
 //! #     type OprfGroup = curve25519_dalek::ristretto::RistrettoPoint;
 //! #     type KeGroup = curve25519_dalek::ristretto::RistrettoPoint;
 //! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
 //! #     type Hash = sha2::Sha512;
+//! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
+//! # }
+//! # #[cfg(not(feature = "ristretto255"))]
+//! # impl CipherSuite for Default {
+//! #     type OprfGroup = p256_::ProjectivePoint;
+//! #     type KeGroup = p256_::PublicKey;
+//! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
+//! #     type Hash = sha2::Sha256;
 //! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
 //! # }
 //! # use rand::{rngs::OsRng, RngCore};
@@ -692,28 +819,28 @@
 //! #     b"password",
 //! # )?;
 //! # let mut server_rng = OsRng;
-//! # let server_setup = ServerSetup::<Default>::new(&mut server_rng)?;
+//! # let server_setup = ServerSetup::<Default>::new(&mut server_rng);
 //! # let server_registration_start_result = ServerRegistration::<Default>::start(&server_setup, client_registration_start_result.message, b"alice@example.com")?;
-//! # let client_registration_finish_result = client_registration_start_result.state.finish(&mut client_rng, server_registration_start_result.message, ClientRegistrationFinishParameters::new(Some(Identifiers::ClientAndServerIdentifiers(b"Alice_the_Cryptographer".to_vec(), b"Facebook".to_vec())), None))?;
-//! # let password_file_bytes = ServerRegistration::<Default>::finish(client_registration_finish_result.message).serialize()?;
+//! # let client_registration_finish_result = client_registration_start_result.state.finish(&mut client_rng, server_registration_start_result.message, ClientRegistrationFinishParameters::new(Identifiers { client: Some(b"Alice_the_Cryptographer"), server: Some(b"Facebook") }, None))?;
+//! # let password_file_bytes = ServerRegistration::<Default>::finish(client_registration_finish_result.message).serialize();
 //! # let client_login_start_result = ClientLogin::<Default>::start(
 //! #     &mut client_rng,
 //! #     b"password",
 //! # )?;
 //! # let password_file =
 //! #   ServerRegistration::<Default>::deserialize(
-//! #     &password_file_bytes[..],
+//! #     &password_file_bytes,
 //! #   )?;
 //! # let server_login_start_result =
-//! #     ServerLogin::start(&mut server_rng, &server_setup, Some(password_file), client_login_start_result.message, b"alice@example.com", ServerLoginStartParameters::WithIdentifiers(Identifiers::ClientAndServerIdentifiers(b"Alice_the_Cryptographer".to_vec(), b"Facebook".to_vec())))?;
+//! #     ServerLogin::start(&mut server_rng, &server_setup, Some(password_file), client_login_start_result.message, b"alice@example.com", ServerLoginStartParameters { context: None, identifiers: Identifiers { client: Some(b"Alice_the_Cryptographer"), server: Some(b"Facebook") } })?;
 //! let client_login_finish_result = client_login_start_result.state.finish(
 //!     server_login_start_result.message,
 //!     ClientLoginFinishParameters::new(
 //!         None,
-//!         Some(Identifiers::ClientAndServerIdentifiers(
-//!             b"Alice_the_Cryptographer".to_vec(),
-//!             b"Facebook".to_vec(),
-//!         )),
+//!         Identifiers {
+//!             client: Some(b"Alice_the_Cryptographer"),
+//!             server: Some(b"Facebook"),
+//!         },
 //!         None,
 //!     ),
 //! )?;
@@ -723,7 +850,7 @@
 //! Failing to supply the same pair of custom identifiers in any of the three steps above will result in an error in attempting to complete
 //! the protocol!
 //!
-//! Note that if only one of the client and server identifiers are present, then [Identifiers::ClientIdentifier] and [Identifiers::ServerIdentifier] can be
+//! Note that if only one of the client and server identifiers are present, then [Identifiers] can be
 //! used to specify them individually.
 //!
 //! ## Key Exchange Context
@@ -731,7 +858,7 @@
 //! A key exchange protocol typically allows for the specifying of shared "context" information between the two parties before the exchange is complete,
 //! so as to bind the integrity of application-specific data or configuration parameters to the security of the key exchange.
 //! During the login phase, the client and server can specify this context using:
-//! - The second login message, where the server can populate [ServerLoginStartParameters::WithContext], and
+//! - The second login message, where the server can populate [ServerLoginStartParameters], and
 //! - The third login message, where the client can populate [ClientLoginFinishParameters].
 //!
 //! For both of these messages, the `WithContextAndIdentifiers` variant can be used to specify these fields in addition to
@@ -751,51 +878,60 @@
 //! [`SecretKey`](keypair::SecretKey`) trait. This allows [`ServerSetup`] to be constructed using an existing keypair
 //! without exposing the bytes of the private key to this library.
 //! ```
-//! # use curve25519_dalek::ristretto::RistrettoPoint;
-//! # use generic_array::{GenericArray, typenum::U32};
-//! # use opaque_ke::{CipherSuite, errors::{InternalError}, keypair::{KeyPair, PrivateKey, PublicKey, SecretKey}, ServerSetup};
+//! # use generic_array::{GenericArray, typenum::U0};
+//! # use opaque_ke::{CipherSuite, errors::{InternalError}, key_exchange::group::KeGroup, keypair::{KeyPair, PrivateKey, PublicKey, SecretKey}, ServerSetup};
 //! # use rand::rngs::OsRng;
 //! # use zeroize::Zeroize;
 //! # struct Default;
+//! # #[cfg(feature = "ristretto255")]
 //! # impl CipherSuite for Default {
-//! #     type OprfGroup = RistrettoPoint;
+//! #     type OprfGroup = curve25519_dalek::ristretto::RistrettoPoint;
 //! #     type KeGroup = curve25519_dalek::ristretto::RistrettoPoint;
 //! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
 //! #     type Hash = sha2::Sha512;
 //! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
 //! # }
+//! # #[cfg(not(feature = "ristretto255"))]
+//! # impl CipherSuite for Default {
+//! #     type OprfGroup = p256_::ProjectivePoint;
+//! #     type KeGroup = p256_::PublicKey;
+//! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
+//! #     type Hash = sha2::Sha256;
+//! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
+//! # }
 //! # #[derive(Debug)]
 //! # struct YourRemoteKeyError;
 //! # #[derive(Clone, Zeroize)]
-//! # struct YourRemoteKey(PrivateKey<RistrettoPoint>);
+//! # struct YourRemoteKey(PrivateKey<<Default as CipherSuite>::KeGroup>);
 //! # impl YourRemoteKey {
-//! #     fn diffie_hellman(&self, pk: &[u8]) -> Result<Vec<u8>, YourRemoteKeyError> { todo!() }
-//! #     fn public_key(&self) -> Result<GenericArray<u8, U32>, YourRemoteKeyError> { Ok(GenericArray::default()) }
+//! #     fn diffie_hellman(&self, pk: &[u8]) -> Result<GenericArray<u8, <<Default as CipherSuite>::KeGroup as KeGroup>::PkLen>, YourRemoteKeyError> { todo!() }
+//! #     fn public_key(&self) -> Result<GenericArray<u8, <<Default as CipherSuite>::KeGroup as KeGroup>::PkLen>, YourRemoteKeyError> { Ok(GenericArray::default()) }
 //! # }
-//! impl SecretKey<RistrettoPoint> for YourRemoteKey {
+//! impl SecretKey<<Default as CipherSuite>::KeGroup> for YourRemoteKey {
 //!     type Error = YourRemoteKeyError;
+//!     type Len = U0;
 //!
 //!     fn diffie_hellman(
 //!         &self,
-//!         pk: PublicKey<RistrettoPoint>,
-//!     ) -> Result<Vec<u8>, InternalError<Self::Error>> {
+//!         pk: PublicKey<<Default as CipherSuite>::KeGroup>,
+//!     ) -> Result<GenericArray<u8, <<Default as CipherSuite>::KeGroup as KeGroup>::PkLen>, InternalError<Self::Error>> {
 //!         YourRemoteKey::diffie_hellman(self, &pk.to_arr()).map_err(InternalError::Custom)
 //!     }
 //!
 //!     fn public_key(
 //!         &self
-//!     ) -> Result<PublicKey<RistrettoPoint>, InternalError<Self::Error>> {
+//!     ) -> Result<PublicKey<<Default as CipherSuite>::KeGroup>, InternalError<Self::Error>> {
 //!         YourRemoteKey::public_key(self).map(PublicKey::from_arr)
 //!             .map_err(InternalError::Custom)
 //!     }
 //!
-//!     fn serialize(&self) -> Vec<u8> {
-//!         // if you use serde and the "serialize" crate feature, you won't need this
+//!     fn serialize(&self) -> GenericArray<u8, Self::Len> {
+//!         // if you use Serde and the "serde" crate feature, you won't need this
 //!         todo!()
 //!     }
 //!
 //!     fn deserialize(input: &[u8]) -> Result<Self, InternalError<Self::Error>> {
-//!         // if you use serde and the "serialize" crate feature, you won't need this
+//!         // if you use Serde and the "serde" crate feature, you won't need this
 //!         todo!()
 //!     }
 //! }
@@ -814,28 +950,34 @@
 //! password file records will be against offline dictionary and precomputation attacks; see
 //! [the OPAQUE paper](https://eprint.iacr.org/2018/163.pdf) for more details.
 //!
-//! - The `serialize` feature, enabled by default, provides convenience functions for serializing and deserializing with
+//! - The `serde` feature, enabled by default, provides convenience functions for serializing and deserializing with
 //! [serde](https://serde.rs/).
 //!
-//! - The `u32_backend` and `u64_backend` features are re-exported from
-//! [curve25519-dalek](https://doc.dalek.rs/curve25519_dalek/index.html#backends-and-features) and allow for selecting
-//! the corresponding backend for the curve arithmetic used. The `u64_backend` feature is included as the default.
+//! - The backend features are re-exported from
+//!   [curve25519-dalek](https://doc.dalek.rs/curve25519_dalek/index.html#backends-and-features) and allow for selecting
+//!   the corresponding backend for the curve arithmetic used. The `ristretto255_u64` feature is included as the default.
+//!   Other features are mapped as `ristretto255_u32`, `ristretto255_fiat_u64` and `ristretto255_fiat_u32`. Any `ristretto255_*`
+//!   backend feature will enable the `ristretto255` feature, which can be used too, but keep in mind that `curve25519-dalek`
+//!   will fail to compile without a selected backend. This enabled to use `curve25519_dalek::ristretto::RistrettoPoint` as a
+//!   `KeGroup` and `OprfGroup`.
 //!
-//! - The `p256` feature enables the use of `p256::ProjectivePoint` as a `Group` for `CipherSuite`. Note that this
-//! is currently an experimental feature ⚠️, and is not yet ready for production use.
+//! - The `x25519` feature is similar to the `ristretto255` feature and requires to select a backend like `x25519_u64`, other
+//!   backends are the same as in `ristretto255_*`. This enables `x25519_dalek::PublicKey` as a `KeGroup`.
+//!
+//! - The `ristretto255_simd` feature is re-exported from
+//!   [curve25519-dalek](https://doc.dalek.rs/curve25519_dalek/index.html#backends-and-features) and enables parallel formulas,
+//!   using either AVX2 or AVX512-IFMA. This will automatically enable the `ristretto255_u64` feature and requires Rust nightly.
+//!
+//! - The `p256` feature enables the use of `p256::PublicKey` as a `KeGroup` and `p256::ProjectivePoint` as a `OprfGroup` for
+//!   `CipherSuite`. Note that this is currently an experimental feature ⚠️, and is not yet ready for production use.
 //!
 //! - The `bench` feature is used only for running performance benchmarks for this implementation.
 //!
 
-#![cfg_attr(not(feature = "bench"), deny(missing_docs))]
 #![deny(unsafe_code)]
 #![cfg_attr(not(feature = "std"), no_std)]
-
-#[cfg(not(any(feature = "u64_backend", feature = "u32_backend",)))]
-compile_error!(
-    "no dalek arithmetic backend cargo feature enabled! \
-     please enable one of: u64_backend, u32_backend"
-);
+#![warn(clippy::cargo, missing_docs)]
+#![allow(clippy::multiple_crate_versions)]
 
 extern crate alloc;
 
@@ -868,6 +1010,11 @@ pub use crate::messages::{
     CredentialFinalization, CredentialRequest, CredentialResponse, RegistrationRequest,
     RegistrationResponse, RegistrationUpload,
 };
+pub use crate::messages::{
+    CredentialFinalizationLen, CredentialRequestLen, CredentialResponseLen, RegistrationRequestLen,
+    RegistrationResponseLen, RegistrationUploadLen,
+};
+pub use crate::opaque::ServerRegistrationLen;
 pub use crate::opaque::{
     ClientLogin, ClientRegistration, ServerLogin, ServerRegistration, ServerSetup,
 };
