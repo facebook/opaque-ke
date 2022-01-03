@@ -7,11 +7,9 @@
 
 use crate::errors::ProtocolError;
 use core::marker::PhantomData;
-use core::ops::Add;
 use digest::Update;
 use generic_array::{
-    sequence::Concat,
-    typenum::{Sum, U0, U2},
+    typenum::{U0, U2},
     ArrayLength, GenericArray,
 };
 use hmac::Mac;
@@ -22,23 +20,19 @@ pub(crate) fn i2osp<L: ArrayLength<u8>>(
 ) -> Result<GenericArray<u8, L>, ProtocolError> {
     const SIZEOF_USIZE: usize = core::mem::size_of::<usize>();
 
-    // Check if input >= 256^length
+    // Make sure input fits in output.
     if (SIZEOF_USIZE as u32 - input.leading_zeros() / 8) > L::U32 {
         return Err(ProtocolError::SerializationError);
     }
 
-    if L::USIZE <= SIZEOF_USIZE {
-        return Ok(GenericArray::clone_from_slice(
-            &input.to_be_bytes()[SIZEOF_USIZE - L::USIZE..],
-        ));
-    }
-
     let mut output = GenericArray::default();
-    output[L::USIZE - SIZEOF_USIZE..L::USIZE].copy_from_slice(&input.to_be_bytes());
+    output[L::USIZE.saturating_sub(SIZEOF_USIZE)..]
+        .copy_from_slice(&input.to_be_bytes()[SIZEOF_USIZE.saturating_sub(L::USIZE)..]);
     Ok(output)
 }
 
 // Corresponds to the OS2IP() function from RFC8017
+#[cfg(test)]
 pub(crate) fn os2ip(input: &[u8]) -> Result<usize, ProtocolError> {
     if input.len() > core::mem::size_of::<usize>() {
         return Err(ProtocolError::SerializationError);
@@ -123,20 +117,6 @@ impl<'a, L1: ArrayLength<u8>, L2: ArrayLength<u8>> Serialize<'a, L1, L2, U0> {
 
         [self.octet.as_slice(), input]
     }
-
-    pub(crate) fn serialize(self) -> GenericArray<u8, Sum<L1, L2>>
-    where
-        L1: Add<L2>,
-        Sum<L1, L2>: ArrayLength<u8>,
-    {
-        let input = if let Input::Owned(value) = self.input {
-            value
-        } else {
-            unreachable!("unexpected `Serialize` constructed with wrong generics")
-        };
-
-        self.octet.concat(input)
-    }
 }
 
 impl<'a, L1: ArrayLength<u8>, L2: ArrayLength<u8>> Serialize<'a, L1, L2, U2> {
@@ -146,24 +126,6 @@ impl<'a, L1: ArrayLength<u8>, L2: ArrayLength<u8>> Serialize<'a, L1, L2, U2> {
             _ => unreachable!("unexpected `Serialize` constructed with wrong generics"),
         }
     }
-}
-
-// Tokenizes an input of the format I2OSP(len(input), max_bytes) || input, outputting
-// (input, remainder)
-pub(crate) fn tokenize(input: &[u8], size_bytes: usize) -> Result<(&[u8], &[u8]), ProtocolError> {
-    if size_bytes > core::mem::size_of::<usize>() || input.len() < size_bytes {
-        return Err(ProtocolError::SerializationError);
-    }
-
-    let size = os2ip(&input[..size_bytes])?;
-    if size_bytes + size > input.len() {
-        return Err(ProtocolError::SerializationError);
-    }
-
-    Ok((
-        &input[size_bytes..size_bytes + size],
-        &input[size_bytes + size..],
-    ))
 }
 
 pub(crate) trait UpdateExt {

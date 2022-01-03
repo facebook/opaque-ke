@@ -7,7 +7,7 @@
 
 /// Macro used for deriving `serde`'s `Serialize` and `Deserialize` traits.
 macro_rules! impl_serialize_and_deserialize_for {
-    ($item:ident$( where $($path:ty: $bound1:path $(| $bound2:path)*),+$(,)?)?$(; $error:expr)?) => {
+    ($item:ident$( where $($path:ty: $bound1:path $(| $bound2:path)*),+$(,)?)?) => {
         #[cfg(feature = "serde")]
         impl<CS: CipherSuite> serde_::Serialize for $item<CS>
         where
@@ -20,7 +20,7 @@ macro_rules! impl_serialize_and_deserialize_for {
             where
                 S: serde_::Serializer,
             {
-                serializer.serialize_bytes(&self.serialize()$(.map_err($error)?)?)
+                serializer.serialize_bytes(&self.serialize())
             }
         }
 

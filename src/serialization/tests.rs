@@ -21,7 +21,7 @@ use crate::{
     keypair::KeyPair,
     messages::CredentialResponseWithoutKeLen,
     opaque::{ClientLoginLen, ClientRegistrationLen, MaskedResponseLen},
-    serialization::{i2osp, os2ip, Serialize},
+    serialization::{i2osp, os2ip},
     *,
 };
 use core::ops::Add;
@@ -31,7 +31,7 @@ use std::vec::Vec;
 use digest::core_api::{BlockSizeUser, CoreProxy};
 use digest::Output;
 use generic_array::{
-    typenum::{IsLess, Le, NonZero, Sum, Unsigned, U2, U256},
+    typenum::{IsLess, Le, NonZero, Sum, Unsigned, U256},
     ArrayLength,
 };
 use proptest::{collection::vec, prelude::*};
@@ -78,12 +78,8 @@ fn client_registration_roundtrip() -> Result<(), ProtocolError> {
         <CS::Hash as CoreProxy>::Core: ProxyHash,
         <<CS::Hash as CoreProxy>::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
         Le<<<CS::Hash as CoreProxy>::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
-        // ClientRegistration: (2 + KgSk) + (2 + KgPk)
-        U2: Add<<CS::OprfGroup as Group>::ScalarLen>,
-        Sum<U2, <CS::OprfGroup as Group>::ScalarLen>:
-            ArrayLength<u8> + Add<Sum<U2, <CS::OprfGroup as Group>::ElemLen>>,
-        U2: Add<<CS::OprfGroup as Group>::ElemLen>,
-        Sum<U2, <CS::OprfGroup as Group>::ElemLen>: ArrayLength<u8>,
+        // ClientRegistration: KgSk + KgPk
+        <CS::OprfGroup as Group>::ScalarLen: Add<<CS::OprfGroup as Group>::ElemLen>,
         ClientRegistrationLen<CS>: ArrayLength<u8>,
     {
         let pw = b"hunter2";
@@ -92,15 +88,16 @@ fn client_registration_roundtrip() -> Result<(), ProtocolError> {
         let blind_result =
             &voprf::NonVerifiableClient::<CS::OprfGroup, CS::Hash>::blind(pw, &mut rng)?;
 
-        let bytes: Vec<u8> = Serialize::<U2>::from(&blind_result.state.serialize())?
+        let bytes: Vec<u8> = blind_result
+            .state
+            .serialize()
             .iter()
-            .chain(Serialize::<U2>::from(&blind_result.message.serialize())?.iter())
-            .flatten()
+            .chain(blind_result.message.serialize().iter())
             .cloned()
             .collect();
 
         let reg = ClientRegistration::<CS>::deserialize(&bytes)?;
-        let reg_bytes = reg.serialize()?;
+        let reg_bytes = reg.serialize();
         assert_eq!(*reg_bytes, bytes);
         Ok(())
     }
@@ -480,16 +477,10 @@ fn client_login_roundtrip() -> Result<(), ProtocolError> {
         // CredentialRequest: KgPk + Ke1Message
         <CS::OprfGroup as Group>::ElemLen: Add<Ke1MessageLen<CS>>,
         CredentialRequestLen<CS>: ArrayLength<u8>,
-        // ClientLogin: (2 + KgSk) + (2 + CredentialRequest) + (2 + Ke1State)
-        U2: Add<<CS::OprfGroup as Group>::ScalarLen>,
-        Sum<U2, <CS::OprfGroup as Group>::ScalarLen>:
-            ArrayLength<u8> + Add<Sum<U2, CredentialRequestLen<CS>>>,
-        U2: Add<CredentialRequestLen<CS>>,
-        Sum<U2, CredentialRequestLen<CS>>: ArrayLength<u8>,
-        Sum<Sum<U2, <CS::OprfGroup as Group>::ScalarLen>, Sum<U2, CredentialRequestLen<CS>>>:
-            ArrayLength<u8> + Add<Sum<U2, Ke1StateLen<CS>>>,
-        U2: Add<Ke1StateLen<CS>>,
-        Sum<U2, Ke1StateLen<CS>>: ArrayLength<u8>,
+        // ClientLogin: KgSk + CredentialRequest + Ke1State
+        <CS::OprfGroup as Group>::ScalarLen: Add<CredentialRequestLen<CS>>,
+        Sum<<CS::OprfGroup as Group>::ScalarLen, CredentialRequestLen<CS>>:
+            ArrayLength<u8> + Add<Ke1StateLen<CS>>,
         ClientLoginLen<CS>: ArrayLength<u8>,
     {
         let pw = b"hunter2";
@@ -516,15 +507,16 @@ fn client_login_roundtrip() -> Result<(), ProtocolError> {
                 )?,
         };
 
-        let bytes: Vec<u8> = Serialize::<U2>::from(&blind_result.state.serialize())?
+        let bytes: Vec<u8> = blind_result
+            .state
+            .serialize()
             .iter()
-            .chain(Serialize::<U2>::from(&credential_request.serialize())?.iter())
-            .chain(Serialize::<U2>::from(&l1_data)?.iter())
-            .flatten()
+            .chain(credential_request.serialize().iter())
+            .chain(l1_data.iter())
             .cloned()
             .collect();
         let reg = ClientLogin::<CS>::deserialize(&bytes)?;
-        let reg_bytes = reg.serialize()?;
+        let reg_bytes = reg.serialize();
         assert_eq!(*reg_bytes, bytes);
         Ok(())
     }
