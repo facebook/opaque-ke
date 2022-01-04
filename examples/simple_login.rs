@@ -5,39 +5,39 @@
 // License, Version 2.0 found in the LICENSE-APACHE file in the root directory
 // of this source tree.
 
-//! Demonstrates a simple client-server password-based login protocol
-//! using OPAQUE, over a command-line interface
+//! Demonstrates a simple client-server password-based login protocol using
+//! OPAQUE, over a command-line interface
 //!
-//! The client-server interactions are executed in a three-step protocol
-//! within the account_registration (for password registration) and
-//! account_login (for password login) functions. These steps
-//! must be performed in the specific sequence outlined in each of these
-//! functions.
+//! The client-server interactions are executed in a three-step protocol within
+//! the account_registration (for password registration) and account_login (for
+//! password login) functions. These steps must be performed in the specific
+//! sequence outlined in each of these functions.
 //!
-//! The CipherSuite trait allows the application to configure the
-//! primitives used by OPAQUE, but must be kept consistent across the steps
-//! of the protocol.
+//! The CipherSuite trait allows the application to configure the primitives
+//! used by OPAQUE, but must be kept consistent across the steps of the
+//! protocol.
 //!
-//! In a more realistic client-server interaction, the client must send
-//! messages over "the wire" to the server. These bytes are serialized
-//! and explicitly annotated in the below functions.
+//! In a more realistic client-server interaction, the client must send messages
+//! over "the wire" to the server. These bytes are serialized and explicitly
+//! annotated in the below functions.
 
-use generic_array::GenericArray;
-use rustyline::error::ReadlineError;
-use rustyline::Editor;
 use std::collections::HashMap;
 use std::process::exit;
 
+use generic_array::GenericArray;
+use opaque_ke::ciphersuite::CipherSuite;
+use opaque_ke::rand::rngs::OsRng;
 use opaque_ke::{
-    ciphersuite::CipherSuite, rand::rngs::OsRng, ClientLogin, ClientLoginFinishParameters,
-    ClientRegistration, ClientRegistrationFinishParameters, CredentialFinalization,
-    CredentialRequest, CredentialResponse, RegistrationRequest, RegistrationResponse,
-    RegistrationUpload, ServerLogin, ServerLoginStartParameters, ServerRegistration,
-    ServerRegistrationLen, ServerSetup,
+    ClientLogin, ClientLoginFinishParameters, ClientRegistration,
+    ClientRegistrationFinishParameters, CredentialFinalization, CredentialRequest,
+    CredentialResponse, RegistrationRequest, RegistrationResponse, RegistrationUpload, ServerLogin,
+    ServerLoginStartParameters, ServerRegistration, ServerRegistrationLen, ServerSetup,
 };
+use rustyline::error::ReadlineError;
+use rustyline::Editor;
 
-// The ciphersuite trait allows to specify the underlying primitives
-// that will be used in the OPAQUE protocol
+// The ciphersuite trait allows to specify the underlying primitives that will
+// be used in the OPAQUE protocol
 #[allow(dead_code)]
 struct Default;
 
@@ -191,11 +191,12 @@ fn main() {
                             {
                                 println!("\nLogin success!");
                             } else {
-                                // Note that at this point, the client knows whether or not the login
-                                // succeeded. In this example, we simply rely on client-reported result
-                                // of login, but in a real client-server implementation, the server may not
-                                // know the outcome of login yet, and extra care must be taken to ensure
-                                // that the server can learn the outcome as well.
+                                // Note that at this point, the client knows whether or not the
+                                // login succeeded. In this example, we simply rely on
+                                // client-reported result of login, but in a real client-server
+                                // implementation, the server may not know the outcome of login yet,
+                                // and extra care must be taken to ensure that the server can learn
+                                // the outcome as well.
                                 println!("\nIncorrect password, please try again.");
                             }
                         }

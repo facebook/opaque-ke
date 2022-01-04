@@ -5,12 +5,12 @@
 // License, Version 2.0 found in the LICENSE-APACHE file in the root directory
 // of this source tree.
 
-//! Includes the KeGroup trait and definitions for the
-//! key exchange groups
+//! Includes the KeGroup trait and definitions for the key exchange groups
 
-use crate::errors::InternalError;
 use generic_array::{ArrayLength, GenericArray};
 use rand::{CryptoRng, RngCore};
+
+use crate::errors::InternalError;
 
 /// A group representation for use in the key exchange
 pub trait KeGroup: Sized + Clone {

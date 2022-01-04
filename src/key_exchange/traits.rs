@@ -5,20 +5,18 @@
 // License, Version 2.0 found in the LICENSE-APACHE file in the root directory
 // of this source tree.
 
-use crate::hash::ProxyHash;
-use crate::key_exchange::group::KeGroup;
-use crate::{
-    ciphersuite::CipherSuite,
-    errors::ProtocolError,
-    hash::Hash,
-    keypair::{PrivateKey, PublicKey, SecretKey},
-};
 use digest::core_api::BlockSizeUser;
 use digest::Output;
 use generic_array::typenum::{IsLess, Le, NonZero, U256};
 use generic_array::{ArrayLength, GenericArray};
 use rand::{CryptoRng, RngCore};
 use zeroize::Zeroize;
+
+use crate::ciphersuite::CipherSuite;
+use crate::errors::ProtocolError;
+use crate::hash::{Hash, ProxyHash};
+use crate::key_exchange::group::KeGroup;
+use crate::keypair::{PrivateKey, PublicKey, SecretKey};
 
 #[cfg(not(test))]
 pub type GenerateKe2Result<K, D, G> = (

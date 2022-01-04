@@ -140,7 +140,8 @@ pub enum ProtocolError<T = Infallible> {
     /** This error occurs when the client detects that the server has
     reflected the OPRF value (beta == alpha) */
     ReflectedValueError,
-    /// Identity group element was encountered during deserialization, which is invalid
+    /** Identity group element was encountered during deserialization, which is
+    invalid */
     IdentityGroupElementError,
 }
 
@@ -169,9 +170,9 @@ impl<T> From<InternalError<T>> for ProtocolError<T> {
     }
 }
 
-// See https://github.com/rust-lang/rust/issues/64715 and remove this when
-// merged, and https://github.com/dtolnay/thiserror/issues/62 for why this
-// comes up in our doc tests.
+// See https://github.com/rust-lang/rust/issues/64715 and remove this when merged,
+// and https://github.com/dtolnay/thiserror/issues/62 for why this comes up in our
+// doc tests.
 impl<T> From<::core::convert::Infallible> for ProtocolError<T> {
     fn from(_: ::core::convert::Infallible) -> Self {
         unreachable!()

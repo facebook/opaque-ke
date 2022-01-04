@@ -7,11 +7,13 @@
 
 //! Key Exchange group implementation for X25519
 
-use super::KeGroup;
-use crate::errors::InternalError;
-use generic_array::{typenum::U32, GenericArray};
+use generic_array::typenum::U32;
+use generic_array::GenericArray;
 use rand::{CryptoRng, RngCore};
 use x25519_dalek::{PublicKey, StaticSecret};
+
+use super::KeGroup;
+use crate::errors::InternalError;
 
 /// The implementation of such a subgroup for Ristretto
 impl KeGroup for PublicKey {

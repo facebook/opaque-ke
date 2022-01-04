@@ -5,34 +5,32 @@
 // License, Version 2.0 found in the LICENSE-APACHE file in the root directory
 // of this source tree.
 
-use crate::{
-    ciphersuite::CipherSuite,
-    envelope::EnvelopeLen,
-    errors::*,
-    hash::{OutputSize, ProxyHash},
-    key_exchange::{
-        group::KeGroup,
-        traits::{Ke1MessageLen, Ke2MessageLen},
-        tripledh::{NonceLen, TripleDH},
-    },
-    messages::{
-        CredentialRequestLen, CredentialResponseLen, CredentialResponseWithoutKeLen,
-        RegistrationResponseLen, RegistrationUploadLen,
-    },
-    opaque::*,
-    slow_hash::NoOpHash,
-    tests::mock_rng::CycleRng,
-    *,
-};
 use core::ops::Add;
+use std::string::ToString;
+use std::vec::Vec;
+use std::{println, vec};
+
 use digest::core_api::{BlockSizeUser, CoreProxy};
-use generic_array::{
-    typenum::{IsLess, Le, NonZero, Sum, U256},
-    ArrayLength,
-};
+use generic_array::typenum::{IsLess, Le, NonZero, Sum, U256};
+use generic_array::ArrayLength;
 use json::JsonValue;
-use std::{println, string::ToString, vec, vec::Vec};
 use voprf::Group;
+
+use crate::ciphersuite::CipherSuite;
+use crate::envelope::EnvelopeLen;
+use crate::errors::*;
+use crate::hash::{OutputSize, ProxyHash};
+use crate::key_exchange::group::KeGroup;
+use crate::key_exchange::traits::{Ke1MessageLen, Ke2MessageLen};
+use crate::key_exchange::tripledh::{NonceLen, TripleDH};
+use crate::messages::{
+    CredentialRequestLen, CredentialResponseLen, CredentialResponseWithoutKeLen,
+    RegistrationResponseLen, RegistrationUploadLen,
+};
+use crate::opaque::*;
+use crate::slow_hash::NoOpHash;
+use crate::tests::mock_rng::CycleRng;
+use crate::*;
 
 #[allow(non_snake_case)]
 #[derive(Debug)]
@@ -95,7 +93,8 @@ macro_rules! parse_default {
 macro_rules! parse_default_random {
     ( $v:ident, $s:expr, $size:expr ) => {
         parse_default!($v, $s, {
-            use rand::{rngs::OsRng, RngCore};
+            use rand::rngs::OsRng;
+            use rand::RngCore;
             let mut rng = OsRng;
             let mut v = vec![0u8; $size];
             rng.fill_bytes(&mut v);

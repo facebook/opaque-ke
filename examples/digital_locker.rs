@@ -8,43 +8,42 @@
 //! Demonstrates an implementation of a server-side secured digital locker using
 //! the client's OPAQUE export key, over a command-line interface
 //!
-//! A client can password-protect a secret message to be stored in a digital locker,
-//! controlled by the server. The locker's contents are only revealed to the holder
-//! of the password when attempting to open the locker.
+//! A client can password-protect a secret message to be stored in a digital
+//! locker, controlled by the server. The locker's contents are only revealed to
+//! the holder of the password when attempting to open the locker.
 //!
-//! The client-server interactions are executed in a three-step protocol
-//! within the account_registration (for password registration) and
-//! account_login (for password login) functions. These steps
-//! must be performed in the specific sequence outlined in each of these
-//! functions.
+//! The client-server interactions are executed in a three-step protocol within
+//! the account_registration (for password registration) and account_login (for
+//! password login) functions. These steps must be performed in the specific
+//! sequence outlined in each of these functions.
 //!
-//! The CipherSuite trait allows the application to configure the
-//! primitives used by OPAQUE, but must be kept consistent across the steps
-//! of the protocol.
+//! The CipherSuite trait allows the application to configure the primitives
+//! used by OPAQUE, but must be kept consistent across the steps of the
+//! protocol.
 //!
-//! In a more realistic client-server interaction, the client must send
-//! messages over "the wire" to the server. These bytes are serialized
-//! and explicitly annotated in the below functions.
+//! In a more realistic client-server interaction, the client must send messages
+//! over "the wire" to the server. These bytes are serialized and explicitly
+//! annotated in the below functions.
+
+use std::process::exit;
 
 use chacha20poly1305::aead::{Aead, NewAead};
 use chacha20poly1305::{ChaCha20Poly1305, Key, Nonce};
 use generic_array::GenericArray;
-use opaque_ke::ServerRegistrationLen;
-use rustyline::error::ReadlineError;
-use rustyline::Editor;
-use std::process::exit;
-
+use opaque_ke::ciphersuite::CipherSuite;
+use opaque_ke::rand::rngs::OsRng;
+use opaque_ke::rand::RngCore;
 use opaque_ke::{
-    ciphersuite::CipherSuite,
-    rand::{rngs::OsRng, RngCore},
     ClientLogin, ClientLoginFinishParameters, ClientRegistration,
     ClientRegistrationFinishParameters, CredentialFinalization, CredentialRequest,
     CredentialResponse, RegistrationRequest, RegistrationResponse, RegistrationUpload, ServerLogin,
-    ServerLoginStartParameters, ServerRegistration, ServerSetup,
+    ServerLoginStartParameters, ServerRegistration, ServerRegistrationLen, ServerSetup,
 };
+use rustyline::error::ReadlineError;
+use rustyline::Editor;
 
-// The ciphersuite trait allows to specify the underlying primitives
-// that will be used in the OPAQUE protocol
+// The ciphersuite trait allows to specify the underlying primitives that will
+// be used in the OPAQUE protocol
 #[allow(dead_code)]
 struct Default;
 
@@ -84,7 +83,8 @@ fn encrypt(key: &[u8], plaintext: &[u8]) -> Vec<u8> {
     [nonce_bytes.to_vec(), ciphertext].concat()
 }
 
-// Decrypt using a key and a ciphertext (nonce included) to recover the original plaintext
+// Decrypt using a key and a ciphertext (nonce included) to recover the original
+// plaintext
 fn decrypt(key: &[u8], ciphertext: &[u8]) -> Vec<u8> {
     let cipher = ChaCha20Poly1305::new(Key::from_slice(&key[..32]));
     cipher
@@ -95,7 +95,8 @@ fn decrypt(key: &[u8], ciphertext: &[u8]) -> Vec<u8> {
         .unwrap()
 }
 
-// Password-based registration and encryption of client secret message between a client and server
+// Password-based registration and encryption of client secret message between a
+// client and server
 fn register_locker(
     server_setup: &ServerSetup<Default>,
     locker_id: usize,
@@ -200,7 +201,7 @@ fn open_locker(
     let encrypted_locker_contents =
         encrypt(&server_login_finish_result.session_key, &locker.contents);
 
-    // Client decrypts contents of locker, first under the session key, and then under the export key
+    // Client decrypts contents of locker, first under the session key, and then
     let plaintext = decrypt(
         &client_login_finish_result.export_key,
         &decrypt(

@@ -7,8 +7,6 @@
 
 //! Key Exchange group implementation for p256
 
-use super::KeGroup;
-use crate::errors::InternalError;
 use generic_array::typenum::{U32, U33};
 use generic_array::GenericArray;
 use p256_::elliptic_curve::group::GroupEncoding;
@@ -16,6 +14,9 @@ use p256_::elliptic_curve::sec1::ToEncodedPoint;
 use p256_::elliptic_curve::{PublicKey, SecretKey};
 use p256_::NistP256;
 use rand::{CryptoRng, RngCore};
+
+use super::KeGroup;
+use crate::errors::InternalError;
 
 impl KeGroup for PublicKey<NistP256> {
     type PkLen = U33;

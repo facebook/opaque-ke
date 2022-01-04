@@ -5,38 +5,34 @@
 // License, Version 2.0 found in the LICENSE-APACHE file in the root directory
 // of this source tree.
 
-use crate::{
-    ciphersuite::CipherSuite,
-    envelope::{Envelope, EnvelopeLen, InnerEnvelopeMode},
-    errors::*,
-    hash::{OutputSize, ProxyHash},
-    key_exchange::{
-        group::KeGroup,
-        traits::{Ke1MessageLen, Ke1StateLen, Ke2MessageLen},
-    },
-    key_exchange::{
-        traits::{FromBytes, KeyExchange, ToBytes},
-        tripledh::{NonceLen, TripleDH},
-    },
-    keypair::KeyPair,
-    messages::CredentialResponseWithoutKeLen,
-    opaque::{ClientLoginLen, ClientRegistrationLen, MaskedResponseLen},
-    serialization::{i2osp, os2ip},
-    *,
-};
 use core::ops::Add;
 use std::vec;
 use std::vec::Vec;
 
 use digest::core_api::{BlockSizeUser, CoreProxy};
 use digest::Output;
-use generic_array::{
-    typenum::{IsLess, Le, NonZero, Sum, Unsigned, U256},
-    ArrayLength,
-};
-use proptest::{collection::vec, prelude::*};
-use rand::{rngs::OsRng, RngCore};
+use generic_array::typenum::{IsLess, Le, NonZero, Sum, Unsigned, U256};
+use generic_array::ArrayLength;
+use proptest::collection::vec;
+use proptest::prelude::*;
+use rand::rngs::OsRng;
+use rand::RngCore;
 use voprf::Group;
+
+use crate::ciphersuite::CipherSuite;
+use crate::envelope::{Envelope, EnvelopeLen, InnerEnvelopeMode};
+use crate::errors::*;
+use crate::hash::{OutputSize, ProxyHash};
+use crate::key_exchange::group::KeGroup;
+use crate::key_exchange::traits::{
+    FromBytes, Ke1MessageLen, Ke1StateLen, Ke2MessageLen, KeyExchange, ToBytes,
+};
+use crate::key_exchange::tripledh::{NonceLen, TripleDH};
+use crate::keypair::KeyPair;
+use crate::messages::CredentialResponseWithoutKeLen;
+use crate::opaque::{ClientLoginLen, ClientRegistrationLen, MaskedResponseLen};
+use crate::serialization::{i2osp, os2ip};
+use crate::*;
 
 #[cfg(feature = "ristretto255")]
 struct Ristretto255;
@@ -128,16 +124,18 @@ fn server_registration_roundtrip() -> Result<(), ProtocolError> {
         // ServerRegistration = RegistrationUpload
     {
         // If we don't have envelope and client_pk, the server registration just
-        // contains the prf key
         let mut rng = OsRng;
         let mut masking_key = Output::<CS::Hash>::default();
         rng.fill_bytes(&mut masking_key);
 
         // Construct a mock envelope
         let mut mock_envelope_bytes = Vec::new();
-        mock_envelope_bytes.extend_from_slice(&[0; NonceLen::USIZE]); // empty nonce
-                                                                      // mock_envelope_bytes.extend_from_slice(&ciphertext); // ciphertext which is an encrypted private key
-        mock_envelope_bytes.extend_from_slice(&Output::<CS::Hash>::default()); // length-MAC_SIZE hmac
+        // empty nonce
+        mock_envelope_bytes.extend_from_slice(&[0; NonceLen::USIZE]);
+        // ciphertext which is an encrypted private key
+        //mock_envelope_bytes.extend_from_slice(&ciphertext);
+        // length-MAC_SIZE hmac
+        mock_envelope_bytes.extend_from_slice(&Output::<CS::Hash>::default());
 
         let mock_client_kp = KeyPair::<CS::KeGroup>::generate_random(&mut rng);
         // serialization order: oprf_key, public key, envelope

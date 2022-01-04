@@ -5,14 +5,14 @@
 // License, Version 2.0 found in the LICENSE-APACHE file in the root directory
 // of this source tree.
 
-use crate::errors::ProtocolError;
 use core::marker::PhantomData;
+
 use digest::Update;
-use generic_array::{
-    typenum::{U0, U2},
-    ArrayLength, GenericArray,
-};
+use generic_array::typenum::{U0, U2};
+use generic_array::{ArrayLength, GenericArray};
 use hmac::Mac;
+
+use crate::errors::ProtocolError;
 
 // Corresponds to the I2OSP() function from RFC8017
 pub(crate) fn i2osp<L: ArrayLength<u8>>(
@@ -43,7 +43,8 @@ pub(crate) fn os2ip(input: &[u8]) -> Result<usize, ProtocolError> {
     Ok(usize::from_be_bytes(output_array))
 }
 
-/// Computes `I2OSP(len(input), max_bytes) || input` and helps hold output without allocation.
+/// Computes `I2OSP(len(input), max_bytes) || input` and helps hold output
+/// without allocation.
 pub(crate) struct Serialize<
     'a,
     L1: ArrayLength<u8>,
@@ -161,8 +162,9 @@ mod tests;
 
 #[cfg(test)]
 mod unit_tests {
-    use super::*;
     use generic_array::typenum::{U1, U2};
+
+    use super::*;
 
     // Test the error condition for I2OSP
     #[test]

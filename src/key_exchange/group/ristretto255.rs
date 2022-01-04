@@ -7,14 +7,15 @@
 
 //! Key Exchange group implementation for ristretto255
 
-use super::KeGroup;
-use crate::errors::InternalError;
 use curve25519_dalek::constants::RISTRETTO_BASEPOINT_POINT;
 use curve25519_dalek::ristretto::{CompressedRistretto, RistrettoPoint};
 use curve25519_dalek::scalar::Scalar;
 use generic_array::typenum::U32;
 use generic_array::GenericArray;
 use rand::{CryptoRng, RngCore};
+
+use super::KeGroup;
+use crate::errors::InternalError;
 
 impl KeGroup for RistrettoPoint {
     type PkLen = U32;
@@ -36,7 +37,8 @@ impl KeGroup for RistrettoPoint {
                     Scalar::from_bytes_mod_order_wide(&scalar_bytes)
                 }
 
-                // Tests need an exact conversion from bytes to scalar, sampling only 32 bytes from rng
+                // Tests need an exact conversion from bytes to scalar, sampling only 32 bytes
+                // from rng
                 #[cfg(test)]
                 {
                     let mut scalar_bytes = [0u8; 32];
