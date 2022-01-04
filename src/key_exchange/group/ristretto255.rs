@@ -13,21 +13,31 @@ use curve25519_dalek::scalar::Scalar;
 use generic_array::typenum::U32;
 use generic_array::GenericArray;
 use rand::{CryptoRng, RngCore};
+use zeroize::Zeroize;
 
 use super::KeGroup;
 use crate::errors::InternalError;
 
-impl KeGroup for RistrettoPoint {
+/// Implementation for Ristretto255.
+pub struct Ristretto255;
+
+impl KeGroup for Ristretto255 {
+    type Pk = RistrettoPoint;
     type PkLen = U32;
+    type Sk = Scalar;
     type SkLen = U32;
 
-    fn from_pk_slice(element_bits: &GenericArray<u8, Self::PkLen>) -> Result<Self, InternalError> {
-        CompressedRistretto::from_slice(element_bits)
+    fn serialize_pk(pk: &Self::Pk) -> GenericArray<u8, Self::PkLen> {
+        pk.compress().to_bytes().into()
+    }
+
+    fn deserialize_pk(bytes: &GenericArray<u8, Self::PkLen>) -> Result<Self::Pk, InternalError> {
+        CompressedRistretto::from_slice(bytes)
             .decompress()
             .ok_or(InternalError::PointError)
     }
 
-    fn random_sk<R: RngCore + CryptoRng>(rng: &mut R) -> GenericArray<u8, Self::SkLen> {
+    fn random_sk<R: RngCore + CryptoRng>(rng: &mut R) -> Self::Sk {
         loop {
             let scalar = {
                 #[cfg(not(test))]
@@ -47,21 +57,33 @@ impl KeGroup for RistrettoPoint {
                 }
             };
 
-            if scalar != Scalar::zero() {
-                break scalar.to_bytes().into();
+            if scalar != Scalar::zero() && scalar.is_canonical() {
+                break scalar;
             }
         }
     }
 
-    fn public_key(sk: &GenericArray<u8, Self::SkLen>) -> Self {
-        RISTRETTO_BASEPOINT_POINT * Scalar::from_bits(*sk.as_ref())
+    fn public_key(sk: &Self::Sk) -> Self::Pk {
+        RISTRETTO_BASEPOINT_POINT * sk
     }
 
-    fn to_arr(&self) -> GenericArray<u8, Self::PkLen> {
-        self.compress().to_bytes().into()
+    fn diffie_hellman(pk: &Self::Pk, sk: &Self::Sk) -> GenericArray<u8, Self::PkLen> {
+        Self::serialize_pk(&(pk * sk))
     }
 
-    fn diffie_hellman(&self, sk: &GenericArray<u8, Self::SkLen>) -> GenericArray<u8, Self::SkLen> {
-        (self * Scalar::from_bits(*sk.as_ref())).to_arr()
+    fn zeroize_sk_on_drop(sk: &mut Self::Sk) {
+        sk.zeroize()
+    }
+
+    fn serialize_sk(sk: &Self::Sk) -> GenericArray<u8, Self::SkLen> {
+        sk.to_bytes().into()
+    }
+
+    fn deserialize_sk(bytes: &GenericArray<u8, Self::PkLen>) -> Result<Self::Sk, InternalError> {
+        // TODO: When we implement `hash_to_field` we can re-enable this again.
+        //Scalar::from_canonical_bytes((*bytes).into()).ok_or(InternalError::
+        // PointError)
+
+        Ok(Scalar::from_bits((*bytes).into()))
     }
 }

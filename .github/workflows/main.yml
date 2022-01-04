@@ -210,7 +210,7 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: clippy
-          args: --all-targets -- -D warnings
+          args: --all-targets --features p256,slow-hash,std,x25519_u64 -- -D warnings
 
       - name: Run cargo doc
         uses: actions-rs/cargo@v1
@@ -218,7 +218,7 @@ jobs:
           RUSTDOCFLAGS: -D warnings
         with:
           command: doc
-          args: --no-deps --document-private-items --features p256,slow-hash,std
+          args: --no-deps --document-private-items --features p256,slow-hash,std,x25519_u64
 
   format:
     name: cargo fmt

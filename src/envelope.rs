@@ -36,11 +36,16 @@ const STR_PRIVATE_KEY: [u8; 10] = *b"PrivateKey";
 const STR_OPAQUE_DERIVE_AUTH_KEY_PAIR: [u8; 24] = *b"OPAQUE-DeriveAuthKeyPair";
 type NonceLen = U32;
 
-#[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, Zeroize)]
-#[zeroize(drop)]
+#[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub(crate) enum InnerEnvelopeMode {
     Zero = 0,
     Internal = 1,
+}
+
+impl Zeroize for InnerEnvelopeMode {
+    fn zeroize(&mut self) {
+        *self = Self::Zero
+    }
 }
 
 impl TryFrom<u8> for InnerEnvelopeMode {
@@ -69,7 +74,7 @@ where
     <<CS::Hash as CoreProxy>::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
     Le<<<CS::Hash as CoreProxy>::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
 {
-    mode: InnerEnvelopeMode,
+    pub(crate) mode: InnerEnvelopeMode,
     nonce: GenericArray<u8, NonceLen>,
     hmac: Output<CS::Hash>,
 }
@@ -136,12 +141,13 @@ where
             build_inner_envelope_internal::<CS>(randomized_pwd_hasher.clone(), nonce)?,
         );
 
+        let server_s_pk_bytes = server_s_pk.to_bytes();
         let (id_u, id_s) = bytestrings_from_identifiers::<CS::KeGroup>(
             ids,
-            client_s_pk.to_arr(),
-            server_s_pk.to_arr(),
+            client_s_pk.to_bytes(),
+            server_s_pk_bytes.clone(),
         )?;
-        let aad = construct_aad(id_u.iter(), id_s.iter(), server_s_pk);
+        let aad = construct_aad(id_u.iter(), id_s.iter(), &server_s_pk_bytes);
 
         let result = Self::seal_raw(randomized_pwd_hasher, nonce, aad, mode)?;
         Ok((
@@ -206,12 +212,13 @@ where
             }
         };
 
+        let server_s_pk_bytes = server_s_pk.to_bytes();
         let (id_u, id_s) = bytestrings_from_identifiers::<CS::KeGroup>(
             optional_ids,
-            client_static_keypair.public().to_arr(),
-            server_s_pk.to_arr(),
+            client_static_keypair.public().to_bytes(),
+            server_s_pk_bytes.clone(),
         )?;
-        let aad = construct_aad(id_u.iter(), id_s.iter(), &server_s_pk);
+        let aad = construct_aad(id_u.iter(), id_s.iter(), &server_s_pk_bytes);
 
         let opened = self.open_raw(randomized_pwd_hasher, aad)?;
 
@@ -318,6 +325,7 @@ where
         .expand(&nonce.concat(STR_PRIVATE_KEY.into()), &mut keypair_seed)
         .map_err(|_| InternalError::HkdfError)?;
     let client_static_keypair = KeyPair::<CS::KeGroup>::from_private_key_slice(
+        // TODO: Use `KeGroup` instead of `OprfGroup` here.
         &CS::OprfGroup::scalar_as_bytes(CS::OprfGroup::hash_to_scalar::<CS::Hash, _, _>(
             [keypair_seed.as_slice()],
             GenericArray::from(STR_OPAQUE_DERIVE_AUTH_KEY_PAIR),

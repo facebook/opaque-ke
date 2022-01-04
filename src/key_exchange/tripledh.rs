@@ -55,11 +55,19 @@ pub struct TripleDH;
 #[cfg_attr(
     feature = "serde",
     derive(serde_::Deserialize, serde_::Serialize),
-    serde(bound = "", crate = "serde_")
+    serde(
+        bound(
+            deserialize = "KG::Sk: serde_::Deserialize<'de>",
+            serialize = "KG::Sk: serde_::Serialize",
+        ),
+        crate = "serde_"
+    )
 )]
 #[derive(DeriveWhere)]
-#[derive_where(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, Zeroize(drop))]
+#[derive_where(Clone, Zeroize(drop))]
+#[derive_where(Debug, Eq, Hash, Ord, PartialEq, PartialOrd; KG::Sk)]
 pub struct Ke1State<KG: KeGroup> {
+    #[derive_where(skip(Zeroize))]
     client_e_sk: PrivateKey<KG>,
     client_nonce: GenericArray<u8, NonceLen>,
 }
@@ -68,12 +76,20 @@ pub struct Ke1State<KG: KeGroup> {
 #[cfg_attr(
     feature = "serde",
     derive(serde_::Deserialize, serde_::Serialize),
-    serde(bound = "", crate = "serde_")
+    serde(
+        bound(
+            deserialize = "KG::Pk: serde_::Deserialize<'de>",
+            serialize = "KG::Pk: serde_::Serialize",
+        ),
+        crate = "serde_"
+    )
 )]
 #[derive(DeriveWhere)]
-#[derive_where(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, Zeroize)]
+#[derive_where(Clone, Zeroize(drop))]
+#[derive_where(Debug, Eq, Hash, Ord, PartialEq, PartialOrd; KG::Pk)]
 pub struct Ke1Message<KG: KeGroup> {
     pub(crate) client_nonce: GenericArray<u8, NonceLen>,
+    #[derive_where(skip(Zeroize))]
     pub(crate) client_e_pk: PublicKey<KG>,
 }
 
@@ -100,10 +116,17 @@ where
 #[cfg_attr(
     feature = "serde",
     derive(serde_::Deserialize, serde_::Serialize),
-    serde(bound = "", crate = "serde_")
+    serde(
+        bound(
+            deserialize = "KG::Pk: serde_::Deserialize<'de>",
+            serialize = "KG::Pk: serde_::Serialize",
+        ),
+        crate = "serde_"
+    )
 )]
 #[derive(DeriveWhere)]
-#[derive_where(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[derive_where(Clone)]
+#[derive_where(Debug, Eq, Hash, Ord, PartialEq, PartialOrd; KG::Pk)]
 pub struct Ke2Message<D: Hash, KG: KeGroup>
 where
     D::Core: ProxyHash,
@@ -210,13 +233,13 @@ where
             .chain_iter(id_s.into_iter())
             .chain_iter(l2_bytes)
             .chain(server_nonce)
-            .chain(&server_e_kp.public().to_arr());
+            .chain(&server_e_kp.public().to_bytes());
 
         let result = derive_3dh_keys::<D, KG, S>(
             TripleDHComponents {
                 pk1: ke1_message.client_e_pk.clone(),
                 sk1: server_e_kp.private().clone(),
-                pk2: ke1_message.client_e_pk,
+                pk2: ke1_message.client_e_pk.clone(),
                 sk2: server_s_sk,
                 pk3: client_s_pk,
                 sk3: server_e_kp.private().clone(),
@@ -268,7 +291,7 @@ where
             .chain_iter(serialized_credential_request)
             .chain_iter(id_s)
             .chain_iter(l2_component)
-            .chain_iter(ke2_message.to_bytes_without_info_or_mac());
+            .chain(ke2_message.to_bytes_without_mac());
 
         let result = derive_3dh_keys::<D, KG, PrivateKey<KG>>(
             TripleDHComponents {
@@ -489,7 +512,7 @@ impl<KG: KeGroup> FromBytes for Ke1State<KG> {
         let checked_bytes = check_slice_size_atleast(bytes, key_len + nonce_len, "ke1_state")?;
 
         Ok(Self {
-            client_e_sk: PrivateKey::from_bytes(&checked_bytes[..key_len])?,
+            client_e_sk: PrivateKey::deserialize(&checked_bytes[..key_len])?,
             client_nonce: GenericArray::clone_from_slice(
                 &checked_bytes[key_len..key_len + nonce_len],
             ),
@@ -506,7 +529,7 @@ where
     type Len = Sum<KG::SkLen, NonceLen>;
 
     fn to_bytes(&self) -> GenericArray<u8, Self::Len> {
-        self.client_e_sk.to_arr().concat(self.client_nonce)
+        self.client_e_sk.serialize().concat(self.client_nonce)
     }
 }
 
@@ -521,7 +544,7 @@ impl<KG: KeGroup> FromBytes for Ke1Message<KG> {
 
         Ok(Self {
             client_nonce: GenericArray::clone_from_slice(&checked_nonce[..nonce_len]),
-            client_e_pk: PublicKey::from_bytes(&checked_nonce[nonce_len..])?,
+            client_e_pk: PublicKey::deserialize(&checked_nonce[nonce_len..])?,
         })
     }
 }
@@ -535,7 +558,7 @@ where
     type Len = Sum<NonceLen, KG::PkLen>;
 
     fn to_bytes(&self) -> GenericArray<u8, Self::Len> {
-        self.client_nonce.concat(self.client_e_pk.to_arr())
+        self.client_nonce.concat(self.client_e_pk.to_bytes())
     }
 }
 
@@ -602,13 +625,11 @@ where
         )?;
 
         // Check the public key bytes
-        let server_e_pk = KeyPair::<KG>::check_public_key(PublicKey::from_bytes(
-            &unchecked_server_e_pk[..key_len],
-        )?)?;
+        let server_e_pk = PublicKey::deserialize(&unchecked_server_e_pk[..key_len])?;
 
         Ok(Self {
             server_nonce: GenericArray::clone_from_slice(&checked_nonce[..nonce_len]),
-            server_e_pk: PublicKey::from_bytes(&server_e_pk)?,
+            server_e_pk,
             mac: GenericArray::clone_from_slice(checked_mac),
         })
     }
@@ -628,7 +649,7 @@ where
 
     fn to_bytes(&self) -> GenericArray<u8, Self::Len> {
         self.server_nonce
-            .concat(self.server_e_pk.to_arr())
+            .concat(self.server_e_pk.to_bytes())
             .concat(self.mac.clone())
     }
 }
@@ -638,9 +659,11 @@ where
     D::Core: ProxyHash,
     <D::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
     Le<<D::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
+    NonceLen: Add<KG::PkLen>,
+    Sum<NonceLen, KG::PkLen>: ArrayLength<u8>,
 {
-    fn to_bytes_without_info_or_mac(&self) -> impl Iterator<Item = &[u8]> {
-        [self.server_nonce.as_slice(), self.server_e_pk.as_slice()].into_iter()
+    fn to_bytes_without_mac(&self) -> GenericArray<u8, Sum<NonceLen, KG::PkLen>> {
+        self.server_nonce.concat(self.server_e_pk.to_bytes())
     }
 }
 

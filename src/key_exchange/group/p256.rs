@@ -9,44 +9,49 @@
 
 use generic_array::typenum::{U32, U33};
 use generic_array::GenericArray;
-use p256_::elliptic_curve::group::GroupEncoding;
-use p256_::elliptic_curve::sec1::ToEncodedPoint;
-use p256_::elliptic_curve::{PublicKey, SecretKey};
-use p256_::NistP256;
+use p256::elliptic_curve::group::GroupEncoding;
+use p256::elliptic_curve::sec1::ToEncodedPoint;
+use p256::elliptic_curve::{PublicKey, SecretKey};
+use p256::NistP256;
 use rand::{CryptoRng, RngCore};
 
 use super::KeGroup;
 use crate::errors::InternalError;
 
-impl KeGroup for PublicKey<NistP256> {
+impl KeGroup for NistP256 {
+    type Pk = PublicKey<Self>;
     type PkLen = U33;
+    type Sk = SecretKey<Self>;
     type SkLen = U32;
-
-    fn from_pk_slice(element_bits: &GenericArray<u8, Self::PkLen>) -> Result<Self, InternalError> {
-        Self::from_sec1_bytes(element_bits).map_err(|_| InternalError::PointError)
+    fn serialize_pk(pk: &Self::Pk) -> GenericArray<u8, Self::PkLen> {
+        GenericArray::clone_from_slice(pk.to_encoded_point(true).as_bytes())
     }
 
-    fn random_sk<R: RngCore + CryptoRng>(rng: &mut R) -> GenericArray<u8, Self::SkLen> {
-        SecretKey::<NistP256>::random(rng).to_be_bytes()
+    fn deserialize_pk(bytes: &GenericArray<u8, Self::PkLen>) -> Result<Self::Pk, InternalError> {
+        Self::Pk::from_sec1_bytes(bytes).map_err(|_| InternalError::PointError)
     }
 
-    fn public_key(sk: &GenericArray<u8, Self::SkLen>) -> Self {
-        SecretKey::<NistP256>::from_be_bytes(sk)
-            .unwrap()
-            .public_key()
+    fn random_sk<R: RngCore + CryptoRng>(rng: &mut R) -> Self::Sk {
+        SecretKey::<NistP256>::random(rng)
     }
 
-    fn to_arr(&self) -> GenericArray<u8, Self::PkLen> {
-        GenericArray::clone_from_slice(self.to_encoded_point(true).as_bytes())
+    fn public_key(sk: &Self::Sk) -> Self::Pk {
+        sk.public_key()
     }
 
-    fn diffie_hellman(&self, sk: &GenericArray<u8, Self::SkLen>) -> GenericArray<u8, Self::PkLen> {
-        (self.to_projective()
-            * SecretKey::<NistP256>::from_be_bytes(sk)
-                .unwrap()
-                .to_nonzero_scalar()
-                .as_ref())
-        .to_affine()
-        .to_bytes()
+    fn diffie_hellman(pk: &Self::Pk, sk: &Self::Sk) -> GenericArray<u8, Self::PkLen> {
+        (pk.to_projective() * sk.to_nonzero_scalar().as_ref())
+            .to_affine()
+            .to_bytes()
+    }
+
+    fn zeroize_sk_on_drop(_: &mut Self::Sk) {}
+
+    fn serialize_sk(sk: &Self::Sk) -> GenericArray<u8, Self::SkLen> {
+        sk.to_be_bytes()
+    }
+
+    fn deserialize_sk(bytes: &GenericArray<u8, Self::SkLen>) -> Result<Self::Sk, InternalError> {
+        Self::Sk::from_be_bytes(bytes).map_err(|_| InternalError::PointError)
     }
 }

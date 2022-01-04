@@ -28,7 +28,7 @@ use crate::key_exchange::traits::{
     FromBytes, Ke1MessageLen, Ke1StateLen, Ke2MessageLen, KeyExchange, ToBytes,
 };
 use crate::key_exchange::tripledh::{NonceLen, TripleDH};
-use crate::keypair::KeyPair;
+use crate::keypair::{KeyPair, SecretKey};
 use crate::messages::CredentialResponseWithoutKeLen;
 use crate::opaque::{ClientLoginLen, ClientRegistrationLen, MaskedResponseLen};
 use crate::serialization::{i2osp, os2ip};
@@ -39,7 +39,7 @@ struct Ristretto255;
 #[cfg(feature = "ristretto255")]
 impl CipherSuite for Ristretto255 {
     type OprfGroup = curve25519_dalek::ristretto::RistrettoPoint;
-    type KeGroup = curve25519_dalek::ristretto::RistrettoPoint;
+    type KeGroup = crate::Ristretto255;
     type KeyExchange = TripleDH;
     type Hash = sha2::Sha512;
     type SlowHash = crate::slow_hash::NoOpHash;
@@ -49,14 +49,14 @@ impl CipherSuite for Ristretto255 {
 struct P256;
 #[cfg(feature = "p256")]
 impl CipherSuite for P256 {
-    type OprfGroup = p256_::ProjectivePoint;
-    type KeGroup = p256_::PublicKey;
+    type OprfGroup = ::p256::ProjectivePoint;
+    type KeGroup = ::p256::NistP256;
     type KeyExchange = TripleDH;
     type Hash = sha2::Sha256;
     type SlowHash = crate::slow_hash::NoOpHash;
 }
 
-fn random_point<CS: CipherSuite>() -> CS::KeGroup
+fn random_point<CS: CipherSuite>() -> <CS::KeGroup as KeGroup>::Pk
 where
     <CS::Hash as CoreProxy>::Core: ProxyHash,
     <<CS::Hash as CoreProxy>::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
@@ -140,7 +140,7 @@ fn server_registration_roundtrip() -> Result<(), ProtocolError> {
         let mock_client_kp = KeyPair::<CS::KeGroup>::generate_random(&mut rng);
         // serialization order: oprf_key, public key, envelope
         let mut bytes = Vec::<u8>::new();
-        bytes.extend_from_slice(&mock_client_kp.public().to_arr());
+        bytes.extend_from_slice(&mock_client_kp.public().to_bytes());
         bytes.extend_from_slice(&masking_key);
         bytes.extend_from_slice(&mock_envelope_bytes);
         let reg = ServerRegistration::<CS>::deserialize(&bytes)?;
@@ -166,7 +166,7 @@ fn registration_request_roundtrip() -> Result<(), ProtocolError> {
         Le<<<CS::Hash as CoreProxy>::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
     {
         let pt = random_point::<CS>();
-        let pt_bytes = pt.to_arr().to_vec();
+        let pt_bytes = CS::KeGroup::serialize_pk(&pt);
 
         let mut input = Vec::new();
         input.extend_from_slice(&pt_bytes);
@@ -209,10 +209,10 @@ fn registration_response_roundtrip() -> Result<(), ProtocolError> {
         RegistrationResponseLen<CS>: ArrayLength<u8>,
     {
         let pt = random_point::<CS>();
-        let beta_bytes = pt.to_arr();
+        let beta_bytes = CS::KeGroup::serialize_pk(&pt);
         let mut rng = OsRng;
         let skp = KeyPair::<CS::KeGroup>::generate_random(&mut rng);
-        let pubkey_bytes = skp.public().to_arr();
+        let pubkey_bytes = skp.public().to_bytes();
 
         let mut input = Vec::new();
         input.extend_from_slice(&beta_bytes);
@@ -264,7 +264,7 @@ fn registration_upload_roundtrip() -> Result<(), ProtocolError> {
     {
         let mut rng = OsRng;
         let skp = KeyPair::<CS::KeGroup>::generate_random(&mut rng);
-        let pubkey_bytes = skp.public().to_arr();
+        let pubkey_bytes = skp.public().to_bytes();
 
         let mut key = [0u8; 32];
         rng.fill_bytes(&mut key);
@@ -318,13 +318,17 @@ fn credential_request_roundtrip() -> Result<(), ProtocolError> {
     {
         let mut rng = OsRng;
         let alpha = random_point::<CS>();
-        let alpha_bytes = alpha.to_arr();
+        let alpha_bytes = CS::KeGroup::serialize_pk(&alpha);
 
         let client_e_kp = KeyPair::<CS::KeGroup>::generate_random(&mut rng);
         let mut client_nonce = [0u8; NonceLen::USIZE];
         rng.fill_bytes(&mut client_nonce);
 
-        let ke1m: Vec<u8> = [client_nonce.as_ref(), client_e_kp.public()].concat();
+        let ke1m: Vec<u8> = [
+            client_nonce.as_ref(),
+            client_e_kp.public().to_bytes().as_ref(),
+        ]
+        .concat();
 
         let mut input = Vec::new();
         input.extend_from_slice(&alpha_bytes);
@@ -377,7 +381,7 @@ fn credential_response_roundtrip() -> Result<(), ProtocolError> {
         CredentialResponseLen<CS>: ArrayLength<u8>,
     {
         let pt = random_point::<CS>();
-        let pt_bytes = pt.to_arr();
+        let pt_bytes = CS::KeGroup::serialize_pk(&pt);
 
         let mut rng = OsRng;
 
@@ -394,7 +398,12 @@ fn credential_response_roundtrip() -> Result<(), ProtocolError> {
         let mut server_nonce = [0u8; NonceLen::USIZE];
         rng.fill_bytes(&mut server_nonce);
 
-        let ke2m: Vec<u8> = [server_nonce.as_ref(), server_e_kp.public(), &mac].concat();
+        let ke2m: Vec<u8> = [
+            server_nonce.as_ref(),
+            server_e_kp.public().to_bytes().as_ref(),
+            &mac,
+        ]
+        .concat();
 
         let mut input = Vec::new();
         input.extend_from_slice(&pt_bytes);
@@ -489,7 +498,7 @@ fn client_login_roundtrip() -> Result<(), ProtocolError> {
         rng.fill_bytes(&mut client_nonce);
 
         let l1_data = [
-            client_e_kp.private().to_arr().to_vec(),
+            client_e_kp.private().serialize().to_vec(),
             client_nonce.to_vec(),
         ]
         .concat();
@@ -501,7 +510,11 @@ fn client_login_roundtrip() -> Result<(), ProtocolError> {
             blinded_element: blind_result.message,
             ke1_message:
                 <CS::KeyExchange as KeyExchange<CS::Hash, CS::KeGroup>>::KE1Message::from_bytes(
-                    &[client_nonce.as_ref(), client_e_kp.public()].concat(),
+                    &[
+                        client_nonce.as_ref(),
+                        client_e_kp.public().to_bytes().as_ref(),
+                    ]
+                    .concat(),
                 )?,
         };
 
@@ -541,7 +554,11 @@ fn ke1_message_roundtrip() -> Result<(), ProtocolError> {
         let mut client_nonce = vec![0u8; NonceLen::USIZE];
         rng.fill_bytes(&mut client_nonce);
 
-        let ke1m = [client_nonce.as_slice(), client_e_kp.public()].concat();
+        let ke1m = [
+            client_nonce.as_slice(),
+            client_e_kp.public().to_bytes().as_ref(),
+        ]
+        .concat();
         let reg =
             <CS::KeyExchange as KeyExchange<CS::Hash, CS::KeGroup>>::KE1Message::from_bytes(&ke1m)?;
         let reg_bytes = reg.to_bytes();
@@ -574,7 +591,12 @@ fn ke2_message_roundtrip() -> Result<(), ProtocolError> {
         let mut server_nonce = vec![0u8; NonceLen::USIZE];
         rng.fill_bytes(&mut server_nonce);
 
-        let ke2m: Vec<u8> = [server_nonce.as_slice(), server_e_kp.public(), &mac].concat();
+        let ke2m: Vec<u8> = [
+            server_nonce.as_slice(),
+            server_e_kp.public().to_bytes().as_ref(),
+            &mac,
+        ]
+        .concat();
 
         let reg =
             <CS::KeyExchange as KeyExchange<CS::Hash, CS::KeGroup>>::KE2Message::from_bytes(&ke2m)?;

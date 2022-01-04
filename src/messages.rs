@@ -28,7 +28,7 @@ use crate::key_exchange::traits::{
     FromBytes, Ke1MessageLen, Ke2MessageLen, Ke3MessageLen, KeyExchange, ToBytes,
 };
 use crate::key_exchange::tripledh::NonceLen;
-use crate::keypair::{KeyPair, PublicKey, SecretKey};
+use crate::keypair::{PublicKey, SecretKey};
 use crate::opaque::{MaskedResponse, MaskedResponseLen, ServerSetup};
 
 ////////////////////////////
@@ -56,7 +56,7 @@ impl_serialize_and_deserialize_for!(RegistrationRequest);
 /// registration attempt
 #[derive(DeriveWhere)]
 #[derive_where(Clone)]
-#[derive_where(Debug, Eq, Hash, Ord, PartialEq, PartialOrd; CS::OprfGroup)]
+#[derive_where(Debug, Eq, Hash, Ord, PartialEq, PartialOrd; CS::OprfGroup, <CS::KeGroup as KeGroup>::Pk)]
 pub struct RegistrationResponse<CS: CipherSuite>
 where
     <CS::Hash as CoreProxy>::Core: ProxyHash,
@@ -80,7 +80,8 @@ impl_serialize_and_deserialize_for!(
 /// The final message from the client, containing sealed cryptographic
 /// identifiers
 #[derive(DeriveWhere)]
-#[derive_where(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, Zeroize(drop))]
+#[derive_where(Clone, Zeroize(drop))]
+#[derive_where(Debug, Eq, Hash, Ord, PartialEq, PartialOrd; <CS::KeGroup as KeGroup>::Pk)]
 pub struct RegistrationUpload<CS: CipherSuite>
 where
     <CS::Hash as CoreProxy>::Core: ProxyHash,
@@ -93,6 +94,7 @@ where
     /// The masking key used to mask the envelope
     pub(crate) masking_key: Output<CS::Hash>,
     /// The user's public key
+    #[derive_where(skip(Zeroize))]
     pub(crate) client_s_pk: PublicKey<CS::KeGroup>,
 }
 
@@ -111,7 +113,7 @@ impl_serialize_and_deserialize_for!(
 
 /// The message sent by the user to the server, to initiate registration
 #[derive(DeriveWhere)]
-#[derive_where(Clone, Zeroize)]
+#[derive_where(Clone, Zeroize(drop))]
 #[derive_where(
     Debug, Eq, Hash, PartialEq;
     CS::OprfGroup,
@@ -249,7 +251,7 @@ where
         self.evaluation_element
             .value()
             .to_arr()
-            .concat(self.server_s_pk.to_arr())
+            .concat(self.server_s_pk.to_bytes())
     }
 
     /// Deserialization from bytes
@@ -260,9 +262,7 @@ where
             check_slice_size(input, elem_len + key_len, "registration_response_bytes")?;
 
         // Ensure that public key is valid
-        let server_s_pk = KeyPair::<CS::KeGroup>::check_public_key(PublicKey::from_bytes(
-            &checked_slice[elem_len..],
-        )?)?;
+        let server_s_pk = PublicKey::deserialize(&checked_slice[elem_len..])?;
 
         Ok(Self {
             evaluation_element: voprf::EvaluationElement::deserialize(&checked_slice[..elem_len])?,
@@ -304,7 +304,7 @@ where
         RegistrationUploadLen<CS>: ArrayLength<u8>,
     {
         self.client_s_pk
-            .to_arr()
+            .to_bytes()
             .concat(self.masking_key.clone())
             .concat(self.envelope.serialize())
     }
@@ -321,9 +321,7 @@ where
             masking_key: GenericArray::clone_from_slice(
                 &checked_slice[key_len..key_len + hash_len],
             ),
-            client_s_pk: KeyPair::<CS::KeGroup>::check_public_key(PublicKey::from_bytes(
-                &checked_slice[..key_len],
-            )?)?,
+            client_s_pk: PublicKey::deserialize(&checked_slice[..key_len])?,
         })
     }
 

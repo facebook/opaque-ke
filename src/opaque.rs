@@ -61,15 +61,17 @@ const STR_OPAQUE_DERIVE_KEY_PAIR: &[u8; 20] = b"OPAQUE-DeriveKeyPair";
     derive(serde_::Deserialize, serde_::Serialize),
     serde(
         bound(
-            deserialize = "KeyPair<CS::KeGroup, S>: serde_::Deserialize<'de>",
-            serialize = "KeyPair<CS::KeGroup, S>: serde_::Serialize"
+            deserialize = "<CS::KeGroup as KeGroup>::Pk: serde_::Deserialize<'de>, <CS::KeGroup \
+                           as KeGroup>::Sk: serde_::Deserialize<'de>, S: serde_::Deserialize<'de>",
+            serialize = "<CS::KeGroup as KeGroup>::Pk: serde_::Serialize, <CS::KeGroup as \
+                         KeGroup>::Sk: serde_::Serialize, S: serde_::Serialize"
         ),
         crate = "serde_"
     )
 )]
 #[derive(DeriveWhere)]
 #[derive_where(Clone)]
-#[derive_where(Debug, Eq, Hash, Ord, PartialEq, PartialOrd; S)]
+#[derive_where(Debug, Eq, Hash, Ord, PartialEq, PartialOrd; <CS::KeGroup as KeGroup>::Pk, <CS::KeGroup as KeGroup>::Sk, S)]
 pub struct ServerSetup<
     CS: CipherSuite,
     S: SecretKey<CS::KeGroup> = PrivateKey<<CS as CipherSuite>::KeGroup>,
@@ -111,8 +113,9 @@ impl_serialize_and_deserialize_for!(
 
 /// The state elements the server holds to record a registration
 #[derive(DeriveWhere)]
-#[derive_where(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, Zeroize(drop))]
-pub struct ServerRegistration<CS: CipherSuite>(RegistrationUpload<CS>)
+#[derive_where(Clone, Zeroize(drop))]
+#[derive_where(Debug, Eq, Hash, Ord, PartialEq, PartialOrd; <CS::KeGroup as KeGroup>::Pk)]
+pub struct ServerRegistration<CS: CipherSuite>(pub(crate) RegistrationUpload<CS>)
 where
     <CS::Hash as CoreProxy>::Core: ProxyHash,
     <<CS::Hash as CoreProxy>::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
@@ -147,9 +150,9 @@ where
     <<CS::Hash as CoreProxy>::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
     Le<<<CS::Hash as CoreProxy>::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
 {
-    oprf_client: voprf::NonVerifiableClient<CS::OprfGroup, CS::Hash>,
-    ke1_state: <CS::KeyExchange as KeyExchange<CS::Hash, CS::KeGroup>>::KE1State,
-    credential_request: CredentialRequest<CS>,
+    pub(crate) oprf_client: voprf::NonVerifiableClient<CS::OprfGroup, CS::Hash>,
+    pub(crate) ke1_state: <CS::KeyExchange as KeyExchange<CS::Hash, CS::KeGroup>>::KE1State,
+    pub(crate) credential_request: CredentialRequest<CS>,
 }
 
 impl_serialize_and_deserialize_for!(
@@ -242,7 +245,7 @@ where
         self.oprf_seed
             .clone()
             .concat(self.keypair.private().serialize())
-            .concat(self.fake_keypair.private().to_arr())
+            .concat(self.fake_keypair.private().serialize())
     }
 
     /// Deserialization from bytes
@@ -509,22 +512,6 @@ where
             ke1_state,
         })
     }
-
-    /// Only used for testing zeroize
-    #[cfg(test)]
-    pub(crate) fn to_vec(&self) -> std::vec::Vec<u8>
-    where
-        // CredentialRequest: KgPk + Ke1Message
-        <CS::OprfGroup as Group>::ElemLen: Add<Ke1MessageLen<CS>>,
-        CredentialRequestLen<CS>: ArrayLength<u8>,
-    {
-        [
-            self.oprf_client.serialize().to_vec(),
-            self.credential_request.serialize().to_vec(),
-            self.ke1_state.to_bytes().to_vec(),
-        ]
-        .concat()
-    }
 }
 
 impl<CS: CipherSuite> ClientLogin<CS>
@@ -728,8 +715,8 @@ where
 
         let (id_u, id_s) = bytestrings_from_identifiers::<CS::KeGroup>(
             identifiers,
-            client_s_pk.to_arr(),
-            server_s_pk.to_arr(),
+            client_s_pk.to_bytes(),
+            server_s_pk.to_bytes(),
         )
         .map_err(ProtocolError::into_custom)?;
 
@@ -758,7 +745,7 @@ where
             rng,
             credential_request_bytes,
             credential_response_component,
-            credential_request.ke1_message,
+            credential_request.ke1_message.clone(),
             client_s_pk,
             server_s_sk.clone(),
             id_u.iter(),
@@ -1184,7 +1171,7 @@ where
 
     for (x1, x2) in xor_pad.iter_mut().zip(
         server_s_pk
-            .to_arr()
+            .to_bytes()
             .as_slice()
             .iter()
             .chain(envelope.serialize().iter()),
@@ -1221,12 +1208,9 @@ where
     }
 
     let key_len = <CS::KeGroup as KeGroup>::PkLen::USIZE;
-    let unchecked_server_s_pk = PublicKey::from_bytes(&xor_pad[..key_len])?;
-    let envelope = Envelope::deserialize(&xor_pad[key_len..])?;
-
-    // Ensure that public key is valid
-    let server_s_pk = KeyPair::<CS::KeGroup>::check_public_key(unchecked_server_s_pk)
+    let server_s_pk = PublicKey::deserialize(&xor_pad[..key_len])
         .map_err(|_| ProtocolError::SerializationError)?;
+    let envelope = Envelope::deserialize(&xor_pad[key_len..])?;
 
     Ok((server_s_pk, envelope))
 }

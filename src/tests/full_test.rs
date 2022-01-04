@@ -29,6 +29,7 @@ use crate::hash::{OutputSize, ProxyHash};
 use crate::key_exchange::group::KeGroup;
 use crate::key_exchange::traits::{Ke1MessageLen, Ke1StateLen, Ke2MessageLen};
 use crate::key_exchange::tripledh::{NonceLen, TripleDH};
+use crate::keypair::SecretKey;
 use crate::messages::{
     CredentialRequestLen, CredentialResponseLen, CredentialResponseWithoutKeLen,
     RegistrationResponseLen, RegistrationUploadLen,
@@ -46,7 +47,7 @@ struct Ristretto255;
 #[cfg(feature = "ristretto255")]
 impl CipherSuite for Ristretto255 {
     type OprfGroup = curve25519_dalek::ristretto::RistrettoPoint;
-    type KeGroup = curve25519_dalek::ristretto::RistrettoPoint;
+    type KeGroup = crate::Ristretto255;
     type KeyExchange = TripleDH;
     type Hash = sha2::Sha512;
     type SlowHash = NoOpHash;
@@ -56,8 +57,8 @@ impl CipherSuite for Ristretto255 {
 struct P256;
 #[cfg(feature = "p256")]
 impl CipherSuite for P256 {
-    type OprfGroup = p256_::ProjectivePoint;
-    type KeGroup = p256_::PublicKey;
+    type OprfGroup = p256::ProjectivePoint;
+    type KeGroup = p256::NistP256;
     type KeyExchange = TripleDH;
     type Hash = sha2::Sha256;
     type SlowHash = NoOpHash;
@@ -68,7 +69,7 @@ struct X25519Ristretto255;
 #[cfg(all(feature = "x25519", feature = "ristretto255"))]
 impl CipherSuite for X25519Ristretto255 {
     type OprfGroup = curve25519_dalek::ristretto::RistrettoPoint;
-    type KeGroup = x25519_dalek::PublicKey;
+    type KeGroup = crate::X25519;
     type KeyExchange = TripleDH;
     type Hash = sha2::Sha512;
     type SlowHash = NoOpHash;
@@ -78,8 +79,8 @@ impl CipherSuite for X25519Ristretto255 {
 struct X25519P256;
 #[cfg(all(feature = "x25519", feature = "p256"))]
 impl CipherSuite for X25519P256 {
-    type OprfGroup = p256_::ProjectivePoint;
-    type KeGroup = x25519_dalek::PublicKey;
+    type OprfGroup = p256::ProjectivePoint;
+    type KeGroup = crate::X25519;
     type KeyExchange = TripleDH;
     type Hash = sha2::Sha256;
     type SlowHash = NoOpHash;
@@ -517,11 +518,11 @@ where
     let mut server_nonce = [0u8; NonceLen::USIZE];
     rng.fill_bytes(&mut server_nonce);
 
-    let fake_sk: Vec<u8> = fake_kp.private().to_vec();
+    let fake_sk: Vec<u8> = fake_kp.private().serialize().to_vec();
     let server_setup = ServerSetup::<CS>::deserialize(
         &[
             oprf_seed.as_ref(),
-            &server_s_kp.private().to_arr(),
+            &server_s_kp.private().serialize(),
             &fake_sk,
         ]
         .concat(),
@@ -557,7 +558,7 @@ where
     let registration_response_bytes = server_registration_start_result.message.serialize();
 
     let mut client_s_sk_and_nonce: Vec<u8> = Vec::new();
-    client_s_sk_and_nonce.extend_from_slice(&client_s_kp.private().to_arr());
+    client_s_sk_and_nonce.extend_from_slice(&client_s_kp.private().serialize());
     client_s_sk_and_nonce.extend_from_slice(&envelope_nonce);
 
     let mut finish_registration_rng = CycleRng::new(client_s_sk_and_nonce);
@@ -583,7 +584,7 @@ where
 
     let mut client_login_start: Vec<u8> = Vec::new();
     client_login_start.extend_from_slice(&blinding_factor_bytes);
-    client_login_start.extend_from_slice(&client_e_kp.private().to_arr());
+    client_login_start.extend_from_slice(&client_e_kp.private().serialize());
     client_login_start.extend_from_slice(&client_nonce);
 
     let mut client_login_start_rng = CycleRng::new(client_login_start);
@@ -595,7 +596,7 @@ where
     let mut server_e_sk_and_nonce_rng = CycleRng::new(
         [
             masking_nonce.to_vec(),
-            server_e_kp.private().to_arr().to_vec(),
+            server_e_kp.private().serialize().to_vec(),
             server_nonce.to_vec(),
         ]
         .concat(),
@@ -636,14 +637,14 @@ where
     let credential_finalization_bytes = client_login_finish_result.message.serialize();
 
     Ok(TestVectorParameters {
-        client_s_pk: client_s_kp.public().to_arr().to_vec(),
-        client_s_sk: client_s_kp.private().to_arr().to_vec(),
-        client_e_pk: client_e_kp.public().to_arr().to_vec(),
-        client_e_sk: client_e_kp.private().to_arr().to_vec(),
-        server_s_pk: server_s_kp.public().to_arr().to_vec(),
-        server_s_sk: server_s_kp.private().to_arr().to_vec(),
-        server_e_pk: server_e_kp.public().to_arr().to_vec(),
-        server_e_sk: server_e_kp.private().to_arr().to_vec(),
+        client_s_pk: client_s_kp.public().to_bytes().to_vec(),
+        client_s_sk: client_s_kp.private().serialize().to_vec(),
+        client_e_pk: client_e_kp.public().to_bytes().to_vec(),
+        client_e_sk: client_e_kp.private().serialize().to_vec(),
+        server_s_pk: server_s_kp.public().to_bytes().to_vec(),
+        server_s_sk: server_s_kp.private().serialize().to_vec(),
+        server_e_pk: server_e_kp.public().to_bytes().to_vec(),
+        server_e_sk: server_e_kp.private().serialize().to_vec(),
         fake_sk,
         credential_identifier: credential_identifier.to_vec(),
         id_u: id_u.to_vec(),
@@ -1090,7 +1091,7 @@ fn test_credential_finalization() -> Result<(), ProtocolError> {
 
         assert_eq!(
             hex::encode(&parameters.server_s_pk),
-            hex::encode(&client_login_finish_result.server_s_pk.to_arr().to_vec())
+            hex::encode(&client_login_finish_result.server_s_pk.to_bytes().to_vec())
         );
         assert_eq!(
             hex::encode(&parameters.session_key),
@@ -1371,10 +1372,9 @@ fn test_zeroize_server_registration_finish() -> Result<(), ProtocolError> {
         let p_file = ServerRegistration::finish(client_registration_finish_result.message);
 
         let mut state = p_file;
-        Zeroize::zeroize(&mut state);
-        for byte in state.serialize() {
-            assert_eq!(byte, 0);
-        }
+        util::drop_manually(&mut state);
+        util::test_zeroized(&mut state.0.envelope.mode);
+        util::test_zeroized(&mut state.0.masking_key);
 
         Ok(())
     }
@@ -1393,24 +1393,39 @@ fn test_zeroize_server_registration_finish() -> Result<(), ProtocolError> {
 
 #[test]
 fn test_zeroize_client_login_start() -> Result<(), ProtocolError> {
-    fn inner<CS: CipherSuite>() -> Result<(), ProtocolError>
+    fn inner<CS: CipherSuite<KeyExchange = TripleDH>>() -> Result<(), ProtocolError>
     where
         <CS::Hash as CoreProxy>::Core: ProxyHash,
         <<CS::Hash as CoreProxy>::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
         Le<<<CS::Hash as CoreProxy>::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
         // CredentialRequest: KgPk + Ke1Message
-        <CS::OprfGroup as Group>::ElemLen: Add<Ke1MessageLen<CS>>,
+        <CS::OprfGroup as Group>::ElemLen: Add<Sum<NonceLen, <CS::KeGroup as KeGroup>::PkLen>>,
         CredentialRequestLen<CS>: ArrayLength<u8>,
+        // Ke1State: KeSk + Nonce
+        <CS::KeGroup as KeGroup>::SkLen: Add<NonceLen>,
+        Sum<<CS::KeGroup as KeGroup>::SkLen, NonceLen>: ArrayLength<u8>,
+        // Ke1Message: Nonce + KePk
+        NonceLen: Add<<CS::KeGroup as KeGroup>::PkLen>,
+        Sum<NonceLen, <CS::KeGroup as KeGroup>::PkLen>: ArrayLength<u8>,
+        // Ke2State: (Hash + Hash) + Hash
+        OutputSize<CS::Hash>: Add<OutputSize<CS::Hash>>,
+        Sum<OutputSize<CS::Hash>, OutputSize<CS::Hash>>:
+            ArrayLength<u8> + Add<OutputSize<CS::Hash>>,
+        Sum<Sum<OutputSize<CS::Hash>, OutputSize<CS::Hash>>, OutputSize<CS::Hash>>: ArrayLength<u8>,
+        // Ke2Message: (Nonce + KePk) + Hash
+        NonceLen: Add<<CS::KeGroup as KeGroup>::PkLen>,
+        Sum<NonceLen, <CS::KeGroup as KeGroup>::PkLen>: ArrayLength<u8> + Add<OutputSize<CS::Hash>>,
+        Sum<Sum<NonceLen, <CS::KeGroup as KeGroup>::PkLen>, OutputSize<CS::Hash>>: ArrayLength<u8>,
     {
         let mut client_rng = OsRng;
         let client_login_start_result =
             ClientLogin::<CS>::start(&mut client_rng, STR_PASSWORD.as_bytes())?;
 
         let mut state = client_login_start_result.state;
-        Zeroize::zeroize(&mut state);
-        for byte in state.to_vec() {
-            assert_eq!(byte, 0);
-        }
+        util::drop_manually(&mut state);
+        util::test_zeroized(&mut state.oprf_client);
+        util::test_zeroized(&mut state.ke1_state);
+        util::test_zeroized(&mut state.credential_request.ke1_message.client_nonce);
 
         Ok(())
     }
@@ -1490,7 +1505,7 @@ fn test_zeroize_server_login_start() -> Result<(), ProtocolError> {
 
 #[test]
 fn test_zeroize_client_login_finish() -> Result<(), ProtocolError> {
-    fn inner<CS: CipherSuite>() -> Result<(), ProtocolError>
+    fn inner<CS: CipherSuite<KeyExchange = TripleDH>>() -> Result<(), ProtocolError>
     where
         <CS::Hash as CoreProxy>::Core: ProxyHash,
         <<CS::Hash as CoreProxy>::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
@@ -1500,8 +1515,23 @@ fn test_zeroize_client_login_finish() -> Result<(), ProtocolError> {
         Sum<NonceLen, OutputSize<CS::Hash>>: ArrayLength<u8> + Add<<CS::KeGroup as KeGroup>::PkLen>,
         MaskedResponseLen<CS>: ArrayLength<u8>,
         // CredentialRequest: KgPk + Ke1Message
-        <CS::OprfGroup as Group>::ElemLen: Add<Ke1MessageLen<CS>>,
+        <CS::OprfGroup as Group>::ElemLen: Add<Sum<NonceLen, <CS::KeGroup as KeGroup>::PkLen>>,
         CredentialRequestLen<CS>: ArrayLength<u8>,
+        // Ke1State: KeSk + Nonce
+        <CS::KeGroup as KeGroup>::SkLen: Add<NonceLen>,
+        Sum<<CS::KeGroup as KeGroup>::SkLen, NonceLen>: ArrayLength<u8>,
+        // Ke1Message: Nonce + KePk
+        NonceLen: Add<<CS::KeGroup as KeGroup>::PkLen>,
+        Sum<NonceLen, <CS::KeGroup as KeGroup>::PkLen>: ArrayLength<u8>,
+        // Ke2State: (Hash + Hash) + Hash
+        OutputSize<CS::Hash>: Add<OutputSize<CS::Hash>>,
+        Sum<OutputSize<CS::Hash>, OutputSize<CS::Hash>>:
+            ArrayLength<u8> + Add<OutputSize<CS::Hash>>,
+        Sum<Sum<OutputSize<CS::Hash>, OutputSize<CS::Hash>>, OutputSize<CS::Hash>>: ArrayLength<u8>,
+        // Ke2Message: (Nonce + KePk) + Hash
+        NonceLen: Add<<CS::KeGroup as KeGroup>::PkLen>,
+        Sum<NonceLen, <CS::KeGroup as KeGroup>::PkLen>: ArrayLength<u8> + Add<OutputSize<CS::Hash>>,
+        Sum<Sum<NonceLen, <CS::KeGroup as KeGroup>::PkLen>, OutputSize<CS::Hash>>: ArrayLength<u8>,
     {
         let mut client_rng = OsRng;
         let mut server_rng = OsRng;
@@ -1537,10 +1567,10 @@ fn test_zeroize_client_login_finish() -> Result<(), ProtocolError> {
         )?;
 
         let mut state = client_login_finish_result.state;
-        Zeroize::zeroize(&mut state);
-        for byte in state.to_vec() {
-            assert_eq!(byte, 0);
-        }
+        util::drop_manually(&mut state);
+        util::test_zeroized(&mut state.oprf_client);
+        util::test_zeroized(&mut state.ke1_state);
+        util::test_zeroized(&mut state.credential_request.ke1_message.client_nonce);
 
         Ok(())
     }
