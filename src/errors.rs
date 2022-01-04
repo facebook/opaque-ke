@@ -8,7 +8,7 @@
 //! A list of error types which are produced during an execution of the protocol
 use core::convert::Infallible;
 use core::fmt::Debug;
-#[cfg(feature = "std")]
+#[cfg(any(feature = "std", test))]
 use std::error::Error;
 
 use displaydoc::Display;
@@ -84,7 +84,7 @@ impl<T: Debug> Debug for InternalError<T> {
     }
 }
 
-#[cfg(feature = "std")]
+#[cfg(any(feature = "std", test))]
 impl<T: Error> Error for InternalError<T> {}
 
 impl InternalError {
@@ -158,7 +158,7 @@ impl<T: Debug> Debug for ProtocolError<T> {
     }
 }
 
-#[cfg(feature = "std")]
+#[cfg(any(feature = "std", test))]
 impl<T: Error> Error for ProtocolError<T> {}
 
 // This is meant to express future(ly) non-trivial ways of converting the
