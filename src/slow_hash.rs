@@ -7,39 +7,49 @@
 
 //! Trait specifying a slow hashing function
 
-use crate::{errors::InternalError, hash::Hash};
-use digest::Digest;
-use generic_array::GenericArray;
+use crate::{
+    errors::InternalError,
+    hash::{Hash, ProxyHash},
+};
+use digest::core_api::BlockSizeUser;
+use digest::Output;
+use generic_array::typenum::{IsLess, Le, NonZero, U256};
 
 /// Used for the slow hashing function in OPAQUE
-pub trait SlowHash<D: Hash>: Default {
+pub trait SlowHash<D: Hash>: Default
+where
+    D::Core: ProxyHash,
+    <D::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
+    Le<<D::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
+{
     /// Computes the slow hashing function
-    fn hash(
-        &self,
-        input: GenericArray<u8, <D as Digest>::OutputSize>,
-    ) -> Result<GenericArray<u8, <D as Digest>::OutputSize>, InternalError>;
+    fn hash(&self, input: Output<D>) -> Result<Output<D>, InternalError>;
 }
 
 /// A no-op hash which simply returns its input
 #[derive(Default)]
 pub struct NoOpHash;
 
-impl<D: Hash> SlowHash<D> for NoOpHash {
-    fn hash(
-        &self,
-        input: GenericArray<u8, <D as Digest>::OutputSize>,
-    ) -> Result<GenericArray<u8, <D as Digest>::OutputSize>, InternalError> {
+impl<D: Hash> SlowHash<D> for NoOpHash
+where
+    D::Core: ProxyHash,
+    <D::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
+    Le<<D::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
+{
+    fn hash(&self, input: Output<D>) -> Result<Output<D>, InternalError> {
         Ok(input)
     }
 }
 
 #[cfg(feature = "slow-hash")]
-impl<D: Hash> SlowHash<D> for argon2::Argon2<'_> {
-    fn hash(
-        &self,
-        input: GenericArray<u8, <D as Digest>::OutputSize>,
-    ) -> Result<GenericArray<u8, <D as Digest>::OutputSize>, InternalError> {
-        let mut output = GenericArray::default();
+impl<D: Hash> SlowHash<D> for argon2::Argon2<'_>
+where
+    D::Core: ProxyHash,
+    <D::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
+    Le<<D::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
+{
+    fn hash(&self, input: Output<D>) -> Result<Output<D>, InternalError> {
+        let mut output = Output::<D>::default();
         self.hash_password_into(&input, &[0; argon2::MIN_SALT_LEN], &mut output)
             .map_err(|_| InternalError::SlowHashError)?;
         Ok(output)

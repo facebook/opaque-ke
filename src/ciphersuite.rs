@@ -7,9 +7,12 @@
 
 //! Defines the CipherSuite trait to specify the underlying primitives for OPAQUE
 
+use crate::hash::ProxyHash;
 use crate::key_exchange::group::KeGroup;
 use crate::{hash::Hash, key_exchange::traits::KeyExchange, slow_hash::SlowHash};
-use voprf::group::Group as OprfGroup;
+use digest::core_api::{BlockSizeUser, CoreProxy};
+use generic_array::typenum::{IsLess, Le, NonZero, U256};
+use voprf::Group as OprfGroup;
 
 /// Configures the underlying primitives used in OPAQUE
 /// * `OprfGroup`: a finite cyclic group along with a point representation, along
@@ -19,7 +22,12 @@ use voprf::group::Group as OprfGroup;
 /// * `KeyExchange`: The key exchange protocol to use in the login step
 /// * `Hash`: The main hashing function to use
 /// * `SlowHash`: A slow hashing function, typically used for password hashing
-pub trait CipherSuite {
+pub trait CipherSuite
+where
+    <Self::Hash as CoreProxy>::Core: ProxyHash,
+    <<Self::Hash as CoreProxy>::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
+    Le<<<Self::Hash as CoreProxy>::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
+{
     /// A finite cyclic group along with a point representation along with
     /// an extension trait PasswordToCurve that allows some customization on
     /// how to hash a password to a curve point. See `group::Group`.

@@ -7,10 +7,9 @@ categories = ["no-std"]
 description = "An implementation of the OPAQUE password-authenticated key exchange protocol"
 authors = ["Kevin Lewi <klewi@fb.com>", "François Garillot <fga@fb.com>"]
 license = "Apache-2.0 OR MIT"
-edition = "2018"
+edition = "2021"
 readme = "README.md"
-resolver = "2"
-rust-version = "1.51"
+rust-version = "1.56"
 
 [features]
 default = ["ristretto255_u64", "serde"]
@@ -37,17 +36,17 @@ argon2 = { version = "0.3", default-features = false, features = ["alloc"], opti
 constant_time_eq = "0.1"
 curve25519-dalek = { version = "3", default-features = false, optional = true }
 derive-where = { version = "1.0.0-rc.1", features = ["zeroize"] }
-digest = "0.9"
+digest = "0.10"
 displaydoc = { version = "0.2", default-features = false }
 generic-array = "0.14"
 getrandom = { version = "0.2", optional = true }
-hkdf = "0.11"
-hmac = "0.11"
-p256_ = { package = "p256", version = "0.9", default-features = false, features = ["arithmetic", "zeroize"], optional = true }
+hkdf = "0.12"
+hmac = "0.12"
+p256_ = { package = "p256", version = "0.10", default-features = false, features = ["arithmetic"], optional = true }
 rand = { version = "0.8", default-features = false }
 serde_ = { version = "1", package = "serde", default-features = false, features = ["derive"], optional = true }
 subtle = { version = "2.3", default-features = false }
-voprf = { git = "https://github.com/khonsulabs/voprf", rev = "f8c19eab4ecc9e7a2a5ae26c59661ce797229566", default-features = false, features = ["danger"] }
+voprf = { git = "https://github.com/novifinancial/voprf", rev = "55ef981a3f9a12eddd8c372ffdf51818011343ee", default-features = false, features = ["danger"] }
 x25519-dalek = { version = "1", default-features = false, optional = true }
 zeroize = { version = "1", features = ["zeroize_derive"] }
 
@@ -62,13 +61,11 @@ criterion = "0.3"
 hex = "0.4"
 json = "0.12"
 lazy_static = "1"
-opaque-ke = { path = "", default-features = false, features = ["std"] }
 serde_json = "1"
-sha2 = "0.9"
+sha2 = "0.10"
 proptest = "1"
 regex = "1"
-# Version 9.1 requires an MSRV of 1.56
-rustyline = "~9.0"
+rustyline = "9"
 
 [[bench]]
 name = "opaque"

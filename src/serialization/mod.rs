@@ -20,23 +20,19 @@ pub(crate) fn i2osp<L: ArrayLength<u8>>(
 ) -> Result<GenericArray<u8, L>, ProtocolError> {
     const SIZEOF_USIZE: usize = core::mem::size_of::<usize>();
 
-    // Check if input >= 256^length
+    // Make sure input fits in output.
     if (SIZEOF_USIZE as u32 - input.leading_zeros() / 8) > L::U32 {
         return Err(ProtocolError::SerializationError);
     }
 
-    if L::USIZE <= SIZEOF_USIZE {
-        return Ok(GenericArray::clone_from_slice(
-            &input.to_be_bytes()[SIZEOF_USIZE - L::USIZE..],
-        ));
-    }
-
     let mut output = GenericArray::default();
-    output[L::USIZE - SIZEOF_USIZE..L::USIZE].copy_from_slice(&input.to_be_bytes());
+    output[L::USIZE.saturating_sub(SIZEOF_USIZE)..]
+        .copy_from_slice(&input.to_be_bytes()[SIZEOF_USIZE.saturating_sub(L::USIZE)..]);
     Ok(output)
 }
 
 // Corresponds to the OS2IP() function from RFC8017
+#[cfg(test)]
 pub(crate) fn os2ip(input: &[u8]) -> Result<usize, ProtocolError> {
     if input.len() > core::mem::size_of::<usize>() {
         return Err(ProtocolError::SerializationError);
@@ -96,17 +92,17 @@ impl<'a, L1: ArrayLength<u8>, L2: ArrayLength<u8>, L3: ArrayLength<u8>> Serializ
 
     pub(crate) fn iter(&self) -> impl Iterator<Item = &[u8]> {
         // Some magic to make it output the same type in all branches.
-        Some(self.octet.as_slice())
+        [self.octet.as_slice()]
             .into_iter()
             .chain(match &self.input {
-                Input::Owned(bytes) => Some(bytes.as_slice()),
-                Input::Borrowed(bytes) => Some(*bytes),
-                Input::Label(_) => None,
+                Input::Owned(bytes) => [bytes.as_slice()],
+                Input::Borrowed(bytes) => [*bytes],
+                Input::Label((iter, _)) => [iter[0]],
             })
             .chain(if let Input::Label((iter, _)) = &self.input {
-                Some(iter[0]).into_iter().chain(Some(iter[1]).into_iter())
+                Some(iter[1])
             } else {
-                None.into_iter().chain(None)
+                None
             })
     }
 }
@@ -130,24 +126,6 @@ impl<'a, L1: ArrayLength<u8>, L2: ArrayLength<u8>> Serialize<'a, L1, L2, U2> {
             _ => unreachable!("unexpected `Serialize` constructed with wrong generics"),
         }
     }
-}
-
-// Tokenizes an input of the format I2OSP(len(input), max_bytes) || input, outputting
-// (input, remainder)
-pub(crate) fn tokenize(input: &[u8], size_bytes: usize) -> Result<(&[u8], &[u8]), ProtocolError> {
-    if size_bytes > core::mem::size_of::<usize>() || input.len() < size_bytes {
-        return Err(ProtocolError::SerializationError);
-    }
-
-    let size = os2ip(&input[..size_bytes])?;
-    if size_bytes + size > input.len() {
-        return Err(ProtocolError::SerializationError);
-    }
-
-    Ok((
-        &input[size_bytes..size_bytes + size],
-        &input[size_bytes + size..],
-    ))
 }
 
 pub(crate) trait UpdateExt {
@@ -176,17 +154,6 @@ impl<T: Mac> MacExt for T {
             self.update(bytes);
         }
     }
-}
-
-/// The purpose of this macro is to simplify [`concat`](alloc::slice::Concat::concat)ing
-/// slices into an [`Iterator`] to avoid allocation
-macro_rules! chain {
-    (
-        $item1:expr,
-        $($item2:expr),+$(,)?
-    ) => {
-        $item1$(.chain($item2))+
-    };
 }
 
 #[cfg(test)]

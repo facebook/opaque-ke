@@ -11,7 +11,7 @@ use crate::{
         utils::{check_slice_size, check_slice_size_atleast},
         InternalError, ProtocolError,
     },
-    hash::Hash,
+    hash::{Hash, OutputSize, ProxyHash},
     key_exchange::{
         group::KeGroup,
         traits::{FromBytes, GenerateKe2Result, GenerateKe3Result, KeyExchange, ToBytes},
@@ -19,18 +19,19 @@ use crate::{
     keypair::{KeyPair, PrivateKey, PublicKey, SecretKey},
     serialization::{Serialize, UpdateExt},
 };
-use core::array::IntoIter;
 use core::convert::TryFrom;
 use core::ops::Add;
 use derive_where::DeriveWhere;
-use digest::{Digest, FixedOutput};
+use digest::core_api::BlockSizeUser;
+use digest::{Digest, Output};
 use generic_array::sequence::Concat;
+use generic_array::typenum::{IsLess, Le, NonZero, U256};
 use generic_array::{
     typenum::{Sum, Unsigned, U1, U2, U32},
     ArrayLength, GenericArray,
 };
 use hkdf::{Hkdf, HkdfExtract};
-use hmac::{Hmac, Mac, NewMac};
+use hmac::{Hmac, Mac};
 use rand::{CryptoRng, RngCore};
 
 ///////////////
@@ -89,10 +90,15 @@ pub struct Ke1Message<KG: KeGroup> {
 )]
 #[derive(DeriveWhere)]
 #[derive_where(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, Zeroize(drop))]
-pub struct Ke2State<D: Hash> {
-    km3: GenericArray<u8, D::OutputSize>,
-    hashed_transcript: GenericArray<u8, D::OutputSize>,
-    session_key: GenericArray<u8, D::OutputSize>,
+pub struct Ke2State<D: Hash>
+where
+    D::Core: ProxyHash,
+    <D::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
+    Le<<D::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
+{
+    km3: Output<D>,
+    hashed_transcript: Output<D>,
+    session_key: Output<D>,
 }
 
 /// The second key exchange message
@@ -103,10 +109,15 @@ pub struct Ke2State<D: Hash> {
 )]
 #[derive(DeriveWhere)]
 #[derive_where(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-pub struct Ke2Message<D: Hash, KG: KeGroup> {
+pub struct Ke2Message<D: Hash, KG: KeGroup>
+where
+    D::Core: ProxyHash,
+    <D::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
+    Le<<D::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
+{
     server_nonce: GenericArray<u8, NonceLen>,
     server_e_pk: PublicKey<KG>,
-    mac: GenericArray<u8, D::OutputSize>,
+    mac: Output<D>,
 }
 
 /// The third key exchange message
@@ -117,8 +128,13 @@ pub struct Ke2Message<D: Hash, KG: KeGroup> {
 )]
 #[derive(DeriveWhere)]
 #[derive_where(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-pub struct Ke3Message<D: Hash> {
-    mac: GenericArray<u8, D::OutputSize>,
+pub struct Ke3Message<D: Hash>
+where
+    D::Core: ProxyHash,
+    <D::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
+    Le<<D::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
+{
+    mac: Output<D>,
 }
 
 ////////////////////////////////
@@ -128,6 +144,9 @@ pub struct Ke3Message<D: Hash> {
 
 impl<D: Hash, KG: KeGroup> KeyExchange<D, KG> for TripleDH
 where
+    D::Core: ProxyHash,
+    <D::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
+    Le<<D::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
     // Ke1State: KeSk + Nonce
     KG::SkLen: Add<NonceLen>,
     Sum<KG::SkLen, NonceLen>: ArrayLength<u8>,
@@ -135,13 +154,13 @@ where
     NonceLen: Add<KG::PkLen>,
     Sum<NonceLen, KG::PkLen>: ArrayLength<u8>,
     // Ke2State: (Hash + Hash) + Hash
-    D::OutputSize: Add<D::OutputSize>,
-    Sum<D::OutputSize, D::OutputSize>: ArrayLength<u8> + Add<D::OutputSize>,
-    Sum<Sum<D::OutputSize, D::OutputSize>, D::OutputSize>: ArrayLength<u8>,
+    OutputSize<D>: Add<OutputSize<D>>,
+    Sum<OutputSize<D>, OutputSize<D>>: ArrayLength<u8> + Add<OutputSize<D>>,
+    Sum<Sum<OutputSize<D>, OutputSize<D>>, OutputSize<D>>: ArrayLength<u8>,
     // Ke2Message: (Nonce + KePk) + Hash
     NonceLen: Add<KG::PkLen>,
-    Sum<NonceLen, KG::PkLen>: ArrayLength<u8> + Add<D::OutputSize>,
-    Sum<Sum<NonceLen, KG::PkLen>, D::OutputSize>: ArrayLength<u8>,
+    Sum<NonceLen, KG::PkLen>: ArrayLength<u8> + Add<OutputSize<D>>,
+    Sum<Sum<NonceLen, KG::PkLen>, OutputSize<D>>: ArrayLength<u8>,
 {
     type KE1State = Ke1State<KG>;
     type KE2State = Ke2State<D>;
@@ -215,7 +234,7 @@ where
         mac_hasher.update(&transcript_hasher.clone().finalize());
         let mac = mac_hasher.finalize().into_bytes();
 
-        transcript_hasher.update(&mac);
+        Digest::update(&mut transcript_hasher, &mac);
 
         Ok((
             Ke2State {
@@ -276,7 +295,7 @@ where
             .verify(&ke2_message.mac)
             .map_err(|_| ProtocolError::InvalidLoginError)?;
 
-        transcript_hasher.update(&ke2_message.mac);
+        Digest::update(&mut transcript_hasher, &ke2_message.mac);
 
         let mut client_mac =
             Hmac::<D>::new_from_slice(&result.2).map_err(|_| InternalError::HmacError)?;
@@ -294,11 +313,10 @@ where
         ))
     }
 
-    #[allow(clippy::type_complexity)]
     fn finish_ke(
         ke3_message: Self::KE3Message,
         ke2_state: &Self::KE2State,
-    ) -> Result<GenericArray<u8, D::OutputSize>, ProtocolError> {
+    ) -> Result<Output<D>, ProtocolError> {
         let mut client_mac =
             Hmac::<D>::new_from_slice(&ke2_state.km3).map_err(|_| InternalError::HmacError)?;
         client_mac.update(&ke2_state.hashed_transcript);
@@ -311,7 +329,7 @@ where
     }
 
     fn ke2_message_size() -> usize {
-        NonceLen::USIZE + <KG as KeGroup>::PkLen::USIZE + <D as FixedOutput>::OutputSize::USIZE
+        NonceLen::USIZE + <KG as KeGroup>::PkLen::USIZE + OutputSize::<D>::USIZE
     }
 }
 
@@ -334,18 +352,9 @@ struct TripleDHComponents<KG: KeGroup, S: SecretKey<KG>> {
 // Consists of a session key, followed by two mac keys: (session_key, km2, km3)
 #[cfg(not(test))]
 #[allow(clippy::upper_case_acronyms)]
-type TripleDHDerivationResult<D> = (
-    GenericArray<u8, <D as FixedOutput>::OutputSize>,
-    GenericArray<u8, <D as FixedOutput>::OutputSize>,
-    GenericArray<u8, <D as FixedOutput>::OutputSize>,
-);
+type TripleDHDerivationResult<D> = (Output<D>, Output<D>, Output<D>);
 #[cfg(test)]
-type TripleDHDerivationResult<D> = (
-    GenericArray<u8, <D as FixedOutput>::OutputSize>,
-    GenericArray<u8, <D as FixedOutput>::OutputSize>,
-    GenericArray<u8, <D as FixedOutput>::OutputSize>,
-    GenericArray<u8, <D as FixedOutput>::OutputSize>,
-);
+type TripleDHDerivationResult<D> = (Output<D>, Output<D>, Output<D>, Output<D>);
 
 ////////////////////////////////////////////////
 // Helper functions and Trait Implementations //
@@ -359,7 +368,12 @@ type TripleDHDerivationResult<D> = (
 fn derive_3dh_keys<D: Hash, KG: KeGroup, S: SecretKey<KG>>(
     dh: TripleDHComponents<KG, S>,
     hashed_derivation_transcript: &[u8],
-) -> Result<TripleDHDerivationResult<D>, ProtocolError<S::Error>> {
+) -> Result<TripleDHDerivationResult<D>, ProtocolError<S::Error>>
+where
+    D::Core: ProxyHash,
+    <D::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
+    Le<<D::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
+{
     let mut hkdf = HkdfExtract::<D>::new(None);
 
     hkdf.input_ikm(
@@ -406,7 +420,12 @@ fn hkdf_expand_label<D: Hash>(
     secret: &[u8],
     label: &[u8],
     context: &[u8],
-) -> Result<GenericArray<u8, D::OutputSize>, ProtocolError> {
+) -> Result<Output<D>, ProtocolError>
+where
+    D::Core: ProxyHash,
+    <D::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
+    Le<<D::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
+{
     let h = Hkdf::<D>::from_prk(secret).map_err(|_| InternalError::HkdfError)?;
     hkdf_expand_label_extracted(&h, label, context)
 }
@@ -415,11 +434,16 @@ fn hkdf_expand_label_extracted<D: Hash>(
     hkdf: &Hkdf<D>,
     label: &[u8],
     context: &[u8],
-) -> Result<GenericArray<u8, D::OutputSize>, ProtocolError> {
+) -> Result<Output<D>, ProtocolError>
+where
+    D::Core: ProxyHash,
+    <D::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
+    Le<<D::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
+{
     let mut okm = GenericArray::default();
 
     let length_u16: u16 =
-        u16::try_from(D::OutputSize::USIZE).map_err(|_| ProtocolError::SerializationError)?;
+        u16::try_from(OutputSize::<D>::USIZE).map_err(|_| ProtocolError::SerializationError)?;
     let label = Serialize::<U1>::from_label(STR_OPAQUE, label)?;
     let label = label.to_array_3();
     let context = Serialize::<U1>::from(context)?;
@@ -443,7 +467,12 @@ fn derive_secrets<D: Hash>(
     hkdf: &Hkdf<D>,
     label: &[u8],
     hashed_derivation_transcript: &[u8],
-) -> Result<GenericArray<u8, D::OutputSize>, ProtocolError> {
+) -> Result<Output<D>, ProtocolError>
+where
+    D::Core: ProxyHash,
+    <D::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
+    Le<<D::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
+{
     hkdf_expand_label_extracted::<D>(hkdf, label, hashed_derivation_transcript)
 }
 
@@ -514,9 +543,14 @@ where
     }
 }
 
-impl<D: Hash> FromBytes for Ke2State<D> {
+impl<D: Hash> FromBytes for Ke2State<D>
+where
+    D::Core: ProxyHash,
+    <D::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
+    Le<<D::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
+{
     fn from_bytes(input: &[u8]) -> Result<Self, ProtocolError> {
-        let hash_len = D::OutputSize::USIZE;
+        let hash_len = OutputSize::<D>::USIZE;
         let checked_bytes = check_slice_size(input, 3 * hash_len, "ke2_state")?;
 
         Ok(Self {
@@ -531,12 +565,15 @@ impl<D: Hash> FromBytes for Ke2State<D> {
 
 impl<D: Hash> ToBytes for Ke2State<D>
 where
+    D::Core: ProxyHash,
+    <D::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
+    Le<<D::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
     // Ke2State: (Hash + Hash) + Hash
-    D::OutputSize: Add<D::OutputSize>,
-    Sum<D::OutputSize, D::OutputSize>: ArrayLength<u8> + Add<D::OutputSize>,
-    Sum<Sum<D::OutputSize, D::OutputSize>, D::OutputSize>: ArrayLength<u8>,
+    OutputSize<D>: Add<OutputSize<D>>,
+    Sum<OutputSize<D>, OutputSize<D>>: ArrayLength<u8> + Add<OutputSize<D>>,
+    Sum<Sum<OutputSize<D>, OutputSize<D>>, OutputSize<D>>: ArrayLength<u8>,
 {
-    type Len = Sum<Sum<D::OutputSize, D::OutputSize>, D::OutputSize>;
+    type Len = Sum<Sum<OutputSize<D>, OutputSize<D>>, OutputSize<D>>;
 
     fn to_bytes(&self) -> GenericArray<u8, Self::Len> {
         self.km3
@@ -546,7 +583,12 @@ where
     }
 }
 
-impl<KG: KeGroup, D: Hash> FromBytes for Ke2Message<D, KG> {
+impl<KG: KeGroup, D: Hash> FromBytes for Ke2Message<D, KG>
+where
+    D::Core: ProxyHash,
+    <D::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
+    Le<<D::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
+{
     fn from_bytes(input: &[u8]) -> Result<Self, ProtocolError> {
         let key_len = <KG as KeGroup>::PkLen::USIZE;
         let nonce_len = NonceLen::USIZE;
@@ -559,7 +601,7 @@ impl<KG: KeGroup, D: Hash> FromBytes for Ke2Message<D, KG> {
         )?;
         let checked_mac = check_slice_size(
             &unchecked_server_e_pk[key_len..],
-            D::OutputSize::USIZE,
+            OutputSize::<D>::USIZE,
             "ke1_message mac",
         )?;
 
@@ -578,12 +620,15 @@ impl<KG: KeGroup, D: Hash> FromBytes for Ke2Message<D, KG> {
 
 impl<D: Hash, KG: KeGroup> ToBytes for Ke2Message<D, KG>
 where
+    D::Core: ProxyHash,
+    <D::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
+    Le<<D::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
     // Ke2Message: (Nonce + KePk) + Hash
     NonceLen: Add<KG::PkLen>,
-    Sum<NonceLen, KG::PkLen>: ArrayLength<u8> + Add<D::OutputSize>,
-    Sum<Sum<NonceLen, KG::PkLen>, D::OutputSize>: ArrayLength<u8>,
+    Sum<NonceLen, KG::PkLen>: ArrayLength<u8> + Add<OutputSize<D>>,
+    Sum<Sum<NonceLen, KG::PkLen>, OutputSize<D>>: ArrayLength<u8>,
 {
-    type Len = Sum<Sum<NonceLen, KG::PkLen>, D::OutputSize>;
+    type Len = Sum<Sum<NonceLen, KG::PkLen>, OutputSize<D>>;
 
     fn to_bytes(&self) -> GenericArray<u8, Self::Len> {
         self.server_nonce
@@ -592,17 +637,25 @@ where
     }
 }
 
-impl<D: Hash, KG: KeGroup> Ke2Message<D, KG> {
+impl<D: Hash, KG: KeGroup> Ke2Message<D, KG>
+where
+    D::Core: ProxyHash,
+    <D::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
+    Le<<D::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
+{
     fn to_bytes_without_info_or_mac(&self) -> impl Iterator<Item = &[u8]> {
-        // MSRV: array `into_iter` isn't available in 1.51
-        #[allow(deprecated)]
-        IntoIter::new([self.server_nonce.as_slice(), self.server_e_pk.as_slice()])
+        [self.server_nonce.as_slice(), self.server_e_pk.as_slice()].into_iter()
     }
 }
 
-impl<D: Hash> FromBytes for Ke3Message<D> {
+impl<D: Hash> FromBytes for Ke3Message<D>
+where
+    D::Core: ProxyHash,
+    <D::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
+    Le<<D::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
+{
     fn from_bytes(bytes: &[u8]) -> Result<Self, ProtocolError> {
-        let checked_bytes = check_slice_size(bytes, D::OutputSize::USIZE, "ke3_message")?;
+        let checked_bytes = check_slice_size(bytes, OutputSize::<D>::USIZE, "ke3_message")?;
 
         Ok(Self {
             mac: GenericArray::clone_from_slice(checked_bytes),
@@ -610,8 +663,13 @@ impl<D: Hash> FromBytes for Ke3Message<D> {
     }
 }
 
-impl<D: Hash> ToBytes for Ke3Message<D> {
-    type Len = D::OutputSize;
+impl<D: Hash> ToBytes for Ke3Message<D>
+where
+    D::Core: ProxyHash,
+    <D::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
+    Le<<D::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
+{
+    type Len = OutputSize<D>;
 
     fn to_bytes(&self) -> GenericArray<u8, Self::Len> {
         self.mac.clone()

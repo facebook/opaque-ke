@@ -9,6 +9,7 @@ use crate::{
     ciphersuite::CipherSuite,
     envelope::EnvelopeLen,
     errors::*,
+    hash::{OutputSize, ProxyHash},
     key_exchange::{
         group::KeGroup,
         traits::{Ke1MessageLen, Ke2MessageLen},
@@ -23,12 +24,15 @@ use crate::{
     tests::mock_rng::CycleRng,
     *,
 };
-use alloc::{string::ToString, vec, vec::Vec};
 use core::ops::Add;
-use digest::FixedOutput;
-use generic_array::{typenum::Sum, ArrayLength};
+use digest::core_api::{BlockSizeUser, CoreProxy};
+use generic_array::{
+    typenum::{IsLess, Le, NonZero, Sum, U256},
+    ArrayLength,
+};
 use json::JsonValue;
-use voprf::group::Group;
+use std::{println, string::ToString, vec, vec::Vec};
+use voprf::Group;
 
 #[allow(non_snake_case)]
 #[derive(Debug)]
@@ -150,12 +154,15 @@ fn populate_test_vectors(values: &JsonValue) -> OpaqueTestVectorParameters {
 
 fn get_password_file_bytes<CS: CipherSuite>(parameters: &OpaqueTestVectorParameters) -> Vec<u8>
 where
+    <CS::Hash as CoreProxy>::Core: ProxyHash,
+    <<CS::Hash as CoreProxy>::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
+    Le<<<CS::Hash as CoreProxy>::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
     // Envelope: Nonce + Hash
-    NonceLen: Add<<CS::Hash as FixedOutput>::OutputSize>,
+    NonceLen: Add<OutputSize<CS::Hash>>,
     EnvelopeLen<CS>: ArrayLength<u8>,
     // RegistrationUpload: (KePk + Hash) + Envelope
-    <CS::KeGroup as KeGroup>::PkLen: Add<<CS::Hash as FixedOutput>::OutputSize>,
-    Sum<<CS::KeGroup as KeGroup>::PkLen, <CS::Hash as FixedOutput>::OutputSize>:
+    <CS::KeGroup as KeGroup>::PkLen: Add<OutputSize<CS::Hash>>,
+    Sum<<CS::KeGroup as KeGroup>::PkLen, OutputSize<CS::Hash>>:
         ArrayLength<u8> + Add<EnvelopeLen<CS>>,
     RegistrationUploadLen<CS>: ArrayLength<u8>,
     // ServerRegistration = RegistrationUpload
@@ -253,7 +260,12 @@ fn tests() -> Result<(), ProtocolError> {
 
 fn test_registration_request<CS: CipherSuite>(
     tvs: &[OpaqueTestVectorParameters],
-) -> Result<(), ProtocolError> {
+) -> Result<(), ProtocolError>
+where
+    <CS::Hash as CoreProxy>::Core: ProxyHash,
+    <<CS::Hash as CoreProxy>::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
+    Le<<<CS::Hash as CoreProxy>::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
+{
     for parameters in tvs {
         let mut rng = CycleRng::new(parameters.blind_registration.to_vec());
         let client_registration_start_result =
@@ -270,6 +282,9 @@ fn test_registration_response<CS: CipherSuite>(
     tvs: &[OpaqueTestVectorParameters],
 ) -> Result<(), ProtocolError>
 where
+    <CS::Hash as CoreProxy>::Core: ProxyHash,
+    <<CS::Hash as CoreProxy>::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
+    Le<<<CS::Hash as CoreProxy>::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
     // RegistrationResponse: KgPk + KePk
     <CS::OprfGroup as Group>::ElemLen: Add<<CS::KeGroup as KeGroup>::PkLen>,
     RegistrationResponseLen<CS>: ArrayLength<u8>,
@@ -304,12 +319,15 @@ fn test_registration_upload<CS: CipherSuite>(
     tvs: &[OpaqueTestVectorParameters],
 ) -> Result<(), ProtocolError>
 where
+    <CS::Hash as CoreProxy>::Core: ProxyHash,
+    <<CS::Hash as CoreProxy>::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
+    Le<<<CS::Hash as CoreProxy>::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
     // Envelope: Nonce + Hash
-    NonceLen: Add<<CS::Hash as FixedOutput>::OutputSize>,
+    NonceLen: Add<OutputSize<CS::Hash>>,
     EnvelopeLen<CS>: ArrayLength<u8>,
     // RegistrationUpload: (KePk + Hash) + Envelope
-    <CS::KeGroup as KeGroup>::PkLen: Add<<CS::Hash as FixedOutput>::OutputSize>,
-    Sum<<CS::KeGroup as KeGroup>::PkLen, <CS::Hash as FixedOutput>::OutputSize>:
+    <CS::KeGroup as KeGroup>::PkLen: Add<OutputSize<CS::Hash>>,
+    Sum<<CS::KeGroup as KeGroup>::PkLen, OutputSize<CS::Hash>>:
         ArrayLength<u8> + Add<EnvelopeLen<CS>>,
     RegistrationUploadLen<CS>: ArrayLength<u8>,
 {
@@ -321,6 +339,7 @@ where
         let mut finish_registration_rng = CycleRng::new(parameters.envelope_nonce.to_vec());
         let result = client_registration_start_result.state.finish(
             &mut finish_registration_rng,
+            &parameters.password,
             RegistrationResponse::deserialize(&parameters.registration_response).unwrap(),
             ClientRegistrationFinishParameters::new(
                 Identifiers {
@@ -353,6 +372,9 @@ where
 
 fn test_ke1<CS: CipherSuite>(tvs: &[OpaqueTestVectorParameters]) -> Result<(), ProtocolError>
 where
+    <CS::Hash as CoreProxy>::Core: ProxyHash,
+    <<CS::Hash as CoreProxy>::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
+    Le<<<CS::Hash as CoreProxy>::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
     // CredentialRequest: KgPk + Ke1Message
     <CS::OprfGroup as Group>::ElemLen: Add<Ke1MessageLen<CS>>,
     CredentialRequestLen<CS>: ArrayLength<u8>,
@@ -383,28 +405,29 @@ where
 
 fn test_ke2<CS: CipherSuite>(tvs: &[OpaqueTestVectorParameters]) -> Result<(), ProtocolError>
 where
+    <CS::Hash as CoreProxy>::Core: ProxyHash,
+    <<CS::Hash as CoreProxy>::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
+    Le<<<CS::Hash as CoreProxy>::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
     // Envelope: Nonce + Hash
-    NonceLen: Add<<CS::Hash as FixedOutput>::OutputSize>,
+    NonceLen: Add<OutputSize<CS::Hash>>,
     EnvelopeLen<CS>: ArrayLength<u8>,
     // RegistrationUpload: (KePk + Hash) + Envelope
-    <CS::KeGroup as KeGroup>::PkLen: Add<<CS::Hash as FixedOutput>::OutputSize>,
-    Sum<<CS::KeGroup as KeGroup>::PkLen, <CS::Hash as FixedOutput>::OutputSize>:
+    <CS::KeGroup as KeGroup>::PkLen: Add<OutputSize<CS::Hash>>,
+    Sum<<CS::KeGroup as KeGroup>::PkLen, OutputSize<CS::Hash>>:
         ArrayLength<u8> + Add<EnvelopeLen<CS>>,
     RegistrationUploadLen<CS>: ArrayLength<u8>,
     // ServerRegistration = RegistrationUpload
     // MaskedResponse: (Nonce + Hash) + KePk
-    NonceLen: Add<<CS::Hash as FixedOutput>::OutputSize>,
-    Sum<NonceLen, <CS::Hash as FixedOutput>::OutputSize>:
-        ArrayLength<u8> + Add<<CS::KeGroup as KeGroup>::PkLen>,
+    NonceLen: Add<OutputSize<CS::Hash>>,
+    Sum<NonceLen, OutputSize<CS::Hash>>: ArrayLength<u8> + Add<<CS::KeGroup as KeGroup>::PkLen>,
     MaskedResponseLen<CS>: ArrayLength<u8>,
     // CredentialResponseWithoutKeLen: (KgPk + Nonce) + MaskedResponse
     <CS::OprfGroup as Group>::ElemLen: Add<NonceLen>,
     Sum<<CS::OprfGroup as Group>::ElemLen, NonceLen>: ArrayLength<u8> + Add<MaskedResponseLen<CS>>,
     CredentialResponseWithoutKeLen<CS>: ArrayLength<u8>,
     // MaskedResponse: (Nonce + Hash) + KePk
-    NonceLen: Add<<CS::Hash as FixedOutput>::OutputSize>,
-    Sum<NonceLen, <CS::Hash as FixedOutput>::OutputSize>:
-        ArrayLength<u8> + Add<<CS::KeGroup as KeGroup>::PkLen>,
+    NonceLen: Add<OutputSize<CS::Hash>>,
+    Sum<NonceLen, OutputSize<CS::Hash>>: ArrayLength<u8> + Add<<CS::KeGroup as KeGroup>::PkLen>,
     MaskedResponseLen<CS>: ArrayLength<u8>,
     // CredentialResponse: CredentialResponseWithoutKeLen + Ke2Message
     CredentialResponseWithoutKeLen<CS>: Add<Ke2MessageLen<CS>>,
@@ -467,10 +490,12 @@ where
 
 fn test_ke3<CS: CipherSuite>(tvs: &[OpaqueTestVectorParameters]) -> Result<(), ProtocolError>
 where
+    <CS::Hash as CoreProxy>::Core: ProxyHash,
+    <<CS::Hash as CoreProxy>::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
+    Le<<<CS::Hash as CoreProxy>::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
     // MaskedResponse: (Nonce + Hash) + KePk
-    NonceLen: Add<<CS::Hash as FixedOutput>::OutputSize>,
-    Sum<NonceLen, <CS::Hash as FixedOutput>::OutputSize>:
-        ArrayLength<u8> + Add<<CS::KeGroup as KeGroup>::PkLen>,
+    NonceLen: Add<OutputSize<CS::Hash>>,
+    Sum<NonceLen, OutputSize<CS::Hash>>: ArrayLength<u8> + Add<<CS::KeGroup as KeGroup>::PkLen>,
     MaskedResponseLen<CS>: ArrayLength<u8>,
 {
     for parameters in tvs {
@@ -485,6 +510,7 @@ where
             ClientLogin::<CS>::start(&mut client_login_start_rng, &parameters.password)?;
 
         let client_login_finish_result = client_login_start_result.state.finish(
+            &parameters.password,
             CredentialResponse::<CS>::deserialize(&parameters.KE2)?,
             ClientLoginFinishParameters::new(
                 Some(&parameters.context.clone()),
@@ -524,19 +550,21 @@ fn test_server_login_finish<CS: CipherSuite>(
     tvs: &[OpaqueTestVectorParameters],
 ) -> Result<(), ProtocolError>
 where
+    <CS::Hash as CoreProxy>::Core: ProxyHash,
+    <<CS::Hash as CoreProxy>::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
+    Le<<<CS::Hash as CoreProxy>::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
     // Envelope: Nonce + Hash
-    NonceLen: Add<<CS::Hash as FixedOutput>::OutputSize>,
+    NonceLen: Add<OutputSize<CS::Hash>>,
     EnvelopeLen<CS>: ArrayLength<u8>,
     // RegistrationUpload: (KePk + Hash) + Envelope
-    <CS::KeGroup as KeGroup>::PkLen: Add<<CS::Hash as FixedOutput>::OutputSize>,
-    Sum<<CS::KeGroup as KeGroup>::PkLen, <CS::Hash as FixedOutput>::OutputSize>:
+    <CS::KeGroup as KeGroup>::PkLen: Add<OutputSize<CS::Hash>>,
+    Sum<<CS::KeGroup as KeGroup>::PkLen, OutputSize<CS::Hash>>:
         ArrayLength<u8> + Add<EnvelopeLen<CS>>,
     RegistrationUploadLen<CS>: ArrayLength<u8>,
     // ServerRegistration = RegistrationUpload
     // MaskedResponse: (Nonce + Hash) + KePk
-    NonceLen: Add<<CS::Hash as FixedOutput>::OutputSize>,
-    Sum<NonceLen, <CS::Hash as FixedOutput>::OutputSize>:
-        ArrayLength<u8> + Add<<CS::KeGroup as KeGroup>::PkLen>,
+    NonceLen: Add<OutputSize<CS::Hash>>,
+    Sum<NonceLen, OutputSize<CS::Hash>>: ArrayLength<u8> + Add<<CS::KeGroup as KeGroup>::PkLen>,
     MaskedResponseLen<CS>: ArrayLength<u8>,
 {
     for parameters in tvs {
@@ -591,10 +619,12 @@ fn test_fake_vectors<CS: CipherSuite>(
     tvs: &[OpaqueTestVectorParameters],
 ) -> Result<(), ProtocolError>
 where
+    <CS::Hash as CoreProxy>::Core: ProxyHash,
+    <<CS::Hash as CoreProxy>::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
+    Le<<<CS::Hash as CoreProxy>::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
     // MaskedResponse: (Nonce + Hash) + KePk
-    NonceLen: Add<<CS::Hash as FixedOutput>::OutputSize>,
-    Sum<NonceLen, <CS::Hash as FixedOutput>::OutputSize>:
-        ArrayLength<u8> + Add<<CS::KeGroup as KeGroup>::PkLen>,
+    NonceLen: Add<OutputSize<CS::Hash>>,
+    Sum<NonceLen, OutputSize<CS::Hash>>: ArrayLength<u8> + Add<<CS::KeGroup as KeGroup>::PkLen>,
     MaskedResponseLen<CS>: ArrayLength<u8>,
     // CredentialResponseWithoutKeLen: (KgPk + Nonce) + MaskedResponse
     <CS::OprfGroup as Group>::ElemLen: Add<NonceLen>,

@@ -8,7 +8,7 @@
 //! A list of error types which are produced during an execution of the protocol
 use core::convert::Infallible;
 use core::fmt::Debug;
-#[cfg(feature = "std")]
+#[cfg(any(feature = "std", test))]
 use std::error::Error;
 
 use displaydoc::Display;
@@ -48,7 +48,7 @@ pub enum InternalError<T = Infallible> {
     /// This error occurs when the inner envelope is malformed
     InvalidInnerEnvelopeError,
     /// Error from the OPRF evaluation
-    OprfError(voprf::errors::InternalError),
+    OprfError(voprf::Error),
     /// Error encountered when attempting to produce a keypair
     InvalidKeypairError,
 }
@@ -84,7 +84,7 @@ impl<T: Debug> Debug for InternalError<T> {
     }
 }
 
-#[cfg(feature = "std")]
+#[cfg(any(feature = "std", test))]
 impl<T: Error> Error for InternalError<T> {}
 
 impl InternalError {
@@ -116,14 +116,14 @@ impl InternalError {
     }
 }
 
-impl From<voprf::errors::InternalError> for InternalError {
-    fn from(voprf_error: voprf::errors::InternalError) -> Self {
+impl From<voprf::Error> for InternalError {
+    fn from(voprf_error: voprf::Error) -> Self {
         Self::OprfError(voprf_error)
     }
 }
 
-impl From<voprf::errors::InternalError> for ProtocolError {
-    fn from(voprf_error: voprf::errors::InternalError) -> Self {
+impl From<voprf::Error> for ProtocolError {
+    fn from(voprf_error: voprf::Error) -> Self {
         Self::LibraryError(InternalError::OprfError(voprf_error))
     }
 }
@@ -158,7 +158,7 @@ impl<T: Debug> Debug for ProtocolError<T> {
     }
 }
 
-#[cfg(feature = "std")]
+#[cfg(any(feature = "std", test))]
 impl<T: Error> Error for ProtocolError<T> {}
 
 // This is meant to express future(ly) non-trivial ways of converting the
