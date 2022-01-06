@@ -7,37 +7,38 @@
 
 //! Provides the main OPAQUE API
 
-use crate::{
-    ciphersuite::CipherSuite,
-    envelope::{Envelope, EnvelopeLen},
-    errors::{utils::check_slice_size, InternalError, ProtocolError},
-    hash::{Hash, OutputSize, ProxyHash},
-    key_exchange::{
-        group::KeGroup,
-        traits::{FromBytes, Ke1MessageLen, Ke1StateLen, Ke2StateLen, KeyExchange, ToBytes},
-        tripledh::NonceLen,
-    },
-    keypair::{KeyPair, PrivateKey, PublicKey, SecretKey},
-    messages::{CredentialRequestLen, RegistrationUploadLen},
-    serialization::Serialize,
-    slow_hash::SlowHash,
-    CredentialFinalization, CredentialRequest, CredentialResponse, RegistrationRequest,
-    RegistrationResponse, RegistrationUpload,
-};
 use core::marker::PhantomData;
 use core::ops::Add;
+
 use derive_where::DeriveWhere;
 use digest::core_api::{BlockSizeUser, CoreProxy};
 use digest::Output;
 use generic_array::sequence::Concat;
-use generic_array::{
-    typenum::{IsLess, Le, NonZero, Sum, Unsigned, U2, U256},
-    ArrayLength, GenericArray,
-};
+use generic_array::typenum::{IsLess, Le, NonZero, Sum, Unsigned, U2, U256};
+use generic_array::{ArrayLength, GenericArray};
 use hkdf::{Hkdf, HkdfExtract};
 use rand::{CryptoRng, RngCore};
 use subtle::ConstantTimeEq;
 use voprf::Group;
+
+use crate::ciphersuite::CipherSuite;
+use crate::envelope::{Envelope, EnvelopeLen};
+use crate::errors::utils::check_slice_size;
+use crate::errors::{InternalError, ProtocolError};
+use crate::hash::{Hash, OutputSize, ProxyHash};
+use crate::key_exchange::group::KeGroup;
+use crate::key_exchange::traits::{
+    FromBytes, Ke1MessageLen, Ke1StateLen, Ke2StateLen, KeyExchange, ToBytes,
+};
+use crate::key_exchange::tripledh::NonceLen;
+use crate::keypair::{KeyPair, PrivateKey, PublicKey, SecretKey};
+use crate::messages::{CredentialRequestLen, RegistrationUploadLen};
+use crate::serialization::Serialize;
+use crate::slow_hash::SlowHash;
+use crate::{
+    CredentialFinalization, CredentialRequest, CredentialResponse, RegistrationRequest,
+    RegistrationResponse, RegistrationUpload,
+};
 
 ///////////////
 // Constants //
@@ -311,7 +312,8 @@ where
         .concat()
     }
 
-    /// Returns an initial "blinded" request to send to the server, as well as a ClientRegistration
+    /// Returns an initial "blinded" request to send to the server, as well as a
+    /// ClientRegistration
     pub fn start<R: RngCore + CryptoRng>(
         blinding_factor_rng: &mut R,
         password: &[u8],
@@ -330,7 +332,8 @@ where
     }
 
     /// "Unblinds" the server's answer and returns a final message containing
-    /// cryptographic identifiers, to be sent to the server on setup finalization
+    /// cryptographic identifiers, to be sent to the server on setup
+    /// finalization
     pub fn finish<R: CryptoRng + RngCore>(
         self,
         rng: &mut R,
@@ -416,8 +419,8 @@ where
         Ok(Self(RegistrationUpload::deserialize(input)?))
     }
 
-    /// From the client's "blinded" password, returns a response to be
-    /// sent back to the client, as well as a ServerRegistration
+    /// From the client's "blinded" password, returns a response to be sent back
+    /// to the client, as well as a ServerRegistration
     pub fn start<S: SecretKey<CS::KeGroup>>(
         server_setup: &ServerSetup<CS, S>,
         message: RegistrationRequest<CS>,
@@ -441,8 +444,8 @@ where
         })
     }
 
-    /// From the client's cryptographic identifiers, fully populates and
-    /// returns a ServerRegistration
+    /// From the client's cryptographic identifiers, fully populates and returns
+    /// a ServerRegistration
     pub fn finish(message: RegistrationUpload<CS>) -> Self {
         Self(message)
     }
@@ -530,7 +533,8 @@ where
     <<CS::Hash as CoreProxy>::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
     Le<<<CS::Hash as CoreProxy>::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
 {
-    /// Returns an initial "blinded" password request to send to the server, as well as a ClientLogin
+    /// Returns an initial "blinded" password request to send to the server, as
+    /// well as a ClientLogin
     pub fn start<R: RngCore + CryptoRng>(
         rng: &mut R,
         password: &[u8],
@@ -553,8 +557,8 @@ where
         })
     }
 
-    /// "Unblinds" the server's answer and returns the opened assets from
-    /// the server
+    /// "Unblinds" the server's answer and returns the opened assets from the
+    /// server
     pub fn finish(
         self,
         password: &[u8],
@@ -676,8 +680,8 @@ where
         })
     }
 
-    /// From the client's "blinded" password, returns a challenge to be
-    /// sent back to the client, as well as a ServerLogin
+    /// From the client's "blinded" password, returns a challenge to be sent
+    /// back to the client, as well as a ServerLogin
     pub fn start<R: RngCore + CryptoRng, S: SecretKey<CS::KeGroup>>(
         rng: &mut R,
         server_setup: &ServerSetup<CS, S>,
@@ -859,7 +863,8 @@ where
 {
     /// The registration request message to be sent to the server
     pub message: RegistrationRequest<CS>,
-    /// The client state that must be persisted in order to complete registration
+    /// The client state that must be persisted in order to complete
+    /// registration
     pub state: ClientRegistration<CS>,
 }
 
@@ -878,7 +883,8 @@ where
     pub export_key: Output<CS::Hash>,
     /// The server's static public key
     pub server_s_pk: PublicKey<CS::KeGroup>,
-    /// Instance of the ClientRegistration, only used in tests for checking zeroize
+    /// Instance of the ClientRegistration, only used in tests for checking
+    /// zeroize
     #[cfg(test)]
     pub state: ClientRegistration<CS>,
     /// AuthKey, only used in tests
@@ -889,8 +895,8 @@ where
     pub randomized_pwd: Output<CS::Hash>,
 }
 
-/// Contains the fields that are returned by a server registration start.
-/// Note that there is no state output in this step
+/// Contains the fields that are returned by a server registration start. Note
+/// that there is no state output in this step
 #[derive(DeriveWhere)]
 #[derive_where(Clone)]
 pub struct ServerRegistrationStartResult<CS: CipherSuite>
@@ -932,7 +938,8 @@ where
 {
     /// Specifying a context field that the server must agree on
     pub context: Option<&'c [u8]>,
-    /// Specifying a user identifier and server identifier that will be matched against the server
+    /// Specifying a user identifier and server identifier that will be matched
+    /// against the server
     pub identifiers: Identifiers<'i>,
     /// Specifying a configuration for the slow hash
     pub slow_hash: Option<&'h CS::SlowHash>,
@@ -1000,7 +1007,8 @@ where
     /// The session key between client and server
     pub session_key: Output<CS::Hash>,
     _cs: PhantomData<CS>,
-    /// Instance of the ClientRegistration, only used in tests for checking zeroize
+    /// Instance of the ClientRegistration, only used in tests for checking
+    /// zeroize
     #[cfg(test)]
     pub state: ServerLogin<CS>,
 }
@@ -1010,7 +1018,8 @@ where
 pub struct ServerLoginStartParameters<'c, 'i> {
     /// Specifying a context field that the client must agree on
     pub context: Option<&'c [u8]>,
-    /// Specifying a user identifier and server identifier that will be matched against the client
+    /// Specifying a user identifier and server identifier that will be matched
+    /// against the client
     pub identifiers: Identifiers<'i>,
 }
 
@@ -1242,10 +1251,9 @@ pub(crate) fn bytestrings_from_identifiers<KG: KeGroup>(
     Ok((client_identity, server_identity))
 }
 
-/// Internal function for computing the blind result by calling the
-/// voprf library. Note that for tests, we use the deterministic blinding
-/// in order to be able to set the blinding factor directly from the passed-in
-/// rng.
+/// Internal function for computing the blind result by calling the voprf
+/// library. Note that for tests, we use the deterministic blinding in order to
+/// be able to set the blinding factor directly from the passed-in rng.
 fn blind<CS: CipherSuite, R: RngCore + CryptoRng>(
     rng: &mut R,
     password: &[u8],

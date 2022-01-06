@@ -227,11 +227,11 @@ jobs:
       - name: Checkout sources
         uses: actions/checkout@v2
 
-      - name: Install stable toolchain
+      - name: Install nightly toolchain
         uses: actions-rs/toolchain@v1
         with:
           profile: minimal
-          toolchain: stable
+          toolchain: nightly
           override: true
           components: rustfmt
 
@@ -240,6 +240,28 @@ jobs:
         with:
           command: fmt
           args: --all -- --check
+
+  taplo:
+    name: Taplo
+    runs-on: ubuntu-latest
+    steps:
+      - name: Cache
+        uses: actions/cache@v2
+        with:
+          path: |
+            ~/.cargo/.crates.toml
+            ~/.cargo/.crates2.json
+            ~/.cargo/bin/taplo
+          key: taplo
+
+      - name: Install Taplo
+        run: cargo install taplo-cli
+
+      - name: Checkout sources
+        uses: actions/checkout@v2
+
+      - name: Run Taplo
+        run: taplo fmt --check
 
   deny-check:
     name: cargo-deny check

@@ -9,14 +9,16 @@
 
 #![allow(unsafe_code)]
 
-use crate::errors::{InternalError, ProtocolError};
-use crate::key_exchange::group::KeGroup;
 use core::ops::Deref;
+
 use derive_where::DeriveWhere;
 use generic_array::typenum::Unsigned;
 use generic_array::{ArrayLength, GenericArray};
 use rand::{CryptoRng, RngCore};
 use zeroize::Zeroize;
+
+use crate::errors::{InternalError, ProtocolError};
+use crate::key_exchange::group::KeGroup;
 
 /// A Keypair trait with public-private verification
 #[cfg_attr(
@@ -50,9 +52,9 @@ impl<KG: KeGroup, S: SecretKey<KG>> KeyPair<KG, S> {
     }
 
     /// Check whether a public key is valid. This is meant to be applied on
-    /// material provided through the network which fits the key
-    /// representation (i.e. can be mapped to a curve point), but presents
-    /// some risk - e.g. small subgroup check
+    /// material provided through the network which fits the key representation
+    /// (i.e. can be mapped to a curve point), but presents some risk - e.g.
+    /// small subgroup check
     pub(crate) fn check_public_key(key: PublicKey<KG>) -> Result<PublicKey<KG>, InternalError> {
         KG::from_pk_slice(GenericArray::from_slice(&key.0)).map(|_| key)
     }
@@ -87,10 +89,11 @@ impl<KG: KeGroup> KeyPair<KG> {
     /// generate_random
     fn uniform_keypair_strategy() -> proptest::prelude::BoxedStrategy<Self> {
         use proptest::prelude::*;
-        use rand::{rngs::StdRng, SeedableRng};
+        use rand::rngs::StdRng;
+        use rand::SeedableRng;
 
-        // The no_shrink is because keypairs should be fixed -- shrinking would cause a different
-        // keypair to be generated, which appears to not be very useful.
+        // The no_shrink is because keypairs should be fixed -- shrinking would cause a
+        // different keypair to be generated, which appears to not be very useful.
         any::<[u8; 32]>()
             .prop_filter_map("valid random keypair", |seed| {
                 let mut rng = StdRng::from_seed(seed);
@@ -119,7 +122,8 @@ impl<L: ArrayLength<u8>> Deref for Key<L> {
     }
 }
 
-// Don't make it implement SizedBytes so that it's not constructible outside of this module.
+// Don't make it implement SizedBytes so that it's not constructible outside of
+// this module.
 impl<L: ArrayLength<u8>> Key<L> {
     /// Convert to bytes
     pub fn to_arr(&self) -> GenericArray<u8, L> {
@@ -246,12 +250,14 @@ impl<KG: KeGroup> PublicKey<KG> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::errors::*;
     use core::slice::from_raw_parts;
+    use std::vec;
+
     use generic_array::typenum::Unsigned;
     use rand::rngs::OsRng;
-    use std::vec;
+
+    use super::*;
+    use crate::errors::*;
 
     #[test]
     fn test_zeroize_key() -> Result<(), ProtocolError> {
@@ -304,9 +310,11 @@ mod tests {
     macro_rules! test {
         ($mod:ident, $point:ty) => {
             mod $mod {
-                use super::*;
-                use proptest::prelude::*;
                 use std::format;
+
+                use proptest::prelude::*;
+
+                use super::*;
 
                 proptest! {
                     #[test]
@@ -353,6 +361,12 @@ mod tests {
 
     #[test]
     fn remote_key() {
+        #[cfg(feature = "ristretto255")]
+        use curve25519_dalek::ristretto::RistrettoPoint as KeCurve;
+        #[cfg(not(feature = "ristretto255"))]
+        use p256_::PublicKey as KeCurve;
+        use rand::rngs::OsRng;
+
         use crate::{
             CipherSuite, ClientLogin, ClientLoginFinishParameters, ClientLoginFinishResult,
             ClientLoginStartResult, ClientRegistration, ClientRegistrationFinishParameters,
@@ -360,11 +374,6 @@ mod tests {
             ServerLoginStartParameters, ServerLoginStartResult, ServerRegistration,
             ServerRegistrationStartResult, ServerSetup,
         };
-        #[cfg(feature = "ristretto255")]
-        use curve25519_dalek::ristretto::RistrettoPoint as KeCurve;
-        #[cfg(not(feature = "ristretto255"))]
-        use p256_::PublicKey as KeCurve;
-        use rand::rngs::OsRng;
 
         struct Default;
 

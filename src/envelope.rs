@@ -5,30 +5,29 @@
 // License, Version 2.0 found in the LICENSE-APACHE file in the root directory
 // of this source tree.
 
-use crate::{
-    ciphersuite::CipherSuite,
-    errors::{utils::check_slice_size, InternalError, ProtocolError},
-    hash::{Hash, OutputSize, ProxyHash},
-    key_exchange::group::KeGroup,
-    keypair::{KeyPair, PublicKey},
-    opaque::{bytestrings_from_identifiers, Identifiers},
-    serialization::{MacExt, Serialize},
-};
 use core::convert::TryFrom;
 use core::ops::Add;
+
 use derive_where::DeriveWhere;
 use digest::core_api::{BlockSizeUser, CoreProxy};
 use digest::Output;
-use generic_array::{
-    sequence::Concat,
-    typenum::{IsLess, Le, NonZero, Sum, Unsigned, U2, U256, U32},
-    ArrayLength, GenericArray,
-};
+use generic_array::sequence::Concat;
+use generic_array::typenum::{IsLess, Le, NonZero, Sum, Unsigned, U2, U256, U32};
+use generic_array::{ArrayLength, GenericArray};
 use hkdf::Hkdf;
 use hmac::{Hmac, Mac};
 use rand::{CryptoRng, RngCore};
 use voprf::Group;
 use zeroize::Zeroize;
+
+use crate::ciphersuite::CipherSuite;
+use crate::errors::utils::check_slice_size;
+use crate::errors::{InternalError, ProtocolError};
+use crate::hash::{Hash, OutputSize, ProxyHash};
+use crate::key_exchange::group::KeGroup;
+use crate::keypair::{KeyPair, PublicKey};
+use crate::opaque::{bytestrings_from_identifiers, Identifiers};
+use crate::serialization::{MacExt, Serialize};
 
 // Constant string used as salt for HKDF computation
 const STR_AUTH_KEY: [u8; 7] = *b"AuthKey";
@@ -54,16 +53,14 @@ impl TryFrom<u8> for InnerEnvelopeMode {
     }
 }
 
-/// This struct is an instantiation of the envelope as described in
-/// <https://tools.ietf.org/html/draft-krawczyk-cfrg-opaque-06#section-4>
+/// This struct is an instantiation of the envelope as described in <https://tools.ietf.org/html/draft-krawczyk-cfrg-opaque-06#section-4>
 ///
-/// Note that earlier versions of this specification described an
-/// implementation of this envelope using an encryption scheme that
-/// satisfied random-key robustness
-/// (<https://tools.ietf.org/html/draft-krawczyk-cfrg-opaque-05#section-4>).
-/// The specification update has simplified this assumption by taking
-/// an XOR-based approach without compromising on security, and to avoid
-/// the confusion around the implementation of an RKR-secure encryption.
+/// Note that earlier versions of this specification described an implementation
+/// of this envelope using an encryption scheme that satisfied random-key
+/// robustness (<https://tools.ietf.org/html/draft-krawczyk-cfrg-opaque-05#section-4>).
+/// The specification update has simplified this assumption by taking an
+/// XOR-based approach without compromising on security, and to avoid the
+/// confusion around the implementation of an RKR-secure encryption.
 #[derive(DeriveWhere)]
 #[derive_where(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, Zeroize(drop))]
 pub(crate) struct Envelope<CS: CipherSuite>
@@ -77,9 +74,10 @@ where
     hmac: Output<CS::Hash>,
 }
 
-// Note that this struct represents an envelope that has been "opened" with the asssociated
-// key. This key is also used to derive the export_key parameter, which is technically
-// unrelated to the envelope's encrypted and authenticated contents.
+// Note that this struct represents an envelope that has been "opened" with the
+// asssociated key. This key is also used to derive the export_key parameter,
+// which is technically unrelated to the envelope's encrypted and authenticated
+// contents.
 pub(crate) struct OpenedEnvelope<'a, CS: CipherSuite>
 where
     <CS::Hash as CoreProxy>::Core: ProxyHash,
@@ -155,8 +153,8 @@ where
         ))
     }
 
-    /// Uses a key to convert the plaintext into an envelope, authenticated by the aad field.
-    /// Note that a new nonce is sampled for each call to seal.
+    /// Uses a key to convert the plaintext into an envelope, authenticated by
+    /// the aad field. Note that a new nonce is sampled for each call to seal.
     #[allow(clippy::type_complexity)]
     pub(crate) fn seal_raw<'a>(
         randomized_pwd_hasher: Hkdf<CS::Hash>,
@@ -225,8 +223,8 @@ where
         })
     }
 
-    /// Attempts to decrypt the envelope using a key, which is successful only if the key and
-    /// aad used to construct the envelope are the same.
+    /// Attempts to decrypt the envelope using a key, which is successful only
+    /// if the key and aad used to construct the envelope are the same.
     pub(crate) fn open_raw<'a>(
         &self,
         randomized_pwd_hasher: Hkdf<CS::Hash>,

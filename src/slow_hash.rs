@@ -7,13 +7,12 @@
 
 //! Trait specifying a slow hashing function
 
-use crate::{
-    errors::InternalError,
-    hash::{Hash, ProxyHash},
-};
 use digest::core_api::BlockSizeUser;
 use digest::Output;
 use generic_array::typenum::{IsLess, Le, NonZero, U256};
+
+use crate::errors::InternalError;
+use crate::hash::{Hash, ProxyHash};
 
 /// Used for the slow hashing function in OPAQUE
 pub trait SlowHash<D: Hash>: Default

@@ -6,33 +6,28 @@
 // of this source tree.
 
 //! An implementation of the Triple Diffie-Hellman key exchange protocol
-use crate::{
-    errors::{
-        utils::{check_slice_size, check_slice_size_atleast},
-        InternalError, ProtocolError,
-    },
-    hash::{Hash, OutputSize, ProxyHash},
-    key_exchange::{
-        group::KeGroup,
-        traits::{FromBytes, GenerateKe2Result, GenerateKe3Result, KeyExchange, ToBytes},
-    },
-    keypair::{KeyPair, PrivateKey, PublicKey, SecretKey},
-    serialization::{Serialize, UpdateExt},
-};
 use core::convert::TryFrom;
 use core::ops::Add;
+
 use derive_where::DeriveWhere;
 use digest::core_api::BlockSizeUser;
 use digest::{Digest, Output};
 use generic_array::sequence::Concat;
-use generic_array::typenum::{IsLess, Le, NonZero, U256};
-use generic_array::{
-    typenum::{Sum, Unsigned, U1, U2, U32},
-    ArrayLength, GenericArray,
-};
+use generic_array::typenum::{IsLess, Le, NonZero, Sum, Unsigned, U1, U2, U256, U32};
+use generic_array::{ArrayLength, GenericArray};
 use hkdf::{Hkdf, HkdfExtract};
 use hmac::{Hmac, Mac};
 use rand::{CryptoRng, RngCore};
+
+use crate::errors::utils::{check_slice_size, check_slice_size_atleast};
+use crate::errors::{InternalError, ProtocolError};
+use crate::hash::{Hash, OutputSize, ProxyHash};
+use crate::key_exchange::group::KeGroup;
+use crate::key_exchange::traits::{
+    FromBytes, GenerateKe2Result, GenerateKe3Result, KeyExchange, ToBytes,
+};
+use crate::keypair::{KeyPair, PrivateKey, PublicKey, SecretKey};
+use crate::serialization::{Serialize, UpdateExt};
 
 ///////////////
 // Constants //
@@ -363,8 +358,9 @@ type TripleDHDerivationResult<D> = (Output<D>, Output<D>, Output<D>, Output<D>);
 
 // Helper functions
 
-// Internal function which takes the public and private components of the client and server keypairs, along
-// with some auxiliary metadata, to produce the session key and two MAC keys
+// Internal function which takes the public and private components of the client
+// and server keypairs, along with some auxiliary metadata, to produce the
+// session key and two MAC keys
 fn derive_3dh_keys<D: Hash, KG: KeGroup, S: SecretKey<KG>>(
     dh: TripleDHComponents<KG, S>,
     hashed_derivation_transcript: &[u8],

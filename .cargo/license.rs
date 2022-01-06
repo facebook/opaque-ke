@@ -4,10 +4,3 @@
 // LICENSE-MIT file in the root directory of this source tree and the Apache
 // License, Version 2.0 found in the LICENSE-APACHE file in the root directory
 // of this source tree.
-
-//! Includes instantiations of key exchange protocols used in the login step for
-//! OPAQUE
-
-pub mod group;
-pub(crate) mod traits;
-pub mod tripledh;

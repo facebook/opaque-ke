@@ -7,38 +7,36 @@
 
 #![allow(unsafe_code)]
 
-use crate::{
-    ciphersuite::CipherSuite,
-    envelope::EnvelopeLen,
-    errors::*,
-    hash::{OutputSize, ProxyHash},
-    key_exchange::{
-        group::KeGroup,
-        traits::{Ke1MessageLen, Ke1StateLen, Ke2MessageLen},
-        tripledh::{NonceLen, TripleDH},
-    },
-    messages::{
-        CredentialRequestLen, CredentialResponseLen, CredentialResponseWithoutKeLen,
-        RegistrationResponseLen, RegistrationUploadLen,
-    },
-    opaque::*,
-    slow_hash::NoOpHash,
-    tests::mock_rng::CycleRng,
-    *,
-};
 use core::ops::Add;
+use std::string::{String, ToString};
+use std::vec::Vec;
+use std::{format, println, vec};
+
 use digest::core_api::{BlockSizeUser, CoreProxy};
 use digest::Output;
 use generic_array::typenum::{IsLess, Le, NonZero, Sum, Unsigned, U256};
 use generic_array::ArrayLength;
 use rand::rngs::OsRng;
 use serde_json::Value;
-use std::string::{String, ToString};
-use std::vec::Vec;
-use std::{format, println, vec};
 use subtle::ConstantTimeEq;
 use voprf::Group;
 use zeroize::Zeroize;
+
+use crate::ciphersuite::CipherSuite;
+use crate::envelope::EnvelopeLen;
+use crate::errors::*;
+use crate::hash::{OutputSize, ProxyHash};
+use crate::key_exchange::group::KeGroup;
+use crate::key_exchange::traits::{Ke1MessageLen, Ke1StateLen, Ke2MessageLen};
+use crate::key_exchange::tripledh::{NonceLen, TripleDH};
+use crate::messages::{
+    CredentialRequestLen, CredentialResponseLen, CredentialResponseWithoutKeLen,
+    RegistrationResponseLen, RegistrationUploadLen,
+};
+use crate::opaque::*;
+use crate::slow_hash::NoOpHash;
+use crate::tests::mock_rng::CycleRng;
+use crate::*;
 
 // Tests
 // =====
@@ -491,8 +489,9 @@ where
     CredentialResponseWithoutKeLen<CS>: Add<Ke2MessageLen<CS>>,
     CredentialResponseLen<CS>: ArrayLength<u8>,
 {
-    use crate::keypair::KeyPair;
     use rand::RngCore;
+
+    use crate::keypair::KeyPair;
 
     let mut rng = OsRng;
 

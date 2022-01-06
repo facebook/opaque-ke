@@ -5,8 +5,7 @@
 // License, Version 2.0 found in the LICENSE-APACHE file in the root directory
 // of this source tree.
 
-//! The OPAQUE test vectors taken from:
-//! https://github.com/cfrg/draft-irtf-cfrg-opaque/blob/master/draft-irtf-cfrg-opaque.md
+//! The OPAQUE test vectors taken from: https://github.com/cfrg/draft-irtf-cfrg-opaque/blob/master/draft-irtf-cfrg-opaque.md
 
 pub(crate) static VECTORS: &str = r#"
 ## Real Test Vectors {#real-vectors}
