@@ -44,7 +44,7 @@ lazy_static = "1.4.0"
 serde_json = "1.0.60"
 sha2 = "0.9.2"
 proptest = "0.10.1"
-rustyline = "6.3.0"
+rustyline = "9"
 
 [[bench]]
 name = "oprf"
