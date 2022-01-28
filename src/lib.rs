@@ -747,6 +747,10 @@ compile_error!(
      please enable one of: u64_backend, u32_backend"
 );
 
+#[cfg(test)]
+#[macro_use]
+extern crate proptest;
+
 // Error types
 pub mod errors;
 
