@@ -170,7 +170,7 @@ impl<D: Hash, G: Group> KeyExchange<D, G> for TripleDH {
             ));
         }
 
-        transcript_hasher.update(ke2_message.mac.to_vec());
+        transcript_hasher.update(ke2_message.mac);
 
         let mut client_mac =
             Hmac::<D>::new_from_slice(&km3).map_err(|_| InternalPakeError::HmacError)?;

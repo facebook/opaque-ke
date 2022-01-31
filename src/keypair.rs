@@ -144,10 +144,10 @@ impl<G: Group + Debug> KeyPair<G> {
     fn uniform_keypair_strategy() -> BoxedStrategy<Self> {
         // The no_shrink is because keypairs should be fixed -- shrinking would cause a different
         // keypair to be generated, which appears to not be very useful.
-        any::<[u8; 32]>()
-            .prop_filter_map("valid random keypair", |seed| {
+        prop::array::uniform32(0_u8..)
+            .prop_map(|seed| {
                 let mut rng = StdRng::from_seed(seed);
-                Some(Self::generate_random(&mut rng))
+                Self::generate_random(&mut rng)
             })
             .no_shrink()
             .boxed()
@@ -281,21 +281,21 @@ mod tests {
 
     proptest! {
         #[test]
-        fn test_ristretto_check(kp in KeyPair::<RistrettoPoint>::uniform_keypair_strategy()) {
+        fn test_ristretto_check(ref kp in KeyPair::<RistrettoPoint>::uniform_keypair_strategy()) {
             let pk = kp.public();
             prop_assert!(KeyPair::<RistrettoPoint>::check_public_key(pk.clone()).is_ok());
         }
 
         #[test]
-        fn test_ristretto_pub_from_priv(kp in KeyPair::<RistrettoPoint>::uniform_keypair_strategy()) {
+        fn test_ristretto_pub_from_priv(ref kp in KeyPair::<RistrettoPoint>::uniform_keypair_strategy()) {
             let pk = kp.public();
             let sk = kp.private();
             prop_assert_eq!(&KeyPair::<RistrettoPoint>::public_from_private(sk), pk);
         }
 
         #[test]
-        fn test_ristretto_dh(kp1 in KeyPair::<RistrettoPoint>::uniform_keypair_strategy(),
-                          kp2 in KeyPair::<RistrettoPoint>::uniform_keypair_strategy()) {
+        fn test_ristretto_dh(ref kp1 in KeyPair::<RistrettoPoint>::uniform_keypair_strategy(),
+        ref kp2 in KeyPair::<RistrettoPoint>::uniform_keypair_strategy()) {
 
             let dh1 = KeyPair::<RistrettoPoint>::diffie_hellman(kp1.public().clone(), kp2.private().clone())?;
             let dh2 = KeyPair::<RistrettoPoint>::diffie_hellman(kp2.public().clone(), kp1.private().clone())?;
@@ -304,7 +304,7 @@ mod tests {
         }
 
         #[test]
-        fn test_private_key_slice(kp in KeyPair::<RistrettoPoint>::uniform_keypair_strategy()) {
+        fn test_private_key_slice(ref kp in KeyPair::<RistrettoPoint>::uniform_keypair_strategy()) {
             let sk_bytes = kp.private().to_vec();
 
             let kp2 = KeyPair::<RistrettoPoint>::from_private_key_slice(&sk_bytes)?;

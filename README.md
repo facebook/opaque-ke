@@ -22,7 +22,7 @@ Installation
 Add the following line to the dependencies of your `Cargo.toml`:
 
 ```
-opaque-ke = "0.6.0"
+opaque-ke = "0.6.1"
 ```
 
 Resources

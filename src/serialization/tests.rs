@@ -346,57 +346,57 @@ fn ke3_message_roundtrip() {
 proptest! {
 
 #[test]
-fn test_i2osp_os2ip(bytes in vec(any::<u8>(), 0..std::mem::size_of::<usize>())) {
-    assert_eq!(i2osp(os2ip(&bytes)?, bytes.len()), bytes);
+fn test_i2osp_os2ip(ref bytes in vec(prop::num::u8::ANY, 0..std::mem::size_of::<usize>())) {
+    assert_eq!(&i2osp(os2ip(&bytes)?, bytes.len()), bytes);
 }
 
 #[test]
-fn test_nocrash_registration_request(bytes in vec(any::<u8>(), 0..200)) {
+fn test_nocrash_registration_request(ref bytes in vec(prop::num::u8::ANY, 0..200)) {
     RegistrationRequest::<Default>::deserialize(&bytes[..]).map_or(true, |_| true);
 }
 
 #[test]
-fn test_nocrash_registration_response(bytes in vec(any::<u8>(), 0..200)) {
+fn test_nocrash_registration_response(ref bytes in vec(prop::num::u8::ANY, 0..200)) {
     RegistrationResponse::<Default>::deserialize(&bytes[..]).map_or(true, |_| true);
 }
 
 #[test]
-fn test_nocrash_registration_upload(bytes in vec(any::<u8>(), 0..200)) {
+fn test_nocrash_registration_upload(ref bytes in vec(prop::num::u8::ANY, 0..200)) {
     RegistrationUpload::<Default>::deserialize(&bytes[..]).map_or(true, |_| true);
 }
 
 #[test]
-fn test_nocrash_credential_request(bytes in vec(any::<u8>(), 0..500)) {
+fn test_nocrash_credential_request(ref bytes in vec(prop::num::u8::ANY, 0..500)) {
     CredentialRequest::<Default>::deserialize(&bytes[..]).map_or(true, |_| true);
 }
 
 #[test]
-fn test_nocrash_credential_response(bytes in vec(any::<u8>(), 0..500)) {
+fn test_nocrash_credential_response(ref bytes in vec(prop::num::u8::ANY, 0..500)) {
     CredentialResponse::<Default>::deserialize(&bytes[..]).map_or(true, |_| true);
 }
 
 #[test]
-fn test_nocrash_credential_finalization(bytes in vec(any::<u8>(), 0..500)) {
+fn test_nocrash_credential_finalization(ref bytes in vec(prop::num::u8::ANY, 0..500)) {
     CredentialFinalization::<Default>::deserialize(&bytes[..]).map_or(true, |_| true);
 }
 
 #[test]
-fn test_nocrash_client_registration(bytes in vec(any::<u8>(), 0..700)) {
+fn test_nocrash_client_registration(ref bytes in vec(prop::num::u8::ANY, 0..700)) {
     ClientRegistration::<Default>::deserialize(&bytes[..]).map_or(true, |_| true);
 }
 
 #[test]
-fn test_nocrash_server_registration(bytes in vec(any::<u8>(), 0..700)) {
+fn test_nocrash_server_registration(ref bytes in vec(prop::num::u8::ANY, 0..700)) {
     ServerRegistration::<Default>::deserialize(&bytes[..]).map_or(true, |_| true);
 }
 
 #[test]
-fn test_nocrash_client_login(bytes in vec(any::<u8>(), 0..700)) {
+fn test_nocrash_client_login(ref bytes in vec(prop::num::u8::ANY, 0..700)) {
     ClientLogin::<Default>::deserialize(&bytes[..]).map_or(true, |_| true);
 }
 
 #[test]
-fn test_nocrash_server_login(bytes in vec(any::<u8>(), 0..700)) {
+fn test_nocrash_server_login(ref bytes in vec(prop::num::u8::ANY, 0..700)) {
     ServerLogin::<Default>::deserialize(&bytes[..]).map_or(true, |_| true);
 }
 

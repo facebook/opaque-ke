@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.6.1 (January 25, 2022)
+
+* Fix `zeroize` implementing `Drop` on `enum`s now
+
 ## 0.6.0 (June 30, 2021)
 
 * Synced implementation with draft-irtf-cfrg-opaque-05, which changes

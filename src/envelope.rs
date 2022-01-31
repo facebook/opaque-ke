@@ -61,7 +61,7 @@ fn recover_keys_internal<CS: CipherSuite>(
     Ok(client_static_keypair)
 }
 
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, Zeroize)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq, Zeroize)]
 #[zeroize(drop)]
 pub(crate) enum InnerEnvelopeMode {
     Zero = 0,
@@ -98,7 +98,7 @@ pub(crate) struct Envelope<CS: CipherSuite> {
 impl<CS: CipherSuite> Clone for Envelope<CS> {
     fn clone(&self) -> Self {
         Self {
-            mode: self.mode,
+            mode: self.mode.clone(),
             nonce: self.nonce.clone(),
             hmac: self.hmac.clone(),
         }
