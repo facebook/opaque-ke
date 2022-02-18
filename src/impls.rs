@@ -11,9 +11,12 @@ macro_rules! impl_serialize_and_deserialize_for {
         #[cfg(feature = "serde")]
         impl<CS: CipherSuite> serde_::Serialize for $item<CS>
         where
-            <CS::Hash as CoreProxy>::Core: ProxyHash,
-            <<CS::Hash as CoreProxy>::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
-            Le<<<CS::Hash as CoreProxy>::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
+            <OprfHash<CS> as OutputSizeUser>::OutputSize:
+                IsLess<U256> + IsLessOrEqual<<OprfHash<CS> as BlockSizeUser>::BlockSize>,
+            OprfHash<CS>: Hash,
+            <OprfHash<CS> as CoreProxy>::Core: ProxyHash,
+            <<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
+            Le<<<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
             $($($path: $bound1 $(+ $bound2)*),+)?
         {
             fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
@@ -27,9 +30,12 @@ macro_rules! impl_serialize_and_deserialize_for {
         #[cfg(feature = "serde")]
         impl<'de, CS: CipherSuite> serde_::Deserialize<'de> for $item<CS>
         where
-            <CS::Hash as CoreProxy>::Core: ProxyHash,
-            <<CS::Hash as CoreProxy>::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
-            Le<<<CS::Hash as CoreProxy>::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
+            <OprfHash<CS> as OutputSizeUser>::OutputSize:
+                IsLess<U256> + IsLessOrEqual<<OprfHash<CS> as BlockSizeUser>::BlockSize>,
+            OprfHash<CS>: Hash,
+                <OprfHash<CS> as CoreProxy>::Core: ProxyHash,
+                <<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
+                Le<<<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
         {
             fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
             where
@@ -39,15 +45,21 @@ macro_rules! impl_serialize_and_deserialize_for {
 
                 struct ByteVisitor<CS: CipherSuite>(core::marker::PhantomData<CS>)
                 where
-                    <CS::Hash as CoreProxy>::Core: ProxyHash,
-                    <<CS::Hash as CoreProxy>::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
-                    Le<<<CS::Hash as CoreProxy>::Core as BlockSizeUser>::BlockSize, U256>: NonZero;
+                    <OprfHash<CS> as OutputSizeUser>::OutputSize:
+                        IsLess<U256> + IsLessOrEqual<<OprfHash<CS> as BlockSizeUser>::BlockSize>,
+                    OprfHash<CS>: Hash,
+                        <OprfHash<CS> as CoreProxy>::Core: ProxyHash,
+                        <<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
+                        Le<<<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize, U256>: NonZero;
 
                 impl<'de, CS: CipherSuite> serde_::de::Visitor<'de> for ByteVisitor<CS>
                 where
-                    <CS::Hash as CoreProxy>::Core: ProxyHash,
-                    <<CS::Hash as CoreProxy>::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
-                    Le<<<CS::Hash as CoreProxy>::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
+                    <OprfHash<CS> as OutputSizeUser>::OutputSize:
+                        IsLess<U256> + IsLessOrEqual<<OprfHash<CS> as BlockSizeUser>::BlockSize>,
+                    OprfHash<CS>: Hash,
+                        <OprfHash<CS> as CoreProxy>::Core: ProxyHash,
+                        <<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
+                        Le<<<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
                 {
                     type Value = $item<CS>;
 

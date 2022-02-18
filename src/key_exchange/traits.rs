@@ -10,9 +10,9 @@ use digest::Output;
 use generic_array::typenum::{IsLess, Le, NonZero, U256};
 use generic_array::{ArrayLength, GenericArray};
 use rand::{CryptoRng, RngCore};
-use zeroize::Zeroize;
+use zeroize::ZeroizeOnDrop;
 
-use crate::ciphersuite::CipherSuite;
+use crate::ciphersuite::{CipherSuite, OprfHash};
 use crate::errors::ProtocolError;
 use crate::hash::{Hash, ProxyHash};
 use crate::key_exchange::group::KeGroup;
@@ -46,9 +46,9 @@ where
     <D::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
     Le<<D::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
 {
-    type KE1State: FromBytes + ToBytes + Zeroize + Clone;
-    type KE2State: FromBytes + ToBytes + Zeroize + Clone;
-    type KE1Message: FromBytes + ToBytes + Zeroize + Clone;
+    type KE1State: FromBytes + ToBytes + ZeroizeOnDrop + Clone;
+    type KE2State: FromBytes + ToBytes + ZeroizeOnDrop + Clone;
+    type KE1Message: FromBytes + ToBytes + ZeroizeOnDrop + Clone;
     type KE2Message: FromBytes + ToBytes + Clone;
     type KE3Message: FromBytes + ToBytes + Clone;
 
@@ -103,12 +103,12 @@ pub trait ToBytes {
 
 #[allow(dead_code)]
 pub type Ke1StateLen<CS: CipherSuite> =
-    <<CS::KeyExchange as KeyExchange<CS::Hash, CS::KeGroup>>::KE1State as ToBytes>::Len;
+    <<CS::KeyExchange as KeyExchange<OprfHash<CS>, CS::KeGroup>>::KE1State as ToBytes>::Len;
 pub type Ke1MessageLen<CS: CipherSuite> =
-    <<CS::KeyExchange as KeyExchange<CS::Hash, CS::KeGroup>>::KE1Message as ToBytes>::Len;
+    <<CS::KeyExchange as KeyExchange<OprfHash<CS>, CS::KeGroup>>::KE1Message as ToBytes>::Len;
 pub type Ke2StateLen<CS: CipherSuite> =
-    <<CS::KeyExchange as KeyExchange<CS::Hash, CS::KeGroup>>::KE2State as ToBytes>::Len;
+    <<CS::KeyExchange as KeyExchange<OprfHash<CS>, CS::KeGroup>>::KE2State as ToBytes>::Len;
 pub type Ke2MessageLen<CS: CipherSuite> =
-    <<CS::KeyExchange as KeyExchange<CS::Hash, CS::KeGroup>>::KE2Message as ToBytes>::Len;
+    <<CS::KeyExchange as KeyExchange<OprfHash<CS>, CS::KeGroup>>::KE2Message as ToBytes>::Len;
 pub type Ke3MessageLen<CS: CipherSuite> =
-    <<CS::KeyExchange as KeyExchange<CS::Hash, CS::KeGroup>>::KE3Message as ToBytes>::Len;
+    <<CS::KeyExchange as KeyExchange<OprfHash<CS>, CS::KeGroup>>::KE3Message as ToBytes>::Len;

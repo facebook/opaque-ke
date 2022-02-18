@@ -13,13 +13,20 @@ jobs:
       fail-fast: false
       matrix:
         backend_feature:
-          - ristretto255_u64
-          - ristretto255_u32
-          - p256
-          - x25519_u64,ristretto255_u64
+          - --features ristretto255_u64,ristretto255_voprf
+          - --features ristretto255_u32,ristretto255_voprf
+          - 
+          - --features x25519_u64,ristretto255_u64,ristretto255_voprf
+          - --features x25519_u32,ristretto255_u32,ristretto255_voprf
+          - --features x25519_u64
+          - --features x25519_u32
+        frontend_feature:
+          - 
+          - --features slow-hash
+          - --features serde
         toolchain:
           - stable
-          - 1.56.1
+          - 1.57.0
     name: test
     steps:
       - name: Checkout sources
@@ -36,13 +43,13 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: test
-          args: --no-default-features --features ${{ matrix.backend_feature }}
+          args: --no-default-features ${{ matrix.backend_feature }} ${{ matrix.frontend_feature }}
 
       - name: Run cargo test with std
         uses: actions-rs/cargo@v1
         with:
           command: test
-          args: --no-default-features --features std --features ${{ matrix.backend_feature }}
+          args: --no-default-features --features std ${{ matrix.backend_feature }} ${{ matrix.frontend_feature }}
 
   cross-test:
     name: Test on ${{ matrix.target }} (using cross)
@@ -54,43 +61,21 @@ jobs:
           # 32-bit x86
           - i686-unknown-linux-gnu
         backend_feature:
-          - ristretto255_u64
-          - ristretto255_u32
-          - p256
-          - x25519_u64,ristretto255_u64
+          - --features ristretto255_u64,ristretto255_voprf
+          - --features ristretto255_u32,ristretto255_voprf
+          - 
+          - x25519_u64,ristretto255_u64,ristretto255_voprf
+          - x25519_u32,ristretto255_u64,ristretto255_voprf
+          - x25519_u64
+          - x25519_u32
     steps:
       - uses: actions/checkout@v2
       - uses: hecrj/setup-rust-action@v1
       - run: cargo install cross
       # Note: just use `cross` as you would `cargo`, but always
       # pass the `--target=${{ matrix.target }}` arg. (Yes, really).
-      - run: cross test --verbose --target=${{ matrix.target }} --no-default-features --features ${{ matrix.backend_feature }}
-      - run: cross test --verbose --target=${{ matrix.target }} --no-default-features --features std --features ${{ matrix.backend_feature }}
-
-  feature-test:
-    name: Test on ${{ matrix.target }} with ${{ matrix.frontend_feature }}
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        backend_feature:
-          - ristretto255_u64
-          - ristretto255_u32
-          - p256
-          - ristretto255_u64,p256
-          - x25519_u64,ristretto255_u64
-          - x25519_u32,ristretto255_u32
-          - x25519_u64,p256
-          - x25519_u32,p256
-          - x25519_u64,ristretto255_u64,p256
-        frontend_feature:
-          - slow-hash
-          - serde
-    steps:
-      - uses: actions/checkout@v2
-      - uses: hecrj/setup-rust-action@v1
-      - run: cargo test --verbose --features ${{ matrix.frontend_feature }} --no-default-features --features ${{ matrix.backend_feature }}
-      - run: cargo test --verbose --features ${{ matrix.frontend_feature }},std --no-default-features --features ${{ matrix.backend_feature }}
+      - run: cross test --verbose --target=${{ matrix.target }} --no-default-features ${{ matrix.backend_feature }}
+      - run: cross test --verbose --target=${{ matrix.target }} --no-default-features --features std ${{ matrix.backend_feature }}
 
   simple-login-test:
     runs-on: ubuntu-latest
@@ -99,7 +84,7 @@ jobs:
       matrix:
         toolchain:
           - stable
-          - 1.56.1
+          - 1.57.0
     name: test simple_login command-line example
     steps:
       - name: install expect
@@ -122,7 +107,7 @@ jobs:
       matrix:
         toolchain:
           - stable
-          - 1.56.1
+          - 1.57.0
     name: test digital_locker command-line example
     steps:
       - name: install expect
@@ -150,10 +135,13 @@ jobs:
           # for any no_std target
           - thumbv6m-none-eabi
         backend_feature:
-          - ristretto255_u64
-          - ristretto255_u32
-          - p256
-          - x25519_u64,ristretto255_u64
+          - ristretto255_u64,ristretto255_voprf
+          - ristretto255_u32,ristretto255_voprf
+          - 
+          - x25519_u64,ristretto255_u64,ristretto255_voprf
+          - x25519_u32,ristretto255_u32,ristretto255_voprf
+          - x25519_u64
+          - x25519_u32
         frontend_feature:
           - slow-hash
           - serde
@@ -170,10 +158,13 @@ jobs:
       fail-fast: false
       matrix:
         backend_feature:
-          - ristretto255_u64
-          - ristretto255_u32
-          - p256
-          - x25519_u64,ristretto255_u64
+          - --features ristretto255_u64,ristretto255_voprf
+          - --features ristretto255_u32,ristretto255_voprf
+          - 
+          - --features x25519_u64,ristretto255_u64,ristretto255_voprf
+          - --features x25519_u32,ristretto255_u32,ristretto255_voprf
+          - --features x25519_u32
+          - --features x25519_u32
     steps:
       - name: Checkout sources
         uses: actions/checkout@v2
@@ -189,7 +180,7 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: bench
-          args: --no-default-features --features ${{ matrix.backend_feature }} --no-run
+          args: --no-default-features ${{ matrix.backend_feature }} --no-run
 
   clippy:
     name: cargo clippy
@@ -210,7 +201,7 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: clippy
-          args: --all-targets --features p256,slow-hash,std,x25519_u64 -- -D warnings
+          args: --all-targets --features slow-hash,std,x25519_u64 -- -D warnings
 
       - name: Run cargo doc
         uses: actions-rs/cargo@v1
@@ -218,7 +209,7 @@ jobs:
           RUSTDOCFLAGS: -D warnings
         with:
           command: doc
-          args: --no-deps --document-private-items --features p256,slow-hash,std,x25519_u64
+          args: --no-deps --document-private-items --features slow-hash,std,x25519_u64
 
   format:
     name: cargo fmt

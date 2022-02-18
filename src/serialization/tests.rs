@@ -10,8 +10,8 @@ use std::vec;
 use std::vec::Vec;
 
 use digest::core_api::{BlockSizeUser, CoreProxy};
-use digest::Output;
-use generic_array::typenum::{IsLess, Le, NonZero, Sum, Unsigned, U256};
+use digest::{Output, OutputSizeUser};
+use generic_array::typenum::{IsLess, IsLessOrEqual, Le, NonZero, Sum, Unsigned, U256};
 use generic_array::ArrayLength;
 use proptest::collection::vec;
 use proptest::prelude::*;
@@ -19,10 +19,10 @@ use rand::rngs::OsRng;
 use rand::RngCore;
 use voprf::Group;
 
-use crate::ciphersuite::CipherSuite;
+use crate::ciphersuite::{CipherSuite, OprfGroup, OprfHash};
 use crate::envelope::{Envelope, EnvelopeLen, InnerEnvelopeMode};
 use crate::errors::*;
-use crate::hash::{OutputSize, ProxyHash};
+use crate::hash::{Hash, OutputSize, ProxyHash};
 use crate::key_exchange::group::KeGroup;
 use crate::key_exchange::traits::{
     FromBytes, Ke1MessageLen, Ke1StateLen, Ke2MessageLen, KeyExchange, ToBytes,
@@ -36,31 +36,32 @@ use crate::*;
 
 #[cfg(feature = "ristretto255")]
 struct Ristretto255;
+
 #[cfg(feature = "ristretto255")]
 impl CipherSuite for Ristretto255 {
-    type OprfGroup = curve25519_dalek::ristretto::RistrettoPoint;
+    type OprfGroup = crate::Ristretto255;
     type KeGroup = crate::Ristretto255;
     type KeyExchange = TripleDH;
-    type Hash = sha2::Sha512;
     type SlowHash = crate::slow_hash::NoOpHash;
 }
 
-#[cfg(feature = "p256")]
 struct P256;
-#[cfg(feature = "p256")]
+
 impl CipherSuite for P256 {
-    type OprfGroup = ::p256::ProjectivePoint;
+    type OprfGroup = ::p256::NistP256;
     type KeGroup = ::p256::NistP256;
     type KeyExchange = TripleDH;
-    type Hash = sha2::Sha256;
     type SlowHash = crate::slow_hash::NoOpHash;
 }
 
 fn random_point<CS: CipherSuite>() -> <CS::KeGroup as KeGroup>::Pk
 where
-    <CS::Hash as CoreProxy>::Core: ProxyHash,
-    <<CS::Hash as CoreProxy>::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
-    Le<<<CS::Hash as CoreProxy>::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
+    <OprfHash<CS> as OutputSizeUser>::OutputSize:
+        IsLess<U256> + IsLessOrEqual<<OprfHash<CS> as BlockSizeUser>::BlockSize>,
+    OprfHash<CS>: Hash,
+    <OprfHash<CS> as CoreProxy>::Core: ProxyHash,
+    <<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
+    Le<<<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
 {
     let mut rng = OsRng;
     let sk = CS::KeGroup::random_sk(&mut rng);
@@ -71,18 +72,20 @@ where
 fn client_registration_roundtrip() -> Result<(), ProtocolError> {
     fn inner<CS: CipherSuite>() -> Result<(), ProtocolError>
     where
-        <CS::Hash as CoreProxy>::Core: ProxyHash,
-        <<CS::Hash as CoreProxy>::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
-        Le<<<CS::Hash as CoreProxy>::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
+        <OprfHash<CS> as OutputSizeUser>::OutputSize:
+            IsLess<U256> + IsLessOrEqual<<OprfHash<CS> as BlockSizeUser>::BlockSize>,
+        OprfHash<CS>: Hash,
+        <OprfHash<CS> as CoreProxy>::Core: ProxyHash,
+        <<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
+        Le<<<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
         // ClientRegistration: KgSk + KgPk
-        <CS::OprfGroup as Group>::ScalarLen: Add<<CS::OprfGroup as Group>::ElemLen>,
+        <OprfGroup<CS> as Group>::ScalarLen: Add<<OprfGroup<CS> as Group>::ElemLen>,
         ClientRegistrationLen<CS>: ArrayLength<u8>,
     {
         let pw = b"hunter2";
         let mut rng = OsRng;
 
-        let blind_result =
-            &voprf::NonVerifiableClient::<CS::OprfGroup, CS::Hash>::blind(pw, &mut rng)?;
+        let blind_result = &voprf::NonVerifiableClient::<CS::OprfGroup>::blind(pw, &mut rng)?;
 
         let bytes: Vec<u8> = blind_result
             .state
@@ -100,7 +103,6 @@ fn client_registration_roundtrip() -> Result<(), ProtocolError> {
 
     #[cfg(feature = "ristretto255")]
     inner::<Ristretto255>()?;
-    #[cfg(feature = "p256")]
     inner::<P256>()?;
 
     Ok(())
@@ -110,22 +112,25 @@ fn client_registration_roundtrip() -> Result<(), ProtocolError> {
 fn server_registration_roundtrip() -> Result<(), ProtocolError> {
     fn inner<CS: CipherSuite>() -> Result<(), ProtocolError>
     where
-        <CS::Hash as CoreProxy>::Core: ProxyHash,
-        <<CS::Hash as CoreProxy>::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
-        Le<<<CS::Hash as CoreProxy>::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
+        <OprfHash<CS> as OutputSizeUser>::OutputSize:
+            IsLess<U256> + IsLessOrEqual<<OprfHash<CS> as BlockSizeUser>::BlockSize>,
+        OprfHash<CS>: Hash,
+        <OprfHash<CS> as CoreProxy>::Core: ProxyHash,
+        <<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
+        Le<<<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
         // Envelope: Nonce + Hash
-        NonceLen: Add<OutputSize<CS::Hash>>,
+        NonceLen: Add<OutputSize<OprfHash<CS>>>,
         EnvelopeLen<CS>: ArrayLength<u8>,
         // RegistrationUpload: (KePk + Hash) + Envelope
-        <CS::KeGroup as KeGroup>::PkLen: Add<OutputSize<CS::Hash>>,
-        Sum<<CS::KeGroup as KeGroup>::PkLen, OutputSize<CS::Hash>>:
+        <CS::KeGroup as KeGroup>::PkLen: Add<OutputSize<OprfHash<CS>>>,
+        Sum<<CS::KeGroup as KeGroup>::PkLen, OutputSize<OprfHash<CS>>>:
             ArrayLength<u8> + Add<EnvelopeLen<CS>>,
         RegistrationUploadLen<CS>: ArrayLength<u8>,
         // ServerRegistration = RegistrationUpload
     {
         // If we don't have envelope and client_pk, the server registration just
         let mut rng = OsRng;
-        let mut masking_key = Output::<CS::Hash>::default();
+        let mut masking_key = Output::<OprfHash<CS>>::default();
         rng.fill_bytes(&mut masking_key);
 
         // Construct a mock envelope
@@ -135,7 +140,7 @@ fn server_registration_roundtrip() -> Result<(), ProtocolError> {
         // ciphertext which is an encrypted private key
         //mock_envelope_bytes.extend_from_slice(&ciphertext);
         // length-MAC_SIZE hmac
-        mock_envelope_bytes.extend_from_slice(&Output::<CS::Hash>::default());
+        mock_envelope_bytes.extend_from_slice(&Output::<OprfHash<CS>>::default());
 
         let mock_client_kp = KeyPair::<CS::KeGroup>::generate_random(&mut rng);
         // serialization order: oprf_key, public key, envelope
@@ -151,7 +156,6 @@ fn server_registration_roundtrip() -> Result<(), ProtocolError> {
 
     #[cfg(feature = "ristretto255")]
     inner::<Ristretto255>()?;
-    #[cfg(feature = "p256")]
     inner::<P256>()?;
 
     Ok(())
@@ -161,9 +165,12 @@ fn server_registration_roundtrip() -> Result<(), ProtocolError> {
 fn registration_request_roundtrip() -> Result<(), ProtocolError> {
     fn inner<CS: CipherSuite>() -> Result<(), ProtocolError>
     where
-        <CS::Hash as CoreProxy>::Core: ProxyHash,
-        <<CS::Hash as CoreProxy>::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
-        Le<<<CS::Hash as CoreProxy>::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
+        <OprfHash<CS> as OutputSizeUser>::OutputSize:
+            IsLess<U256> + IsLessOrEqual<<OprfHash<CS> as BlockSizeUser>::BlockSize>,
+        OprfHash<CS>: Hash,
+        <OprfHash<CS> as CoreProxy>::Core: ProxyHash,
+        <<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
+        Le<<<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
     {
         let pt = random_point::<CS>();
         let pt_bytes = CS::KeGroup::serialize_pk(&pt);
@@ -176,13 +183,13 @@ fn registration_request_roundtrip() -> Result<(), ProtocolError> {
         assert_eq!(input, *r1_bytes);
 
         // Assert that identity group element is rejected
-        let identity = CS::OprfGroup::identity();
-        let identity_bytes = identity.to_arr().to_vec();
+        let identity = OprfGroup::<CS>::identity_elem();
+        let identity_bytes = OprfGroup::<CS>::serialize_elem(identity).to_vec();
 
         assert!(matches!(
             RegistrationRequest::<CS>::deserialize(&identity_bytes),
             Err(ProtocolError::LibraryError(InternalError::OprfError(
-                voprf::Error::PointError,
+                voprf::Error::Deserialization,
             )))
         ));
 
@@ -191,7 +198,6 @@ fn registration_request_roundtrip() -> Result<(), ProtocolError> {
 
     #[cfg(feature = "ristretto255")]
     inner::<Ristretto255>()?;
-    #[cfg(feature = "p256")]
     inner::<P256>()?;
 
     Ok(())
@@ -201,11 +207,14 @@ fn registration_request_roundtrip() -> Result<(), ProtocolError> {
 fn registration_response_roundtrip() -> Result<(), ProtocolError> {
     fn inner<CS: CipherSuite>() -> Result<(), ProtocolError>
     where
-        <CS::Hash as CoreProxy>::Core: ProxyHash,
-        <<CS::Hash as CoreProxy>::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
-        Le<<<CS::Hash as CoreProxy>::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
+        <OprfHash<CS> as OutputSizeUser>::OutputSize:
+            IsLess<U256> + IsLessOrEqual<<OprfHash<CS> as BlockSizeUser>::BlockSize>,
+        OprfHash<CS>: Hash,
+        <OprfHash<CS> as CoreProxy>::Core: ProxyHash,
+        <<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
+        Le<<<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
         // RegistrationResponse: KgPk + KePk
-        <CS::OprfGroup as Group>::ElemLen: Add<<CS::KeGroup as KeGroup>::PkLen>,
+        <OprfGroup<CS> as Group>::ElemLen: Add<<CS::KeGroup as KeGroup>::PkLen>,
         RegistrationResponseLen<CS>: ArrayLength<u8>,
     {
         let pt = random_point::<CS>();
@@ -223,15 +232,15 @@ fn registration_response_roundtrip() -> Result<(), ProtocolError> {
         assert_eq!(input, *r2_bytes);
 
         // Assert that identity group element is rejected
-        let identity = CS::OprfGroup::identity();
-        let identity_bytes = identity.to_arr().to_vec();
+        let identity = OprfGroup::<CS>::identity_elem();
+        let identity_bytes = OprfGroup::<CS>::serialize_elem(identity).to_vec();
 
         assert!(matches!(
             RegistrationResponse::<CS>::deserialize(
                 &[identity_bytes, pubkey_bytes.to_vec()].concat()
             ),
             Err(ProtocolError::LibraryError(InternalError::OprfError(
-                voprf::Error::PointError,
+                voprf::Error::Deserialization,
             )))
         ));
 
@@ -240,7 +249,6 @@ fn registration_response_roundtrip() -> Result<(), ProtocolError> {
 
     #[cfg(feature = "ristretto255")]
     inner::<Ristretto255>()?;
-    #[cfg(feature = "p256")]
     inner::<P256>()?;
 
     Ok(())
@@ -250,15 +258,18 @@ fn registration_response_roundtrip() -> Result<(), ProtocolError> {
 fn registration_upload_roundtrip() -> Result<(), ProtocolError> {
     fn inner<CS: CipherSuite>() -> Result<(), ProtocolError>
     where
-        <CS::Hash as CoreProxy>::Core: ProxyHash,
-        <<CS::Hash as CoreProxy>::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
-        Le<<<CS::Hash as CoreProxy>::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
+        <OprfHash<CS> as OutputSizeUser>::OutputSize:
+            IsLess<U256> + IsLessOrEqual<<OprfHash<CS> as BlockSizeUser>::BlockSize>,
+        OprfHash<CS>: Hash,
+        <OprfHash<CS> as CoreProxy>::Core: ProxyHash,
+        <<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
+        Le<<<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
         // Envelope: Nonce + Hash
-        NonceLen: Add<OutputSize<CS::Hash>>,
+        NonceLen: Add<OutputSize<OprfHash<CS>>>,
         EnvelopeLen<CS>: ArrayLength<u8>,
         // RegistrationUpload: (KePk + Hash) + Envelope
-        <CS::KeGroup as KeGroup>::PkLen: Add<OutputSize<CS::Hash>>,
-        Sum<<CS::KeGroup as KeGroup>::PkLen, OutputSize<CS::Hash>>:
+        <CS::KeGroup as KeGroup>::PkLen: Add<OutputSize<OprfHash<CS>>>,
+        Sum<<CS::KeGroup as KeGroup>::PkLen, OutputSize<OprfHash<CS>>>:
             ArrayLength<u8> + Add<EnvelopeLen<CS>>,
         RegistrationUploadLen<CS>: ArrayLength<u8>,
     {
@@ -271,7 +282,7 @@ fn registration_upload_roundtrip() -> Result<(), ProtocolError> {
         let mut nonce = [0u8; NonceLen::USIZE];
         rng.fill_bytes(&mut nonce);
 
-        let mut masking_key = Output::<CS::Hash>::default();
+        let mut masking_key = Output::<OprfHash<CS>>::default();
         rng.fill_bytes(&mut masking_key);
 
         let randomized_pwd_hasher = hkdf::Hkdf::new(None, &key);
@@ -299,7 +310,6 @@ fn registration_upload_roundtrip() -> Result<(), ProtocolError> {
 
     #[cfg(feature = "ristretto255")]
     inner::<Ristretto255>()?;
-    #[cfg(feature = "p256")]
     inner::<P256>()?;
 
     Ok(())
@@ -309,11 +319,14 @@ fn registration_upload_roundtrip() -> Result<(), ProtocolError> {
 fn credential_request_roundtrip() -> Result<(), ProtocolError> {
     fn inner<CS: CipherSuite>() -> Result<(), ProtocolError>
     where
-        <CS::Hash as CoreProxy>::Core: ProxyHash,
-        <<CS::Hash as CoreProxy>::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
-        Le<<<CS::Hash as CoreProxy>::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
+        <OprfHash<CS> as OutputSizeUser>::OutputSize:
+            IsLess<U256> + IsLessOrEqual<<OprfHash<CS> as BlockSizeUser>::BlockSize>,
+        OprfHash<CS>: Hash,
+        <OprfHash<CS> as CoreProxy>::Core: ProxyHash,
+        <<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
+        Le<<<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
         // CredentialRequest: KgPk + Ke1Message
-        <CS::OprfGroup as Group>::ElemLen: Add<Ke1MessageLen<CS>>,
+        <OprfGroup<CS> as Group>::ElemLen: Add<Ke1MessageLen<CS>>,
         CredentialRequestLen<CS>: ArrayLength<u8>,
     {
         let mut rng = OsRng;
@@ -339,13 +352,13 @@ fn credential_request_roundtrip() -> Result<(), ProtocolError> {
         assert_eq!(input, *l1_bytes);
 
         // Assert that identity group element is rejected
-        let identity = CS::OprfGroup::identity();
-        let identity_bytes = identity.to_arr().to_vec();
+        let identity = OprfGroup::<CS>::identity_elem();
+        let identity_bytes = OprfGroup::<CS>::serialize_elem(identity).to_vec();
 
         assert!(matches!(
             CredentialRequest::<CS>::deserialize(&[identity_bytes, ke1m.to_vec()].concat()),
             Err(ProtocolError::LibraryError(InternalError::OprfError(
-                voprf::Error::PointError,
+                voprf::Error::Deserialization,
             )))
         ));
 
@@ -354,7 +367,6 @@ fn credential_request_roundtrip() -> Result<(), ProtocolError> {
 
     #[cfg(feature = "ristretto255")]
     inner::<Ristretto255>()?;
-    #[cfg(feature = "p256")]
     inner::<P256>()?;
 
     Ok(())
@@ -364,17 +376,21 @@ fn credential_request_roundtrip() -> Result<(), ProtocolError> {
 fn credential_response_roundtrip() -> Result<(), ProtocolError> {
     fn inner<CS: CipherSuite>() -> Result<(), ProtocolError>
     where
-        <CS::Hash as CoreProxy>::Core: ProxyHash,
-        <<CS::Hash as CoreProxy>::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
-        Le<<<CS::Hash as CoreProxy>::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
+        <OprfHash<CS> as OutputSizeUser>::OutputSize:
+            IsLess<U256> + IsLessOrEqual<<OprfHash<CS> as BlockSizeUser>::BlockSize>,
+        OprfHash<CS>: Hash,
+        <OprfHash<CS> as CoreProxy>::Core: ProxyHash,
+        <<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
+        Le<<<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
         // CredentialResponseWithoutKeLen: (KgPk + Nonce) + MaskedResponse
-        <CS::OprfGroup as Group>::ElemLen: Add<NonceLen>,
-        Sum<<CS::OprfGroup as Group>::ElemLen, NonceLen>:
+        <OprfGroup<CS> as Group>::ElemLen: Add<NonceLen>,
+        Sum<<OprfGroup<CS> as Group>::ElemLen, NonceLen>:
             ArrayLength<u8> + Add<MaskedResponseLen<CS>>,
         CredentialResponseWithoutKeLen<CS>: ArrayLength<u8>,
         // MaskedResponse: (Nonce + Hash) + KePk
-        NonceLen: Add<OutputSize<CS::Hash>>,
-        Sum<NonceLen, OutputSize<CS::Hash>>: ArrayLength<u8> + Add<<CS::KeGroup as KeGroup>::PkLen>,
+        NonceLen: Add<OutputSize<OprfHash<CS>>>,
+        Sum<NonceLen, OutputSize<OprfHash<CS>>>:
+            ArrayLength<u8> + Add<<CS::KeGroup as KeGroup>::PkLen>,
         MaskedResponseLen<CS>: ArrayLength<u8>,
         // CredentialResponse: CredentialResponseWithoutKeLen + Ke2Message
         CredentialResponseWithoutKeLen<CS>: Add<Ke2MessageLen<CS>>,
@@ -389,11 +405,11 @@ fn credential_response_roundtrip() -> Result<(), ProtocolError> {
         rng.fill_bytes(&mut masking_nonce);
 
         let mut masked_response =
-            vec![0u8; <CS::OprfGroup as Group>::ElemLen::USIZE + Envelope::<CS>::len()];
+            vec![0u8; <OprfGroup<CS> as Group>::ElemLen::USIZE + Envelope::<CS>::len()];
         rng.fill_bytes(&mut masked_response);
 
         let server_e_kp = KeyPair::<CS::KeGroup>::generate_random(&mut rng);
-        let mut mac = Output::<CS::Hash>::default();
+        let mut mac = Output::<OprfHash<CS>>::default();
         rng.fill_bytes(&mut mac);
         let mut server_nonce = [0u8; NonceLen::USIZE];
         rng.fill_bytes(&mut server_nonce);
@@ -416,8 +432,8 @@ fn credential_response_roundtrip() -> Result<(), ProtocolError> {
         assert_eq!(input, *l2_bytes);
 
         // Assert that identity group element is rejected
-        let identity = CS::OprfGroup::identity();
-        let identity_bytes = identity.to_arr().to_vec();
+        let identity = OprfGroup::<CS>::identity_elem();
+        let identity_bytes = OprfGroup::<CS>::serialize_elem(identity).to_vec();
 
         assert!(matches!(
             CredentialResponse::<CS>::deserialize(
@@ -430,7 +446,7 @@ fn credential_response_roundtrip() -> Result<(), ProtocolError> {
                 .concat()
             ),
             Err(ProtocolError::LibraryError(InternalError::OprfError(
-                voprf::Error::PointError,
+                voprf::Error::Deserialization,
             )))
         ));
 
@@ -439,7 +455,6 @@ fn credential_response_roundtrip() -> Result<(), ProtocolError> {
 
     #[cfg(feature = "ristretto255")]
     inner::<Ristretto255>()?;
-    #[cfg(feature = "p256")]
     inner::<P256>()?;
 
     Ok(())
@@ -449,12 +464,15 @@ fn credential_response_roundtrip() -> Result<(), ProtocolError> {
 fn credential_finalization_roundtrip() -> Result<(), ProtocolError> {
     fn inner<CS: CipherSuite>() -> Result<(), ProtocolError>
     where
-        <CS::Hash as CoreProxy>::Core: ProxyHash,
-        <<CS::Hash as CoreProxy>::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
-        Le<<<CS::Hash as CoreProxy>::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
+        <OprfHash<CS> as OutputSizeUser>::OutputSize:
+            IsLess<U256> + IsLessOrEqual<<OprfHash<CS> as BlockSizeUser>::BlockSize>,
+        OprfHash<CS>: Hash,
+        <OprfHash<CS> as CoreProxy>::Core: ProxyHash,
+        <<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
+        Le<<<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
     {
         let mut rng = OsRng;
-        let mut mac = Output::<CS::Hash>::default();
+        let mut mac = Output::<OprfHash<CS>>::default();
         rng.fill_bytes(&mut mac);
 
         let input = mac;
@@ -468,7 +486,6 @@ fn credential_finalization_roundtrip() -> Result<(), ProtocolError> {
 
     #[cfg(feature = "ristretto255")]
     inner::<Ristretto255>()?;
-    #[cfg(feature = "p256")]
     inner::<P256>()?;
 
     Ok(())
@@ -478,15 +495,18 @@ fn credential_finalization_roundtrip() -> Result<(), ProtocolError> {
 fn client_login_roundtrip() -> Result<(), ProtocolError> {
     fn inner<CS: CipherSuite>() -> Result<(), ProtocolError>
     where
-        <CS::Hash as CoreProxy>::Core: ProxyHash,
-        <<CS::Hash as CoreProxy>::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
-        Le<<<CS::Hash as CoreProxy>::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
+        <OprfHash<CS> as OutputSizeUser>::OutputSize:
+            IsLess<U256> + IsLessOrEqual<<OprfHash<CS> as BlockSizeUser>::BlockSize>,
+        OprfHash<CS>: Hash,
+        <OprfHash<CS> as CoreProxy>::Core: ProxyHash,
+        <<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
+        Le<<<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
         // CredentialRequest: KgPk + Ke1Message
-        <CS::OprfGroup as Group>::ElemLen: Add<Ke1MessageLen<CS>>,
+        <OprfGroup<CS> as Group>::ElemLen: Add<Ke1MessageLen<CS>>,
         CredentialRequestLen<CS>: ArrayLength<u8>,
         // ClientLogin: KgSk + CredentialRequest + Ke1State
-        <CS::OprfGroup as Group>::ScalarLen: Add<CredentialRequestLen<CS>>,
-        Sum<<CS::OprfGroup as Group>::ScalarLen, CredentialRequestLen<CS>>:
+        <OprfGroup<CS> as Group>::ScalarLen: Add<CredentialRequestLen<CS>>,
+        Sum<<OprfGroup<CS> as Group>::ScalarLen, CredentialRequestLen<CS>>:
             ArrayLength<u8> + Add<Ke1StateLen<CS>>,
         ClientLoginLen<CS>: ArrayLength<u8>,
     {
@@ -503,13 +523,12 @@ fn client_login_roundtrip() -> Result<(), ProtocolError> {
         ]
         .concat();
 
-        let blind_result =
-            voprf::NonVerifiableClient::<CS::OprfGroup, CS::Hash>::blind(pw, &mut rng)?;
+        let blind_result = voprf::NonVerifiableClient::<CS::OprfGroup>::blind(pw, &mut rng)?;
 
         let credential_request = CredentialRequest::<CS> {
             blinded_element: blind_result.message,
             ke1_message:
-                <CS::KeyExchange as KeyExchange<CS::Hash, CS::KeGroup>>::KE1Message::from_bytes(
+                <CS::KeyExchange as KeyExchange<OprfHash<CS>, CS::KeGroup>>::KE1Message::from_bytes(
                     &[
                         client_nonce.as_ref(),
                         client_e_kp.public().to_bytes().as_ref(),
@@ -534,7 +553,6 @@ fn client_login_roundtrip() -> Result<(), ProtocolError> {
 
     #[cfg(feature = "ristretto255")]
     inner::<Ristretto255>()?;
-    #[cfg(feature = "p256")]
     inner::<P256>()?;
 
     Ok(())
@@ -544,9 +562,12 @@ fn client_login_roundtrip() -> Result<(), ProtocolError> {
 fn ke1_message_roundtrip() -> Result<(), ProtocolError> {
     fn inner<CS: CipherSuite>() -> Result<(), ProtocolError>
     where
-        <CS::Hash as CoreProxy>::Core: ProxyHash,
-        <<CS::Hash as CoreProxy>::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
-        Le<<<CS::Hash as CoreProxy>::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
+        <OprfHash<CS> as OutputSizeUser>::OutputSize:
+            IsLess<U256> + IsLessOrEqual<<OprfHash<CS> as BlockSizeUser>::BlockSize>,
+        OprfHash<CS>: Hash,
+        <OprfHash<CS> as CoreProxy>::Core: ProxyHash,
+        <<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
+        Le<<<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
     {
         let mut rng = OsRng;
 
@@ -560,7 +581,9 @@ fn ke1_message_roundtrip() -> Result<(), ProtocolError> {
         ]
         .concat();
         let reg =
-            <CS::KeyExchange as KeyExchange<CS::Hash, CS::KeGroup>>::KE1Message::from_bytes(&ke1m)?;
+            <CS::KeyExchange as KeyExchange<OprfHash<CS>, CS::KeGroup>>::KE1Message::from_bytes(
+                &ke1m,
+            )?;
         let reg_bytes = reg.to_bytes();
         assert_eq!(*reg_bytes, ke1m);
 
@@ -569,7 +592,6 @@ fn ke1_message_roundtrip() -> Result<(), ProtocolError> {
 
     #[cfg(feature = "ristretto255")]
     inner::<Ristretto255>()?;
-    #[cfg(feature = "p256")]
     inner::<P256>()?;
 
     Ok(())
@@ -579,14 +601,17 @@ fn ke1_message_roundtrip() -> Result<(), ProtocolError> {
 fn ke2_message_roundtrip() -> Result<(), ProtocolError> {
     fn inner<CS: CipherSuite>() -> Result<(), ProtocolError>
     where
-        <CS::Hash as CoreProxy>::Core: ProxyHash,
-        <<CS::Hash as CoreProxy>::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
-        Le<<<CS::Hash as CoreProxy>::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
+        <OprfHash<CS> as OutputSizeUser>::OutputSize:
+            IsLess<U256> + IsLessOrEqual<<OprfHash<CS> as BlockSizeUser>::BlockSize>,
+        OprfHash<CS>: Hash,
+        <OprfHash<CS> as CoreProxy>::Core: ProxyHash,
+        <<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
+        Le<<<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
     {
         let mut rng = OsRng;
 
         let server_e_kp = KeyPair::<CS::KeGroup>::generate_random(&mut rng);
-        let mut mac = Output::<CS::Hash>::default();
+        let mut mac = Output::<OprfHash<CS>>::default();
         rng.fill_bytes(&mut mac);
         let mut server_nonce = vec![0u8; NonceLen::USIZE];
         rng.fill_bytes(&mut server_nonce);
@@ -599,7 +624,9 @@ fn ke2_message_roundtrip() -> Result<(), ProtocolError> {
         .concat();
 
         let reg =
-            <CS::KeyExchange as KeyExchange<CS::Hash, CS::KeGroup>>::KE2Message::from_bytes(&ke2m)?;
+            <CS::KeyExchange as KeyExchange<OprfHash<CS>, CS::KeGroup>>::KE2Message::from_bytes(
+                &ke2m,
+            )?;
         let reg_bytes = reg.to_bytes();
         assert_eq!(*reg_bytes, ke2m);
 
@@ -608,7 +635,6 @@ fn ke2_message_roundtrip() -> Result<(), ProtocolError> {
 
     #[cfg(feature = "ristretto255")]
     inner::<Ristretto255>()?;
-    #[cfg(feature = "p256")]
     inner::<P256>()?;
 
     Ok(())
@@ -618,18 +644,23 @@ fn ke2_message_roundtrip() -> Result<(), ProtocolError> {
 fn ke3_message_roundtrip() -> Result<(), ProtocolError> {
     fn inner<CS: CipherSuite>() -> Result<(), ProtocolError>
     where
-        <CS::Hash as CoreProxy>::Core: ProxyHash,
-        <<CS::Hash as CoreProxy>::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
-        Le<<<CS::Hash as CoreProxy>::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
+        <OprfHash<CS> as OutputSizeUser>::OutputSize:
+            IsLess<U256> + IsLessOrEqual<<OprfHash<CS> as BlockSizeUser>::BlockSize>,
+        OprfHash<CS>: Hash,
+        <OprfHash<CS> as CoreProxy>::Core: ProxyHash,
+        <<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
+        Le<<<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
     {
         let mut rng = OsRng;
-        let mut mac = Output::<CS::Hash>::default();
+        let mut mac = Output::<OprfHash<CS>>::default();
         rng.fill_bytes(&mut mac);
 
         let ke3m: Vec<u8> = [mac].concat();
 
         let reg =
-            <CS::KeyExchange as KeyExchange<CS::Hash, CS::KeGroup>>::KE3Message::from_bytes(&ke3m)?;
+            <CS::KeyExchange as KeyExchange<OprfHash<CS>, CS::KeGroup>>::KE3Message::from_bytes(
+                &ke3m,
+            )?;
         let reg_bytes = reg.to_bytes();
         assert_eq!(*reg_bytes, ke3m);
 
@@ -638,7 +669,6 @@ fn ke3_message_roundtrip() -> Result<(), ProtocolError> {
 
     #[cfg(feature = "ristretto255")]
     inner::<Ristretto255>()?;
-    #[cfg(feature = "p256")]
     inner::<P256>()?;
 
     Ok(())
@@ -729,5 +759,4 @@ macro_rules! test {
 
 #[cfg(feature = "ristretto255")]
 test!(ristretto255, Ristretto255);
-#[cfg(feature = "p256")]
 test!(p256, P256);

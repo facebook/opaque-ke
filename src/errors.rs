@@ -49,6 +49,8 @@ pub enum InternalError<T = Infallible> {
     InvalidInnerEnvelopeError,
     /// Error from the OPRF evaluation
     OprfError(voprf::Error),
+    /// Error from the OPRF evaluation
+    OprfInternalError(voprf::InternalError),
     /// Error encountered when attempting to produce a keypair
     InvalidKeypairError,
 }
@@ -79,6 +81,9 @@ impl<T: Debug> Debug for InternalError<T> {
             }
             Self::InvalidInnerEnvelopeError => f.debug_tuple("InvalidInnerEnvelopeError").finish(),
             Self::OprfError(error) => f.debug_tuple("OprfError").field(error).finish(),
+            Self::OprfInternalError(error) => {
+                f.debug_tuple("OprfInternalError").field(error).finish()
+            }
             Self::InvalidKeypairError => f.debug_tuple("InvalidKeypairError").finish(),
         }
     }
@@ -111,6 +116,7 @@ impl InternalError {
             Self::IncompatibleEnvelopeModeError => InternalError::IncompatibleEnvelopeModeError,
             Self::InvalidInnerEnvelopeError => InternalError::InvalidInnerEnvelopeError,
             Self::OprfError(error) => InternalError::OprfError(error),
+            Self::OprfInternalError(error) => InternalError::OprfInternalError(error),
             Self::InvalidKeypairError => InternalError::InvalidKeypairError,
         }
     }
@@ -125,6 +131,12 @@ impl From<voprf::Error> for InternalError {
 impl From<voprf::Error> for ProtocolError {
     fn from(voprf_error: voprf::Error) -> Self {
         Self::LibraryError(InternalError::OprfError(voprf_error))
+    }
+}
+
+impl From<voprf::InternalError> for ProtocolError {
+    fn from(voprf_error: voprf::InternalError) -> Self {
+        Self::LibraryError(InternalError::OprfInternalError(voprf_error))
     }
 }
 

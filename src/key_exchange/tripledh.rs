@@ -9,7 +9,7 @@
 use core::convert::TryFrom;
 use core::ops::Add;
 
-use derive_where::DeriveWhere;
+use derive_where::derive_where;
 use digest::core_api::BlockSizeUser;
 use digest::{Digest, Output};
 use generic_array::sequence::Concat;
@@ -18,6 +18,7 @@ use generic_array::{ArrayLength, GenericArray};
 use hkdf::{Hkdf, HkdfExtract};
 use hmac::{Hmac, Mac};
 use rand::{CryptoRng, RngCore};
+use zeroize::{Zeroize, ZeroizeOnDrop};
 
 use crate::errors::utils::{check_slice_size, check_slice_size_atleast};
 use crate::errors::{InternalError, ProtocolError};
@@ -63,14 +64,20 @@ pub struct TripleDH;
         crate = "serde_"
     )
 )]
-#[derive(DeriveWhere)]
-#[derive_where(Clone, Zeroize(drop))]
+#[derive_where(Clone)]
 #[derive_where(Debug, Eq, Hash, Ord, PartialEq, PartialOrd; KG::Sk)]
 pub struct Ke1State<KG: KeGroup> {
-    #[derive_where(skip(Zeroize))]
     client_e_sk: PrivateKey<KG>,
     client_nonce: GenericArray<u8, NonceLen>,
 }
+
+impl<KG: KeGroup> Drop for Ke1State<KG> {
+    fn drop(&mut self) {
+        self.client_nonce.zeroize();
+    }
+}
+
+impl<KG: KeGroup> ZeroizeOnDrop for Ke1State<KG> {}
 
 /// The first key exchange message
 #[cfg_attr(
@@ -84,14 +91,20 @@ pub struct Ke1State<KG: KeGroup> {
         crate = "serde_"
     )
 )]
-#[derive(DeriveWhere)]
-#[derive_where(Clone, Zeroize(drop))]
+#[derive_where(Clone)]
 #[derive_where(Debug, Eq, Hash, Ord, PartialEq, PartialOrd; KG::Pk)]
 pub struct Ke1Message<KG: KeGroup> {
     pub(crate) client_nonce: GenericArray<u8, NonceLen>,
-    #[derive_where(skip(Zeroize))]
     pub(crate) client_e_pk: PublicKey<KG>,
 }
+
+impl<KG: KeGroup> Drop for Ke1Message<KG> {
+    fn drop(&mut self) {
+        self.client_nonce.zeroize();
+    }
+}
+
+impl<KG: KeGroup> ZeroizeOnDrop for Ke1Message<KG> {}
 
 /// The server state produced after the second key exchange message
 #[cfg_attr(
@@ -99,8 +112,7 @@ pub struct Ke1Message<KG: KeGroup> {
     derive(serde_::Deserialize, serde_::Serialize),
     serde(bound = "", crate = "serde_")
 )]
-#[derive(DeriveWhere)]
-#[derive_where(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, Zeroize(drop))]
+#[derive_where(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct Ke2State<D: Hash>
 where
     D::Core: ProxyHash,
@@ -110,6 +122,27 @@ where
     km3: Output<D>,
     hashed_transcript: Output<D>,
     session_key: Output<D>,
+}
+
+impl<D: Hash> Drop for Ke2State<D>
+where
+    D::Core: ProxyHash,
+    <D::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
+    Le<<D::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
+{
+    fn drop(&mut self) {
+        self.km3.zeroize();
+        self.hashed_transcript.zeroize();
+        self.session_key.zeroize();
+    }
+}
+
+impl<D: Hash> ZeroizeOnDrop for Ke2State<D>
+where
+    D::Core: ProxyHash,
+    <D::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
+    Le<<D::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
+{
 }
 
 /// The second key exchange message
@@ -124,7 +157,6 @@ where
         crate = "serde_"
     )
 )]
-#[derive(DeriveWhere)]
 #[derive_where(Clone)]
 #[derive_where(Debug, Eq, Hash, Ord, PartialEq, PartialOrd; KG::Pk)]
 pub struct Ke2Message<D: Hash, KG: KeGroup>
@@ -144,7 +176,6 @@ where
     derive(serde_::Deserialize, serde_::Serialize),
     serde(bound = "", crate = "serde_")
 )]
-#[derive(DeriveWhere)]
 #[derive_where(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct Ke3Message<D: Hash>
 where

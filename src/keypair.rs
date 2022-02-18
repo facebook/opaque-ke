@@ -9,9 +9,10 @@
 
 #![allow(unsafe_code)]
 
-use derive_where::DeriveWhere;
+use derive_where::derive_where;
 use generic_array::{ArrayLength, GenericArray};
 use rand::{CryptoRng, RngCore};
+use zeroize::ZeroizeOnDrop;
 
 use crate::errors::{InternalError, ProtocolError};
 use crate::key_exchange::group::KeGroup;
@@ -29,7 +30,6 @@ use crate::serialization::GenericArrayExt;
         crate = "serde_"
     )
 )]
-#[derive(DeriveWhere)]
 #[derive_where(Clone)]
 #[derive_where(Debug, Eq, Hash, Ord, PartialEq, PartialOrd; KG::Pk, S)]
 pub struct KeyPair<KG: KeGroup, S: SecretKey<KG> = PrivateKey<KG>> {
@@ -109,7 +109,6 @@ where
         crate = "serde_"
     )
 )]
-#[derive(DeriveWhere)]
 #[derive_where(Clone)]
 #[derive_where(Debug, Eq, Hash, Ord, PartialEq, PartialOrd; KG::Sk)]
 pub struct PrivateKey<KG: KeGroup>(KG::Sk);
@@ -119,6 +118,8 @@ impl<KG: KeGroup> Drop for PrivateKey<KG> {
         KG::zeroize_sk_on_drop(&mut self.0)
     }
 }
+
+impl<KG: KeGroup> ZeroizeOnDrop for PrivateKey<KG> {}
 
 impl<KG: KeGroup> PrivateKey<KG> {
     /// Convert from bytes
@@ -186,7 +187,6 @@ impl<KG: KeGroup> SecretKey<KG> for PrivateKey<KG> {
         crate = "serde_"
     )
 )]
-#[derive(DeriveWhere)]
 #[derive_where(Clone)]
 #[derive_where(Debug, Eq, Hash, Ord, PartialEq, PartialOrd; KG::Pk)]
 pub struct PublicKey<KG: KeGroup>(KG::Pk);
@@ -226,7 +226,6 @@ mod tests {
 
         #[cfg(feature = "ristretto255")]
         inner::<crate::Ristretto255>();
-        #[cfg(feature = "p256")]
         inner::<::p256::NistP256>();
     }
 
@@ -273,7 +272,6 @@ mod tests {
 
     #[cfg(feature = "ristretto255")]
     test!(ristretto, crate::Ristretto255);
-    #[cfg(feature = "p256")]
     test!(p256, ::p256::NistP256);
 
     #[test]
@@ -292,18 +290,14 @@ mod tests {
 
         impl CipherSuite for Default {
             #[cfg(feature = "ristretto255")]
-            type OprfGroup = curve25519_dalek::ristretto::RistrettoPoint;
+            type OprfGroup = crate::Ristretto255;
             #[cfg(not(feature = "ristretto255"))]
-            type OprfGroup = ::p256::ProjectivePoint;
+            type OprfGroup = ::p256::NistP256;
             #[cfg(feature = "ristretto255")]
             type KeGroup = crate::Ristretto255;
             #[cfg(not(feature = "ristretto255"))]
             type KeGroup = ::p256::NistP256;
             type KeyExchange = crate::key_exchange::tripledh::TripleDH;
-            #[cfg(feature = "ristretto255")]
-            type Hash = sha2::Sha512;
-            #[cfg(not(feature = "ristretto255"))]
-            type Hash = sha2::Sha256;
             type SlowHash = crate::slow_hash::NoOpHash;
         }
 

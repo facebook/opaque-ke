@@ -5,34 +5,40 @@
 // License, Version 2.0 found in the LICENSE-APACHE file in the root directory
 // of this source tree.
 
-//! Key Exchange group implementation for p256
-
-use generic_array::typenum::{U32, U33};
+use elliptic_curve::sec1::{FromEncodedPoint, ModulusSize, ToEncodedPoint};
+use elliptic_curve::{
+    AffinePoint, Curve, FieldSize, ProjectiveArithmetic, ProjectivePoint, PublicKey, SecretKey,
+};
 use generic_array::GenericArray;
-use p256::elliptic_curve::group::GroupEncoding;
-use p256::elliptic_curve::sec1::ToEncodedPoint;
-use p256::elliptic_curve::{PublicKey, SecretKey};
-use p256::NistP256;
 use rand::{CryptoRng, RngCore};
 
 use super::KeGroup;
 use crate::errors::InternalError;
 
-impl KeGroup for NistP256 {
+impl<G: Curve + ProjectiveArithmetic> KeGroup for G
+where
+    FieldSize<Self>: ModulusSize,
+    AffinePoint<Self>: FromEncodedPoint<Self> + ToEncodedPoint<Self>,
+    ProjectivePoint<Self>: ToEncodedPoint<Self>,
+{
     type Pk = PublicKey<Self>;
-    type PkLen = U33;
+
+    type PkLen = <FieldSize<Self> as ModulusSize>::CompressedPointSize;
+
     type Sk = SecretKey<Self>;
-    type SkLen = U32;
+
+    type SkLen = FieldSize<Self>;
+
     fn serialize_pk(pk: &Self::Pk) -> GenericArray<u8, Self::PkLen> {
         GenericArray::clone_from_slice(pk.to_encoded_point(true).as_bytes())
     }
 
     fn deserialize_pk(bytes: &GenericArray<u8, Self::PkLen>) -> Result<Self::Pk, InternalError> {
-        Self::Pk::from_sec1_bytes(bytes).map_err(|_| InternalError::PointError)
+        PublicKey::<Self>::from_sec1_bytes(bytes).map_err(|_| InternalError::PointError)
     }
 
     fn random_sk<R: RngCore + CryptoRng>(rng: &mut R) -> Self::Sk {
-        SecretKey::<NistP256>::random(rng)
+        SecretKey::<Self>::random(rng)
     }
 
     fn public_key(sk: &Self::Sk) -> Self::Pk {
@@ -40,12 +46,14 @@ impl KeGroup for NistP256 {
     }
 
     fn diffie_hellman(pk: &Self::Pk, sk: &Self::Sk) -> GenericArray<u8, Self::PkLen> {
-        (pk.to_projective() * sk.to_nonzero_scalar().as_ref())
-            .to_affine()
-            .to_bytes()
+        GenericArray::clone_from_slice(
+            (pk.to_projective() * sk.to_nonzero_scalar().as_ref())
+                .to_encoded_point(true)
+                .as_bytes(),
+        )
     }
 
-    fn zeroize_sk_on_drop(_: &mut Self::Sk) {}
+    fn zeroize_sk_on_drop(_sk: &mut Self::Sk) {}
 
     fn serialize_sk(sk: &Self::Sk) -> GenericArray<u8, Self::SkLen> {
         sk.to_be_bytes()

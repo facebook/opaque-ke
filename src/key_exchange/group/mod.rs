@@ -7,6 +7,12 @@
 
 //! Includes the KeGroup trait and definitions for the key exchange groups
 
+mod elliptic_curve;
+#[cfg(feature = "ristretto255")]
+pub mod ristretto255;
+#[cfg(feature = "x25519")]
+pub mod x25519;
+
 use generic_array::{ArrayLength, GenericArray};
 use rand::{CryptoRng, RngCore};
 
@@ -47,10 +53,3 @@ pub trait KeGroup {
     /// Return a public key from its fixed-length bytes representation
     fn deserialize_sk(bytes: &GenericArray<u8, Self::SkLen>) -> Result<Self::Sk, InternalError>;
 }
-
-#[cfg(feature = "p256")]
-pub mod p256;
-#[cfg(feature = "ristretto255")]
-pub mod ristretto255;
-#[cfg(feature = "x25519")]
-pub mod x25519;

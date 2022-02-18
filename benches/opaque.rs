@@ -20,26 +20,24 @@ static SUFFIX: &str = "ristretto255_u32";
 static SUFFIX: &str = "ristretto255_fiat_u64";
 #[cfg(feature = "ristretto255_fiat_u32")]
 static SUFFIX: &str = "ristretto255_fiat_u32";
-#[cfg(all(not(feature = "ristretto255"), feature = "p256"))]
+#[cfg(all(not(feature = "ristretto255")))]
 static SUFFIX: &str = "p256";
 
 struct Default;
 
 #[cfg(feature = "ristretto255")]
 impl CipherSuite for Default {
-    type OprfGroup = curve25519_dalek::ristretto::RistrettoPoint;
+    type OprfGroup = opaque_ke::Ristretto255;
     type KeGroup = opaque_ke::Ristretto255;
     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
-    type Hash = sha2::Sha512;
     type SlowHash = opaque_ke::slow_hash::NoOpHash;
 }
 
 #[cfg(not(feature = "ristretto255"))]
 impl CipherSuite for Default {
-    type OprfGroup = p256_::ProjectivePoint;
-    type KeGroup = p256_::NistP256;
+    type OprfGroup = p256::NistP256;
+    type KeGroup = p256::NistP256;
     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
-    type Hash = sha2::Sha256;
     type SlowHash = opaque_ke::slow_hash::NoOpHash;
 }
 

@@ -7,21 +7,20 @@
 
 //! Provides the main OPAQUE API
 
-use core::marker::PhantomData;
 use core::ops::Add;
 
-use derive_where::DeriveWhere;
+use derive_where::derive_where;
 use digest::core_api::{BlockSizeUser, CoreProxy};
-use digest::Output;
+use digest::{Output, OutputSizeUser};
 use generic_array::sequence::Concat;
-use generic_array::typenum::{IsLess, Le, NonZero, Sum, Unsigned, U2, U256};
+use generic_array::typenum::{IsLess, IsLessOrEqual, Le, NonZero, Sum, Unsigned, U2, U256};
 use generic_array::{ArrayLength, GenericArray};
 use hkdf::{Hkdf, HkdfExtract};
 use rand::{CryptoRng, RngCore};
 use subtle::ConstantTimeEq;
 use voprf::Group;
 
-use crate::ciphersuite::CipherSuite;
+use crate::ciphersuite::{CipherSuite, OprfGroup, OprfHash};
 use crate::envelope::{Envelope, EnvelopeLen};
 use crate::errors::utils::check_slice_size;
 use crate::errors::{InternalError, ProtocolError};
@@ -69,89 +68,97 @@ const STR_OPAQUE_DERIVE_KEY_PAIR: &[u8; 20] = b"OPAQUE-DeriveKeyPair";
         crate = "serde_"
     )
 )]
-#[derive(DeriveWhere)]
 #[derive_where(Clone)]
 #[derive_where(Debug, Eq, Hash, Ord, PartialEq, PartialOrd; <CS::KeGroup as KeGroup>::Pk, <CS::KeGroup as KeGroup>::Sk, S)]
 pub struct ServerSetup<
     CS: CipherSuite,
     S: SecretKey<CS::KeGroup> = PrivateKey<<CS as CipherSuite>::KeGroup>,
 > where
-    <CS::Hash as CoreProxy>::Core: ProxyHash,
-    <<CS::Hash as CoreProxy>::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
-    Le<<<CS::Hash as CoreProxy>::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
+    <OprfHash<CS> as OutputSizeUser>::OutputSize:
+        IsLess<U256> + IsLessOrEqual<<OprfHash<CS> as BlockSizeUser>::BlockSize>,
+    OprfHash<CS>: Hash,
+    <OprfHash<CS> as CoreProxy>::Core: ProxyHash,
+    <<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
+    Le<<<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
 {
-    oprf_seed: Output<CS::Hash>,
+    oprf_seed: Output<OprfHash<CS>>,
     keypair: KeyPair<CS::KeGroup, S>,
     pub(crate) fake_keypair: KeyPair<CS::KeGroup>,
 }
 
 /// The state elements the client holds to register itself
-#[derive(DeriveWhere)]
-#[derive_where(Clone, Zeroize(drop))]
+#[derive_where(Clone, ZeroizeOnDrop)]
 #[derive_where(
     Debug, Eq, Hash, PartialEq;
-    voprf::NonVerifiableClient<CS::OprfGroup, CS::Hash>,
-    voprf::BlindedElement<CS::OprfGroup, CS::Hash>,
+    voprf::NonVerifiableClient<CS::OprfGroup>,
+    voprf::BlindedElement<CS::OprfGroup>,
 )]
 pub struct ClientRegistration<CS: CipherSuite>
 where
-    <CS::Hash as CoreProxy>::Core: ProxyHash,
-    <<CS::Hash as CoreProxy>::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
-    Le<<<CS::Hash as CoreProxy>::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
+    <OprfHash<CS> as OutputSizeUser>::OutputSize:
+        IsLess<U256> + IsLessOrEqual<<OprfHash<CS> as BlockSizeUser>::BlockSize>,
+    OprfHash<CS>: Hash,
+    <OprfHash<CS> as CoreProxy>::Core: ProxyHash,
+    <<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
+    Le<<<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
 {
-    pub(crate) oprf_client: voprf::NonVerifiableClient<CS::OprfGroup, CS::Hash>,
-    pub(crate) blinded_element: voprf::BlindedElement<CS::OprfGroup, CS::Hash>,
+    pub(crate) oprf_client: voprf::NonVerifiableClient<CS::OprfGroup>,
+    pub(crate) blinded_element: voprf::BlindedElement<CS::OprfGroup>,
 }
 
 impl_serialize_and_deserialize_for!(
     ClientRegistration
     where
         // ClientRegistration: KgSk + KgPk
-        <CS::OprfGroup as Group>::ScalarLen: Add<<CS::OprfGroup as Group>::ElemLen>,
+        <OprfGroup<CS> as Group>::ScalarLen: Add<<OprfGroup<CS> as Group>::ElemLen>,
         ClientRegistrationLen<CS>: ArrayLength<u8>,
 );
 
 /// The state elements the server holds to record a registration
-#[derive(DeriveWhere)]
-#[derive_where(Clone, Zeroize(drop))]
+#[derive_where(Clone, ZeroizeOnDrop)]
 #[derive_where(Debug, Eq, Hash, Ord, PartialEq, PartialOrd; <CS::KeGroup as KeGroup>::Pk)]
 pub struct ServerRegistration<CS: CipherSuite>(pub(crate) RegistrationUpload<CS>)
 where
-    <CS::Hash as CoreProxy>::Core: ProxyHash,
-    <<CS::Hash as CoreProxy>::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
-    Le<<<CS::Hash as CoreProxy>::Core as BlockSizeUser>::BlockSize, U256>: NonZero;
+    <OprfHash<CS> as OutputSizeUser>::OutputSize:
+        IsLess<U256> + IsLessOrEqual<<OprfHash<CS> as BlockSizeUser>::BlockSize>,
+    OprfHash<CS>: Hash,
+    <OprfHash<CS> as CoreProxy>::Core: ProxyHash,
+    <<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
+    Le<<<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize, U256>: NonZero;
 
 impl_serialize_and_deserialize_for!(
     ServerRegistration
     where
         // Envelope: Nonce + Hash
-        NonceLen: Add<OutputSize<CS::Hash>>,
+        NonceLen: Add<OutputSize<OprfHash<CS>>>,
         EnvelopeLen<CS>: ArrayLength<u8>,
         // RegistrationUpload: (KePk + Hash) + Envelope
-        <CS::KeGroup as KeGroup>::PkLen: Add<OutputSize<CS::Hash>>,
-        Sum<<CS::KeGroup as KeGroup>::PkLen, OutputSize<CS::Hash>>:
+        <CS::KeGroup as KeGroup>::PkLen: Add<OutputSize<OprfHash<CS>>>,
+        Sum<<CS::KeGroup as KeGroup>::PkLen, OutputSize<OprfHash<CS>>>:
             ArrayLength<u8> | Add<EnvelopeLen<CS>>,
         RegistrationUploadLen<CS>: ArrayLength<u8>,
         // ServerRegistration = RegistrationUpload
 );
 
 /// The state elements the client holds to perform a login
-#[derive(DeriveWhere)]
-#[derive_where(Clone, Zeroize(drop))]
+#[derive_where(Clone, ZeroizeOnDrop)]
 #[derive_where(
     Debug, Eq, Hash, PartialEq;
-    voprf::NonVerifiableClient<CS::OprfGroup, CS::Hash>,
-    <CS::KeyExchange as KeyExchange<CS::Hash, CS::KeGroup>>::KE1State,
+    voprf::NonVerifiableClient<CS::OprfGroup>,
+    <CS::KeyExchange as KeyExchange<OprfHash<CS>, CS::KeGroup>>::KE1State,
     CredentialRequest<CS>,
 )]
 pub struct ClientLogin<CS: CipherSuite>
 where
-    <CS::Hash as CoreProxy>::Core: ProxyHash,
-    <<CS::Hash as CoreProxy>::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
-    Le<<<CS::Hash as CoreProxy>::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
+    <OprfHash<CS> as OutputSizeUser>::OutputSize:
+        IsLess<U256> + IsLessOrEqual<<OprfHash<CS> as BlockSizeUser>::BlockSize>,
+    OprfHash<CS>: Hash,
+    <OprfHash<CS> as CoreProxy>::Core: ProxyHash,
+    <<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
+    Le<<<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
 {
-    pub(crate) oprf_client: voprf::NonVerifiableClient<CS::OprfGroup, CS::Hash>,
-    pub(crate) ke1_state: <CS::KeyExchange as KeyExchange<CS::Hash, CS::KeGroup>>::KE1State,
+    pub(crate) oprf_client: voprf::NonVerifiableClient<CS::OprfGroup>,
+    pub(crate) ke1_state: <CS::KeyExchange as KeyExchange<OprfHash<CS>, CS::KeGroup>>::KE1State,
     pub(crate) credential_request: CredentialRequest<CS>,
 }
 
@@ -159,31 +166,31 @@ impl_serialize_and_deserialize_for!(
     ClientLogin
     where
         // CredentialRequest: KgPk + Ke1Message
-        <CS::OprfGroup as Group>::ElemLen: Add<Ke1MessageLen<CS>>,
+        <OprfGroup<CS> as Group>::ElemLen: Add<Ke1MessageLen<CS>>,
         CredentialRequestLen<CS>: ArrayLength<u8>,
         // ClientLogin: KgSk + CredentialRequest + Ke1State
-        <CS::OprfGroup as Group>::ScalarLen: Add<CredentialRequestLen<CS>>,
-        Sum<<CS::OprfGroup as Group>::ScalarLen, CredentialRequestLen<CS>>:
+        <OprfGroup<CS> as Group>::ScalarLen: Add<CredentialRequestLen<CS>>,
+        Sum<<OprfGroup<CS> as Group>::ScalarLen, CredentialRequestLen<CS>>:
             ArrayLength<u8> | Add<Ke1StateLen<CS>>,
         ClientLoginLen<CS>: ArrayLength<u8>,
 );
 
 /// The state elements the server holds to record a login
-#[derive(DeriveWhere)]
-#[derive_where(Clone, Zeroize(drop))]
+#[derive_where(Clone, ZeroizeOnDrop)]
 #[derive_where(
     Debug, Eq, Hash, PartialEq;
-    <CS::KeyExchange as KeyExchange<CS::Hash, CS::KeGroup>>::KE2State,
+    <CS::KeyExchange as KeyExchange<OprfHash<CS>, CS::KeGroup>>::KE2State,
 )]
 pub struct ServerLogin<CS: CipherSuite>
 where
-    <CS::Hash as CoreProxy>::Core: ProxyHash,
-    <<CS::Hash as CoreProxy>::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
-    Le<<<CS::Hash as CoreProxy>::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
+    <OprfHash<CS> as OutputSizeUser>::OutputSize:
+        IsLess<U256> + IsLessOrEqual<<OprfHash<CS> as BlockSizeUser>::BlockSize>,
+    OprfHash<CS>: Hash,
+    <OprfHash<CS> as CoreProxy>::Core: ProxyHash,
+    <<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
+    Le<<<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
 {
-    ke2_state: <CS::KeyExchange as KeyExchange<CS::Hash, CS::KeGroup>>::KE2State,
-    #[derive_where(skip(Zeroize))]
-    _cs: PhantomData<CS>,
+    ke2_state: <CS::KeyExchange as KeyExchange<OprfHash<CS>, CS::KeGroup>>::KE2State,
 }
 
 impl_serialize_and_deserialize_for!(ServerLogin);
@@ -198,9 +205,12 @@ impl_serialize_and_deserialize_for!(ServerLogin);
 
 impl<CS: CipherSuite> ServerSetup<CS, PrivateKey<CS::KeGroup>>
 where
-    <CS::Hash as CoreProxy>::Core: ProxyHash,
-    <<CS::Hash as CoreProxy>::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
-    Le<<<CS::Hash as CoreProxy>::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
+    <OprfHash<CS> as OutputSizeUser>::OutputSize:
+        IsLess<U256> + IsLessOrEqual<<OprfHash<CS> as BlockSizeUser>::BlockSize>,
+    OprfHash<CS>: Hash,
+    <OprfHash<CS> as CoreProxy>::Core: ProxyHash,
+    <<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
+    Le<<<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
 {
     /// Generate a new instance of server setup
     pub fn new<R: CryptoRng + RngCore>(rng: &mut R) -> Self {
@@ -211,13 +221,16 @@ where
 
 /// Length of [`ServerSetup`] in bytes for serialization.
 pub type ServerSetupLen<CS: CipherSuite, S: SecretKey<CS::KeGroup>> =
-    Sum<Sum<OutputSize<CS::Hash>, S::Len>, <CS::KeGroup as KeGroup>::SkLen>;
+    Sum<Sum<OutputSize<OprfHash<CS>>, S::Len>, <CS::KeGroup as KeGroup>::SkLen>;
 
 impl<CS: CipherSuite, S: SecretKey<CS::KeGroup>> ServerSetup<CS, S>
 where
-    <CS::Hash as CoreProxy>::Core: ProxyHash,
-    <<CS::Hash as CoreProxy>::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
-    Le<<<CS::Hash as CoreProxy>::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
+    <OprfHash<CS> as OutputSizeUser>::OutputSize:
+        IsLess<U256> + IsLessOrEqual<<OprfHash<CS> as BlockSizeUser>::BlockSize>,
+    OprfHash<CS>: Hash,
+    <OprfHash<CS> as CoreProxy>::Core: ProxyHash,
+    <<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
+    Le<<<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
 {
     /// Create [`ServerSetup`] with the given keypair
     pub fn new_with_key<R: CryptoRng + RngCore>(
@@ -238,8 +251,9 @@ where
     pub fn serialize(&self) -> GenericArray<u8, ServerSetupLen<CS, S>>
     where
         // ServerSetup: Hash + KeSk + KeSk
-        OutputSize<CS::Hash>: Add<S::Len>,
-        Sum<OutputSize<CS::Hash>, S::Len>: ArrayLength<u8> + Add<<CS::KeGroup as KeGroup>::SkLen>,
+        OutputSize<OprfHash<CS>>: Add<S::Len>,
+        Sum<OutputSize<OprfHash<CS>>, S::Len>:
+            ArrayLength<u8> + Add<<CS::KeGroup as KeGroup>::SkLen>,
         ServerSetupLen<CS, S>: ArrayLength<u8>,
     {
         self.oprf_seed
@@ -250,7 +264,7 @@ where
 
     /// Deserialization from bytes
     pub fn deserialize(input: &[u8]) -> Result<Self, ProtocolError<S::Error>> {
-        let seed_len = OutputSize::<CS::Hash>::USIZE;
+        let seed_len = OutputSize::<OprfHash<CS>>::USIZE;
         let key_len = <CS::KeGroup as KeGroup>::SkLen::USIZE;
         let checked_slice = check_slice_size(input, seed_len + key_len + key_len, "server_setup")?;
 
@@ -272,19 +286,22 @@ where
 // ============
 
 pub(crate) type ClientRegistrationLen<CS: CipherSuite> =
-    Sum<<CS::OprfGroup as Group>::ScalarLen, <CS::OprfGroup as Group>::ElemLen>;
+    Sum<<OprfGroup<CS> as Group>::ScalarLen, <OprfGroup<CS> as Group>::ElemLen>;
 
 impl<CS: CipherSuite> ClientRegistration<CS>
 where
-    <CS::Hash as CoreProxy>::Core: ProxyHash,
-    <<CS::Hash as CoreProxy>::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
-    Le<<<CS::Hash as CoreProxy>::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
+    <OprfHash<CS> as OutputSizeUser>::OutputSize:
+        IsLess<U256> + IsLessOrEqual<<OprfHash<CS> as BlockSizeUser>::BlockSize>,
+    OprfHash<CS>: Hash,
+    <OprfHash<CS> as CoreProxy>::Core: ProxyHash,
+    <<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
+    Le<<<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
 {
     /// Serialization into bytes
     pub fn serialize(&self) -> GenericArray<u8, ClientRegistrationLen<CS>>
     where
         // ClientRegistration: KgSk + KgPk
-        <CS::OprfGroup as Group>::ScalarLen: Add<<CS::OprfGroup as Group>::ElemLen>,
+        <OprfGroup<CS> as Group>::ScalarLen: Add<<OprfGroup<CS> as Group>::ElemLen>,
         ClientRegistrationLen<CS>: ArrayLength<u8>,
     {
         self.oprf_client
@@ -294,8 +311,8 @@ where
 
     /// Deserialization from bytes
     pub fn deserialize(input: &[u8]) -> Result<Self, ProtocolError> {
-        let client_len = <CS::OprfGroup as Group>::ScalarLen::USIZE;
-        let element_len = <CS::OprfGroup as Group>::ElemLen::USIZE;
+        let client_len = <OprfGroup<CS> as Group>::ScalarLen::USIZE;
+        let element_len = <OprfGroup<CS> as Group>::ElemLen::USIZE;
         let checked_slice =
             check_slice_size(input, client_len + element_len, "client_registration")?;
 
@@ -362,7 +379,7 @@ where
             params.slow_hash,
         )?;
 
-        let mut masking_key = Output::<CS::Hash>::default();
+        let mut masking_key = Output::<OprfHash<CS>>::default();
         randomized_pwd_hasher
             .expand(STR_MASKING_KEY, &mut masking_key)
             .map_err(|_| InternalError::HkdfError)?;
@@ -397,19 +414,22 @@ pub type ServerRegistrationLen<CS> = RegistrationUploadLen<CS>;
 
 impl<CS: CipherSuite> ServerRegistration<CS>
 where
-    <CS::Hash as CoreProxy>::Core: ProxyHash,
-    <<CS::Hash as CoreProxy>::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
-    Le<<<CS::Hash as CoreProxy>::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
+    <OprfHash<CS> as OutputSizeUser>::OutputSize:
+        IsLess<U256> + IsLessOrEqual<<OprfHash<CS> as BlockSizeUser>::BlockSize>,
+    OprfHash<CS>: Hash,
+    <OprfHash<CS> as CoreProxy>::Core: ProxyHash,
+    <<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
+    Le<<<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
 {
     /// Serialization into bytes
     pub fn serialize(&self) -> GenericArray<u8, ServerRegistrationLen<CS>>
     where
         // Envelope: Nonce + Hash
-        NonceLen: Add<OutputSize<CS::Hash>>,
+        NonceLen: Add<OutputSize<OprfHash<CS>>>,
         EnvelopeLen<CS>: ArrayLength<u8>,
         // RegistrationUpload: (KePk + Hash) + Envelope
-        <CS::KeGroup as KeGroup>::PkLen: Add<OutputSize<CS::Hash>>,
-        Sum<<CS::KeGroup as KeGroup>::PkLen, OutputSize<CS::Hash>>:
+        <CS::KeGroup as KeGroup>::PkLen: Add<OutputSize<OprfHash<CS>>>,
+        Sum<<CS::KeGroup as KeGroup>::PkLen, OutputSize<OprfHash<CS>>>:
             ArrayLength<u8> + Add<EnvelopeLen<CS>>,
         RegistrationUploadLen<CS>: ArrayLength<u8>,
         // ServerRegistration = RegistrationUpload
@@ -429,17 +449,15 @@ where
         message: RegistrationRequest<CS>,
         credential_identifier: &[u8],
     ) -> Result<ServerRegistrationStartResult<CS>, ProtocolError> {
-        let oprf_key = oprf_key_from_seed::<CS::OprfGroup, CS::Hash>(
-            &server_setup.oprf_seed,
-            credential_identifier,
-        )?;
+        let oprf_key =
+            oprf_key_from_seed::<CS::OprfGroup>(&server_setup.oprf_seed, credential_identifier)?;
 
         let server = voprf::NonVerifiableServer::new_with_key(&oprf_key)?;
-        let evaluate_result = server.evaluate(&message.blinded_element, None)?;
+        let evaluation_element = server.evaluate(&message.blinded_element, None)?;
 
         Ok(ServerRegistrationStartResult {
             message: RegistrationResponse {
-                evaluation_element: evaluate_result.message,
+                evaluation_element,
                 server_s_pk: server_setup.keypair.public().clone(),
             },
             #[cfg(test)]
@@ -466,23 +484,26 @@ where
 // =====
 
 pub(crate) type ClientLoginLen<CS: CipherSuite> =
-    Sum<Sum<<CS::OprfGroup as Group>::ScalarLen, CredentialRequestLen<CS>>, Ke1StateLen<CS>>;
+    Sum<Sum<<OprfGroup<CS> as Group>::ScalarLen, CredentialRequestLen<CS>>, Ke1StateLen<CS>>;
 
 impl<CS: CipherSuite> ClientLogin<CS>
 where
-    <CS::Hash as CoreProxy>::Core: ProxyHash,
-    <<CS::Hash as CoreProxy>::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
-    Le<<<CS::Hash as CoreProxy>::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
+    <OprfHash<CS> as OutputSizeUser>::OutputSize:
+        IsLess<U256> + IsLessOrEqual<<OprfHash<CS> as BlockSizeUser>::BlockSize>,
+    OprfHash<CS>: Hash,
+    <OprfHash<CS> as CoreProxy>::Core: ProxyHash,
+    <<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
+    Le<<<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
 {
     /// Serialization into bytes
     pub fn serialize(&self) -> GenericArray<u8, ClientLoginLen<CS>>
     where
         // CredentialRequest: KgPk + Ke1Message
-        <CS::OprfGroup as Group>::ElemLen: Add<Ke1MessageLen<CS>>,
+        <OprfGroup<CS> as Group>::ElemLen: Add<Ke1MessageLen<CS>>,
         CredentialRequestLen<CS>: ArrayLength<u8>,
         // ClientLogin: KgSk + CredentialRequest + Ke1State
-        <CS::OprfGroup as Group>::ScalarLen: Add<CredentialRequestLen<CS>>,
-        Sum<<CS::OprfGroup as Group>::ScalarLen, CredentialRequestLen<CS>>:
+        <OprfGroup<CS> as Group>::ScalarLen: Add<CredentialRequestLen<CS>>,
+        Sum<<OprfGroup<CS> as Group>::ScalarLen, CredentialRequestLen<CS>>:
             ArrayLength<u8> + Add<Ke1StateLen<CS>>,
         ClientLoginLen<CS>: ArrayLength<u8>,
     {
@@ -494,14 +515,14 @@ where
 
     /// Deserialization from bytes
     pub fn deserialize(input: &[u8]) -> Result<Self, ProtocolError> {
-        let client_len = <CS::OprfGroup as Group>::ScalarLen::USIZE;
-        let request_len = <CS::OprfGroup as Group>::ElemLen::USIZE + Ke1MessageLen::<CS>::USIZE;
+        let client_len = <OprfGroup<CS> as Group>::ScalarLen::USIZE;
+        let request_len = <OprfGroup<CS> as Group>::ElemLen::USIZE + Ke1MessageLen::<CS>::USIZE;
         let state_len = Ke1StateLen::<CS>::USIZE;
         let checked_slice =
             check_slice_size(input, client_len + request_len + state_len, "client_login")?;
 
         let ke1_state =
-            <CS::KeyExchange as KeyExchange<CS::Hash, CS::KeGroup>>::KE1State::from_bytes(
+            <CS::KeyExchange as KeyExchange<OprfHash<CS>, CS::KeGroup>>::KE1State::from_bytes(
                 &checked_slice[client_len + request_len..],
             )?;
         Ok(Self {
@@ -516,9 +537,12 @@ where
 
 impl<CS: CipherSuite> ClientLogin<CS>
 where
-    <CS::Hash as CoreProxy>::Core: ProxyHash,
-    <<CS::Hash as CoreProxy>::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
-    Le<<<CS::Hash as CoreProxy>::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
+    <OprfHash<CS> as OutputSizeUser>::OutputSize:
+        IsLess<U256> + IsLessOrEqual<<OprfHash<CS> as BlockSizeUser>::BlockSize>,
+    OprfHash<CS>: Hash,
+    <OprfHash<CS> as CoreProxy>::Core: ProxyHash,
+    <<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
+    Le<<<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
 {
     /// Returns an initial "blinded" password request to send to the server, as
     /// well as a ClientLogin
@@ -554,8 +578,9 @@ where
     ) -> Result<ClientLoginFinishResult<CS>, ProtocolError>
     where
         // MaskedResponse: (Nonce + Hash) + KePk
-        NonceLen: Add<OutputSize<CS::Hash>>,
-        Sum<NonceLen, OutputSize<CS::Hash>>: ArrayLength<u8> + Add<<CS::KeGroup as KeGroup>::PkLen>,
+        NonceLen: Add<OutputSize<OprfHash<CS>>>,
+        Sum<NonceLen, OutputSize<OprfHash<CS>>>:
+            ArrayLength<u8> + Add<<CS::KeGroup as KeGroup>::PkLen>,
         MaskedResponseLen<CS>: ArrayLength<u8>,
     {
         // Check if beta value from server is equal to alpha value from client
@@ -576,7 +601,7 @@ where
             params.slow_hash,
         )?;
 
-        let mut masking_key = Output::<CS::Hash>::default();
+        let mut masking_key = Output::<OprfHash<CS>>::default();
         randomized_pwd_hasher
             .expand(STR_MASKING_KEY, &mut masking_key)
             .map_err(|_| InternalError::HkdfError)?;
@@ -604,14 +629,15 @@ where
                 err => err,
             })?;
 
-        let beta = credential_response.evaluation_element.value().to_arr();
+        let beta = OprfGroup::<CS>::serialize_elem(credential_response.evaluation_element.value());
         let credential_response_component = CredentialResponse::<CS>::serialize_without_ke(
             &beta,
             &credential_response.masking_nonce,
             &credential_response.masked_response,
         );
 
-        let blinded_element = self.credential_request.blinded_element.value().to_arr();
+        let blinded_element =
+            OprfGroup::<CS>::serialize_elem(self.credential_request.blinded_element.value());
         let ke1_message = self.credential_request.ke1_message.to_bytes();
         let serialized_credential_request =
             CredentialRequest::<CS>::serialize_iter(&blinded_element, &ke1_message);
@@ -647,9 +673,12 @@ where
 
 impl<CS: CipherSuite> ServerLogin<CS>
 where
-    <CS::Hash as CoreProxy>::Core: ProxyHash,
-    <<CS::Hash as CoreProxy>::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
-    Le<<<CS::Hash as CoreProxy>::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
+    <OprfHash<CS> as OutputSizeUser>::OutputSize:
+        IsLess<U256> + IsLessOrEqual<<OprfHash<CS> as BlockSizeUser>::BlockSize>,
+    OprfHash<CS>: Hash,
+    <OprfHash<CS> as CoreProxy>::Core: ProxyHash,
+    <<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
+    Le<<<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
 {
     /// Serialization into bytes
     pub fn serialize(&self) -> GenericArray<u8, Ke2StateLen<CS>> {
@@ -659,9 +688,8 @@ where
     /// Deserialization from bytes
     pub fn deserialize(bytes: &[u8]) -> Result<Self, ProtocolError> {
         Ok(Self {
-            _cs: PhantomData,
             ke2_state:
-                <CS::KeyExchange as KeyExchange<CS::Hash, CS::KeGroup>>::KE2State::from_bytes(
+                <CS::KeyExchange as KeyExchange<OprfHash<CS>, CS::KeGroup>>::KE2State::from_bytes(
                     bytes,
                 )?,
         })
@@ -682,8 +710,9 @@ where
     ) -> Result<ServerLoginStartResult<CS>, ProtocolError<S::Error>>
     where
         // MaskedResponse: (Nonce + Hash) + KePk
-        NonceLen: Add<OutputSize<CS::Hash>>,
-        Sum<NonceLen, OutputSize<CS::Hash>>: ArrayLength<u8> + Add<<CS::KeGroup as KeGroup>::PkLen>,
+        NonceLen: Add<OutputSize<OprfHash<CS>>>,
+        Sum<NonceLen, OutputSize<OprfHash<CS>>>:
+            ArrayLength<u8> + Add<<CS::KeGroup as KeGroup>::PkLen>,
         MaskedResponseLen<CS>: ArrayLength<u8>,
     {
         let record = match password_file {
@@ -720,24 +749,22 @@ where
         )
         .map_err(ProtocolError::into_custom)?;
 
-        let blinded_element = credential_request.blinded_element.value().to_arr();
+        let blinded_element =
+            OprfGroup::<CS>::serialize_elem(credential_request.blinded_element.value());
         let ke1_message = credential_request.ke1_message.to_bytes();
         let credential_request_bytes =
             CredentialRequest::<CS>::serialize_iter(&blinded_element, &ke1_message);
 
-        let oprf_key = oprf_key_from_seed::<CS::OprfGroup, CS::Hash>(
-            &server_setup.oprf_seed,
-            credential_identifier,
-        )
-        .map_err(ProtocolError::into_custom)?;
+        let oprf_key =
+            oprf_key_from_seed::<CS::OprfGroup>(&server_setup.oprf_seed, credential_identifier)
+                .map_err(ProtocolError::into_custom)?;
         let server = voprf::NonVerifiableServer::new_with_key(&oprf_key)
             .map_err(|e| ProtocolError::into_custom(e.into()))?;
-        let evaluate_result = server
+        let evaluation_element = server
             .evaluate(&credential_request.blinded_element, None)
             .map_err(|e| ProtocolError::into_custom(e.into()))?;
-        let evaluation_element = evaluate_result.message;
 
-        let beta = evaluation_element.value().to_arr();
+        let beta = OprfGroup::<CS>::serialize_elem(evaluation_element.value());
         let credential_response_component =
             CredentialResponse::<CS>::serialize_without_ke(&beta, &masking_nonce, &masked_response);
 
@@ -763,7 +790,6 @@ where
         Ok(ServerLoginStartResult {
             message: credential_response,
             state: Self {
-                _cs: PhantomData,
                 ke2_state: result.0,
             },
             #[cfg(test)]
@@ -781,14 +807,13 @@ where
         self,
         message: CredentialFinalization<CS>,
     ) -> Result<ServerLoginFinishResult<CS>, ProtocolError> {
-        let session_key = <CS::KeyExchange as KeyExchange<CS::Hash, CS::KeGroup>>::finish_ke(
+        let session_key = <CS::KeyExchange as KeyExchange<OprfHash<CS>, CS::KeGroup>>::finish_ke(
             message.ke3_message,
             &self.ke2_state,
         )?;
 
         Ok(ServerLoginFinishResult {
             session_key,
-            _cs: PhantomData,
             #[cfg(test)]
             state: self,
         })
@@ -810,13 +835,15 @@ pub struct Identifiers<'a> {
 }
 
 /// Optional parameters for client registration finish
-#[derive(DeriveWhere)]
 #[derive_where(Clone, Default)]
 pub struct ClientRegistrationFinishParameters<'i, 'h, CS: CipherSuite>
 where
-    <CS::Hash as CoreProxy>::Core: ProxyHash,
-    <<CS::Hash as CoreProxy>::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
-    Le<<<CS::Hash as CoreProxy>::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
+    <OprfHash<CS> as OutputSizeUser>::OutputSize:
+        IsLess<U256> + IsLessOrEqual<<OprfHash<CS> as BlockSizeUser>::BlockSize>,
+    OprfHash<CS>: Hash,
+    <OprfHash<CS> as CoreProxy>::Core: ProxyHash,
+    <<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
+    Le<<<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
 {
     /// Specifying the identifiers idU and idS
     pub identifiers: Identifiers<'i>,
@@ -826,9 +853,12 @@ where
 
 impl<'i, 'h, CS: CipherSuite> ClientRegistrationFinishParameters<'i, 'h, CS>
 where
-    <CS::Hash as CoreProxy>::Core: ProxyHash,
-    <<CS::Hash as CoreProxy>::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
-    Le<<<CS::Hash as CoreProxy>::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
+    <OprfHash<CS> as OutputSizeUser>::OutputSize:
+        IsLess<U256> + IsLessOrEqual<<OprfHash<CS> as BlockSizeUser>::BlockSize>,
+    OprfHash<CS>: Hash,
+    <OprfHash<CS> as CoreProxy>::Core: ProxyHash,
+    <<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
+    Le<<<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
 {
     /// Create a new [`ClientRegistrationFinishParameters`]
     pub fn new(identifiers: Identifiers<'i>, slow_hash: Option<&'h CS::SlowHash>) -> Self {
@@ -840,13 +870,15 @@ where
 }
 
 /// Contains the fields that are returned by a client registration start
-#[derive(DeriveWhere)]
 #[derive_where(Clone)]
 pub struct ClientRegistrationStartResult<CS: CipherSuite>
 where
-    <CS::Hash as CoreProxy>::Core: ProxyHash,
-    <<CS::Hash as CoreProxy>::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
-    Le<<<CS::Hash as CoreProxy>::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
+    <OprfHash<CS> as OutputSizeUser>::OutputSize:
+        IsLess<U256> + IsLessOrEqual<<OprfHash<CS> as BlockSizeUser>::BlockSize>,
+    OprfHash<CS>: Hash,
+    <OprfHash<CS> as CoreProxy>::Core: ProxyHash,
+    <<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
+    Le<<<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
 {
     /// The registration request message to be sent to the server
     pub message: RegistrationRequest<CS>,
@@ -856,18 +888,20 @@ where
 }
 
 /// Contains the fields that are returned by a client registration finish
-#[derive(DeriveWhere)]
 #[derive_where(Clone)]
 pub struct ClientRegistrationFinishResult<CS: CipherSuite>
 where
-    <CS::Hash as CoreProxy>::Core: ProxyHash,
-    <<CS::Hash as CoreProxy>::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
-    Le<<<CS::Hash as CoreProxy>::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
+    <OprfHash<CS> as OutputSizeUser>::OutputSize:
+        IsLess<U256> + IsLessOrEqual<<OprfHash<CS> as BlockSizeUser>::BlockSize>,
+    OprfHash<CS>: Hash,
+    <OprfHash<CS> as CoreProxy>::Core: ProxyHash,
+    <<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
+    Le<<<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
 {
     /// The registration upload message to be sent to the server
     pub message: RegistrationUpload<CS>,
     /// The export key output by client registration
-    pub export_key: Output<CS::Hash>,
+    pub export_key: Output<OprfHash<CS>>,
     /// The server's static public key
     pub server_s_pk: PublicKey<CS::KeGroup>,
     /// Instance of the ClientRegistration, only used in tests for checking
@@ -876,37 +910,41 @@ where
     pub state: ClientRegistration<CS>,
     /// AuthKey, only used in tests
     #[cfg(test)]
-    pub auth_key: Output<CS::Hash>,
+    pub auth_key: Output<OprfHash<CS>>,
     /// Password derived key, only used in tests
     #[cfg(test)]
-    pub randomized_pwd: Output<CS::Hash>,
+    pub randomized_pwd: Output<OprfHash<CS>>,
 }
 
 /// Contains the fields that are returned by a server registration start. Note
 /// that there is no state output in this step
-#[derive(DeriveWhere)]
 #[derive_where(Clone)]
 pub struct ServerRegistrationStartResult<CS: CipherSuite>
 where
-    <CS::Hash as CoreProxy>::Core: ProxyHash,
-    <<CS::Hash as CoreProxy>::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
-    Le<<<CS::Hash as CoreProxy>::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
+    <OprfHash<CS> as OutputSizeUser>::OutputSize:
+        IsLess<U256> + IsLessOrEqual<<OprfHash<CS> as BlockSizeUser>::BlockSize>,
+    OprfHash<CS>: Hash,
+    <OprfHash<CS> as CoreProxy>::Core: ProxyHash,
+    <<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
+    Le<<<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
 {
     /// The registration resposne message to send to the client
     pub message: RegistrationResponse<CS>,
     /// OPRF key, only used in tests
     #[cfg(test)]
-    pub oprf_key: GenericArray<u8, <CS::OprfGroup as Group>::ScalarLen>,
+    pub oprf_key: GenericArray<u8, <OprfGroup<CS> as Group>::ScalarLen>,
 }
 
 /// Contains the fields that are returned by a client login start
-#[derive(DeriveWhere)]
 #[derive_where(Clone)]
 pub struct ClientLoginStartResult<CS: CipherSuite>
 where
-    <CS::Hash as CoreProxy>::Core: ProxyHash,
-    <<CS::Hash as CoreProxy>::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
-    Le<<<CS::Hash as CoreProxy>::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
+    <OprfHash<CS> as OutputSizeUser>::OutputSize:
+        IsLess<U256> + IsLessOrEqual<<OprfHash<CS> as BlockSizeUser>::BlockSize>,
+    OprfHash<CS>: Hash,
+    <OprfHash<CS> as CoreProxy>::Core: ProxyHash,
+    <<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
+    Le<<<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
 {
     /// The message to send to the server to begin the login protocol
     pub message: CredentialRequest<CS>,
@@ -915,13 +953,15 @@ where
 }
 
 /// Optional parameters for client login finish
-#[derive(DeriveWhere)]
 #[derive_where(Clone, Default)]
 pub struct ClientLoginFinishParameters<'c, 'i, 'h, CS: CipherSuite>
 where
-    <CS::Hash as CoreProxy>::Core: ProxyHash,
-    <<CS::Hash as CoreProxy>::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
-    Le<<<CS::Hash as CoreProxy>::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
+    <OprfHash<CS> as OutputSizeUser>::OutputSize:
+        IsLess<U256> + IsLessOrEqual<<OprfHash<CS> as BlockSizeUser>::BlockSize>,
+    OprfHash<CS>: Hash,
+    <OprfHash<CS> as CoreProxy>::Core: ProxyHash,
+    <<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
+    Le<<<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
 {
     /// Specifying a context field that the server must agree on
     pub context: Option<&'c [u8]>,
@@ -934,9 +974,12 @@ where
 
 impl<'c, 'i, 'h, CS: CipherSuite> ClientLoginFinishParameters<'c, 'i, 'h, CS>
 where
-    <CS::Hash as CoreProxy>::Core: ProxyHash,
-    <<CS::Hash as CoreProxy>::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
-    Le<<<CS::Hash as CoreProxy>::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
+    <OprfHash<CS> as OutputSizeUser>::OutputSize:
+        IsLess<U256> + IsLessOrEqual<<OprfHash<CS> as BlockSizeUser>::BlockSize>,
+    OprfHash<CS>: Hash,
+    <OprfHash<CS> as CoreProxy>::Core: ProxyHash,
+    <<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
+    Le<<<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
 {
     /// Create a new [`ClientLoginFinishParameters`]
     pub fn new(
@@ -953,20 +996,22 @@ where
 }
 
 /// Contains the fields that are returned by a client login finish
-#[derive(DeriveWhere)]
 #[derive_where(Clone)]
 pub struct ClientLoginFinishResult<CS: CipherSuite>
 where
-    <CS::Hash as CoreProxy>::Core: ProxyHash,
-    <<CS::Hash as CoreProxy>::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
-    Le<<<CS::Hash as CoreProxy>::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
+    <OprfHash<CS> as OutputSizeUser>::OutputSize:
+        IsLess<U256> + IsLessOrEqual<<OprfHash<CS> as BlockSizeUser>::BlockSize>,
+    OprfHash<CS>: Hash,
+    <OprfHash<CS> as CoreProxy>::Core: ProxyHash,
+    <<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
+    Le<<<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
 {
     /// The message to send to the server to complete the protocol
     pub message: CredentialFinalization<CS>,
     /// The session key
-    pub session_key: Output<CS::Hash>,
+    pub session_key: Output<OprfHash<CS>>,
     /// The client-side export key
-    pub export_key: Output<CS::Hash>,
+    pub export_key: Output<OprfHash<CS>>,
     /// The server's static public key
     pub server_s_pk: PublicKey<CS::KeGroup>,
     /// Instance of the ClientLogin, only used in tests for checking zeroize
@@ -974,26 +1019,27 @@ where
     pub state: ClientLogin<CS>,
     /// Handshake secret, only used in tests
     #[cfg(test)]
-    pub handshake_secret: Output<CS::Hash>,
+    pub handshake_secret: Output<OprfHash<CS>>,
     /// Client MAC key, only used in tests
     #[cfg(test)]
-    pub client_mac_key: Output<CS::Hash>,
+    pub client_mac_key: Output<OprfHash<CS>>,
 }
 
 /// Contains the fields that are returned by a server login finish
-#[derive(DeriveWhere)]
 #[derive_where(Clone)]
 #[cfg_attr(not(test), derive_where(Debug))]
 #[cfg_attr(test, derive_where(Debug; ServerLogin<CS>))]
 pub struct ServerLoginFinishResult<CS: CipherSuite>
 where
-    <CS::Hash as CoreProxy>::Core: ProxyHash,
-    <<CS::Hash as CoreProxy>::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
-    Le<<<CS::Hash as CoreProxy>::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
+    <OprfHash<CS> as OutputSizeUser>::OutputSize:
+        IsLess<U256> + IsLessOrEqual<<OprfHash<CS> as BlockSizeUser>::BlockSize>,
+    OprfHash<CS>: Hash,
+    <OprfHash<CS> as CoreProxy>::Core: ProxyHash,
+    <<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
+    Le<<<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
 {
     /// The session key between client and server
-    pub session_key: Output<CS::Hash>,
-    _cs: PhantomData<CS>,
+    pub session_key: Output<OprfHash<CS>>,
     /// Instance of the ClientRegistration, only used in tests for checking
     /// zeroize
     #[cfg(test)]
@@ -1011,19 +1057,21 @@ pub struct ServerLoginStartParameters<'c, 'i> {
 }
 
 /// Contains the fields that are returned by a server login start
-#[derive(DeriveWhere)]
 #[derive_where(Clone)]
 #[derive_where(
     Debug;
-    CS::OprfGroup,
-    <CS::KeyExchange as KeyExchange<CS::Hash, CS::KeGroup>>::KE2Message,
-    <CS::KeyExchange as KeyExchange<CS::Hash, CS::KeGroup>>::KE2State,
+    voprf::EvaluationElement<CS::OprfGroup>,
+    <CS::KeyExchange as KeyExchange<OprfHash<CS>, CS::KeGroup>>::KE2Message,
+    <CS::KeyExchange as KeyExchange<OprfHash<CS>, CS::KeGroup>>::KE2State,
 )]
 pub struct ServerLoginStartResult<CS: CipherSuite>
 where
-    <CS::Hash as CoreProxy>::Core: ProxyHash,
-    <<CS::Hash as CoreProxy>::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
-    Le<<<CS::Hash as CoreProxy>::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
+    <OprfHash<CS> as OutputSizeUser>::OutputSize:
+        IsLess<U256> + IsLessOrEqual<<OprfHash<CS> as BlockSizeUser>::BlockSize>,
+    OprfHash<CS>: Hash,
+    <OprfHash<CS> as CoreProxy>::Core: ProxyHash,
+    <<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
+    Le<<<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
 {
     /// The message to send back to the client
     pub message: CredentialResponse<CS>,
@@ -1031,13 +1079,13 @@ where
     pub state: ServerLogin<CS>,
     /// Handshake secret, only used in tests
     #[cfg(test)]
-    pub handshake_secret: Output<CS::Hash>,
+    pub handshake_secret: Output<OprfHash<CS>>,
     /// Server MAC key, only used in tests
     #[cfg(test)]
-    pub server_mac_key: Output<CS::Hash>,
+    pub server_mac_key: Output<OprfHash<CS>>,
     /// OPRF key, only used in tests
     #[cfg(test)]
-    pub oprf_key: GenericArray<u8, <CS::OprfGroup as Group>::ScalarLen>,
+    pub oprf_key: GenericArray<u8, <OprfGroup<CS> as Group>::ScalarLen>,
 }
 
 ////////////////////////////////////////////////
@@ -1049,14 +1097,17 @@ where
 #[allow(clippy::type_complexity)]
 fn get_password_derived_key<CS: CipherSuite>(
     input: &[u8],
-    oprf_client: voprf::NonVerifiableClient<CS::OprfGroup, CS::Hash>,
-    evaluation_element: voprf::EvaluationElement<CS::OprfGroup, CS::Hash>,
+    oprf_client: voprf::NonVerifiableClient<CS::OprfGroup>,
+    evaluation_element: voprf::EvaluationElement<CS::OprfGroup>,
     slow_hash: Option<&CS::SlowHash>,
-) -> Result<(Output<CS::Hash>, Hkdf<CS::Hash>), ProtocolError>
+) -> Result<(Output<OprfHash<CS>>, Hkdf<OprfHash<CS>>), ProtocolError>
 where
-    <CS::Hash as CoreProxy>::Core: ProxyHash,
-    <<CS::Hash as CoreProxy>::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
-    Le<<<CS::Hash as CoreProxy>::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
+    <OprfHash<CS> as OutputSizeUser>::OutputSize:
+        IsLess<U256> + IsLessOrEqual<<OprfHash<CS> as BlockSizeUser>::BlockSize>,
+    OprfHash<CS>: Hash,
+    <OprfHash<CS> as CoreProxy>::Core: ProxyHash,
+    <<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
+    Le<<<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
 {
     let oprf_output = oprf_client.finalize(input, &evaluation_element, None)?;
 
@@ -1067,63 +1118,74 @@ where
     }
     .map_err(ProtocolError::from)?;
 
-    let mut hkdf = HkdfExtract::<CS::Hash>::new(None);
+    let mut hkdf = HkdfExtract::<OprfHash<CS>>::new(None);
     hkdf.input_ikm(&oprf_output);
     hkdf.input_ikm(&hardened_output);
     Ok(hkdf.finalize())
 }
 
-fn oprf_key_from_seed<G: Group, D: Hash>(
-    oprf_seed: &Output<D>,
+fn oprf_key_from_seed<CS: voprf::CipherSuite>(
+    oprf_seed: &Output<CS::Hash>,
     credential_identifier: &[u8],
-) -> Result<GenericArray<u8, G::ScalarLen>, ProtocolError>
+) -> Result<GenericArray<u8, <CS::Group as Group>::ScalarLen>, ProtocolError>
 where
-    D::Core: ProxyHash,
-    <D::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
-    Le<<D::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
+    <CS::Hash as OutputSizeUser>::OutputSize:
+        IsLess<U256> + IsLessOrEqual<<CS::Hash as BlockSizeUser>::BlockSize>,
+    CS::Hash: Hash,
+    <CS::Hash as CoreProxy>::Core: ProxyHash,
+    <<CS::Hash as CoreProxy>::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
+    Le<<<CS::Hash as CoreProxy>::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
 {
-    let mut ikm = GenericArray::<_, G::ScalarLen>::default();
-    Hkdf::<D>::from_prk(oprf_seed)
+    let mut ikm = GenericArray::<_, <CS::Group as Group>::ScalarLen>::default();
+    Hkdf::<CS::Hash>::from_prk(oprf_seed)
         .ok()
         .and_then(|hkdf| {
             hkdf.expand_multi_info(&[credential_identifier, STR_OPRF_KEY], &mut ikm)
                 .ok()
         })
         .ok_or(InternalError::HkdfError)?;
-    Ok(G::scalar_as_bytes(G::hash_to_scalar::<D, _, _>(
-        [ikm.as_slice()],
-        GenericArray::from(*STR_OPAQUE_DERIVE_KEY_PAIR),
-    )?))
+    Ok(CS::Group::serialize_scalar(
+        CS::Group::hash_to_scalar::<CS>(
+            &[ikm.as_slice()],
+            &GenericArray::from(*STR_OPAQUE_DERIVE_KEY_PAIR),
+        )?,
+    ))
 }
 
-#[derive(DeriveWhere)]
 #[derive_where(Clone)]
 #[derive_where(Debug, Eq, Hash, PartialEq)]
 pub(crate) struct MaskedResponse<CS: CipherSuite>
 where
-    <CS::Hash as CoreProxy>::Core: ProxyHash,
-    <<CS::Hash as CoreProxy>::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
-    Le<<<CS::Hash as CoreProxy>::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
+    <OprfHash<CS> as OutputSizeUser>::OutputSize:
+        IsLess<U256> + IsLessOrEqual<<OprfHash<CS> as BlockSizeUser>::BlockSize>,
+    OprfHash<CS>: Hash,
+    <OprfHash<CS> as CoreProxy>::Core: ProxyHash,
+    <<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
+    Le<<<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
 {
     pub(crate) nonce: GenericArray<u8, NonceLen>,
-    pub(crate) hash: Output<CS::Hash>,
+    pub(crate) hash: Output<OprfHash<CS>>,
     pub(crate) pk: GenericArray<u8, <CS::KeGroup as KeGroup>::PkLen>,
 }
 
 pub(crate) type MaskedResponseLen<CS: CipherSuite> =
-    Sum<Sum<NonceLen, OutputSize<CS::Hash>>, <CS::KeGroup as KeGroup>::PkLen>;
+    Sum<Sum<NonceLen, OutputSize<OprfHash<CS>>>, <CS::KeGroup as KeGroup>::PkLen>;
 
 impl<CS: CipherSuite> MaskedResponse<CS>
 where
-    <CS::Hash as CoreProxy>::Core: ProxyHash,
-    <<CS::Hash as CoreProxy>::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
-    Le<<<CS::Hash as CoreProxy>::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
+    <OprfHash<CS> as OutputSizeUser>::OutputSize:
+        IsLess<U256> + IsLessOrEqual<<OprfHash<CS> as BlockSizeUser>::BlockSize>,
+    OprfHash<CS>: Hash,
+    <OprfHash<CS> as CoreProxy>::Core: ProxyHash,
+    <<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
+    Le<<<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
 {
     pub(crate) fn serialize(&self) -> GenericArray<u8, MaskedResponseLen<CS>>
     where
         // MaskedResponse: (Nonce + Hash) + KePk
-        NonceLen: Add<OutputSize<CS::Hash>>,
-        Sum<NonceLen, OutputSize<CS::Hash>>: ArrayLength<u8> + Add<<CS::KeGroup as KeGroup>::PkLen>,
+        NonceLen: Add<OutputSize<OprfHash<CS>>>,
+        Sum<NonceLen, OutputSize<OprfHash<CS>>>:
+            ArrayLength<u8> + Add<<CS::KeGroup as KeGroup>::PkLen>,
         MaskedResponseLen<CS>: ArrayLength<u8>,
     {
         self.nonce.concat(self.hash.clone()).concat(self.pk.clone())
@@ -1131,7 +1193,7 @@ where
 
     pub(crate) fn deserialize(bytes: &[u8]) -> Self {
         let nonce = NonceLen::USIZE;
-        let hash = nonce + OutputSize::<CS::Hash>::USIZE;
+        let hash = nonce + OutputSize::<OprfHash<CS>>::USIZE;
         let pk = hash + <CS::KeGroup as KeGroup>::PkLen::USIZE;
 
         Self {
@@ -1153,18 +1215,20 @@ fn mask_response<CS: CipherSuite>(
     envelope: &Envelope<CS>,
 ) -> Result<MaskedResponse<CS>, ProtocolError>
 where
-    <CS::Hash as CoreProxy>::Core: ProxyHash,
-    <<CS::Hash as CoreProxy>::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
-    Le<<<CS::Hash as CoreProxy>::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
-
+    <OprfHash<CS> as OutputSizeUser>::OutputSize:
+        IsLess<U256> + IsLessOrEqual<<OprfHash<CS> as BlockSizeUser>::BlockSize>,
+    OprfHash<CS>: Hash,
+    <OprfHash<CS> as CoreProxy>::Core: ProxyHash,
+    <<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
+    Le<<<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
     // MaskedResponse: (Nonce + Hash) + KePk
-    NonceLen: Add<OutputSize<CS::Hash>>,
-    Sum<NonceLen, OutputSize<CS::Hash>>: ArrayLength<u8> + Add<<CS::KeGroup as KeGroup>::PkLen>,
+    NonceLen: Add<OutputSize<OprfHash<CS>>>,
+    Sum<NonceLen, OutputSize<OprfHash<CS>>>: ArrayLength<u8> + Add<<CS::KeGroup as KeGroup>::PkLen>,
     MaskedResponseLen<CS>: ArrayLength<u8>,
 {
     let mut xor_pad = GenericArray::<_, MaskedResponseLen<CS>>::default();
 
-    Hkdf::<CS::Hash>::from_prk(masking_key)
+    Hkdf::<OprfHash<CS>>::from_prk(masking_key)
         .map_err(|_| InternalError::HkdfError)?
         .expand_multi_info(&[masking_nonce, STR_CREDENTIAL_RESPONSE_PAD], &mut xor_pad)
         .map_err(|_| InternalError::HkdfError)?;
@@ -1188,17 +1252,20 @@ fn unmask_response<CS: CipherSuite>(
     masked_response: &MaskedResponse<CS>,
 ) -> Result<(PublicKey<CS::KeGroup>, Envelope<CS>), ProtocolError>
 where
-    <CS::Hash as CoreProxy>::Core: ProxyHash,
-    <<CS::Hash as CoreProxy>::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
-    Le<<<CS::Hash as CoreProxy>::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
+    <OprfHash<CS> as OutputSizeUser>::OutputSize:
+        IsLess<U256> + IsLessOrEqual<<OprfHash<CS> as BlockSizeUser>::BlockSize>,
+    OprfHash<CS>: Hash,
+    <OprfHash<CS> as CoreProxy>::Core: ProxyHash,
+    <<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
+    Le<<<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
     // MaskedResponse: (Nonce + Hash) + KePk
-    NonceLen: Add<OutputSize<CS::Hash>>,
-    Sum<NonceLen, OutputSize<CS::Hash>>: ArrayLength<u8> + Add<<CS::KeGroup as KeGroup>::PkLen>,
+    NonceLen: Add<OutputSize<OprfHash<CS>>>,
+    Sum<NonceLen, OutputSize<OprfHash<CS>>>: ArrayLength<u8> + Add<<CS::KeGroup as KeGroup>::PkLen>,
     MaskedResponseLen<CS>: ArrayLength<u8>,
 {
     let mut xor_pad = GenericArray::<_, MaskedResponseLen<CS>>::default();
 
-    Hkdf::<CS::Hash>::from_prk(masking_key)
+    Hkdf::<OprfHash<CS>>::from_prk(masking_key)
         .map_err(|_| InternalError::HkdfError)?
         .expand_multi_info(&[masking_nonce, STR_CREDENTIAL_RESPONSE_PAD], &mut xor_pad)
         .map_err(|_| InternalError::HkdfError)?;
@@ -1241,27 +1308,25 @@ pub(crate) fn bytestrings_from_identifiers<KG: KeGroup>(
 fn blind<CS: CipherSuite, R: RngCore + CryptoRng>(
     rng: &mut R,
     password: &[u8],
-) -> Result<voprf::NonVerifiableClientBlindResult<CS::OprfGroup, CS::Hash>, voprf::Error>
+) -> Result<voprf::NonVerifiableClientBlindResult<CS::OprfGroup>, voprf::Error>
 where
-    <CS::Hash as CoreProxy>::Core: ProxyHash,
-    <<CS::Hash as CoreProxy>::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
-    Le<<<CS::Hash as CoreProxy>::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
+    <OprfHash<CS> as OutputSizeUser>::OutputSize:
+        IsLess<U256> + IsLessOrEqual<<OprfHash<CS> as BlockSizeUser>::BlockSize>,
+    OprfHash<CS>: Hash,
+    <OprfHash<CS> as CoreProxy>::Core: ProxyHash,
+    <<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
+    Le<<<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
 {
     #[cfg(not(test))]
     let result = voprf::NonVerifiableClient::blind(password, rng)?;
 
     #[cfg(test)]
     let result = {
-        let mut blind_bytes = GenericArray::default();
+        let mut blind_bytes = GenericArray::<_, <OprfGroup<CS> as Group>::ScalarLen>::default();
         let blind = loop {
             rng.fill_bytes(&mut blind_bytes);
-            let scalar = <CS::OprfGroup as Group>::from_scalar_slice_unchecked(&blind_bytes)?;
-            match scalar
-                .ct_eq(&<CS::OprfGroup as Group>::scalar_zero())
-                .into()
-            {
-                false => break scalar,
-                true => (),
+            if let Ok(scalar) = <OprfGroup<CS> as Group>::deserialize_scalar(&blind_bytes) {
+                break scalar;
             }
         };
         voprf::NonVerifiableClient::deterministic_blind_unchecked(password, blind)?

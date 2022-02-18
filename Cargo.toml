@@ -8,38 +8,18 @@ license = "Apache-2.0 OR MIT"
 name = "opaque-ke"
 readme = "README.md"
 repository = "https://github.com/novifinancial/opaque-ke"
-rust-version = "1.56"
+rust-version = "1.57"
 version = "2.0.0-pre.1"
 
 [features]
-default = ["ristretto255_u64", "serde"]
-p256 = ["p256_", "voprf/p256"]
-ristretto255 = []
-ristretto255_fiat_u32 = [
-  "curve25519-dalek/fiat_u32_backend",
-  "ristretto255",
-  "voprf/ristretto255_fiat_u32",
-]
-ristretto255_fiat_u64 = [
-  "curve25519-dalek/fiat_u64_backend",
-  "ristretto255",
-  "voprf/ristretto255_fiat_u64",
-]
-ristretto255_simd = [
-  "curve25519-dalek/simd_backend",
-  "ristretto255",
-  "voprf/ristretto255_simd",
-]
-ristretto255_u32 = [
-  "curve25519-dalek/u32_backend",
-  "ristretto255",
-  "voprf/ristretto255_u32",
-]
-ristretto255_u64 = [
-  "curve25519-dalek/u64_backend",
-  "ristretto255",
-  "voprf/ristretto255_u64",
-]
+default = ["ristretto255_u64", "ristretto255_voprf", "serde"]
+ristretto255 = ["voprf/ristretto255"]
+ristretto255_fiat_u32 = ["curve25519-dalek/fiat_u32_backend", "ristretto255"]
+ristretto255_fiat_u64 = ["curve25519-dalek/fiat_u64_backend", "ristretto255"]
+ristretto255_simd = ["curve25519-dalek/simd_backend", "ristretto255"]
+ristretto255_u32 = ["curve25519-dalek/u32_backend", "ristretto255"]
+ristretto255_u64 = ["curve25519-dalek/u64_backend", "ristretto255"]
+ristretto255_voprf = ["ristretto255", "voprf/ristretto255-ciphersuite"]
 serde = ["serde_", "generic-array/serde", "voprf/serde"]
 slow-hash = ["argon2"]
 std = ["getrandom", "rand/std", "rand/std_rng", "voprf/std"]
@@ -60,26 +40,22 @@ argon2 = { version = "0.3", default-features = false, features = [
   "alloc",
 ], optional = true }
 constant_time_eq = "0.1"
-curve25519-dalek = { version = "3", default-features = false, optional = true }
-derive-where = { version = "1.0.0-rc.1", features = ["zeroize"] }
+curve25519-dalek = { version = "=4.0.0-pre.1", default-features = false, optional = true }
+derive-where = { version = "=1.0.0-rc.3", features = ["zeroize-on-drop"] }
 digest = "0.10"
 displaydoc = { version = "0.2", default-features = false }
+elliptic-curve = { version = "0.12.0-pre.1", features = ["sec1"] }
 generic-array = "0.14"
 getrandom = { version = "0.2", optional = true }
 hkdf = "0.12"
 hmac = "0.12"
-p256_ = { package = "p256", version = "0.10", default-features = false, features = [
-  "arithmetic",
-], optional = true }
 rand = { version = "0.8", default-features = false }
 serde_ = { version = "1", package = "serde", default-features = false, features = [
   "derive",
 ], optional = true }
 subtle = { version = "2.3", default-features = false }
-voprf = { git = "https://github.com/novifinancial/voprf", rev = "55ef981a3f9a12eddd8c372ffdf51818011343ee", default-features = false, features = [
-  "danger",
-] }
-x25519-dalek = { version = "1", default-features = false, optional = true }
+voprf = { version = "0.3", default-features = false, features = ["danger"] }
+x25519-dalek = { version = "=2.0.0-pre.1", default-features = false, optional = true }
 zeroize = { version = "1", features = ["zeroize_derive"] }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
@@ -93,7 +69,12 @@ criterion = "0.3"
 hex = "0.4"
 json = "0.12"
 lazy_static = "1"
+p256 = { version = "=0.11.0-pre.0", default-features = false, features = [
+  "hash2curve",
+  "voprf",
+] }
 proptest = "1"
+rand = "0.8"
 regex = "1"
 rustyline = "9"
 serde_json = "1"
@@ -102,3 +83,14 @@ sha2 = "0.10"
 [[bench]]
 harness = false
 name = "opaque"
+
+[package.metadata.docs.rs]
+features = ["std", "slow-hash", "x25519_u64"]
+targets = []
+
+[patch.crates-io]
+chacha20 = { git = "https://github.com/RustCrypto/stream-ciphers" }
+chacha20poly1305 = { git = "https://github.com/khonsulabs/aeads", branch = "update-dependencies" }
+derive-where = { git = "https://github.com/ModProg/derive-where" }
+poly1305 = { git = "https://github.com/RustCrypto/universal-hashes" }
+voprf = { git = "https://github.com/khonsulabs/voprf", branch = "v08" }
