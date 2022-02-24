@@ -502,10 +502,10 @@ where
     pub fn deserialize(input: &[u8]) -> Result<Self, ProtocolError> {
         let elem_len = <OprfGroup<CS> as Group>::ElemLen::USIZE;
         let key_len = <CS::KeGroup as KeGroup>::PkLen::USIZE;
-        let nonce_len: usize = 32;
+        let nonce_len = NonceLen::USIZE;
         let envelope_len = Envelope::<CS>::len();
         let masked_response_len = key_len + envelope_len;
-        let ke2_message_len = CS::KeyExchange::ke2_message_size();
+        let ke2_message_len = Ke2MessageLen::<CS>::USIZE;
 
         let checked_slice = check_slice_size_atleast(
             input,

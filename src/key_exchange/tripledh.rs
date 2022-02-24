@@ -170,6 +170,26 @@ where
     mac: Output<D>,
 }
 
+impl<D: Hash, KG: KeGroup> Drop for Ke2Message<D, KG>
+where
+    D::Core: ProxyHash,
+    <D::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
+    Le<<D::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
+{
+    fn drop(&mut self) {
+        self.server_nonce.zeroize();
+        self.mac.zeroize();
+    }
+}
+
+impl<D: Hash, KG: KeGroup> ZeroizeOnDrop for Ke2Message<D, KG>
+where
+    D::Core: ProxyHash,
+    <D::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
+    Le<<D::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
+{
+}
+
 /// The third key exchange message
 #[cfg_attr(
     feature = "serde",
@@ -184,6 +204,25 @@ where
     Le<<D::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
 {
     mac: Output<D>,
+}
+
+impl<D: Hash> Drop for Ke3Message<D>
+where
+    D::Core: ProxyHash,
+    <D::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
+    Le<<D::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
+{
+    fn drop(&mut self) {
+        self.mac.zeroize();
+    }
+}
+
+impl<D: Hash> ZeroizeOnDrop for Ke3Message<D>
+where
+    D::Core: ProxyHash,
+    <D::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
+    Le<<D::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
+{
 }
 
 ////////////////////////////////
@@ -375,10 +414,6 @@ where
             .map_err(|_| ProtocolError::InvalidLoginError)?;
 
         Ok(ke2_state.session_key.clone())
-    }
-
-    fn ke2_message_size() -> usize {
-        NonceLen::USIZE + <KG as KeGroup>::PkLen::USIZE + OutputSize::<D>::USIZE
     }
 }
 
