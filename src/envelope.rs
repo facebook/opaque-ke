@@ -17,10 +17,9 @@ use generic_array::{ArrayLength, GenericArray};
 use hkdf::Hkdf;
 use hmac::{Hmac, Mac};
 use rand::{CryptoRng, RngCore};
-use voprf::Group;
 use zeroize::{Zeroize, ZeroizeOnDrop};
 
-use crate::ciphersuite::{CipherSuite, OprfGroup, OprfHash};
+use crate::ciphersuite::{CipherSuite, OprfHash};
 use crate::errors::utils::check_slice_size;
 use crate::errors::{InternalError, ProtocolError};
 use crate::hash::{Hash, OutputSize, ProxyHash};
@@ -363,8 +362,7 @@ where
         .expand(&nonce.concat(STR_PRIVATE_KEY.into()), &mut keypair_seed)
         .map_err(|_| InternalError::HkdfError)?;
     let client_static_keypair = KeyPair::<CS::KeGroup>::from_private_key_slice(
-        // TODO: Use `KeGroup` instead of `OprfGroup` here.
-        &OprfGroup::<CS>::serialize_scalar(OprfGroup::<CS>::hash_to_scalar::<CS::OprfGroup>(
+        &CS::KeGroup::serialize_sk(&CS::KeGroup::hash_to_scalar::<OprfHash<CS>>(
             &[keypair_seed.as_slice()],
             &GenericArray::from(STR_OPAQUE_DERIVE_AUTH_KEY_PAIR),
         )?),
@@ -390,7 +388,7 @@ where
         .expand(&nonce.concat(STR_PRIVATE_KEY.into()), &mut keypair_seed)
         .map_err(|_| InternalError::HkdfError)?;
     let client_static_keypair = KeyPair::<CS::KeGroup>::from_private_key_slice(
-        &OprfGroup::<CS>::serialize_scalar(OprfGroup::<CS>::hash_to_scalar::<CS::OprfGroup>(
+        &CS::KeGroup::serialize_sk(&CS::KeGroup::hash_to_scalar::<OprfHash<CS>>(
             &[keypair_seed.as_slice()],
             &GenericArray::from(STR_OPAQUE_DERIVE_AUTH_KEY_PAIR),
         )?),

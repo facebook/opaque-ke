@@ -13,6 +13,9 @@ pub mod ristretto255;
 #[cfg(feature = "x25519")]
 pub mod x25519;
 
+use digest::core_api::BlockSizeUser;
+use digest::Digest;
+use generic_array::typenum::{IsLess, IsLessOrEqual, U256};
 use generic_array::{ArrayLength, GenericArray};
 use rand::{CryptoRng, RngCore};
 
@@ -37,6 +40,16 @@ pub trait KeGroup {
 
     /// Generate a random secret key
     fn random_sk<R: RngCore + CryptoRng>(rng: &mut R) -> Self::Sk;
+
+    /// Hashes a slice of pseudo-random bytes to a scalar
+    ///
+    /// # Errors
+    /// [`InternalError::HashToScalar`] if the `input` is empty or longer then
+    /// [`u16::MAX`].
+    fn hash_to_scalar<H>(input: &[&[u8]], dst: &[u8]) -> Result<Self::Sk, InternalError>
+    where
+        H: Digest + BlockSizeUser,
+        H::OutputSize: IsLess<U256> + IsLessOrEqual<H::BlockSize>;
 
     /// Return a public key from its secret key
     fn public_key(sk: &Self::Sk) -> Self::Pk;

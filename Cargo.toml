@@ -13,7 +13,7 @@ version = "2.0.0-pre.1"
 
 [features]
 default = ["ristretto255_u64", "ristretto255_voprf", "serde"]
-ristretto255 = ["voprf/ristretto255"]
+ristretto255 = ["curve25519-dalek", "voprf/ristretto255"]
 ristretto255_fiat_u32 = ["curve25519-dalek/fiat_u32_backend", "ristretto255"]
 ristretto255_fiat_u64 = ["curve25519-dalek/fiat_u64_backend", "ristretto255"]
 ristretto255_simd = ["curve25519-dalek/simd_backend", "ristretto255"]
@@ -23,12 +23,12 @@ ristretto255_voprf = ["ristretto255", "voprf/ristretto255-ciphersuite"]
 serde = ["serde_", "generic-array/serde", "voprf/serde"]
 slow-hash = ["argon2"]
 std = ["getrandom", "rand/std", "rand/std_rng", "voprf/std"]
-x25519 = []
+x25519 = ["curve25519-dalek-3"]
 x25519_fiat_u32 = ["x25519", "x25519-dalek/fiat_u32_backend"]
 x25519_fiat_u64 = ["x25519", "x25519-dalek/fiat_u64_backend"]
 # x25519-dalek isn't properly re-exposing `simd_backend`.
 x25519_simd = [
-  "curve25519-dalek/simd_backend",
+  "curve25519-dalek-3/simd_backend",
   "x25519",
   "x25519-dalek/nightly",
 ]
@@ -41,10 +41,11 @@ argon2 = { version = "0.3", default-features = false, features = [
 ], optional = true }
 constant_time_eq = "0.1"
 curve25519-dalek = { version = "=4.0.0-pre.1", default-features = false, optional = true }
+curve25519-dalek-3 = { version = "3", package = "curve25519-dalek", default-features = false, optional = true }
 derive-where = { version = "=1.0.0-rc.3", features = ["zeroize-on-drop"] }
 digest = "0.10"
 displaydoc = { version = "0.2", default-features = false }
-elliptic-curve = { version = "0.12.0-pre.1", features = ["sec1"] }
+elliptic-curve = { version = "0.12.0-pre.1", features = ["hash2curve", "sec1"] }
 generic-array = "0.14"
 getrandom = { version = "0.2", optional = true }
 hkdf = "0.12"

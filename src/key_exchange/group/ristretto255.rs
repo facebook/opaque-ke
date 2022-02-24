@@ -11,8 +11,9 @@ use curve25519_dalek::constants::RISTRETTO_BASEPOINT_POINT;
 use curve25519_dalek::ristretto::{CompressedRistretto, RistrettoPoint};
 use curve25519_dalek::scalar::Scalar;
 use digest::core_api::BlockSizeUser;
-use digest::OutputSizeUser;
-use generic_array::typenum::{IsLess, IsLessOrEqual, U256, U32};
+use digest::{Digest, OutputSizeUser};
+use elliptic_curve::hash2curve::{ExpandMsg, ExpandMsgXmd, Expander};
+use generic_array::typenum::{IsLess, IsLessOrEqual, U256, U32, U64};
 use generic_array::GenericArray;
 use rand::{CryptoRng, RngCore};
 use voprf::Group;
@@ -66,6 +67,21 @@ impl KeGroup for Ristretto255 {
                 break scalar;
             }
         }
+    }
+
+    // Implements the `HashToScalar()` function from
+    // https://www.ietf.org/archive/id/draft-irtf-cfrg-voprf-08.html#section-4.1
+    fn hash_to_scalar<'a, H>(input: &[&[u8]], dst: &[u8]) -> Result<Self::Sk, InternalError>
+    where
+        H: Digest + BlockSizeUser,
+        H::OutputSize: IsLess<U256> + IsLessOrEqual<H::BlockSize>,
+    {
+        let mut uniform_bytes = GenericArray::<_, U64>::default();
+        ExpandMsgXmd::<H>::expand_message(input, dst, 64)
+            .map_err(|_| InternalError::HashToScalar)?
+            .fill_bytes(&mut uniform_bytes);
+
+        Ok(Scalar::from_bytes_mod_order_wide(&uniform_bytes.into()))
     }
 
     fn public_key(sk: &Self::Sk) -> Self::Pk {

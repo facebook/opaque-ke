@@ -5,21 +5,29 @@
 // License, Version 2.0 found in the LICENSE-APACHE file in the root directory
 // of this source tree.
 
+use digest::core_api::BlockSizeUser;
+use digest::Digest;
+use elliptic_curve::group::cofactor::CofactorGroup;
+use elliptic_curve::hash2curve::{ExpandMsgXmd, FromOkm, GroupDigest};
 use elliptic_curve::sec1::{FromEncodedPoint, ModulusSize, ToEncodedPoint};
 use elliptic_curve::{
-    AffinePoint, Curve, FieldSize, ProjectiveArithmetic, ProjectivePoint, PublicKey, SecretKey,
+    AffinePoint, Curve, FieldSize, NonZeroScalar, ProjectiveArithmetic, ProjectivePoint, PublicKey,
+    Scalar, SecretKey,
 };
+use generic_array::typenum::{IsLess, IsLessOrEqual, U256};
 use generic_array::GenericArray;
 use rand::{CryptoRng, RngCore};
 
 use super::KeGroup;
 use crate::errors::InternalError;
 
-impl<G: Curve + ProjectiveArithmetic> KeGroup for G
+impl<G: Curve + GroupDigest + ProjectiveArithmetic> KeGroup for G
 where
     FieldSize<Self>: ModulusSize,
     AffinePoint<Self>: FromEncodedPoint<Self> + ToEncodedPoint<Self>,
-    ProjectivePoint<Self>: ToEncodedPoint<Self>,
+    ProjectivePoint<Self>: CofactorGroup + ToEncodedPoint<Self>,
+    Scalar<Self>: FromOkm,
+    //AffinePoint<Self>: FromEncodedPoint<Self> + ToEncodedPoint<Self>,
 {
     type Pk = PublicKey<Self>;
 
@@ -39,6 +47,20 @@ where
 
     fn random_sk<R: RngCore + CryptoRng>(rng: &mut R) -> Self::Sk {
         SecretKey::<Self>::random(rng)
+    }
+
+    // Implements the `HashToScalar()` function
+    fn hash_to_scalar<H>(input: &[&[u8]], dst: &[u8]) -> Result<Self::Sk, InternalError>
+    where
+        H: Digest + BlockSizeUser,
+        H::OutputSize: IsLess<U256> + IsLessOrEqual<H::BlockSize>,
+    {
+        Option::<NonZeroScalar<Self>>::from(NonZeroScalar::new(
+            <Self as GroupDigest>::hash_to_scalar::<ExpandMsgXmd<H>>(input, dst)
+                .map_err(|_| InternalError::HashToScalar)?,
+        ))
+        .map(SecretKey::from)
+        .ok_or(InternalError::HashToScalar)
     }
 
     fn public_key(sk: &Self::Sk) -> Self::Pk {

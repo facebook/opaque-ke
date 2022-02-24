@@ -31,8 +31,8 @@ pub enum InternalError<T = Infallible> {
     },
     /// Could not decompress point.
     PointError,
-    /// Computing the hash-to-curve function failed
-    HashToCurveError,
+    /// Size of input is empty or longer then [`u16::MAX`].
+    HashToScalar,
     /// Computing HKDF failed while deriving subkeys
     HkdfError,
     /// Computing HMAC failed while supplying a secret key
@@ -45,14 +45,10 @@ pub enum InternalError<T = Infallible> {
     /** This error occurs when attempting to open an envelope of the wrong
     type (base mode, custom identifier) */
     IncompatibleEnvelopeModeError,
-    /// This error occurs when the inner envelope is malformed
-    InvalidInnerEnvelopeError,
     /// Error from the OPRF evaluation
     OprfError(voprf::Error),
     /// Error from the OPRF evaluation
     OprfInternalError(voprf::InternalError),
-    /// Error encountered when attempting to produce a keypair
-    InvalidKeypairError,
 }
 
 impl<T: Debug> Debug for InternalError<T> {
@@ -71,7 +67,7 @@ impl<T: Debug> Debug for InternalError<T> {
                 .field("actual_len", actual_len)
                 .finish(),
             Self::PointError => f.debug_tuple("PointError").finish(),
-            Self::HashToCurveError => f.debug_tuple("HashToCurveError").finish(),
+            Self::HashToScalar => f.debug_tuple("HashToScalar").finish(),
             Self::HkdfError => f.debug_tuple("HkdfError").finish(),
             Self::HmacError => f.debug_tuple("HmacError").finish(),
             Self::SlowHashError => f.debug_tuple("SlowHashError").finish(),
@@ -79,12 +75,10 @@ impl<T: Debug> Debug for InternalError<T> {
             Self::IncompatibleEnvelopeModeError => {
                 f.debug_tuple("IncompatibleEnvelopeModeError").finish()
             }
-            Self::InvalidInnerEnvelopeError => f.debug_tuple("InvalidInnerEnvelopeError").finish(),
             Self::OprfError(error) => f.debug_tuple("OprfError").field(error).finish(),
             Self::OprfInternalError(error) => {
                 f.debug_tuple("OprfInternalError").field(error).finish()
             }
-            Self::InvalidKeypairError => f.debug_tuple("InvalidKeypairError").finish(),
         }
     }
 }
@@ -108,16 +102,14 @@ impl InternalError {
                 actual_len,
             },
             Self::PointError => InternalError::PointError,
-            Self::HashToCurveError => InternalError::HashToCurveError,
+            Self::HashToScalar => InternalError::HashToScalar,
             Self::HkdfError => InternalError::HkdfError,
             Self::HmacError => InternalError::HmacError,
             Self::SlowHashError => InternalError::SlowHashError,
             Self::SealOpenHmacError => InternalError::SealOpenHmacError,
             Self::IncompatibleEnvelopeModeError => InternalError::IncompatibleEnvelopeModeError,
-            Self::InvalidInnerEnvelopeError => InternalError::InvalidInnerEnvelopeError,
             Self::OprfError(error) => InternalError::OprfError(error),
             Self::OprfInternalError(error) => InternalError::OprfInternalError(error),
-            Self::InvalidKeypairError => InternalError::InvalidKeypairError,
         }
     }
 }
