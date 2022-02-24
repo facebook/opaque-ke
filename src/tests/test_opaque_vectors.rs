@@ -6,7 +6,6 @@
 // of this source tree.
 
 use core::ops::Add;
-use std::string::ToString;
 use std::vec::Vec;
 use std::{println, vec};
 
@@ -93,9 +92,7 @@ macro_rules! parse_default {
 }
 
 fn decode(values: &JsonValue, key: &str) -> Option<Vec<u8>> {
-    values[key]
-        .as_str()
-        .and_then(|s| hex::decode(&s.to_string()).ok())
+    values[key].as_str().and_then(|s| hex::decode(&s).ok())
 }
 
 fn populate_test_vectors<CS: CipherSuite>(values: &JsonValue) -> OpaqueTestVectorParameters
@@ -401,7 +398,7 @@ where
         );
         assert_eq!(
             hex::encode(&parameters.export_key),
-            hex::encode(result.export_key.to_vec())
+            hex::encode(result.export_key)
         );
     }
 

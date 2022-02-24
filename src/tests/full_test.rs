@@ -8,7 +8,7 @@
 #![allow(unsafe_code)]
 
 use core::ops::Add;
-use std::string::{String, ToString};
+use std::string::String;
 use std::vec::Vec;
 use std::{format, println, ptr, vec};
 
@@ -274,9 +274,7 @@ static TEST_VECTOR_X25519_P256: &str = r#"
 "#;
 
 fn decode(values: &Value, key: &str) -> Option<Vec<u8>> {
-    values[key]
-        .as_str()
-        .and_then(|s| hex::decode(&s.to_string()).ok())
+    values[key].as_str().and_then(|s| hex::decode(&s).ok())
 }
 
 fn populate_test_vectors(values: &Value) -> TestVectorParameters {
@@ -883,7 +881,7 @@ fn test_registration_upload() -> Result<(), ProtocolError> {
         );
         assert_eq!(
             hex::encode(parameters.export_key),
-            hex::encode(result.export_key.to_vec())
+            hex::encode(result.export_key)
         );
 
         Ok(())
@@ -1109,7 +1107,7 @@ fn test_credential_finalization() -> Result<(), ProtocolError> {
 
         assert_eq!(
             hex::encode(&parameters.server_s_pk),
-            hex::encode(&client_login_finish_result.server_s_pk.to_bytes().to_vec())
+            hex::encode(&client_login_finish_result.server_s_pk.to_bytes())
         );
         assert_eq!(
             hex::encode(&parameters.session_key),
