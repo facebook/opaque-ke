@@ -27,7 +27,6 @@ where
     AffinePoint<Self>: FromEncodedPoint<Self> + ToEncodedPoint<Self>,
     ProjectivePoint<Self>: CofactorGroup + ToEncodedPoint<Self>,
     Scalar<Self>: FromOkm,
-    //AffinePoint<Self>: FromEncodedPoint<Self> + ToEncodedPoint<Self>,
 {
     type Pk = PublicKey<Self>;
 
@@ -42,11 +41,11 @@ where
     }
 
     fn deserialize_pk(bytes: &GenericArray<u8, Self::PkLen>) -> Result<Self::Pk, InternalError> {
-        PublicKey::<Self>::from_sec1_bytes(bytes).map_err(|_| InternalError::PointError)
+        PublicKey::from_sec1_bytes(bytes).map_err(|_| InternalError::PointError)
     }
 
     fn random_sk<R: RngCore + CryptoRng>(rng: &mut R) -> Self::Sk {
-        SecretKey::<Self>::random(rng)
+        SecretKey::random(rng)
     }
 
     // Implements the `HashToScalar()` function
@@ -55,12 +54,11 @@ where
         H: Digest + BlockSizeUser,
         H::OutputSize: IsLess<U256> + IsLessOrEqual<H::BlockSize>,
     {
-        Option::<NonZeroScalar<Self>>::from(NonZeroScalar::new(
-            <Self as GroupDigest>::hash_to_scalar::<ExpandMsgXmd<H>>(input, dst)
-                .map_err(|_| InternalError::HashToScalar)?,
-        ))
-        .map(SecretKey::from)
-        .ok_or(InternalError::HashToScalar)
+        Self::hash_to_scalar::<ExpandMsgXmd<H>>(input, dst)
+            .ok()
+            .and_then(|scalar| Option::<NonZeroScalar<Self>>::from(NonZeroScalar::new(scalar)))
+            .map(SecretKey::from)
+            .ok_or(InternalError::HashToScalar)
     }
 
     fn public_key(sk: &Self::Sk) -> Self::Pk {
@@ -82,6 +80,6 @@ where
     }
 
     fn deserialize_sk(bytes: &GenericArray<u8, Self::SkLen>) -> Result<Self::Sk, InternalError> {
-        Self::Sk::from_be_bytes(bytes).map_err(|_| InternalError::PointError)
+        SecretKey::from_be_bytes(bytes).map_err(|_| InternalError::PointError)
     }
 }
