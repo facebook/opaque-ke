@@ -24,13 +24,13 @@ use crate::errors::InternalError;
 /// A group representation for use in the key exchange
 pub trait KeGroup {
     /// Public key
-    type Pk: Clone + Sized;
+    type Pk: Clone;
     /// Length of the public key
-    type PkLen: ArrayLength<u8> + 'static;
+    type PkLen: ArrayLength<u8>;
     /// Secret key
-    type Sk: Clone + Sized;
+    type Sk: Clone;
     /// Length of the secret key
-    type SkLen: ArrayLength<u8> + 'static;
+    type SkLen: ArrayLength<u8>;
 
     /// Serializes `self`
     fn serialize_pk(pk: &Self::Pk) -> GenericArray<u8, Self::PkLen>;
