@@ -62,7 +62,7 @@ impl KeGroup for Ristretto255 {
                 }
             };
 
-            if scalar != Scalar::zero() && scalar.is_canonical() {
+            if scalar != Scalar::zero() {
                 break scalar;
             }
         }
