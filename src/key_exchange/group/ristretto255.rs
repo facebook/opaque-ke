@@ -10,6 +10,7 @@
 use curve25519_dalek::constants::RISTRETTO_BASEPOINT_POINT;
 use curve25519_dalek::ristretto::{CompressedRistretto, RistrettoPoint};
 use curve25519_dalek::scalar::Scalar;
+use curve25519_dalek::traits::Identity;
 use digest::core_api::BlockSizeUser;
 use digest::{Digest, OutputSizeUser};
 use elliptic_curve::hash2curve::{ExpandMsg, ExpandMsgXmd, Expander};
@@ -39,6 +40,7 @@ impl KeGroup for Ristretto255 {
     fn deserialize_pk(bytes: &GenericArray<u8, Self::PkLen>) -> Result<Self::Pk, InternalError> {
         CompressedRistretto::from_slice(bytes)
             .decompress()
+            .filter(|point| point != &RistrettoPoint::identity())
             .ok_or(InternalError::PointError)
     }
 
@@ -94,7 +96,9 @@ impl KeGroup for Ristretto255 {
     }
 
     fn deserialize_sk(bytes: &GenericArray<u8, Self::PkLen>) -> Result<Self::Sk, InternalError> {
-        Scalar::from_canonical_bytes((*bytes).into()).ok_or(InternalError::PointError)
+        Scalar::from_canonical_bytes((*bytes).into())
+            .filter(|scalar| scalar != &Scalar::zero())
+            .ok_or(InternalError::PointError)
     }
 }
 
