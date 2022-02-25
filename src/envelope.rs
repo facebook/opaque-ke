@@ -65,7 +65,7 @@ impl TryFrom<u8> for InnerEnvelopeMode {
 /// The specification update has simplified this assumption by taking an
 /// XOR-based approach without compromising on security, and to avoid the
 /// confusion around the implementation of an RKR-secure encryption.
-#[derive_where(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[derive_where(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, ZeroizeOnDrop)]
 pub(crate) struct Envelope<CS: CipherSuite>
 where
     <OprfHash<CS> as OutputSizeUser>::OutputSize:
@@ -78,33 +78,6 @@ where
     pub(crate) mode: InnerEnvelopeMode,
     nonce: GenericArray<u8, NonceLen>,
     hmac: Output<OprfHash<CS>>,
-}
-
-impl<CS: CipherSuite> Drop for Envelope<CS>
-where
-    <OprfHash<CS> as OutputSizeUser>::OutputSize:
-        IsLess<U256> + IsLessOrEqual<<OprfHash<CS> as BlockSizeUser>::BlockSize>,
-    OprfHash<CS>: Hash,
-    <OprfHash<CS> as CoreProxy>::Core: ProxyHash,
-    <<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
-    Le<<<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
-{
-    fn drop(&mut self) {
-        self.mode.zeroize();
-        self.nonce.zeroize();
-        self.hmac.zeroize();
-    }
-}
-
-impl<CS: CipherSuite> ZeroizeOnDrop for Envelope<CS>
-where
-    <OprfHash<CS> as OutputSizeUser>::OutputSize:
-        IsLess<U256> + IsLessOrEqual<<OprfHash<CS> as BlockSizeUser>::BlockSize>,
-    OprfHash<CS>: Hash,
-    <OprfHash<CS> as CoreProxy>::Core: ProxyHash,
-    <<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
-    Le<<<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
-{
 }
 
 // Note that this struct represents an envelope that has been "opened" with the

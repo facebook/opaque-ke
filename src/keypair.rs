@@ -178,7 +178,7 @@ impl<KG: KeGroup> SecretKey<KG> for PrivateKey<KG> {
         crate = "serde_"
     )
 )]
-#[derive_where(Clone)]
+#[derive_where(Clone, ZeroizeOnDrop)]
 #[derive_where(Debug, Eq, Hash, Ord, PartialEq, PartialOrd; KG::Pk)]
 pub struct PublicKey<KG: KeGroup>(KG::Pk);
 

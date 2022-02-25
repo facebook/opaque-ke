@@ -18,7 +18,6 @@ use generic_array::{ArrayLength, GenericArray};
 use hkdf::{Hkdf, HkdfExtract};
 use hmac::{Hmac, Mac};
 use rand::{CryptoRng, RngCore};
-use zeroize::{Zeroize, ZeroizeOnDrop};
 
 use crate::errors::utils::{check_slice_size, check_slice_size_atleast};
 use crate::errors::{InternalError, ProtocolError};
@@ -64,20 +63,12 @@ pub struct TripleDH;
         crate = "serde_"
     )
 )]
-#[derive_where(Clone)]
+#[derive_where(Clone, ZeroizeOnDrop)]
 #[derive_where(Debug, Eq, Hash, Ord, PartialEq, PartialOrd; KG::Sk)]
 pub struct Ke1State<KG: KeGroup> {
     client_e_sk: PrivateKey<KG>,
     client_nonce: GenericArray<u8, NonceLen>,
 }
-
-impl<KG: KeGroup> Drop for Ke1State<KG> {
-    fn drop(&mut self) {
-        self.client_nonce.zeroize();
-    }
-}
-
-impl<KG: KeGroup> ZeroizeOnDrop for Ke1State<KG> {}
 
 /// The first key exchange message
 #[cfg_attr(
@@ -91,20 +82,12 @@ impl<KG: KeGroup> ZeroizeOnDrop for Ke1State<KG> {}
         crate = "serde_"
     )
 )]
-#[derive_where(Clone)]
+#[derive_where(Clone, ZeroizeOnDrop)]
 #[derive_where(Debug, Eq, Hash, Ord, PartialEq, PartialOrd; KG::Pk)]
 pub struct Ke1Message<KG: KeGroup> {
     pub(crate) client_nonce: GenericArray<u8, NonceLen>,
     pub(crate) client_e_pk: PublicKey<KG>,
 }
-
-impl<KG: KeGroup> Drop for Ke1Message<KG> {
-    fn drop(&mut self) {
-        self.client_nonce.zeroize();
-    }
-}
-
-impl<KG: KeGroup> ZeroizeOnDrop for Ke1Message<KG> {}
 
 /// The server state produced after the second key exchange message
 #[cfg_attr(
@@ -112,7 +95,7 @@ impl<KG: KeGroup> ZeroizeOnDrop for Ke1Message<KG> {}
     derive(serde_::Deserialize, serde_::Serialize),
     serde(bound = "", crate = "serde_")
 )]
-#[derive_where(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[derive_where(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, ZeroizeOnDrop)]
 pub struct Ke2State<D: Hash>
 where
     D::Core: ProxyHash,
@@ -122,27 +105,6 @@ where
     km3: Output<D>,
     hashed_transcript: Output<D>,
     session_key: Output<D>,
-}
-
-impl<D: Hash> Drop for Ke2State<D>
-where
-    D::Core: ProxyHash,
-    <D::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
-    Le<<D::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
-{
-    fn drop(&mut self) {
-        self.km3.zeroize();
-        self.hashed_transcript.zeroize();
-        self.session_key.zeroize();
-    }
-}
-
-impl<D: Hash> ZeroizeOnDrop for Ke2State<D>
-where
-    D::Core: ProxyHash,
-    <D::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
-    Le<<D::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
-{
 }
 
 /// The second key exchange message
@@ -157,7 +119,7 @@ where
         crate = "serde_"
     )
 )]
-#[derive_where(Clone)]
+#[derive_where(Clone, ZeroizeOnDrop)]
 #[derive_where(Debug, Eq, Hash, Ord, PartialEq, PartialOrd; KG::Pk)]
 pub struct Ke2Message<D: Hash, KG: KeGroup>
 where
@@ -170,33 +132,13 @@ where
     mac: Output<D>,
 }
 
-impl<D: Hash, KG: KeGroup> Drop for Ke2Message<D, KG>
-where
-    D::Core: ProxyHash,
-    <D::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
-    Le<<D::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
-{
-    fn drop(&mut self) {
-        self.server_nonce.zeroize();
-        self.mac.zeroize();
-    }
-}
-
-impl<D: Hash, KG: KeGroup> ZeroizeOnDrop for Ke2Message<D, KG>
-where
-    D::Core: ProxyHash,
-    <D::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
-    Le<<D::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
-{
-}
-
 /// The third key exchange message
 #[cfg_attr(
     feature = "serde",
     derive(serde_::Deserialize, serde_::Serialize),
     serde(bound = "", crate = "serde_")
 )]
-#[derive_where(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[derive_where(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, ZeroizeOnDrop)]
 pub struct Ke3Message<D: Hash>
 where
     D::Core: ProxyHash,
@@ -204,25 +146,6 @@ where
     Le<<D::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
 {
     mac: Output<D>,
-}
-
-impl<D: Hash> Drop for Ke3Message<D>
-where
-    D::Core: ProxyHash,
-    <D::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
-    Le<<D::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
-{
-    fn drop(&mut self) {
-        self.mac.zeroize();
-    }
-}
-
-impl<D: Hash> ZeroizeOnDrop for Ke3Message<D>
-where
-    D::Core: ProxyHash,
-    <D::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
-    Le<<D::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
-{
 }
 
 ////////////////////////////////
