@@ -15,7 +15,6 @@ use generic_array::typenum::{IsLess, IsLessOrEqual, U256, U32, U64};
 use generic_array::GenericArray;
 use rand::{CryptoRng, RngCore};
 use x25519_dalek::{PublicKey, StaticSecret};
-use zeroize::Zeroize;
 
 use super::KeGroup;
 use crate::errors::InternalError;
@@ -77,10 +76,6 @@ impl KeGroup for X25519 {
 
     fn diffie_hellman(pk: &Self::Pk, sk: &Self::Sk) -> GenericArray<u8, Self::PkLen> {
         sk.diffie_hellman(pk).to_bytes().into()
-    }
-
-    fn zeroize_sk_on_drop(sk: &mut Self::Sk) {
-        sk.zeroize()
     }
 
     fn serialize_sk(sk: &Self::Sk) -> GenericArray<u8, Self::SkLen> {

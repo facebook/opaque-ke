@@ -17,7 +17,6 @@ use generic_array::typenum::{IsLess, IsLessOrEqual, U256, U32, U64};
 use generic_array::GenericArray;
 use rand::{CryptoRng, RngCore};
 use voprf::Group;
-use zeroize::Zeroize;
 
 use super::KeGroup;
 use crate::errors::InternalError;
@@ -90,10 +89,6 @@ impl KeGroup for Ristretto255 {
 
     fn diffie_hellman(pk: &Self::Pk, sk: &Self::Sk) -> GenericArray<u8, Self::PkLen> {
         Self::serialize_pk(&(pk * sk))
-    }
-
-    fn zeroize_sk_on_drop(sk: &mut Self::Sk) {
-        sk.zeroize()
     }
 
     fn serialize_sk(sk: &Self::Sk) -> GenericArray<u8, Self::SkLen> {

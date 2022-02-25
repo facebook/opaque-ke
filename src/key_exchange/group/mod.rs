@@ -18,17 +18,18 @@ use digest::Digest;
 use generic_array::typenum::{IsLess, IsLessOrEqual, U256};
 use generic_array::{ArrayLength, GenericArray};
 use rand::{CryptoRng, RngCore};
+use zeroize::Zeroize;
 
 use crate::errors::InternalError;
 
 /// A group representation for use in the key exchange
 pub trait KeGroup {
     /// Public key
-    type Pk: Clone;
+    type Pk: Clone + Zeroize;
     /// Length of the public key
     type PkLen: ArrayLength<u8>;
     /// Secret key
-    type Sk: Clone;
+    type Sk: Clone + Zeroize;
     /// Length of the secret key
     type SkLen: ArrayLength<u8>;
 
@@ -56,9 +57,6 @@ pub trait KeGroup {
 
     /// Diffie-Hellman key exchange
     fn diffie_hellman(pk: &Self::Pk, sk: &Self::Sk) -> GenericArray<u8, Self::PkLen>;
-
-    /// Zeroize secret key on drop.
-    fn zeroize_sk_on_drop(sk: &mut Self::Sk);
 
     /// Serializes `self`
     fn serialize_sk(sk: &Self::Sk) -> GenericArray<u8, Self::SkLen>;

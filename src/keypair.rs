@@ -12,7 +12,6 @@
 use derive_where::derive_where;
 use generic_array::{ArrayLength, GenericArray};
 use rand::{CryptoRng, RngCore};
-use zeroize::ZeroizeOnDrop;
 
 use crate::errors::{InternalError, ProtocolError};
 use crate::key_exchange::group::KeGroup;
@@ -109,17 +108,9 @@ where
         crate = "serde_"
     )
 )]
-#[derive_where(Clone)]
+#[derive_where(Clone, ZeroizeOnDrop)]
 #[derive_where(Debug, Eq, Hash, Ord, PartialEq, PartialOrd; KG::Sk)]
 pub struct PrivateKey<KG: KeGroup>(KG::Sk);
-
-impl<KG: KeGroup> Drop for PrivateKey<KG> {
-    fn drop(&mut self) {
-        KG::zeroize_sk_on_drop(&mut self.0)
-    }
-}
-
-impl<KG: KeGroup> ZeroizeOnDrop for PrivateKey<KG> {}
 
 impl<KG: KeGroup> PrivateKey<KG> {
     /// Convert from bytes
