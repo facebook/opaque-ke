@@ -47,9 +47,7 @@ impl KeGroup for Ristretto255 {
             let scalar = {
                 #[cfg(not(test))]
                 {
-                    let mut scalar_bytes = [0u8; 64];
-                    rng.fill_bytes(&mut scalar_bytes);
-                    Scalar::from_bytes_mod_order_wide(&scalar_bytes)
+                    Scalar::random(rng)
                 }
 
                 // Tests need an exact conversion from bytes to scalar, sampling only 32 bytes
