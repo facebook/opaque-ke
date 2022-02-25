@@ -7,37 +7,62 @@
 
 //! Includes the KeGroup trait and definitions for the key exchange groups
 
+mod elliptic_curve;
+#[cfg(feature = "ristretto255")]
+pub mod ristretto255;
+#[cfg(feature = "x25519")]
+pub mod x25519;
+
+use digest::core_api::BlockSizeUser;
+use digest::Digest;
+use generic_array::typenum::{IsLess, IsLessOrEqual, U256};
 use generic_array::{ArrayLength, GenericArray};
 use rand::{CryptoRng, RngCore};
 
 use crate::errors::InternalError;
 
 /// A group representation for use in the key exchange
-pub trait KeGroup: Sized + Clone {
+pub trait KeGroup {
+    /// Public key
+    type Pk: Clone;
     /// Length of the public key
-    type PkLen: ArrayLength<u8> + 'static;
+    type PkLen: ArrayLength<u8>;
+    /// Secret key
+    type Sk: Clone;
     /// Length of the secret key
-    type SkLen: ArrayLength<u8> + 'static;
-
-    /// Return a public key from its fixed-length bytes representation
-    fn from_pk_slice(element_bits: &GenericArray<u8, Self::PkLen>) -> Result<Self, InternalError>;
-
-    /// Generate a random secret key
-    fn random_sk<R: RngCore + CryptoRng>(rng: &mut R) -> GenericArray<u8, Self::SkLen>;
-
-    /// Return a public key from its secret key
-    fn public_key(sk: &GenericArray<u8, Self::SkLen>) -> Self;
+    type SkLen: ArrayLength<u8>;
 
     /// Serializes `self`
-    fn to_arr(&self) -> GenericArray<u8, Self::PkLen>;
+    fn serialize_pk(pk: &Self::Pk) -> GenericArray<u8, Self::PkLen>;
+
+    /// Return a public key from its fixed-length bytes representation
+    fn deserialize_pk(bytes: &GenericArray<u8, Self::PkLen>) -> Result<Self::Pk, InternalError>;
+
+    /// Generate a random secret key
+    fn random_sk<R: RngCore + CryptoRng>(rng: &mut R) -> Self::Sk;
+
+    /// Hashes a slice of pseudo-random bytes to a scalar
+    ///
+    /// # Errors
+    /// [`InternalError::HashToScalar`] if the `input` is empty or longer then
+    /// [`u16::MAX`].
+    fn hash_to_scalar<H>(input: &[&[u8]], dst: &[u8]) -> Result<Self::Sk, InternalError>
+    where
+        H: Digest + BlockSizeUser,
+        H::OutputSize: IsLess<U256> + IsLessOrEqual<H::BlockSize>;
+
+    /// Return a public key from its secret key
+    fn public_key(sk: &Self::Sk) -> Self::Pk;
 
     /// Diffie-Hellman key exchange
-    fn diffie_hellman(&self, sk: &GenericArray<u8, Self::SkLen>) -> GenericArray<u8, Self::PkLen>;
-}
+    fn diffie_hellman(pk: &Self::Pk, sk: &Self::Sk) -> GenericArray<u8, Self::PkLen>;
 
-#[cfg(feature = "p256")]
-pub mod p256;
-#[cfg(feature = "ristretto255")]
-pub mod ristretto255;
-#[cfg(feature = "x25519")]
-pub mod x25519;
+    /// Zeroize secret key on drop.
+    fn zeroize_sk_on_drop(sk: &mut Self::Sk);
+
+    /// Serializes `self`
+    fn serialize_sk(sk: &Self::Sk) -> GenericArray<u8, Self::SkLen>;
+
+    /// Return a public key from its fixed-length bytes representation
+    fn deserialize_sk(bytes: &GenericArray<u8, Self::SkLen>) -> Result<Self::Sk, InternalError>;
+}

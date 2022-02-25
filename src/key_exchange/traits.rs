@@ -10,9 +10,9 @@ use digest::Output;
 use generic_array::typenum::{IsLess, Le, NonZero, U256};
 use generic_array::{ArrayLength, GenericArray};
 use rand::{CryptoRng, RngCore};
-use zeroize::Zeroize;
+use zeroize::ZeroizeOnDrop;
 
-use crate::ciphersuite::CipherSuite;
+use crate::ciphersuite::{CipherSuite, OprfHash};
 use crate::errors::ProtocolError;
 use crate::hash::{Hash, ProxyHash};
 use crate::key_exchange::group::KeGroup;
@@ -46,17 +46,17 @@ where
     <D::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
     Le<<D::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
 {
-    type KE1State: FromBytes + ToBytes + Zeroize + Clone;
-    type KE2State: FromBytes + ToBytes + Zeroize + Clone;
-    type KE1Message: FromBytes + ToBytes + Zeroize + Clone;
-    type KE2Message: FromBytes + ToBytes + Clone;
-    type KE3Message: FromBytes + ToBytes + Clone;
+    type KE1State: FromBytes + ToBytes + ZeroizeOnDrop + Clone;
+    type KE2State: FromBytes + ToBytes + ZeroizeOnDrop + Clone;
+    type KE1Message: FromBytes + ToBytes + ZeroizeOnDrop + Clone;
+    type KE2Message: FromBytes + ToBytes + ZeroizeOnDrop + Clone;
+    type KE3Message: FromBytes + ToBytes + ZeroizeOnDrop + Clone;
 
     fn generate_ke1<R: RngCore + CryptoRng>(
         rng: &mut R,
     ) -> Result<(Self::KE1State, Self::KE1Message), ProtocolError>;
 
-    #[allow(clippy::too_many_arguments, clippy::type_complexity)]
+    #[allow(clippy::too_many_arguments)]
     fn generate_ke2<'a, 'b, 'c, 'd, R: RngCore + CryptoRng, S: SecretKey<G>>(
         rng: &mut R,
         l1_bytes: impl Iterator<Item = &'a [u8]>,
@@ -69,7 +69,7 @@ where
         context: &[u8],
     ) -> Result<GenerateKe2Result<Self, D, G>, ProtocolError<S::Error>>;
 
-    #[allow(clippy::too_many_arguments, clippy::type_complexity)]
+    #[allow(clippy::too_many_arguments)]
     fn generate_ke3<'a, 'b, 'c, 'd>(
         l2_component: impl Iterator<Item = &'a [u8]>,
         ke2_message: Self::KE2Message,
@@ -82,13 +82,10 @@ where
         context: &[u8],
     ) -> Result<GenerateKe3Result<Self, D, G>, ProtocolError>;
 
-    #[allow(clippy::type_complexity)]
     fn finish_ke(
         ke3_message: Self::KE3Message,
         ke2_state: &Self::KE2State,
     ) -> Result<Output<D>, ProtocolError>;
-
-    fn ke2_message_size() -> usize;
 }
 
 pub trait FromBytes: Sized {
@@ -101,14 +98,13 @@ pub trait ToBytes {
     fn to_bytes(&self) -> GenericArray<u8, Self::Len>;
 }
 
-#[allow(dead_code)]
 pub type Ke1StateLen<CS: CipherSuite> =
-    <<CS::KeyExchange as KeyExchange<CS::Hash, CS::KeGroup>>::KE1State as ToBytes>::Len;
+    <<CS::KeyExchange as KeyExchange<OprfHash<CS>, CS::KeGroup>>::KE1State as ToBytes>::Len;
 pub type Ke1MessageLen<CS: CipherSuite> =
-    <<CS::KeyExchange as KeyExchange<CS::Hash, CS::KeGroup>>::KE1Message as ToBytes>::Len;
+    <<CS::KeyExchange as KeyExchange<OprfHash<CS>, CS::KeGroup>>::KE1Message as ToBytes>::Len;
 pub type Ke2StateLen<CS: CipherSuite> =
-    <<CS::KeyExchange as KeyExchange<CS::Hash, CS::KeGroup>>::KE2State as ToBytes>::Len;
+    <<CS::KeyExchange as KeyExchange<OprfHash<CS>, CS::KeGroup>>::KE2State as ToBytes>::Len;
 pub type Ke2MessageLen<CS: CipherSuite> =
-    <<CS::KeyExchange as KeyExchange<CS::Hash, CS::KeGroup>>::KE2Message as ToBytes>::Len;
+    <<CS::KeyExchange as KeyExchange<OprfHash<CS>, CS::KeGroup>>::KE2Message as ToBytes>::Len;
 pub type Ke3MessageLen<CS: CipherSuite> =
-    <<CS::KeyExchange as KeyExchange<CS::Hash, CS::KeGroup>>::KE3Message as ToBytes>::Len;
+    <<CS::KeyExchange as KeyExchange<OprfHash<CS>, CS::KeGroup>>::KE3Message as ToBytes>::Len;

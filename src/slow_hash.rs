@@ -7,48 +7,39 @@
 
 //! Trait specifying a slow hashing function
 
-use digest::core_api::BlockSizeUser;
-use digest::Output;
-use generic_array::typenum::{IsLess, Le, NonZero, U256};
+use generic_array::{ArrayLength, GenericArray};
 
 use crate::errors::InternalError;
-use crate::hash::{Hash, ProxyHash};
 
 /// Used for the slow hashing function in OPAQUE
-pub trait SlowHash<D: Hash>: Default
-where
-    D::Core: ProxyHash,
-    <D::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
-    Le<<D::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
-{
+pub trait SlowHash: Default {
     /// Computes the slow hashing function
-    fn hash(&self, input: Output<D>) -> Result<Output<D>, InternalError>;
+    fn hash<L: ArrayLength<u8>>(
+        &self,
+        input: GenericArray<u8, L>,
+    ) -> Result<GenericArray<u8, L>, InternalError>;
 }
 
 /// A no-op hash which simply returns its input
 #[derive(Default)]
 pub struct NoOpHash;
 
-impl<D: Hash> SlowHash<D> for NoOpHash
-where
-    D::Core: ProxyHash,
-    <D::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
-    Le<<D::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
-{
-    fn hash(&self, input: Output<D>) -> Result<Output<D>, InternalError> {
+impl SlowHash for NoOpHash {
+    fn hash<L: ArrayLength<u8>>(
+        &self,
+        input: GenericArray<u8, L>,
+    ) -> Result<GenericArray<u8, L>, InternalError> {
         Ok(input)
     }
 }
 
 #[cfg(feature = "slow-hash")]
-impl<D: Hash> SlowHash<D> for argon2::Argon2<'_>
-where
-    D::Core: ProxyHash,
-    <D::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
-    Le<<D::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
-{
-    fn hash(&self, input: Output<D>) -> Result<Output<D>, InternalError> {
-        let mut output = Output::<D>::default();
+impl SlowHash for argon2::Argon2<'_> {
+    fn hash<L: ArrayLength<u8>>(
+        &self,
+        input: GenericArray<u8, L>,
+    ) -> Result<GenericArray<u8, L>, InternalError> {
+        let mut output = GenericArray::default();
         self.hash_password_into(&input, &[0; argon2::MIN_SALT_LEN], &mut output)
             .map_err(|_| InternalError::SlowHashError)?;
         Ok(output)

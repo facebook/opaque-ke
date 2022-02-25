@@ -6,20 +6,22 @@
 // of this source tree.
 
 use core::ops::Add;
-use std::string::ToString;
 use std::vec::Vec;
 use std::{println, vec};
 
 use digest::core_api::{BlockSizeUser, CoreProxy};
-use generic_array::typenum::{IsLess, Le, NonZero, Sum, U256};
-use generic_array::ArrayLength;
+use digest::OutputSizeUser;
+use generic_array::typenum::{IsLess, IsLessOrEqual, Le, NonZero, Sum, U256};
+use generic_array::{ArrayLength, GenericArray};
 use json::JsonValue;
+use rand::rngs::OsRng;
+use rand::RngCore;
 use voprf::Group;
 
-use crate::ciphersuite::CipherSuite;
+use crate::ciphersuite::{CipherSuite, OprfGroup, OprfHash};
 use crate::envelope::EnvelopeLen;
 use crate::errors::*;
-use crate::hash::{OutputSize, ProxyHash};
+use crate::hash::{Hash, OutputSize, ProxyHash};
 use crate::key_exchange::group::KeGroup;
 use crate::key_exchange::traits::{Ke1MessageLen, Ke2MessageLen};
 use crate::key_exchange::tripledh::{NonceLen, TripleDH};
@@ -89,30 +91,39 @@ macro_rules! parse_default {
     };
 }
 
-/// If no entry is found, default to filling a random buffer of a specified size
-macro_rules! parse_default_random {
-    ( $v:ident, $s:expr, $size:expr ) => {
-        parse_default!($v, $s, {
-            use rand::rngs::OsRng;
-            use rand::RngCore;
-            let mut rng = OsRng;
-            let mut v = vec![0u8; $size];
-            rng.fill_bytes(&mut v);
-            v
-        })
-    };
-}
-
 fn decode(values: &JsonValue, key: &str) -> Option<Vec<u8>> {
-    values[key]
-        .as_str()
-        .and_then(|s| hex::decode(&s.to_string()).ok())
+    values[key].as_str().and_then(|s| hex::decode(&s).ok())
 }
 
-fn populate_test_vectors(values: &JsonValue) -> OpaqueTestVectorParameters {
+fn populate_test_vectors<CS: CipherSuite>(values: &JsonValue) -> OpaqueTestVectorParameters
+where
+    <OprfHash<CS> as OutputSizeUser>::OutputSize:
+        IsLess<U256> + IsLessOrEqual<<OprfHash<CS> as BlockSizeUser>::BlockSize>,
+    OprfHash<CS>: Hash,
+    <OprfHash<CS> as CoreProxy>::Core: ProxyHash,
+    <<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
+    Le<<<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
+{
+    let mut rng = OsRng;
+
     OpaqueTestVectorParameters {
-        dummy_private_key: parse_default_random!(values, "client_private_key", 32),
-        dummy_masking_key: parse_default_random!(values, "masking_key", 64),
+        dummy_private_key: {
+            match decode(values, "client_private_key") {
+                Some(value) => value,
+                None => CS::KeGroup::serialize_sk(&CS::KeGroup::random_sk(&mut OsRng)).to_vec(),
+            }
+        },
+        dummy_masking_key: {
+            match decode(values, "masking_key") {
+                Some(value) => value,
+                None => {
+                    let mut bytes =
+                        GenericArray::<u8, <OprfHash<CS> as OutputSizeUser>::OutputSize>::default();
+                    rng.fill_bytes(&mut bytes);
+                    bytes.to_vec()
+                }
+            }
+        },
         context: parse!(values, "Context"),
         client_private_key: decode(values, "client_private_key"),
         client_keyshare: parse!(values, "client_keyshare"),
@@ -153,15 +164,18 @@ fn populate_test_vectors(values: &JsonValue) -> OpaqueTestVectorParameters {
 
 fn get_password_file_bytes<CS: CipherSuite>(parameters: &OpaqueTestVectorParameters) -> Vec<u8>
 where
-    <CS::Hash as CoreProxy>::Core: ProxyHash,
-    <<CS::Hash as CoreProxy>::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
-    Le<<<CS::Hash as CoreProxy>::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
+    <OprfHash<CS> as OutputSizeUser>::OutputSize:
+        IsLess<U256> + IsLessOrEqual<<OprfHash<CS> as BlockSizeUser>::BlockSize>,
+    OprfHash<CS>: Hash,
+    <OprfHash<CS> as CoreProxy>::Core: ProxyHash,
+    <<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
+    Le<<<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
     // Envelope: Nonce + Hash
-    NonceLen: Add<OutputSize<CS::Hash>>,
+    NonceLen: Add<OutputSize<OprfHash<CS>>>,
     EnvelopeLen<CS>: ArrayLength<u8>,
     // RegistrationUpload: (KePk + Hash) + Envelope
-    <CS::KeGroup as KeGroup>::PkLen: Add<OutputSize<CS::Hash>>,
-    Sum<<CS::KeGroup as KeGroup>::PkLen, OutputSize<CS::Hash>>:
+    <CS::KeGroup as KeGroup>::PkLen: Add<OutputSize<OprfHash<CS>>>,
+    Sum<<CS::KeGroup as KeGroup>::PkLen, OutputSize<OprfHash<CS>>>:
         ArrayLength<u8> + Add<EnvelopeLen<CS>>,
     RegistrationUploadLen<CS>: ArrayLength<u8>,
     // ServerRegistration = RegistrationUpload
@@ -174,12 +188,12 @@ where
 }
 
 macro_rules! json_to_test_vectors {
-    ( $v:ident, $vector_type:expr, $cs:expr, ) => {
+    ( $v:ident, $vector_type:expr, $cs:expr, $cs_ty:ty) => {
         $v[$vector_type]
             .members()
             .filter_map(|x| {
                 if x.has_key($cs) {
-                    Some(populate_test_vectors(&x[$cs]))
+                    Some(populate_test_vectors::<$cs_ty>(&x[$cs]))
                 } else {
                     None
                 }
@@ -195,23 +209,32 @@ fn tests() -> Result<(), ProtocolError> {
 
     #[cfg(feature = "ristretto255")]
     {
-        let ristretto_real_tvs = json_to_test_vectors!(rfc, "Real", "ristretto255, SHA512",);
+        struct Ristretto255Sha512NoSlowHash;
+        impl CipherSuite for Ristretto255Sha512NoSlowHash {
+            type OprfGroup = crate::Ristretto255;
+            type KeGroup = crate::Ristretto255;
+            type KeyExchange = TripleDH;
+            type SlowHash = NoOpHash;
+        }
 
-        let ristretto_fake_tvs = json_to_test_vectors!(rfc, "Fake", "ristretto255, SHA512",);
+        let ristretto_real_tvs = json_to_test_vectors!(
+            rfc,
+            "Real",
+            "ristretto255, SHA512",
+            Ristretto255Sha512NoSlowHash
+        );
+
+        let ristretto_fake_tvs = json_to_test_vectors!(
+            rfc,
+            "Fake",
+            "ristretto255, SHA512",
+            Ristretto255Sha512NoSlowHash
+        );
 
         assert!(
             !(ristretto_real_tvs.is_empty() || ristretto_fake_tvs.is_empty()),
             "Parsing error"
         );
-
-        struct Ristretto255Sha512NoSlowHash;
-        impl CipherSuite for Ristretto255Sha512NoSlowHash {
-            type OprfGroup = curve25519_dalek::ristretto::RistrettoPoint;
-            type KeGroup = curve25519_dalek::ristretto::RistrettoPoint;
-            type KeyExchange = TripleDH;
-            type Hash = sha2::Sha512;
-            type SlowHash = NoOpHash;
-        }
 
         test_registration_request::<Ristretto255Sha512NoSlowHash>(&ristretto_real_tvs)?;
         test_registration_response::<Ristretto255Sha512NoSlowHash>(&ristretto_real_tvs)?;
@@ -223,36 +246,40 @@ fn tests() -> Result<(), ProtocolError> {
         test_fake_vectors::<Ristretto255Sha512NoSlowHash>(&ristretto_fake_tvs)?;
     }
 
-    #[cfg(feature = "p256")]
-    {
-        let p256_real_tvs =
-            json_to_test_vectors!(rfc, "Real", "P256_XMD:SHA-256_SSWU_RO_, SHA256",);
-        let p256_fake_tvs =
-            json_to_test_vectors!(rfc, "Fake", "P256_XMD:SHA-256_SSWU_RO_, SHA256",);
-
-        assert!(
-            !(p256_real_tvs.is_empty() || p256_fake_tvs.is_empty()),
-            "Parsing error"
-        );
-
-        struct P256Sha256NoSlowHash;
-        impl CipherSuite for P256Sha256NoSlowHash {
-            type OprfGroup = p256_::ProjectivePoint;
-            type KeGroup = p256_::PublicKey;
-            type KeyExchange = TripleDH;
-            type Hash = sha2::Sha256;
-            type SlowHash = NoOpHash;
-        }
-
-        test_registration_request::<P256Sha256NoSlowHash>(&p256_real_tvs)?;
-        test_registration_response::<P256Sha256NoSlowHash>(&p256_real_tvs)?;
-        test_registration_upload::<P256Sha256NoSlowHash>(&p256_real_tvs)?;
-        test_ke1::<P256Sha256NoSlowHash>(&p256_real_tvs)?;
-        test_ke2::<P256Sha256NoSlowHash>(&p256_real_tvs)?;
-        test_ke3::<P256Sha256NoSlowHash>(&p256_real_tvs)?;
-        test_server_login_finish::<P256Sha256NoSlowHash>(&p256_real_tvs)?;
-        test_fake_vectors::<P256Sha256NoSlowHash>(&p256_fake_tvs)?;
+    struct P256Sha256NoSlowHash;
+    impl CipherSuite for P256Sha256NoSlowHash {
+        type OprfGroup = p256::NistP256;
+        type KeGroup = p256::NistP256;
+        type KeyExchange = TripleDH;
+        type SlowHash = NoOpHash;
     }
+
+    let p256_real_tvs = json_to_test_vectors!(
+        rfc,
+        "Real",
+        "P256_XMD:SHA-256_SSWU_RO_, SHA256",
+        P256Sha256NoSlowHash
+    );
+    let p256_fake_tvs = json_to_test_vectors!(
+        rfc,
+        "Fake",
+        "P256_XMD:SHA-256_SSWU_RO_, SHA256",
+        P256Sha256NoSlowHash
+    );
+
+    assert!(
+        !(p256_real_tvs.is_empty() || p256_fake_tvs.is_empty()),
+        "Parsing error"
+    );
+
+    test_registration_request::<P256Sha256NoSlowHash>(&p256_real_tvs)?;
+    test_registration_response::<P256Sha256NoSlowHash>(&p256_real_tvs)?;
+    test_registration_upload::<P256Sha256NoSlowHash>(&p256_real_tvs)?;
+    test_ke1::<P256Sha256NoSlowHash>(&p256_real_tvs)?;
+    test_ke2::<P256Sha256NoSlowHash>(&p256_real_tvs)?;
+    test_ke3::<P256Sha256NoSlowHash>(&p256_real_tvs)?;
+    test_server_login_finish::<P256Sha256NoSlowHash>(&p256_real_tvs)?;
+    test_fake_vectors::<P256Sha256NoSlowHash>(&p256_fake_tvs)?;
 
     Ok(())
 }
@@ -261,9 +288,12 @@ fn test_registration_request<CS: CipherSuite>(
     tvs: &[OpaqueTestVectorParameters],
 ) -> Result<(), ProtocolError>
 where
-    <CS::Hash as CoreProxy>::Core: ProxyHash,
-    <<CS::Hash as CoreProxy>::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
-    Le<<<CS::Hash as CoreProxy>::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
+    <OprfHash<CS> as OutputSizeUser>::OutputSize:
+        IsLess<U256> + IsLessOrEqual<<OprfHash<CS> as BlockSizeUser>::BlockSize>,
+    OprfHash<CS>: Hash,
+    <OprfHash<CS> as CoreProxy>::Core: ProxyHash,
+    <<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
+    Le<<<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
 {
     for parameters in tvs {
         let mut rng = CycleRng::new(parameters.blind_registration.to_vec());
@@ -281,11 +311,14 @@ fn test_registration_response<CS: CipherSuite>(
     tvs: &[OpaqueTestVectorParameters],
 ) -> Result<(), ProtocolError>
 where
-    <CS::Hash as CoreProxy>::Core: ProxyHash,
-    <<CS::Hash as CoreProxy>::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
-    Le<<<CS::Hash as CoreProxy>::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
+    <OprfHash<CS> as OutputSizeUser>::OutputSize:
+        IsLess<U256> + IsLessOrEqual<<OprfHash<CS> as BlockSizeUser>::BlockSize>,
+    OprfHash<CS>: Hash,
+    <OprfHash<CS> as CoreProxy>::Core: ProxyHash,
+    <<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
+    Le<<<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
     // RegistrationResponse: KgPk + KePk
-    <CS::OprfGroup as Group>::ElemLen: Add<<CS::KeGroup as KeGroup>::PkLen>,
+    <OprfGroup<CS> as Group>::ElemLen: Add<<CS::KeGroup as KeGroup>::PkLen>,
     RegistrationResponseLen<CS>: ArrayLength<u8>,
 {
     for parameters in tvs {
@@ -318,15 +351,18 @@ fn test_registration_upload<CS: CipherSuite>(
     tvs: &[OpaqueTestVectorParameters],
 ) -> Result<(), ProtocolError>
 where
-    <CS::Hash as CoreProxy>::Core: ProxyHash,
-    <<CS::Hash as CoreProxy>::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
-    Le<<<CS::Hash as CoreProxy>::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
+    <OprfHash<CS> as OutputSizeUser>::OutputSize:
+        IsLess<U256> + IsLessOrEqual<<OprfHash<CS> as BlockSizeUser>::BlockSize>,
+    OprfHash<CS>: Hash,
+    <OprfHash<CS> as CoreProxy>::Core: ProxyHash,
+    <<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
+    Le<<<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
     // Envelope: Nonce + Hash
-    NonceLen: Add<OutputSize<CS::Hash>>,
+    NonceLen: Add<OutputSize<OprfHash<CS>>>,
     EnvelopeLen<CS>: ArrayLength<u8>,
     // RegistrationUpload: (KePk + Hash) + Envelope
-    <CS::KeGroup as KeGroup>::PkLen: Add<OutputSize<CS::Hash>>,
-    Sum<<CS::KeGroup as KeGroup>::PkLen, OutputSize<CS::Hash>>:
+    <CS::KeGroup as KeGroup>::PkLen: Add<OutputSize<OprfHash<CS>>>,
+    Sum<<CS::KeGroup as KeGroup>::PkLen, OutputSize<OprfHash<CS>>>:
         ArrayLength<u8> + Add<EnvelopeLen<CS>>,
     RegistrationUploadLen<CS>: ArrayLength<u8>,
 {
@@ -362,7 +398,7 @@ where
         );
         assert_eq!(
             hex::encode(&parameters.export_key),
-            hex::encode(result.export_key.to_vec())
+            hex::encode(result.export_key)
         );
     }
 
@@ -371,11 +407,14 @@ where
 
 fn test_ke1<CS: CipherSuite>(tvs: &[OpaqueTestVectorParameters]) -> Result<(), ProtocolError>
 where
-    <CS::Hash as CoreProxy>::Core: ProxyHash,
-    <<CS::Hash as CoreProxy>::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
-    Le<<<CS::Hash as CoreProxy>::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
+    <OprfHash<CS> as OutputSizeUser>::OutputSize:
+        IsLess<U256> + IsLessOrEqual<<OprfHash<CS> as BlockSizeUser>::BlockSize>,
+    OprfHash<CS>: Hash,
+    <OprfHash<CS> as CoreProxy>::Core: ProxyHash,
+    <<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
+    Le<<<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
     // CredentialRequest: KgPk + Ke1Message
-    <CS::OprfGroup as Group>::ElemLen: Add<Ke1MessageLen<CS>>,
+    <OprfGroup<CS> as Group>::ElemLen: Add<Ke1MessageLen<CS>>,
     CredentialRequestLen<CS>: ArrayLength<u8>,
 {
     for parameters in tvs {
@@ -404,29 +443,32 @@ where
 
 fn test_ke2<CS: CipherSuite>(tvs: &[OpaqueTestVectorParameters]) -> Result<(), ProtocolError>
 where
-    <CS::Hash as CoreProxy>::Core: ProxyHash,
-    <<CS::Hash as CoreProxy>::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
-    Le<<<CS::Hash as CoreProxy>::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
+    <OprfHash<CS> as OutputSizeUser>::OutputSize:
+        IsLess<U256> + IsLessOrEqual<<OprfHash<CS> as BlockSizeUser>::BlockSize>,
+    OprfHash<CS>: Hash,
+    <OprfHash<CS> as CoreProxy>::Core: ProxyHash,
+    <<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
+    Le<<<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
     // Envelope: Nonce + Hash
-    NonceLen: Add<OutputSize<CS::Hash>>,
+    NonceLen: Add<OutputSize<OprfHash<CS>>>,
     EnvelopeLen<CS>: ArrayLength<u8>,
     // RegistrationUpload: (KePk + Hash) + Envelope
-    <CS::KeGroup as KeGroup>::PkLen: Add<OutputSize<CS::Hash>>,
-    Sum<<CS::KeGroup as KeGroup>::PkLen, OutputSize<CS::Hash>>:
+    <CS::KeGroup as KeGroup>::PkLen: Add<OutputSize<OprfHash<CS>>>,
+    Sum<<CS::KeGroup as KeGroup>::PkLen, OutputSize<OprfHash<CS>>>:
         ArrayLength<u8> + Add<EnvelopeLen<CS>>,
     RegistrationUploadLen<CS>: ArrayLength<u8>,
     // ServerRegistration = RegistrationUpload
     // MaskedResponse: (Nonce + Hash) + KePk
-    NonceLen: Add<OutputSize<CS::Hash>>,
-    Sum<NonceLen, OutputSize<CS::Hash>>: ArrayLength<u8> + Add<<CS::KeGroup as KeGroup>::PkLen>,
+    NonceLen: Add<OutputSize<OprfHash<CS>>>,
+    Sum<NonceLen, OutputSize<OprfHash<CS>>>: ArrayLength<u8> + Add<<CS::KeGroup as KeGroup>::PkLen>,
     MaskedResponseLen<CS>: ArrayLength<u8>,
     // CredentialResponseWithoutKeLen: (KgPk + Nonce) + MaskedResponse
-    <CS::OprfGroup as Group>::ElemLen: Add<NonceLen>,
-    Sum<<CS::OprfGroup as Group>::ElemLen, NonceLen>: ArrayLength<u8> + Add<MaskedResponseLen<CS>>,
+    <OprfGroup<CS> as Group>::ElemLen: Add<NonceLen>,
+    Sum<<OprfGroup<CS> as Group>::ElemLen, NonceLen>: ArrayLength<u8> + Add<MaskedResponseLen<CS>>,
     CredentialResponseWithoutKeLen<CS>: ArrayLength<u8>,
     // MaskedResponse: (Nonce + Hash) + KePk
-    NonceLen: Add<OutputSize<CS::Hash>>,
-    Sum<NonceLen, OutputSize<CS::Hash>>: ArrayLength<u8> + Add<<CS::KeGroup as KeGroup>::PkLen>,
+    NonceLen: Add<OutputSize<OprfHash<CS>>>,
+    Sum<NonceLen, OutputSize<OprfHash<CS>>>: ArrayLength<u8> + Add<<CS::KeGroup as KeGroup>::PkLen>,
     MaskedResponseLen<CS>: ArrayLength<u8>,
     // CredentialResponse: CredentialResponseWithoutKeLen + Ke2Message
     CredentialResponseWithoutKeLen<CS>: Add<Ke2MessageLen<CS>>,
@@ -489,12 +531,15 @@ where
 
 fn test_ke3<CS: CipherSuite>(tvs: &[OpaqueTestVectorParameters]) -> Result<(), ProtocolError>
 where
-    <CS::Hash as CoreProxy>::Core: ProxyHash,
-    <<CS::Hash as CoreProxy>::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
-    Le<<<CS::Hash as CoreProxy>::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
+    <OprfHash<CS> as OutputSizeUser>::OutputSize:
+        IsLess<U256> + IsLessOrEqual<<OprfHash<CS> as BlockSizeUser>::BlockSize>,
+    OprfHash<CS>: Hash,
+    <OprfHash<CS> as CoreProxy>::Core: ProxyHash,
+    <<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
+    Le<<<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
     // MaskedResponse: (Nonce + Hash) + KePk
-    NonceLen: Add<OutputSize<CS::Hash>>,
-    Sum<NonceLen, OutputSize<CS::Hash>>: ArrayLength<u8> + Add<<CS::KeGroup as KeGroup>::PkLen>,
+    NonceLen: Add<OutputSize<OprfHash<CS>>>,
+    Sum<NonceLen, OutputSize<OprfHash<CS>>>: ArrayLength<u8> + Add<<CS::KeGroup as KeGroup>::PkLen>,
     MaskedResponseLen<CS>: ArrayLength<u8>,
 {
     for parameters in tvs {
@@ -549,21 +594,24 @@ fn test_server_login_finish<CS: CipherSuite>(
     tvs: &[OpaqueTestVectorParameters],
 ) -> Result<(), ProtocolError>
 where
-    <CS::Hash as CoreProxy>::Core: ProxyHash,
-    <<CS::Hash as CoreProxy>::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
-    Le<<<CS::Hash as CoreProxy>::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
+    <OprfHash<CS> as OutputSizeUser>::OutputSize:
+        IsLess<U256> + IsLessOrEqual<<OprfHash<CS> as BlockSizeUser>::BlockSize>,
+    OprfHash<CS>: Hash,
+    <OprfHash<CS> as CoreProxy>::Core: ProxyHash,
+    <<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
+    Le<<<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
     // Envelope: Nonce + Hash
-    NonceLen: Add<OutputSize<CS::Hash>>,
+    NonceLen: Add<OutputSize<OprfHash<CS>>>,
     EnvelopeLen<CS>: ArrayLength<u8>,
     // RegistrationUpload: (KePk + Hash) + Envelope
-    <CS::KeGroup as KeGroup>::PkLen: Add<OutputSize<CS::Hash>>,
-    Sum<<CS::KeGroup as KeGroup>::PkLen, OutputSize<CS::Hash>>:
+    <CS::KeGroup as KeGroup>::PkLen: Add<OutputSize<OprfHash<CS>>>,
+    Sum<<CS::KeGroup as KeGroup>::PkLen, OutputSize<OprfHash<CS>>>:
         ArrayLength<u8> + Add<EnvelopeLen<CS>>,
     RegistrationUploadLen<CS>: ArrayLength<u8>,
     // ServerRegistration = RegistrationUpload
     // MaskedResponse: (Nonce + Hash) + KePk
-    NonceLen: Add<OutputSize<CS::Hash>>,
-    Sum<NonceLen, OutputSize<CS::Hash>>: ArrayLength<u8> + Add<<CS::KeGroup as KeGroup>::PkLen>,
+    NonceLen: Add<OutputSize<OprfHash<CS>>>,
+    Sum<NonceLen, OutputSize<OprfHash<CS>>>: ArrayLength<u8> + Add<<CS::KeGroup as KeGroup>::PkLen>,
     MaskedResponseLen<CS>: ArrayLength<u8>,
 {
     for parameters in tvs {
@@ -618,16 +666,19 @@ fn test_fake_vectors<CS: CipherSuite>(
     tvs: &[OpaqueTestVectorParameters],
 ) -> Result<(), ProtocolError>
 where
-    <CS::Hash as CoreProxy>::Core: ProxyHash,
-    <<CS::Hash as CoreProxy>::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
-    Le<<<CS::Hash as CoreProxy>::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
+    <OprfHash<CS> as OutputSizeUser>::OutputSize:
+        IsLess<U256> + IsLessOrEqual<<OprfHash<CS> as BlockSizeUser>::BlockSize>,
+    OprfHash<CS>: Hash,
+    <OprfHash<CS> as CoreProxy>::Core: ProxyHash,
+    <<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
+    Le<<<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
     // MaskedResponse: (Nonce + Hash) + KePk
-    NonceLen: Add<OutputSize<CS::Hash>>,
-    Sum<NonceLen, OutputSize<CS::Hash>>: ArrayLength<u8> + Add<<CS::KeGroup as KeGroup>::PkLen>,
+    NonceLen: Add<OutputSize<OprfHash<CS>>>,
+    Sum<NonceLen, OutputSize<OprfHash<CS>>>: ArrayLength<u8> + Add<<CS::KeGroup as KeGroup>::PkLen>,
     MaskedResponseLen<CS>: ArrayLength<u8>,
     // CredentialResponseWithoutKeLen: (KgPk + Nonce) + MaskedResponse
-    <CS::OprfGroup as Group>::ElemLen: Add<NonceLen>,
-    Sum<<CS::OprfGroup as Group>::ElemLen, NonceLen>: ArrayLength<u8> + Add<MaskedResponseLen<CS>>,
+    <OprfGroup<CS> as Group>::ElemLen: Add<NonceLen>,
+    Sum<<OprfGroup<CS> as Group>::ElemLen, NonceLen>: ArrayLength<u8> + Add<MaskedResponseLen<CS>>,
     CredentialResponseWithoutKeLen<CS>: ArrayLength<u8>,
     // CredentialResponse: CredentialResponseWithoutKeLen + Ke2Message
     CredentialResponseWithoutKeLen<CS>: Add<Ke2MessageLen<CS>>,
