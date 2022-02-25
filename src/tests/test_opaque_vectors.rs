@@ -110,7 +110,7 @@ where
         dummy_private_key: {
             match decode(values, "client_private_key") {
                 Some(value) => value,
-                None => CS::KeGroup::serialize_sk(&CS::KeGroup::random_sk(&mut OsRng)).to_vec(),
+                None => CS::KeGroup::serialize_sk(CS::KeGroup::random_sk(&mut OsRng)).to_vec(),
             }
         },
         dummy_masking_key: {

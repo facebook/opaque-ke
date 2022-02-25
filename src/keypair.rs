@@ -63,7 +63,7 @@ impl<KG: KeGroup> KeyPair<KG> {
     /// Generating a random key pair given a cryptographic rng
     pub(crate) fn generate_random<R: RngCore + CryptoRng>(rng: &mut R) -> Self {
         let sk = KG::random_sk(rng);
-        let pk = KG::public_key(&sk);
+        let pk = KG::public_key(sk);
         Self {
             pk: PublicKey(pk),
             sk: PrivateKey(sk),
@@ -150,15 +150,15 @@ impl<KG: KeGroup> SecretKey<KG> for PrivateKey<KG> {
         &self,
         pk: PublicKey<KG>,
     ) -> Result<GenericArray<u8, KG::PkLen>, InternalError> {
-        Ok(KG::diffie_hellman(&pk.0, &self.0))
+        Ok(KG::diffie_hellman(pk.0, self.0))
     }
 
     fn public_key(&self) -> Result<PublicKey<KG>, InternalError> {
-        Ok(PublicKey(KG::public_key(&self.0)))
+        Ok(PublicKey(KG::public_key(self.0)))
     }
 
     fn serialize(&self) -> GenericArray<u8, Self::Len> {
-        KG::serialize_sk(&self.0)
+        KG::serialize_sk(self.0)
     }
 
     fn deserialize(input: &[u8]) -> Result<Self, InternalError> {
@@ -190,7 +190,7 @@ impl<KG: KeGroup> PublicKey<KG> {
 
     /// Convert to bytes
     pub fn to_bytes(&self) -> GenericArray<u8, KG::PkLen> {
-        KG::serialize_pk(&self.0)
+        KG::serialize_pk(self.0)
     }
 
     /// Convert from slice

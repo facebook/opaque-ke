@@ -36,7 +36,7 @@ where
 
     type SkLen = FieldSize<Self>;
 
-    fn serialize_pk(pk: &Self::Pk) -> GenericArray<u8, Self::PkLen> {
+    fn serialize_pk(pk: Self::Pk) -> GenericArray<u8, Self::PkLen> {
         let bytes = pk.to_encoded_point(true);
         let bytes = bytes.as_bytes();
         let mut result = GenericArray::default();
@@ -63,17 +63,17 @@ where
         Self::hash_to_scalar::<ExpandMsgXmd<H>>(input, dst).map_err(|_| InternalError::HashToScalar)
     }
 
-    fn public_key(sk: &Self::Sk) -> Self::Pk {
+    fn public_key(sk: Self::Sk) -> Self::Pk {
         ProjectivePoint::<Self>::generator() * sk
     }
 
-    fn diffie_hellman(pk: &Self::Pk, sk: &Self::Sk) -> GenericArray<u8, Self::PkLen> {
+    fn diffie_hellman(pk: Self::Pk, sk: Self::Sk) -> GenericArray<u8, Self::PkLen> {
         // This should be unable to fail because we should pass a zero scalar.
-        GenericArray::clone_from_slice((*pk * sk).to_encoded_point(true).as_bytes())
+        GenericArray::clone_from_slice((pk * sk).to_encoded_point(true).as_bytes())
     }
 
-    fn serialize_sk(sk: &Self::Sk) -> GenericArray<u8, Self::SkLen> {
-        (*sk).into()
+    fn serialize_sk(sk: Self::Sk) -> GenericArray<u8, Self::SkLen> {
+        sk.into()
     }
 
     fn deserialize_sk(bytes: &GenericArray<u8, Self::SkLen>) -> Result<Self::Sk, InternalError> {

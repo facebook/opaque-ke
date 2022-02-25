@@ -31,7 +31,7 @@ impl KeGroup for X25519 {
     type Sk = Scalar;
     type SkLen = U32;
 
-    fn serialize_pk(pk: &Self::Pk) -> GenericArray<u8, Self::PkLen> {
+    fn serialize_pk(pk: Self::Pk) -> GenericArray<u8, Self::PkLen> {
         pk.to_bytes().into()
     }
 
@@ -70,15 +70,15 @@ impl KeGroup for X25519 {
         Ok(Scalar::from_bytes_mod_order_wide(&uniform_bytes.into()))
     }
 
-    fn public_key(sk: &Self::Sk) -> Self::Pk {
-        (&ED25519_BASEPOINT_TABLE * sk).to_montgomery()
+    fn public_key(sk: Self::Sk) -> Self::Pk {
+        (&ED25519_BASEPOINT_TABLE * &sk).to_montgomery()
     }
 
-    fn diffie_hellman(pk: &Self::Pk, sk: &Self::Sk) -> GenericArray<u8, Self::PkLen> {
-        Self::serialize_pk(&(sk * pk))
+    fn diffie_hellman(pk: Self::Pk, sk: Self::Sk) -> GenericArray<u8, Self::PkLen> {
+        Self::serialize_pk(sk * pk)
     }
 
-    fn serialize_sk(sk: &Self::Sk) -> GenericArray<u8, Self::SkLen> {
+    fn serialize_sk(sk: Self::Sk) -> GenericArray<u8, Self::SkLen> {
         sk.to_bytes().into()
     }
 

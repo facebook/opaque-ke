@@ -33,7 +33,7 @@ impl KeGroup for Ristretto255 {
     type Sk = Scalar;
     type SkLen = U32;
 
-    fn serialize_pk(pk: &Self::Pk) -> GenericArray<u8, Self::PkLen> {
+    fn serialize_pk(pk: Self::Pk) -> GenericArray<u8, Self::PkLen> {
         pk.compress().to_bytes().into()
     }
 
@@ -83,15 +83,15 @@ impl KeGroup for Ristretto255 {
         Ok(Scalar::from_bytes_mod_order_wide(&uniform_bytes.into()))
     }
 
-    fn public_key(sk: &Self::Sk) -> Self::Pk {
+    fn public_key(sk: Self::Sk) -> Self::Pk {
         RISTRETTO_BASEPOINT_POINT * sk
     }
 
-    fn diffie_hellman(pk: &Self::Pk, sk: &Self::Sk) -> GenericArray<u8, Self::PkLen> {
-        Self::serialize_pk(&(pk * sk))
+    fn diffie_hellman(pk: Self::Pk, sk: Self::Sk) -> GenericArray<u8, Self::PkLen> {
+        Self::serialize_pk(pk * sk)
     }
 
-    fn serialize_sk(sk: &Self::Sk) -> GenericArray<u8, Self::SkLen> {
+    fn serialize_sk(sk: Self::Sk) -> GenericArray<u8, Self::SkLen> {
         sk.to_bytes().into()
     }
 

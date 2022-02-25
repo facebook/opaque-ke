@@ -944,7 +944,7 @@
 //! # struct YourRemoteKey(<<Default as CipherSuite>::KeGroup as KeGroup>::Sk);
 //! # impl YourRemoteKey {
 //! #     fn diffie_hellman(&self, pk: &[u8]) -> Result<GenericArray<u8, <<Default as CipherSuite>::KeGroup as KeGroup>::PkLen>, YourRemoteKeyError> { todo!() }
-//! #     fn public_key(&self) -> Result<GenericArray<u8, <<Default as CipherSuite>::KeGroup as KeGroup>::PkLen>, YourRemoteKeyError> { Ok(<<Default as CipherSuite>::KeGroup>::serialize_pk(&<<Default as CipherSuite>::KeGroup>::public_key(&self.0))) }
+//! #     fn public_key(&self) -> Result<GenericArray<u8, <<Default as CipherSuite>::KeGroup as KeGroup>::PkLen>, YourRemoteKeyError> { Ok(<<Default as CipherSuite>::KeGroup>::serialize_pk(<<Default as CipherSuite>::KeGroup>::public_key(self.0))) }
 //! # }
 //! impl SecretKey<<Default as CipherSuite>::KeGroup> for YourRemoteKey {
 //!     type Error = YourRemoteKeyError;

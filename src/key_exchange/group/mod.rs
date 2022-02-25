@@ -25,16 +25,16 @@ use crate::errors::InternalError;
 /// A group representation for use in the key exchange
 pub trait KeGroup {
     /// Public key
-    type Pk: Clone + Zeroize;
+    type Pk: Copy + Zeroize;
     /// Length of the public key
     type PkLen: ArrayLength<u8>;
     /// Secret key
-    type Sk: Clone + Zeroize;
+    type Sk: Copy + Zeroize;
     /// Length of the secret key
     type SkLen: ArrayLength<u8>;
 
     /// Serializes `self`
-    fn serialize_pk(pk: &Self::Pk) -> GenericArray<u8, Self::PkLen>;
+    fn serialize_pk(pk: Self::Pk) -> GenericArray<u8, Self::PkLen>;
 
     /// Return a public key from its fixed-length bytes representation
     fn deserialize_pk(bytes: &GenericArray<u8, Self::PkLen>) -> Result<Self::Pk, InternalError>;
@@ -53,13 +53,13 @@ pub trait KeGroup {
         H::OutputSize: IsLess<U256> + IsLessOrEqual<H::BlockSize>;
 
     /// Return a public key from its secret key
-    fn public_key(sk: &Self::Sk) -> Self::Pk;
+    fn public_key(sk: Self::Sk) -> Self::Pk;
 
     /// Diffie-Hellman key exchange
-    fn diffie_hellman(pk: &Self::Pk, sk: &Self::Sk) -> GenericArray<u8, Self::PkLen>;
+    fn diffie_hellman(pk: Self::Pk, sk: Self::Sk) -> GenericArray<u8, Self::PkLen>;
 
     /// Serializes `self`
-    fn serialize_sk(sk: &Self::Sk) -> GenericArray<u8, Self::SkLen>;
+    fn serialize_sk(sk: Self::Sk) -> GenericArray<u8, Self::SkLen>;
 
     /// Return a public key from its fixed-length bytes representation
     fn deserialize_sk(bytes: &GenericArray<u8, Self::SkLen>) -> Result<Self::Sk, InternalError>;

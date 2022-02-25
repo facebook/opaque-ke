@@ -65,7 +65,7 @@ where
 {
     let mut rng = OsRng;
     let sk = CS::KeGroup::random_sk(&mut rng);
-    CS::KeGroup::public_key(&sk)
+    CS::KeGroup::public_key(sk)
 }
 
 #[test]
@@ -173,7 +173,7 @@ fn registration_request_roundtrip() -> Result<(), ProtocolError> {
         Le<<<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
     {
         let pt = random_point::<CS>();
-        let pt_bytes = CS::KeGroup::serialize_pk(&pt);
+        let pt_bytes = CS::KeGroup::serialize_pk(pt);
 
         let mut input = Vec::new();
         input.extend_from_slice(&pt_bytes);
@@ -218,7 +218,7 @@ fn registration_response_roundtrip() -> Result<(), ProtocolError> {
         RegistrationResponseLen<CS>: ArrayLength<u8>,
     {
         let pt = random_point::<CS>();
-        let beta_bytes = CS::KeGroup::serialize_pk(&pt);
+        let beta_bytes = CS::KeGroup::serialize_pk(pt);
         let mut rng = OsRng;
         let skp = KeyPair::<CS::KeGroup>::generate_random(&mut rng);
         let pubkey_bytes = skp.public().to_bytes();
@@ -331,7 +331,7 @@ fn credential_request_roundtrip() -> Result<(), ProtocolError> {
     {
         let mut rng = OsRng;
         let alpha = random_point::<CS>();
-        let alpha_bytes = CS::KeGroup::serialize_pk(&alpha);
+        let alpha_bytes = CS::KeGroup::serialize_pk(alpha);
 
         let client_e_kp = KeyPair::<CS::KeGroup>::generate_random(&mut rng);
         let mut client_nonce = [0u8; NonceLen::USIZE];
@@ -397,7 +397,7 @@ fn credential_response_roundtrip() -> Result<(), ProtocolError> {
         CredentialResponseLen<CS>: ArrayLength<u8>,
     {
         let pt = random_point::<CS>();
-        let pt_bytes = CS::KeGroup::serialize_pk(&pt);
+        let pt_bytes = CS::KeGroup::serialize_pk(pt);
 
         let mut rng = OsRng;
 
