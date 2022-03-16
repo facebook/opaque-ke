@@ -57,11 +57,11 @@ impl TryFrom<u8> for InnerEnvelopeMode {
     }
 }
 
-/// This struct is an instantiation of the envelope as described in <https://tools.ietf.org/html/draft-krawczyk-cfrg-opaque-06#section-4>
+/// This struct is an instantiation of the envelope.
 ///
 /// Note that earlier versions of this specification described an implementation
 /// of this envelope using an encryption scheme that satisfied random-key
-/// robustness (<https://tools.ietf.org/html/draft-krawczyk-cfrg-opaque-05#section-4>).
+/// robustness.
 /// The specification update has simplified this assumption by taking an
 /// XOR-based approach without compromising on security, and to avoid the
 /// confusion around the implementation of an RKR-secure encryption.

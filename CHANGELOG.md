@@ -1,5 +1,32 @@
 # Changelog
 
+## 2.0.0-pre.1 (March 15, 2022)
+
+* Synced implementation with draft-irtf-cfrg-opaque-07
+* Split out VOPRF implementation into its own crate
+* Added support for running the API without performing
+  allocations
+* Revamped the way the Group trait was used, so as to be more
+  easily extendable to other groups
+* Added support for p256 as the group and x25519 as the key exchange group
+* Added common traits for each public-facing struct, including serde support
+
+## 1.2.0 (October 7, 2021)
+
+* Added explicit support for the thumbv6m-none-eabi target (no-std)
+
+## 1.1.0 (August 18, 2021)
+
+* Updated dependencies and bumped MSRV to 1.51
+* Added no_std support
+
+## 1.0.0 (July 19, 2021)
+
+* Branched from v0.5.0
+* Various security improvements: non-zero scalars, zeroizing on drop,
+  constant-time operations, reflected value check, and adding an
+  i2osp error condition
+
 ## 0.6.0 (June 30, 2021)
 
 * Synced implementation with draft-irtf-cfrg-opaque-05, which changes
