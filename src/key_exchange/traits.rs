@@ -18,28 +18,6 @@ use crate::hash::{Hash, ProxyHash};
 use crate::key_exchange::group::KeGroup;
 use crate::keypair::{PrivateKey, PublicKey, SecretKey};
 
-#[cfg(not(test))]
-pub type GenerateKe2Result<K, D, G> = (
-    <K as KeyExchange<D, G>>::KE2State,
-    <K as KeyExchange<D, G>>::KE2Message,
-);
-#[cfg(test)]
-pub type GenerateKe2Result<K, D, G> = (
-    <K as KeyExchange<D, G>>::KE2State,
-    <K as KeyExchange<D, G>>::KE2Message,
-    Output<D>,
-    Output<D>,
-);
-#[cfg(not(test))]
-pub type GenerateKe3Result<K, D, G> = (Output<D>, <K as KeyExchange<D, G>>::KE3Message);
-#[cfg(test)]
-pub type GenerateKe3Result<K, D, G> = (
-    Output<D>,
-    <K as KeyExchange<D, G>>::KE3Message,
-    Output<D>,
-    Output<D>,
-);
-
 pub trait KeyExchange<D: Hash, G: KeGroup>
 where
     D::Core: ProxyHash,
@@ -97,6 +75,28 @@ pub trait ToBytes {
 
     fn to_bytes(&self) -> GenericArray<u8, Self::Len>;
 }
+
+#[cfg(not(test))]
+pub type GenerateKe2Result<K, D, G> = (
+    <K as KeyExchange<D, G>>::KE2State,
+    <K as KeyExchange<D, G>>::KE2Message,
+);
+#[cfg(test)]
+pub type GenerateKe2Result<K, D, G> = (
+    <K as KeyExchange<D, G>>::KE2State,
+    <K as KeyExchange<D, G>>::KE2Message,
+    Output<D>,
+    Output<D>,
+);
+#[cfg(not(test))]
+pub type GenerateKe3Result<K, D, G> = (Output<D>, <K as KeyExchange<D, G>>::KE3Message);
+#[cfg(test)]
+pub type GenerateKe3Result<K, D, G> = (
+    Output<D>,
+    <K as KeyExchange<D, G>>::KE3Message,
+    Output<D>,
+    Output<D>,
+);
 
 pub type Ke1StateLen<CS: CipherSuite> =
     <<CS::KeyExchange as KeyExchange<OprfHash<CS>, CS::KeGroup>>::KE1State as ToBytes>::Len;
