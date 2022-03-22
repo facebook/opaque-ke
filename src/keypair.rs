@@ -111,13 +111,6 @@ where
 #[derive_where(Debug, Eq, Hash, Ord, PartialEq, PartialOrd; KG::Sk)]
 pub struct PrivateKey<KG: KeGroup>(KG::Sk);
 
-impl<KG: KeGroup> PrivateKey<KG> {
-    /// Convert from bytes
-    pub fn from_bytes(key_bytes: &[u8]) -> Result<Self, InternalError> {
-        KG::deserialize_sk(key_bytes).map(Self)
-    }
-}
-
 /// A trait specifying the requirements for a private key container
 pub trait SecretKey<KG: KeGroup>: Clone + Sized {
     /// Custom error type that can be passed down to `InternalError::Custom`
@@ -161,7 +154,7 @@ impl<KG: KeGroup> SecretKey<KG> for PrivateKey<KG> {
     }
 
     fn deserialize(input: &[u8]) -> Result<Self, InternalError> {
-        Self::from_bytes(input)
+        KG::deserialize_sk(input).map(Self)
     }
 }
 
