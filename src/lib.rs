@@ -45,7 +45,7 @@
 //! Note that our choice of slow hashing function in this example, `NoOpHash`,
 //! is selected only to ensure that the tests execute quickly. A real
 //! application should use an actual slow hashing function, such as `Argon2`,
-//! which can be enabled through the `slow-hash` feature. See more details in
+//! which can be enabled through the `argon2` feature. See more details in
 //! the [features](#features) section.
 //!
 //! ## Setup
@@ -981,7 +981,7 @@
 //!
 //! # Features
 //!
-//! - The `slow-hash` feature, when enabled, introduces a dependency on `argon2`
+//! - The `argon2` feature, when enabled, introduces a dependency on `argon2`
 //!   and implements the `SlowHash` trait for `Argon2` with a set of default parameters.
 //!   In general, secure instantiations should choose to invoke a memory-hard password
 //!   hashing function when the client's password is expected to have low entropy,

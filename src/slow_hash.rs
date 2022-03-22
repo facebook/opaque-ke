@@ -33,7 +33,7 @@ impl SlowHash for NoOpHash {
     }
 }
 
-#[cfg(feature = "slow-hash")]
+#[cfg(feature = "argon2")]
 impl SlowHash for argon2::Argon2<'_> {
     fn hash<L: ArrayLength<u8>>(
         &self,

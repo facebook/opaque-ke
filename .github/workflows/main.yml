@@ -22,7 +22,7 @@ jobs:
           - --features x25519-u32
         frontend_feature:
           -
-          - --features slow-hash
+          - --features argon2
           - --features serde
         toolchain:
           - stable
@@ -143,7 +143,7 @@ jobs:
           - x25519-u64
           - x25519-u32
         frontend_feature:
-          - slow-hash
+          - argon2
           - serde
     steps:
       - uses: actions/checkout@v2
@@ -201,7 +201,7 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: clippy
-          args: --all-targets --features slow-hash,std,x25519-u64 -- -D warnings
+          args: --all-targets --features argon2,std,x25519-u64 -- -D warnings
 
       - name: Run cargo doc
         uses: actions-rs/cargo@v1
@@ -209,7 +209,7 @@ jobs:
           RUSTDOCFLAGS: -D warnings
         with:
           command: doc
-          args: --no-deps --document-private-items --features slow-hash,std,x25519-u64
+          args: --no-deps --document-private-items --features argon2,std,x25519-u64
 
   format:
     name: cargo fmt
