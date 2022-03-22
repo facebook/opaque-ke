@@ -15,14 +15,14 @@ use generic_array::typenum::{IsLess, IsLessOrEqual, Le, NonZero, U256};
 use crate::hash::{Hash, ProxyHash};
 use crate::key_exchange::group::KeGroup;
 use crate::key_exchange::traits::KeyExchange;
-use crate::slow_hash::SlowHash;
+use crate::ksf::Ksf;
 
 /// Configures the underlying primitives used in OPAQUE
 /// * `OprfCs`: A VOPRF ciphersuite, see [`voprf::CipherSuite`].
 /// * `KeGroup`: A `Group` used for the `KeyExchange`.
 /// * `KeyExchange`: The key exchange protocol to use in the login step
 /// * `Hash`: The main hashing function to use
-/// * `SlowHash`: A slow hashing function, typically used for password hashing
+/// * `Ksf`: A key stretching function, typically used for password hashing
 pub trait CipherSuite
 where
     <OprfHash<Self> as OutputSizeUser>::OutputSize:
@@ -38,8 +38,8 @@ where
     type KeGroup: KeGroup;
     /// A key exchange protocol
     type KeyExchange: KeyExchange<OprfHash<Self>, Self::KeGroup>;
-    /// A slow hashing function, typically used for password hashing
-    type SlowHash: SlowHash;
+    /// A key stretching function, typically used for password hashing
+    type Ksf: Ksf;
 }
 
 pub(crate) type OprfGroup<CS> = <<CS as CipherSuite>::OprfCs as voprf::CipherSuite>::Group;

@@ -25,12 +25,12 @@ use crate::hash::{Hash, OutputSize, ProxyHash};
 use crate::key_exchange::group::KeGroup;
 use crate::key_exchange::traits::{Ke1MessageLen, Ke2MessageLen};
 use crate::key_exchange::tripledh::{NonceLen, TripleDh};
+use crate::ksf::Identity;
 use crate::messages::{
     CredentialRequestLen, CredentialResponseLen, CredentialResponseWithoutKeLen,
     RegistrationResponseLen, RegistrationUploadLen,
 };
 use crate::opaque::*;
-use crate::slow_hash::Identity;
 use crate::tests::mock_rng::CycleRng;
 use crate::*;
 
@@ -209,62 +209,54 @@ fn tests() -> Result<(), ProtocolError> {
 
     #[cfg(feature = "ristretto255")]
     {
-        struct Ristretto255Sha512NoSlowHash;
-        impl CipherSuite for Ristretto255Sha512NoSlowHash {
+        struct Ristretto255Sha512NoKsf;
+        impl CipherSuite for Ristretto255Sha512NoKsf {
             type OprfCs = crate::Ristretto255;
             type KeGroup = crate::Ristretto255;
             type KeyExchange = TripleDh;
-            type SlowHash = Identity;
+            type Ksf = Identity;
         }
 
-        let ristretto_real_tvs = json_to_test_vectors!(
-            rfc,
-            "Real",
-            "ristretto255, SHA512",
-            Ristretto255Sha512NoSlowHash
-        );
+        let ristretto_real_tvs =
+            json_to_test_vectors!(rfc, "Real", "ristretto255, SHA512", Ristretto255Sha512NoKsf);
 
-        let ristretto_fake_tvs = json_to_test_vectors!(
-            rfc,
-            "Fake",
-            "ristretto255, SHA512",
-            Ristretto255Sha512NoSlowHash
-        );
+        let ristretto_fake_tvs =
+            json_to_test_vectors!(rfc, "Fake", "ristretto255, SHA512", Ristretto255Sha512NoKsf);
 
         assert!(
             !(ristretto_real_tvs.is_empty() || ristretto_fake_tvs.is_empty()),
             "Parsing error"
         );
 
-        test_registration_request::<Ristretto255Sha512NoSlowHash>(&ristretto_real_tvs)?;
-        test_registration_response::<Ristretto255Sha512NoSlowHash>(&ristretto_real_tvs)?;
-        test_registration_upload::<Ristretto255Sha512NoSlowHash>(&ristretto_real_tvs)?;
-        test_ke1::<Ristretto255Sha512NoSlowHash>(&ristretto_real_tvs)?;
-        test_ke2::<Ristretto255Sha512NoSlowHash>(&ristretto_real_tvs)?;
-        test_ke3::<Ristretto255Sha512NoSlowHash>(&ristretto_real_tvs)?;
-        test_server_login_finish::<Ristretto255Sha512NoSlowHash>(&ristretto_real_tvs)?;
-        test_fake_vectors::<Ristretto255Sha512NoSlowHash>(&ristretto_fake_tvs)?;
+        test_registration_request::<Ristretto255Sha512NoKsf>(&ristretto_real_tvs)?;
+        test_registration_response::<Ristretto255Sha512NoKsf>(&ristretto_real_tvs)?;
+        test_registration_upload::<Ristretto255Sha512NoKsf>(&ristretto_real_tvs)?;
+        test_ke1::<Ristretto255Sha512NoKsf>(&ristretto_real_tvs)?;
+        test_ke2::<Ristretto255Sha512NoKsf>(&ristretto_real_tvs)?;
+        test_ke3::<Ristretto255Sha512NoKsf>(&ristretto_real_tvs)?;
+        test_server_login_finish::<Ristretto255Sha512NoKsf>(&ristretto_real_tvs)?;
+        test_fake_vectors::<Ristretto255Sha512NoKsf>(&ristretto_fake_tvs)?;
     }
 
-    struct P256Sha256NoSlowHash;
-    impl CipherSuite for P256Sha256NoSlowHash {
+    struct P256Sha256NoKsf;
+    impl CipherSuite for P256Sha256NoKsf {
         type OprfCs = p256::NistP256;
         type KeGroup = p256::NistP256;
         type KeyExchange = TripleDh;
-        type SlowHash = Identity;
+        type Ksf = Identity;
     }
 
     let p256_real_tvs = json_to_test_vectors!(
         rfc,
         "Real",
         "P256_XMD:SHA-256_SSWU_RO_, SHA256",
-        P256Sha256NoSlowHash
+        P256Sha256NoKsf
     );
     let p256_fake_tvs = json_to_test_vectors!(
         rfc,
         "Fake",
         "P256_XMD:SHA-256_SSWU_RO_, SHA256",
-        P256Sha256NoSlowHash
+        P256Sha256NoKsf
     );
 
     assert!(
@@ -272,14 +264,14 @@ fn tests() -> Result<(), ProtocolError> {
         "Parsing error"
     );
 
-    test_registration_request::<P256Sha256NoSlowHash>(&p256_real_tvs)?;
-    test_registration_response::<P256Sha256NoSlowHash>(&p256_real_tvs)?;
-    test_registration_upload::<P256Sha256NoSlowHash>(&p256_real_tvs)?;
-    test_ke1::<P256Sha256NoSlowHash>(&p256_real_tvs)?;
-    test_ke2::<P256Sha256NoSlowHash>(&p256_real_tvs)?;
-    test_ke3::<P256Sha256NoSlowHash>(&p256_real_tvs)?;
-    test_server_login_finish::<P256Sha256NoSlowHash>(&p256_real_tvs)?;
-    test_fake_vectors::<P256Sha256NoSlowHash>(&p256_fake_tvs)?;
+    test_registration_request::<P256Sha256NoKsf>(&p256_real_tvs)?;
+    test_registration_response::<P256Sha256NoKsf>(&p256_real_tvs)?;
+    test_registration_upload::<P256Sha256NoKsf>(&p256_real_tvs)?;
+    test_ke1::<P256Sha256NoKsf>(&p256_real_tvs)?;
+    test_ke2::<P256Sha256NoKsf>(&p256_real_tvs)?;
+    test_ke3::<P256Sha256NoKsf>(&p256_real_tvs)?;
+    test_server_login_finish::<P256Sha256NoKsf>(&p256_real_tvs)?;
+    test_fake_vectors::<P256Sha256NoKsf>(&p256_fake_tvs)?;
 
     Ok(())
 }

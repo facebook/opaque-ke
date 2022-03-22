@@ -289,7 +289,7 @@ mod tests {
             #[cfg(not(feature = "ristretto255"))]
             type KeGroup = ::p256::NistP256;
             type KeyExchange = crate::key_exchange::tripledh::TripleDh;
-            type SlowHash = crate::slow_hash::Identity;
+            type Ksf = crate::ksf::Identity;
         }
 
         type KeCurve = <Default as CipherSuite>::KeGroup;

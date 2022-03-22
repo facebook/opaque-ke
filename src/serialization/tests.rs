@@ -42,7 +42,7 @@ impl CipherSuite for Ristretto255 {
     type OprfCs = crate::Ristretto255;
     type KeGroup = crate::Ristretto255;
     type KeyExchange = TripleDh;
-    type SlowHash = crate::slow_hash::Identity;
+    type Ksf = crate::ksf::Identity;
 }
 
 struct P256;
@@ -51,7 +51,7 @@ impl CipherSuite for P256 {
     type OprfCs = ::p256::NistP256;
     type KeGroup = ::p256::NistP256;
     type KeyExchange = TripleDh;
-    type SlowHash = crate::slow_hash::Identity;
+    type Ksf = crate::ksf::Identity;
 }
 
 fn random_point<CS: CipherSuite>() -> <CS::KeGroup as KeGroup>::Pk

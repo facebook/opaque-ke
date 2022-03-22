@@ -31,9 +31,9 @@ use crate::key_exchange::traits::{
 };
 use crate::key_exchange::tripledh::NonceLen;
 use crate::keypair::{KeyPair, PrivateKey, PublicKey, SecretKey};
+use crate::ksf::Ksf;
 use crate::messages::{CredentialRequestLen, RegistrationUploadLen};
 use crate::serialization::Serialize;
-use crate::slow_hash::SlowHash;
 use crate::{
     CredentialFinalization, CredentialRequest, CredentialResponse, RegistrationRequest,
     RegistrationResponse, RegistrationUpload,
@@ -376,7 +376,7 @@ where
             password,
             self.oprf_client.clone(),
             registration_response.evaluation_element,
-            params.slow_hash,
+            params.ksf,
         )?;
 
         let mut masking_key = Output::<OprfHash<CS>>::default();
@@ -598,7 +598,7 @@ where
             password,
             self.oprf_client.clone(),
             credential_response.evaluation_element.clone(),
-            params.slow_hash,
+            params.ksf,
         )?;
 
         let mut masking_key = Output::<OprfHash<CS>>::default();
@@ -847,8 +847,8 @@ where
 {
     /// Specifying the identifiers idU and idS
     pub identifiers: Identifiers<'i>,
-    /// Specifying a configuration for the slow hash
-    pub slow_hash: Option<&'h CS::SlowHash>,
+    /// Specifying a configuration for the key stretching function
+    pub ksf: Option<&'h CS::Ksf>,
 }
 
 impl<'i, 'h, CS: CipherSuite> ClientRegistrationFinishParameters<'i, 'h, CS>
@@ -861,11 +861,8 @@ where
     Le<<<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
 {
     /// Create a new [`ClientRegistrationFinishParameters`]
-    pub fn new(identifiers: Identifiers<'i>, slow_hash: Option<&'h CS::SlowHash>) -> Self {
-        Self {
-            identifiers,
-            slow_hash,
-        }
+    pub fn new(identifiers: Identifiers<'i>, ksf: Option<&'h CS::Ksf>) -> Self {
+        Self { identifiers, ksf }
     }
 }
 
@@ -968,8 +965,8 @@ where
     /// Specifying a user identifier and server identifier that will be matched
     /// against the server
     pub identifiers: Identifiers<'i>,
-    /// Specifying a configuration for the slow hash
-    pub slow_hash: Option<&'h CS::SlowHash>,
+    /// Specifying a configuration for the key stretching hash
+    pub ksf: Option<&'h CS::Ksf>,
 }
 
 impl<'c, 'i, 'h, CS: CipherSuite> ClientLoginFinishParameters<'c, 'i, 'h, CS>
@@ -985,12 +982,12 @@ where
     pub fn new(
         context: Option<&'c [u8]>,
         identifiers: Identifiers<'i>,
-        slow_hash: Option<&'h CS::SlowHash>,
+        ksf: Option<&'h CS::Ksf>,
     ) -> Self {
         Self {
             context,
             identifiers,
-            slow_hash,
+            ksf,
         }
     }
 }
@@ -1099,7 +1096,7 @@ fn get_password_derived_key<CS: CipherSuite>(
     input: &[u8],
     oprf_client: voprf::NonVerifiableClient<CS::OprfCs>,
     evaluation_element: voprf::EvaluationElement<CS::OprfCs>,
-    slow_hash: Option<&CS::SlowHash>,
+    ksf: Option<&CS::Ksf>,
 ) -> Result<(Output<OprfHash<CS>>, Hkdf<OprfHash<CS>>), ProtocolError>
 where
     <OprfHash<CS> as OutputSizeUser>::OutputSize:
@@ -1111,10 +1108,10 @@ where
 {
     let oprf_output = oprf_client.finalize(input, &evaluation_element, None)?;
 
-    let hardened_output = if let Some(slow_hash) = slow_hash {
-        slow_hash.hash(oprf_output.clone())
+    let hardened_output = if let Some(ksf) = ksf {
+        ksf.hash(oprf_output.clone())
     } else {
-        CS::SlowHash::default().hash(oprf_output.clone())
+        CS::Ksf::default().hash(oprf_output.clone())
     }
     .map_err(ProtocolError::from)?;
 

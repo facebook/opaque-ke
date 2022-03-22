@@ -29,12 +29,12 @@ use crate::key_exchange::group::KeGroup;
 use crate::key_exchange::traits::{Ke1MessageLen, Ke1StateLen, Ke2MessageLen};
 use crate::key_exchange::tripledh::{NonceLen, TripleDh};
 use crate::keypair::SecretKey;
+use crate::ksf::Identity;
 use crate::messages::{
     CredentialRequestLen, CredentialResponseLen, CredentialResponseWithoutKeLen,
     RegistrationResponseLen, RegistrationUploadLen,
 };
 use crate::opaque::*;
-use crate::slow_hash::Identity;
 use crate::tests::mock_rng::CycleRng;
 use crate::*;
 
@@ -49,7 +49,7 @@ impl CipherSuite for Ristretto255 {
     type OprfCs = crate::Ristretto255;
     type KeGroup = crate::Ristretto255;
     type KeyExchange = TripleDh;
-    type SlowHash = Identity;
+    type Ksf = Identity;
 }
 
 struct P256;
@@ -58,7 +58,7 @@ impl CipherSuite for P256 {
     type OprfCs = p256::NistP256;
     type KeGroup = p256::NistP256;
     type KeyExchange = TripleDh;
-    type SlowHash = Identity;
+    type Ksf = Identity;
 }
 
 #[cfg(all(feature = "x25519", feature = "ristretto255"))]
@@ -69,7 +69,7 @@ impl CipherSuite for X25519Ristretto255 {
     type OprfCs = crate::Ristretto255;
     type KeGroup = crate::X25519;
     type KeyExchange = TripleDh;
-    type SlowHash = Identity;
+    type Ksf = Identity;
 }
 
 #[cfg(feature = "x25519")]
@@ -80,7 +80,7 @@ impl CipherSuite for X25519P256 {
     type OprfCs = p256::NistP256;
     type KeGroup = crate::X25519;
     type KeyExchange = TripleDh;
-    type SlowHash = Identity;
+    type Ksf = Identity;
 }
 
 pub struct TestVectorParameters {

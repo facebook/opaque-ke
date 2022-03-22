@@ -37,8 +37,8 @@ pub enum InternalError<T = Infallible> {
     HkdfError,
     /// Computing HMAC failed while supplying a secret key
     HmacError,
-    /// Computing the slow hashing function failed
-    SlowHashError,
+    /// Computing the key stretching function failed
+    KsfError,
     /** This error occurs when the envelope seal open hmac check fails
     HMAC check in seal open failed. */
     SealOpenHmacError,
@@ -70,7 +70,7 @@ impl<T: Debug> Debug for InternalError<T> {
             Self::HashToScalar => f.debug_tuple("HashToScalar").finish(),
             Self::HkdfError => f.debug_tuple("HkdfError").finish(),
             Self::HmacError => f.debug_tuple("HmacError").finish(),
-            Self::SlowHashError => f.debug_tuple("SlowHashError").finish(),
+            Self::KsfError => f.debug_tuple("KsfError").finish(),
             Self::SealOpenHmacError => f.debug_tuple("SealOpenHmacError").finish(),
             Self::IncompatibleEnvelopeModeError => {
                 f.debug_tuple("IncompatibleEnvelopeModeError").finish()
@@ -105,7 +105,7 @@ impl InternalError {
             Self::HashToScalar => InternalError::HashToScalar,
             Self::HkdfError => InternalError::HkdfError,
             Self::HmacError => InternalError::HmacError,
-            Self::SlowHashError => InternalError::SlowHashError,
+            Self::KsfError => InternalError::KsfError,
             Self::SealOpenHmacError => InternalError::SealOpenHmacError,
             Self::IncompatibleEnvelopeModeError => InternalError::IncompatibleEnvelopeModeError,
             Self::OprfError(error) => InternalError::OprfError(error),
