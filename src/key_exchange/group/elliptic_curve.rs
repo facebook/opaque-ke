@@ -40,7 +40,7 @@ where
         GenericArray::clone_from_slice(pk.to_encoded_point(true).as_bytes())
     }
 
-    fn deserialize_pk(bytes: &GenericArray<u8, Self::PkLen>) -> Result<Self::Pk, InternalError> {
+    fn deserialize_pk(bytes: &[u8]) -> Result<Self::Pk, InternalError> {
         PublicKey::<Self>::from_sec1_bytes(bytes)
             .map(|public_key| public_key.to_projective())
             .map_err(|_| InternalError::PointError)
@@ -79,7 +79,7 @@ where
         sk.into()
     }
 
-    fn deserialize_sk(bytes: &GenericArray<u8, Self::SkLen>) -> Result<Self::Sk, InternalError> {
+    fn deserialize_sk(bytes: &[u8]) -> Result<Self::Sk, InternalError> {
         SecretKey::<Self>::from_be_bytes(bytes)
             .map(|secret_key| *secret_key.to_nonzero_scalar())
             .map_err(|_| InternalError::PointError)

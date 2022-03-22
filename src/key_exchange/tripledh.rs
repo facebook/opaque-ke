@@ -530,7 +530,7 @@ impl<KG: KeGroup> FromBytes for Ke1Message<KG> {
 
         Ok(Self {
             client_nonce: GenericArray::clone_from_slice(&checked_nonce[..nonce_len]),
-            client_e_pk: PublicKey::deserialize(&checked_nonce[nonce_len..])?,
+            client_e_pk: PublicKey::from_bytes(&checked_nonce[nonce_len..])?,
         })
     }
 }
@@ -611,7 +611,7 @@ where
         )?;
 
         // Check the public key bytes
-        let server_e_pk = PublicKey::deserialize(&unchecked_server_e_pk[..key_len])?;
+        let server_e_pk = PublicKey::from_bytes(&unchecked_server_e_pk[..key_len])?;
 
         Ok(Self {
             server_nonce: GenericArray::clone_from_slice(&checked_nonce[..nonce_len]),

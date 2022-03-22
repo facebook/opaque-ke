@@ -1272,7 +1272,7 @@ where
     }
 
     let key_len = <CS::KeGroup as KeGroup>::PkLen::USIZE;
-    let server_s_pk = PublicKey::deserialize(&xor_pad[..key_len])
+    let server_s_pk = PublicKey::from_bytes(&xor_pad[..key_len])
         .map_err(|_| ProtocolError::SerializationError)?;
     let envelope = Envelope::deserialize(&xor_pad[key_len..])?;
 

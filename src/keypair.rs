@@ -15,7 +15,6 @@ use rand::{CryptoRng, RngCore};
 
 use crate::errors::{InternalError, ProtocolError};
 use crate::key_exchange::group::KeGroup;
-use crate::serialization::GenericArrayExt;
 
 /// A Keypair trait with public-private verification
 #[cfg_attr(
@@ -114,7 +113,7 @@ pub struct PrivateKey<KG: KeGroup>(KG::Sk);
 
 impl<KG: KeGroup> PrivateKey<KG> {
     /// Convert from bytes
-    pub fn from_bytes(key_bytes: &GenericArray<u8, KG::SkLen>) -> Result<Self, InternalError> {
+    pub fn from_bytes(key_bytes: &[u8]) -> Result<Self, InternalError> {
         KG::deserialize_sk(key_bytes).map(Self)
     }
 }
@@ -162,7 +161,7 @@ impl<KG: KeGroup> SecretKey<KG> for PrivateKey<KG> {
     }
 
     fn deserialize(input: &[u8]) -> Result<Self, InternalError> {
-        GenericArray::try_from_slice(input).and_then(Self::from_bytes)
+        Self::from_bytes(input)
     }
 }
 
@@ -184,18 +183,13 @@ pub struct PublicKey<KG: KeGroup>(KG::Pk);
 
 impl<KG: KeGroup> PublicKey<KG> {
     /// Convert from bytes
-    pub fn from_bytes(key_bytes: &GenericArray<u8, KG::PkLen>) -> Result<Self, InternalError> {
+    pub fn from_bytes(key_bytes: &[u8]) -> Result<Self, InternalError> {
         KG::deserialize_pk(key_bytes).map(Self)
     }
 
     /// Convert to bytes
     pub fn to_bytes(&self) -> GenericArray<u8, KG::PkLen> {
         KG::serialize_pk(self.0)
-    }
-
-    /// Convert from slice
-    pub fn deserialize(input: &[u8]) -> Result<Self, InternalError> {
-        GenericArray::try_from_slice(input).and_then(Self::from_bytes)
     }
 }
 

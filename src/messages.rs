@@ -276,7 +276,7 @@ where
             check_slice_size(input, elem_len + key_len, "registration_response_bytes")?;
 
         // Ensure that public key is valid
-        let server_s_pk = PublicKey::deserialize(&checked_slice[elem_len..])?;
+        let server_s_pk = PublicKey::from_bytes(&checked_slice[elem_len..])?;
 
         Ok(Self {
             evaluation_element: voprf::EvaluationElement::deserialize(&checked_slice[..elem_len])?,
@@ -338,7 +338,7 @@ where
             masking_key: GenericArray::clone_from_slice(
                 &checked_slice[key_len..key_len + hash_len],
             ),
-            client_s_pk: PublicKey::deserialize(&checked_slice[..key_len])?,
+            client_s_pk: PublicKey::from_bytes(&checked_slice[..key_len])?,
         })
     }
 

@@ -35,14 +35,13 @@ impl KeGroup for X25519 {
         pk.to_bytes().into()
     }
 
-    fn deserialize_pk(bytes: &GenericArray<u8, Self::PkLen>) -> Result<Self::Pk, InternalError> {
-        let pk = MontgomeryPoint((*bytes).into());
-
-        if pk == MontgomeryPoint::identity() {
-            Err(InternalError::PointError)
-        } else {
-            Ok(pk)
-        }
+    fn deserialize_pk(bytes: &[u8]) -> Result<Self::Pk, InternalError> {
+        bytes
+            .try_into()
+            .ok()
+            .map(MontgomeryPoint)
+            .filter(|pk| pk != &MontgomeryPoint::identity())
+            .ok_or(InternalError::PointError)
     }
 
     fn random_sk<R: RngCore + CryptoRng>(rng: &mut R) -> Self::Sk {
@@ -88,8 +87,11 @@ impl KeGroup for X25519 {
         sk.to_bytes().into()
     }
 
-    fn deserialize_sk(bytes: &GenericArray<u8, Self::PkLen>) -> Result<Self::Sk, InternalError> {
-        Scalar::from_canonical_bytes((*bytes).into())
+    fn deserialize_sk(bytes: &[u8]) -> Result<Self::Sk, InternalError> {
+        bytes
+            .try_into()
+            .ok()
+            .and_then(Scalar::from_canonical_bytes)
             .filter(|scalar| scalar != &Scalar::zero())
             .ok_or(InternalError::PointError)
     }

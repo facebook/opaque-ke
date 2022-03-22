@@ -37,7 +37,11 @@ impl KeGroup for Ristretto255 {
         pk.compress().to_bytes().into()
     }
 
-    fn deserialize_pk(bytes: &GenericArray<u8, Self::PkLen>) -> Result<Self::Pk, InternalError> {
+    fn deserialize_pk(bytes: &[u8]) -> Result<Self::Pk, InternalError> {
+        if bytes.len() != 32 {
+            return Err(InternalError::PointError);
+        }
+
         CompressedRistretto::from_slice(bytes)
             .decompress()
             .filter(|point| point != &RistrettoPoint::identity())
@@ -101,8 +105,11 @@ impl KeGroup for Ristretto255 {
         sk.to_bytes().into()
     }
 
-    fn deserialize_sk(bytes: &GenericArray<u8, Self::PkLen>) -> Result<Self::Sk, InternalError> {
-        Scalar::from_canonical_bytes((*bytes).into())
+    fn deserialize_sk(bytes: &[u8]) -> Result<Self::Sk, InternalError> {
+        bytes
+            .try_into()
+            .ok()
+            .and_then(Scalar::from_canonical_bytes)
             .filter(|scalar| scalar != &Scalar::zero())
             .ok_or(InternalError::PointError)
     }
