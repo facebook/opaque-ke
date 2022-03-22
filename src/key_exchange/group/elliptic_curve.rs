@@ -11,7 +11,7 @@ use elliptic_curve::group::cofactor::CofactorGroup;
 use elliptic_curve::hash2curve::{ExpandMsgXmd, FromOkm, GroupDigest};
 use elliptic_curve::sec1::{FromEncodedPoint, ModulusSize, ToEncodedPoint};
 use elliptic_curve::{
-    AffinePoint, FieldSize, Group, ProjectivePoint, PublicKey, Scalar, SecretKey,
+    AffinePoint, Field, FieldSize, Group, ProjectivePoint, PublicKey, Scalar, SecretKey,
 };
 use generic_array::typenum::{IsLess, IsLessOrEqual, U256};
 use generic_array::GenericArray;
@@ -37,11 +37,7 @@ where
     type SkLen = FieldSize<Self>;
 
     fn serialize_pk(pk: Self::Pk) -> GenericArray<u8, Self::PkLen> {
-        let bytes = pk.to_encoded_point(true);
-        let bytes = bytes.as_bytes();
-        let mut result = GenericArray::default();
-        result[..bytes.len()].copy_from_slice(bytes);
-        result
+        GenericArray::clone_from_slice(pk.to_encoded_point(true).as_bytes())
     }
 
     fn deserialize_pk(bytes: &GenericArray<u8, Self::PkLen>) -> Result<Self::Pk, InternalError> {
@@ -60,7 +56,15 @@ where
         H: Digest + BlockSizeUser,
         H::OutputSize: IsLess<U256> + IsLessOrEqual<H::BlockSize>,
     {
-        Self::hash_to_scalar::<ExpandMsgXmd<H>>(input, dst).map_err(|_| InternalError::HashToScalar)
+        Self::hash_to_scalar::<ExpandMsgXmd<H>>(input, dst)
+            .map_err(|_| InternalError::HashToScalar)
+            .and_then(|scalar| {
+                if bool::from(scalar.is_zero()) {
+                    Err(InternalError::HashToScalar)
+                } else {
+                    Ok(scalar)
+                }
+            })
     }
 
     fn public_key(sk: Self::Sk) -> Self::Pk {
@@ -68,8 +72,7 @@ where
     }
 
     fn diffie_hellman(pk: Self::Pk, sk: Self::Sk) -> GenericArray<u8, Self::PkLen> {
-        // This should be unable to fail because we should pass a zero scalar.
-        GenericArray::clone_from_slice((pk * sk).to_encoded_point(true).as_bytes())
+        Self::serialize_pk(pk * sk)
     }
 
     fn serialize_sk(sk: Self::Sk) -> GenericArray<u8, Self::SkLen> {

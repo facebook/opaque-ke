@@ -67,7 +67,13 @@ impl KeGroup for X25519 {
             .map_err(|_| InternalError::HashToScalar)?
             .fill_bytes(&mut uniform_bytes);
 
-        Ok(Scalar::from_bytes_mod_order_wide(&uniform_bytes.into()))
+        let scalar = Scalar::from_bytes_mod_order_wide(&uniform_bytes.into());
+
+        if scalar == Scalar::zero() {
+            Err(InternalError::HashToScalar)
+        } else {
+            Ok(scalar)
+        }
     }
 
     fn public_key(sk: Self::Sk) -> Self::Pk {
