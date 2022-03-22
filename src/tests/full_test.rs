@@ -46,7 +46,7 @@ struct Ristretto255;
 
 #[cfg(feature = "ristretto255")]
 impl CipherSuite for Ristretto255 {
-    type OprfGroup = crate::Ristretto255;
+    type OprfCs = crate::Ristretto255;
     type KeGroup = crate::Ristretto255;
     type KeyExchange = TripleDH;
     type SlowHash = NoOpHash;
@@ -55,7 +55,7 @@ impl CipherSuite for Ristretto255 {
 struct P256;
 
 impl CipherSuite for P256 {
-    type OprfGroup = p256::NistP256;
+    type OprfCs = p256::NistP256;
     type KeGroup = p256::NistP256;
     type KeyExchange = TripleDH;
     type SlowHash = NoOpHash;
@@ -66,7 +66,7 @@ struct X25519Ristretto255;
 
 #[cfg(all(feature = "x25519", feature = "ristretto255"))]
 impl CipherSuite for X25519Ristretto255 {
-    type OprfGroup = crate::Ristretto255;
+    type OprfCs = crate::Ristretto255;
     type KeGroup = crate::X25519;
     type KeyExchange = TripleDH;
     type SlowHash = NoOpHash;
@@ -77,7 +77,7 @@ struct X25519P256;
 
 #[cfg(feature = "x25519")]
 impl CipherSuite for X25519P256 {
-    type OprfGroup = p256::NistP256;
+    type OprfCs = p256::NistP256;
     type KeGroup = crate::X25519;
     type KeyExchange = TripleDH;
     type SlowHash = NoOpHash;

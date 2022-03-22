@@ -39,7 +39,7 @@ use crate::opaque::{MaskedResponse, MaskedResponseLen, ServerSetup};
 
 /// The message sent by the client to the server, to initiate registration
 #[derive_where(Clone)]
-#[derive_where(Debug, Eq, Hash, Ord, PartialEq, PartialOrd; voprf::BlindedElement<CS::OprfGroup>)]
+#[derive_where(Debug, Eq, Hash, Ord, PartialEq, PartialOrd; voprf::BlindedElement<CS::OprfCs>)]
 pub struct RegistrationRequest<CS: CipherSuite>
 where
     <OprfHash<CS> as OutputSizeUser>::OutputSize:
@@ -50,7 +50,7 @@ where
     Le<<<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
 {
     /// blinded password information
-    pub(crate) blinded_element: voprf::BlindedElement<CS::OprfGroup>,
+    pub(crate) blinded_element: voprf::BlindedElement<CS::OprfCs>,
 }
 
 impl_serialize_and_deserialize_for!(RegistrationRequest);
@@ -58,7 +58,7 @@ impl_serialize_and_deserialize_for!(RegistrationRequest);
 /// The answer sent by the server to the user, upon reception of the
 /// registration attempt
 #[derive_where(Clone)]
-#[derive_where(Debug, Eq, Hash, Ord, PartialEq, PartialOrd; voprf::EvaluationElement<CS::OprfGroup>, <CS::KeGroup as KeGroup>::Pk)]
+#[derive_where(Debug, Eq, Hash, Ord, PartialEq, PartialOrd; voprf::EvaluationElement<CS::OprfCs>, <CS::KeGroup as KeGroup>::Pk)]
 pub struct RegistrationResponse<CS: CipherSuite>
 where
     <OprfHash<CS> as OutputSizeUser>::OutputSize:
@@ -69,7 +69,7 @@ where
     Le<<<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
 {
     /// The server's oprf output
-    pub(crate) evaluation_element: voprf::EvaluationElement<CS::OprfGroup>,
+    pub(crate) evaluation_element: voprf::EvaluationElement<CS::OprfCs>,
     /// Server's static public key
     pub(crate) server_s_pk: PublicKey<CS::KeGroup>,
 }
@@ -121,7 +121,7 @@ impl_serialize_and_deserialize_for!(
 #[derive_where(Clone, ZeroizeOnDrop)]
 #[derive_where(
     Debug, Eq, Hash, PartialEq;
-    voprf::BlindedElement<CS::OprfGroup>,
+    voprf::BlindedElement<CS::OprfCs>,
     <CS::KeyExchange as KeyExchange<OprfHash<CS>, CS::KeGroup>>::KE1Message,
 )]
 pub struct CredentialRequest<CS: CipherSuite>
@@ -133,7 +133,7 @@ where
     <<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
     Le<<<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
 {
-    pub(crate) blinded_element: voprf::BlindedElement<CS::OprfGroup>,
+    pub(crate) blinded_element: voprf::BlindedElement<CS::OprfCs>,
     pub(crate) ke1_message: <CS::KeyExchange as KeyExchange<OprfHash<CS>, CS::KeGroup>>::KE1Message,
 }
 
@@ -150,7 +150,7 @@ impl_serialize_and_deserialize_for!(
 #[derive_where(Clone)]
 #[derive_where(
     Debug, Eq, Hash, PartialEq;
-    voprf::EvaluationElement<CS::OprfGroup>,
+    voprf::EvaluationElement<CS::OprfCs>,
     <CS::KeyExchange as KeyExchange<OprfHash<CS>, CS::KeGroup>>::KE2Message,
 )]
 pub struct CredentialResponse<CS: CipherSuite>
@@ -163,7 +163,7 @@ where
     Le<<<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
 {
     /// the server's oprf output
-    pub(crate) evaluation_element: voprf::EvaluationElement<CS::OprfGroup>,
+    pub(crate) evaluation_element: voprf::EvaluationElement<CS::OprfCs>,
     pub(crate) masking_nonce: GenericArray<u8, NonceLen>,
     pub(crate) masked_response: MaskedResponse<CS>,
     pub(crate) ke2_message: <CS::KeyExchange as KeyExchange<OprfHash<CS>, CS::KeGroup>>::KE2Message,
@@ -227,7 +227,7 @@ where
 {
     /// Only used for testing purposes
     #[cfg(test)]
-    pub fn get_blinded_element_for_testing(&self) -> voprf::BlindedElement<CS::OprfGroup> {
+    pub fn get_blinded_element_for_testing(&self) -> voprf::BlindedElement<CS::OprfCs> {
         self.blinded_element.clone()
     }
 
@@ -398,7 +398,7 @@ where
         // Check that the message is actually containing an element of the correct
         // subgroup
         let blinded_element =
-            voprf::BlindedElement::<CS::OprfGroup>::deserialize(&checked_slice[..elem_len])?;
+            voprf::BlindedElement::<CS::OprfCs>::deserialize(&checked_slice[..elem_len])?;
 
         // Throw an error if the identity group element is encountered
         if bool::from(<OprfGroup<CS> as Group>::identity_elem().ct_eq(&blinded_element.value())) {
@@ -418,7 +418,7 @@ where
 
     /// Only used for testing purposes
     #[cfg(test)]
-    pub fn get_blinded_element_for_testing(&self) -> voprf::BlindedElement<CS::OprfGroup> {
+    pub fn get_blinded_element_for_testing(&self) -> voprf::BlindedElement<CS::OprfCs> {
         self.blinded_element.clone()
     }
 }
@@ -490,8 +490,7 @@ where
         // Check that the message is actually containing an element of the correct
         // subgroup
         let beta_bytes = &checked_slice[..elem_len];
-        let evaluation_element =
-            voprf::EvaluationElement::<CS::OprfGroup>::deserialize(beta_bytes)?;
+        let evaluation_element = voprf::EvaluationElement::<CS::OprfCs>::deserialize(beta_bytes)?;
 
         // Throw an error if the identity group element is encountered
         if bool::from(<OprfGroup<CS> as Group>::identity_elem().ct_eq(&evaluation_element.value()))

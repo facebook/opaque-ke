@@ -33,7 +33,7 @@
 //! use opaque_ke::CipherSuite;
 //! struct Default;
 //! impl CipherSuite for Default {
-//!     type OprfGroup = opaque_ke::Ristretto255;
+//!     type OprfCs = opaque_ke::Ristretto255;
 //!     type KeGroup = opaque_ke::Ristretto255;
 //!     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
 //!     type SlowHash = opaque_ke::slow_hash::NoOpHash;
@@ -58,14 +58,14 @@
 //! # struct Default;
 //! # #[cfg(feature = "ristretto255")]
 //! # impl CipherSuite for Default {
-//! #     type OprfGroup = opaque_ke::Ristretto255;
+//! #     type OprfCs = opaque_ke::Ristretto255;
 //! #     type KeGroup = opaque_ke::Ristretto255;
 //! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
 //! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
 //! # }
 //! # #[cfg(not(feature = "ristretto255"))]
 //! # impl CipherSuite for Default {
-//! #     type OprfGroup = p256::NistP256;
+//! #     type OprfCs = p256::NistP256;
 //! #     type KeGroup = p256::NistP256;
 //! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
 //! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
@@ -107,14 +107,14 @@
 //! # struct Default;
 //! # #[cfg(feature = "ristretto255")]
 //! # impl CipherSuite for Default {
-//! #     type OprfGroup = opaque_ke::Ristretto255;
+//! #     type OprfCs = opaque_ke::Ristretto255;
 //! #     type KeGroup = opaque_ke::Ristretto255;
 //! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
 //! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
 //! # }
 //! # #[cfg(not(feature = "ristretto255"))]
 //! # impl CipherSuite for Default {
-//! #     type OprfGroup = p256::NistP256;
+//! #     type OprfCs = p256::NistP256;
 //! #     type KeGroup = p256::NistP256;
 //! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
 //! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
@@ -145,14 +145,14 @@
 //! # struct Default;
 //! # #[cfg(feature = "ristretto255")]
 //! # impl CipherSuite for Default {
-//! #     type OprfGroup = opaque_ke::Ristretto255;
+//! #     type OprfCs = opaque_ke::Ristretto255;
 //! #     type KeGroup = opaque_ke::Ristretto255;
 //! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
 //! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
 //! # }
 //! # #[cfg(not(feature = "ristretto255"))]
 //! # impl CipherSuite for Default {
-//! #     type OprfGroup = p256::NistP256;
+//! #     type OprfCs = p256::NistP256;
 //! #     type KeGroup = p256::NistP256;
 //! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
 //! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
@@ -192,14 +192,14 @@
 //! # struct Default;
 //! # #[cfg(feature = "ristretto255")]
 //! # impl CipherSuite for Default {
-//! #     type OprfGroup = opaque_ke::Ristretto255;
+//! #     type OprfCs = opaque_ke::Ristretto255;
 //! #     type KeGroup = opaque_ke::Ristretto255;
 //! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
 //! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
 //! # }
 //! # #[cfg(not(feature = "ristretto255"))]
 //! # impl CipherSuite for Default {
-//! #     type OprfGroup = p256::NistP256;
+//! #     type OprfCs = p256::NistP256;
 //! #     type KeGroup = p256::NistP256;
 //! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
 //! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
@@ -240,14 +240,14 @@
 //! # struct Default;
 //! # #[cfg(feature = "ristretto255")]
 //! # impl CipherSuite for Default {
-//! #     type OprfGroup = opaque_ke::Ristretto255;
+//! #     type OprfCs = opaque_ke::Ristretto255;
 //! #     type KeGroup = opaque_ke::Ristretto255;
 //! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
 //! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
 //! # }
 //! # #[cfg(not(feature = "ristretto255"))]
 //! # impl CipherSuite for Default {
-//! #     type OprfGroup = p256::NistP256;
+//! #     type OprfCs = p256::NistP256;
 //! #     type KeGroup = p256::NistP256;
 //! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
 //! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
@@ -293,14 +293,14 @@
 //! # struct Default;
 //! # #[cfg(feature = "ristretto255")]
 //! # impl CipherSuite for Default {
-//! #     type OprfGroup = opaque_ke::Ristretto255;
+//! #     type OprfCs = opaque_ke::Ristretto255;
 //! #     type KeGroup = opaque_ke::Ristretto255;
 //! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
 //! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
 //! # }
 //! # #[cfg(not(feature = "ristretto255"))]
 //! # impl CipherSuite for Default {
-//! #     type OprfGroup = p256::NistP256;
+//! #     type OprfCs = p256::NistP256;
 //! #     type KeGroup = p256::NistP256;
 //! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
 //! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
@@ -330,14 +330,14 @@
 //! # struct Default;
 //! # #[cfg(feature = "ristretto255")]
 //! # impl CipherSuite for Default {
-//! #     type OprfGroup = opaque_ke::Ristretto255;
+//! #     type OprfCs = opaque_ke::Ristretto255;
 //! #     type KeGroup = opaque_ke::Ristretto255;
 //! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
 //! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
 //! # }
 //! # #[cfg(not(feature = "ristretto255"))]
 //! # impl CipherSuite for Default {
-//! #     type OprfGroup = p256::NistP256;
+//! #     type OprfCs = p256::NistP256;
 //! #     type KeGroup = p256::NistP256;
 //! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
 //! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
@@ -393,14 +393,14 @@
 //! # struct Default;
 //! # #[cfg(feature = "ristretto255")]
 //! # impl CipherSuite for Default {
-//! #     type OprfGroup = opaque_ke::Ristretto255;
+//! #     type OprfCs = opaque_ke::Ristretto255;
 //! #     type KeGroup = opaque_ke::Ristretto255;
 //! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
 //! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
 //! # }
 //! # #[cfg(not(feature = "ristretto255"))]
 //! # impl CipherSuite for Default {
-//! #     type OprfGroup = p256::NistP256;
+//! #     type OprfCs = p256::NistP256;
 //! #     type KeGroup = p256::NistP256;
 //! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
 //! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
@@ -449,14 +449,14 @@
 //! # struct Default;
 //! # #[cfg(feature = "ristretto255")]
 //! # impl CipherSuite for Default {
-//! #     type OprfGroup = opaque_ke::Ristretto255;
+//! #     type OprfCs = opaque_ke::Ristretto255;
 //! #     type KeGroup = opaque_ke::Ristretto255;
 //! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
 //! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
 //! # }
 //! # #[cfg(not(feature = "ristretto255"))]
 //! # impl CipherSuite for Default {
-//! #     type OprfGroup = p256::NistP256;
+//! #     type OprfCs = p256::NistP256;
 //! #     type KeGroup = p256::NistP256;
 //! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
 //! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
@@ -545,14 +545,14 @@
 //! # struct Default;
 //! # #[cfg(feature = "ristretto255")]
 //! # impl CipherSuite for Default {
-//! #     type OprfGroup = opaque_ke::Ristretto255;
+//! #     type OprfCs = opaque_ke::Ristretto255;
 //! #     type KeGroup = opaque_ke::Ristretto255;
 //! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
 //! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
 //! # }
 //! # #[cfg(not(feature = "ristretto255"))]
 //! # impl CipherSuite for Default {
-//! #     type OprfGroup = p256::NistP256;
+//! #     type OprfCs = p256::NistP256;
 //! #     type KeGroup = p256::NistP256;
 //! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
 //! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
@@ -642,14 +642,14 @@
 //! # struct Default;
 //! # #[cfg(feature = "ristretto255")]
 //! # impl CipherSuite for Default {
-//! #     type OprfGroup = opaque_ke::Ristretto255;
+//! #     type OprfCs = opaque_ke::Ristretto255;
 //! #     type KeGroup = opaque_ke::Ristretto255;
 //! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
 //! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
 //! # }
 //! # #[cfg(not(feature = "ristretto255"))]
 //! # impl CipherSuite for Default {
-//! #     type OprfGroup = p256::NistP256;
+//! #     type OprfCs = p256::NistP256;
 //! #     type KeGroup = p256::NistP256;
 //! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
 //! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
@@ -723,14 +723,14 @@
 //! # struct Default;
 //! # #[cfg(feature = "ristretto255")]
 //! # impl CipherSuite for Default {
-//! #     type OprfGroup = opaque_ke::Ristretto255;
+//! #     type OprfCs = opaque_ke::Ristretto255;
 //! #     type KeGroup = opaque_ke::Ristretto255;
 //! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
 //! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
 //! # }
 //! # #[cfg(not(feature = "ristretto255"))]
 //! # impl CipherSuite for Default {
-//! #     type OprfGroup = p256::NistP256;
+//! #     type OprfCs = p256::NistP256;
 //! #     type KeGroup = p256::NistP256;
 //! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
 //! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
@@ -771,14 +771,14 @@
 //! # struct Default;
 //! # #[cfg(feature = "ristretto255")]
 //! # impl CipherSuite for Default {
-//! #     type OprfGroup = opaque_ke::Ristretto255;
+//! #     type OprfCs = opaque_ke::Ristretto255;
 //! #     type KeGroup = opaque_ke::Ristretto255;
 //! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
 //! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
 //! # }
 //! # #[cfg(not(feature = "ristretto255"))]
 //! # impl CipherSuite for Default {
-//! #     type OprfGroup = p256::NistP256;
+//! #     type OprfCs = p256::NistP256;
 //! #     type KeGroup = p256::NistP256;
 //! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
 //! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
@@ -830,14 +830,14 @@
 //! # struct Default;
 //! # #[cfg(feature = "ristretto255")]
 //! # impl CipherSuite for Default {
-//! #     type OprfGroup = opaque_ke::Ristretto255;
+//! #     type OprfCs = opaque_ke::Ristretto255;
 //! #     type KeGroup = opaque_ke::Ristretto255;
 //! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
 //! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
 //! # }
 //! # #[cfg(not(feature = "ristretto255"))]
 //! # impl CipherSuite for Default {
-//! #     type OprfGroup = p256::NistP256;
+//! #     type OprfCs = p256::NistP256;
 //! #     type KeGroup = p256::NistP256;
 //! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
 //! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
@@ -926,14 +926,14 @@
 //! # struct Default;
 //! # #[cfg(feature = "ristretto255")]
 //! # impl CipherSuite for Default {
-//! #     type OprfGroup = opaque_ke::Ristretto255;
+//! #     type OprfCs = opaque_ke::Ristretto255;
 //! #     type KeGroup = opaque_ke::Ristretto255;
 //! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
 //! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
 //! # }
 //! # #[cfg(not(feature = "ristretto255"))]
 //! # impl CipherSuite for Default {
-//! #     type OprfGroup = p256::NistP256;
+//! #     type OprfCs = p256::NistP256;
 //! #     type KeGroup = p256::NistP256;
 //! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
 //! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
@@ -1000,7 +1000,7 @@
 //!   `ristretto255-fiat-u32`. Any `ristretto255-*` backend feature will enable
 //!   the `ristretto255` feature, which can be used too, but keep in mind that
 //!   `curve25519-dalek` will fail to compile without a selected backend. This
-//!   enables the use of [`Ristretto255`] as a `KeGroup` and `OprfGroup`.
+//!   enables the use of [`Ristretto255`] as a `KeGroup` and `OprfCs`.
 //!
 //! - The `x25519` feature is similar to the `ristretto255` feature and requires
 //!   to select a backend like `x25519-u64`, other backends are the same as in
@@ -1012,7 +1012,7 @@
 //!   nightly.
 //!
 //! - The `p256` feature enables the use of [`p256::NistP256`] as a `KeGroup`
-//!   and a `OprfGroup` for `CipherSuite`.
+//!   and a `OprfCs` for `CipherSuite`.
 //!
 //! - The `bench` feature is used only for running performance benchmarks for
 //!   this implementation.

@@ -39,7 +39,7 @@ struct Ristretto255;
 
 #[cfg(feature = "ristretto255")]
 impl CipherSuite for Ristretto255 {
-    type OprfGroup = crate::Ristretto255;
+    type OprfCs = crate::Ristretto255;
     type KeGroup = crate::Ristretto255;
     type KeyExchange = TripleDH;
     type SlowHash = crate::slow_hash::NoOpHash;
@@ -48,7 +48,7 @@ impl CipherSuite for Ristretto255 {
 struct P256;
 
 impl CipherSuite for P256 {
-    type OprfGroup = ::p256::NistP256;
+    type OprfCs = ::p256::NistP256;
     type KeGroup = ::p256::NistP256;
     type KeyExchange = TripleDH;
     type SlowHash = crate::slow_hash::NoOpHash;
@@ -85,7 +85,7 @@ fn client_registration_roundtrip() -> Result<(), ProtocolError> {
         let pw = b"hunter2";
         let mut rng = OsRng;
 
-        let blind_result = &voprf::NonVerifiableClient::<CS::OprfGroup>::blind(pw, &mut rng)?;
+        let blind_result = &voprf::NonVerifiableClient::<CS::OprfCs>::blind(pw, &mut rng)?;
 
         let bytes: Vec<u8> = blind_result
             .state
@@ -523,7 +523,7 @@ fn client_login_roundtrip() -> Result<(), ProtocolError> {
         ]
         .concat();
 
-        let blind_result = voprf::NonVerifiableClient::<CS::OprfGroup>::blind(pw, &mut rng)?;
+        let blind_result = voprf::NonVerifiableClient::<CS::OprfCs>::blind(pw, &mut rng)?;
 
         let credential_request = CredentialRequest::<CS> {
             blinded_element: blind_result.message,

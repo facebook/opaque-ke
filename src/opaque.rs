@@ -90,8 +90,8 @@ pub struct ServerSetup<
 #[derive_where(Clone, ZeroizeOnDrop)]
 #[derive_where(
     Debug, Eq, Hash, PartialEq;
-    voprf::NonVerifiableClient<CS::OprfGroup>,
-    voprf::BlindedElement<CS::OprfGroup>,
+    voprf::NonVerifiableClient<CS::OprfCs>,
+    voprf::BlindedElement<CS::OprfCs>,
 )]
 pub struct ClientRegistration<CS: CipherSuite>
 where
@@ -102,8 +102,8 @@ where
     <<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
     Le<<<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
 {
-    pub(crate) oprf_client: voprf::NonVerifiableClient<CS::OprfGroup>,
-    pub(crate) blinded_element: voprf::BlindedElement<CS::OprfGroup>,
+    pub(crate) oprf_client: voprf::NonVerifiableClient<CS::OprfCs>,
+    pub(crate) blinded_element: voprf::BlindedElement<CS::OprfCs>,
 }
 
 impl_serialize_and_deserialize_for!(
@@ -144,7 +144,7 @@ impl_serialize_and_deserialize_for!(
 #[derive_where(Clone, ZeroizeOnDrop)]
 #[derive_where(
     Debug, Eq, Hash, PartialEq;
-    voprf::NonVerifiableClient<CS::OprfGroup>,
+    voprf::NonVerifiableClient<CS::OprfCs>,
     <CS::KeyExchange as KeyExchange<OprfHash<CS>, CS::KeGroup>>::KE1State,
     CredentialRequest<CS>,
 )]
@@ -157,7 +157,7 @@ where
     <<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
     Le<<<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
 {
-    pub(crate) oprf_client: voprf::NonVerifiableClient<CS::OprfGroup>,
+    pub(crate) oprf_client: voprf::NonVerifiableClient<CS::OprfCs>,
     pub(crate) ke1_state: <CS::KeyExchange as KeyExchange<OprfHash<CS>, CS::KeGroup>>::KE1State,
     pub(crate) credential_request: CredentialRequest<CS>,
 }
@@ -450,7 +450,7 @@ where
         credential_identifier: &[u8],
     ) -> Result<ServerRegistrationStartResult<CS>, ProtocolError> {
         let oprf_key =
-            oprf_key_from_seed::<CS::OprfGroup>(&server_setup.oprf_seed, credential_identifier)?;
+            oprf_key_from_seed::<CS::OprfCs>(&server_setup.oprf_seed, credential_identifier)?;
 
         let server = voprf::NonVerifiableServer::new_with_key(&oprf_key)?;
         let evaluation_element = server.evaluate(&message.blinded_element, None)?;
@@ -756,7 +756,7 @@ where
             CredentialRequest::<CS>::serialize_iter(&blinded_element, &ke1_message);
 
         let oprf_key =
-            oprf_key_from_seed::<CS::OprfGroup>(&server_setup.oprf_seed, credential_identifier)
+            oprf_key_from_seed::<CS::OprfCs>(&server_setup.oprf_seed, credential_identifier)
                 .map_err(ProtocolError::into_custom)?;
         let server = voprf::NonVerifiableServer::new_with_key(&oprf_key)
             .map_err(|e| ProtocolError::into_custom(e.into()))?;
@@ -1060,7 +1060,7 @@ pub struct ServerLoginStartParameters<'c, 'i> {
 #[derive_where(Clone)]
 #[derive_where(
     Debug;
-    voprf::EvaluationElement<CS::OprfGroup>,
+    voprf::EvaluationElement<CS::OprfCs>,
     <CS::KeyExchange as KeyExchange<OprfHash<CS>, CS::KeGroup>>::KE2Message,
     <CS::KeyExchange as KeyExchange<OprfHash<CS>, CS::KeGroup>>::KE2State,
 )]
@@ -1097,8 +1097,8 @@ where
 #[allow(clippy::type_complexity)]
 fn get_password_derived_key<CS: CipherSuite>(
     input: &[u8],
-    oprf_client: voprf::NonVerifiableClient<CS::OprfGroup>,
-    evaluation_element: voprf::EvaluationElement<CS::OprfGroup>,
+    oprf_client: voprf::NonVerifiableClient<CS::OprfCs>,
+    evaluation_element: voprf::EvaluationElement<CS::OprfCs>,
     slow_hash: Option<&CS::SlowHash>,
 ) -> Result<(Output<OprfHash<CS>>, Hkdf<OprfHash<CS>>), ProtocolError>
 where
@@ -1308,7 +1308,7 @@ pub(crate) fn bytestrings_from_identifiers<KG: KeGroup>(
 fn blind<CS: CipherSuite, R: RngCore + CryptoRng>(
     rng: &mut R,
     password: &[u8],
-) -> Result<voprf::NonVerifiableClientBlindResult<CS::OprfGroup>, voprf::Error>
+) -> Result<voprf::NonVerifiableClientBlindResult<CS::OprfCs>, voprf::Error>
 where
     <OprfHash<CS> as OutputSizeUser>::OutputSize:
         IsLess<U256> + IsLessOrEqual<<OprfHash<CS> as BlockSizeUser>::BlockSize>,

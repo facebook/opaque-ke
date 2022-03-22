@@ -211,7 +211,7 @@ fn tests() -> Result<(), ProtocolError> {
     {
         struct Ristretto255Sha512NoSlowHash;
         impl CipherSuite for Ristretto255Sha512NoSlowHash {
-            type OprfGroup = crate::Ristretto255;
+            type OprfCs = crate::Ristretto255;
             type KeGroup = crate::Ristretto255;
             type KeyExchange = TripleDH;
             type SlowHash = NoOpHash;
@@ -248,7 +248,7 @@ fn tests() -> Result<(), ProtocolError> {
 
     struct P256Sha256NoSlowHash;
     impl CipherSuite for P256Sha256NoSlowHash {
-        type OprfGroup = p256::NistP256;
+        type OprfCs = p256::NistP256;
         type KeGroup = p256::NistP256;
         type KeyExchange = TripleDH;
         type SlowHash = NoOpHash;

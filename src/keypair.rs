@@ -281,9 +281,9 @@ mod tests {
 
         impl CipherSuite for Default {
             #[cfg(feature = "ristretto255")]
-            type OprfGroup = crate::Ristretto255;
+            type OprfCs = crate::Ristretto255;
             #[cfg(not(feature = "ristretto255"))]
-            type OprfGroup = ::p256::NistP256;
+            type OprfCs = ::p256::NistP256;
             #[cfg(feature = "ristretto255")]
             type KeGroup = crate::Ristretto255;
             #[cfg(not(feature = "ristretto255"))]
