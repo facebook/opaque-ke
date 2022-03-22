@@ -40,7 +40,6 @@ digest = "0.10"
 displaydoc = { version = "0.2", default-features = false }
 elliptic-curve = { version = "0.12.0-pre.1", features = ["hash2curve", "sec1"] }
 generic-array = "0.14"
-getrandom = { version = "0.2", optional = true }
 hkdf = "0.12"
 hmac = "0.12"
 rand = { version = "0.8", default-features = false }
