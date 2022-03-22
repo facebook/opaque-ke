@@ -30,7 +30,7 @@ use crate::messages::{
     RegistrationResponseLen, RegistrationUploadLen,
 };
 use crate::opaque::*;
-use crate::slow_hash::NoOpHash;
+use crate::slow_hash::Identity;
 use crate::tests::mock_rng::CycleRng;
 use crate::*;
 
@@ -214,7 +214,7 @@ fn tests() -> Result<(), ProtocolError> {
             type OprfCs = crate::Ristretto255;
             type KeGroup = crate::Ristretto255;
             type KeyExchange = TripleDh;
-            type SlowHash = NoOpHash;
+            type SlowHash = Identity;
         }
 
         let ristretto_real_tvs = json_to_test_vectors!(
@@ -251,7 +251,7 @@ fn tests() -> Result<(), ProtocolError> {
         type OprfCs = p256::NistP256;
         type KeGroup = p256::NistP256;
         type KeyExchange = TripleDh;
-        type SlowHash = NoOpHash;
+        type SlowHash = Identity;
     }
 
     let p256_real_tvs = json_to_test_vectors!(

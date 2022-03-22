@@ -30,7 +30,7 @@ impl CipherSuite for Default {
     type OprfCs = opaque_ke::Ristretto255;
     type KeGroup = opaque_ke::Ristretto255;
     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDh;
-    type SlowHash = opaque_ke::slow_hash::NoOpHash;
+    type SlowHash = opaque_ke::slow_hash::Identity;
 }
 
 #[cfg(not(feature = "ristretto255"))]
@@ -38,7 +38,7 @@ impl CipherSuite for Default {
     type OprfCs = p256::NistP256;
     type KeGroup = p256::NistP256;
     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDh;
-    type SlowHash = opaque_ke::slow_hash::NoOpHash;
+    type SlowHash = opaque_ke::slow_hash::Identity;
 }
 
 fn server_setup(c: &mut Criterion) {

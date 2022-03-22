@@ -36,13 +36,13 @@
 //!     type OprfCs = opaque_ke::Ristretto255;
 //!     type KeGroup = opaque_ke::Ristretto255;
 //!     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDh;
-//!     type SlowHash = opaque_ke::slow_hash::NoOpHash;
+//!     type SlowHash = opaque_ke::slow_hash::Identity;
 //! }
 //! ```
 //! See [examples/simple_login.rs](https://github.com/novifinancial/opaque-ke/blob/main/examples/simple_login.rs)
 //! for a working example of a simple password-based login using OPAQUE.
 //!
-//! Note that our choice of slow hashing function in this example, `NoOpHash`,
+//! Note that our choice of slow hashing function in this example, `Identity`,
 //! is selected only to ensure that the tests execute quickly. A real
 //! application should use an actual slow hashing function, such as `Argon2`,
 //! which can be enabled through the `argon2` feature. See more details in
@@ -61,14 +61,14 @@
 //! #     type OprfCs = opaque_ke::Ristretto255;
 //! #     type KeGroup = opaque_ke::Ristretto255;
 //! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDh;
-//! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
+//! #     type SlowHash = opaque_ke::slow_hash::Identity;
 //! # }
 //! # #[cfg(not(feature = "ristretto255"))]
 //! # impl CipherSuite for Default {
 //! #     type OprfCs = p256::NistP256;
 //! #     type KeGroup = p256::NistP256;
 //! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDh;
-//! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
+//! #     type SlowHash = opaque_ke::slow_hash::Identity;
 //! # }
 //! use rand::rngs::OsRng;
 //! use rand::RngCore;
@@ -101,7 +101,7 @@
 //! # use opaque_ke::{
 //! #   errors::ProtocolError,
 //! #   ServerRegistration,
-//! #   slow_hash::NoOpHash,
+//! #   slow_hash::Identity,
 //! # };
 //! # use opaque_ke::CipherSuite;
 //! # struct Default;
@@ -110,14 +110,14 @@
 //! #     type OprfCs = opaque_ke::Ristretto255;
 //! #     type KeGroup = opaque_ke::Ristretto255;
 //! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDh;
-//! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
+//! #     type SlowHash = opaque_ke::slow_hash::Identity;
 //! # }
 //! # #[cfg(not(feature = "ristretto255"))]
 //! # impl CipherSuite for Default {
 //! #     type OprfCs = p256::NistP256;
 //! #     type KeGroup = p256::NistP256;
 //! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDh;
-//! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
+//! #     type SlowHash = opaque_ke::slow_hash::Identity;
 //! # }
 //! use opaque_ke::ClientRegistration;
 //! use rand::rngs::OsRng;
@@ -139,7 +139,7 @@
 //! #   errors::ProtocolError,
 //! #   ClientRegistration,
 //! #   ServerSetup,
-//! #   slow_hash::NoOpHash,
+//! #   slow_hash::Identity,
 //! # };
 //! # use opaque_ke::CipherSuite;
 //! # struct Default;
@@ -148,14 +148,14 @@
 //! #     type OprfCs = opaque_ke::Ristretto255;
 //! #     type KeGroup = opaque_ke::Ristretto255;
 //! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDh;
-//! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
+//! #     type SlowHash = opaque_ke::slow_hash::Identity;
 //! # }
 //! # #[cfg(not(feature = "ristretto255"))]
 //! # impl CipherSuite for Default {
 //! #     type OprfCs = p256::NistP256;
 //! #     type KeGroup = p256::NistP256;
 //! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDh;
-//! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
+//! #     type SlowHash = opaque_ke::slow_hash::Identity;
 //! # }
 //! # use rand::{rngs::OsRng, RngCore};
 //! # let mut client_rng = OsRng;
@@ -186,7 +186,7 @@
 //! # use opaque_ke::{
 //! #   errors::ProtocolError,
 //! #   ClientRegistration, ClientRegistrationFinishParameters, ServerRegistration, ServerSetup,
-//! #   slow_hash::NoOpHash,
+//! #   slow_hash::Identity,
 //! # };
 //! # use opaque_ke::CipherSuite;
 //! # struct Default;
@@ -195,14 +195,14 @@
 //! #     type OprfCs = opaque_ke::Ristretto255;
 //! #     type KeGroup = opaque_ke::Ristretto255;
 //! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDh;
-//! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
+//! #     type SlowHash = opaque_ke::slow_hash::Identity;
 //! # }
 //! # #[cfg(not(feature = "ristretto255"))]
 //! # impl CipherSuite for Default {
 //! #     type OprfCs = p256::NistP256;
 //! #     type KeGroup = p256::NistP256;
 //! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDh;
-//! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
+//! #     type SlowHash = opaque_ke::slow_hash::Identity;
 //! # }
 //! # use rand::{rngs::OsRng, RngCore};
 //! # let mut client_rng = OsRng;
@@ -234,7 +234,7 @@
 //! # use opaque_ke::{
 //! #   errors::ProtocolError,
 //! #   ClientRegistration, ClientRegistrationFinishParameters, ServerRegistration, ServerSetup,
-//! #   slow_hash::NoOpHash,
+//! #   slow_hash::Identity,
 //! # };
 //! # use opaque_ke::CipherSuite;
 //! # struct Default;
@@ -243,14 +243,14 @@
 //! #     type OprfCs = opaque_ke::Ristretto255;
 //! #     type KeGroup = opaque_ke::Ristretto255;
 //! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDh;
-//! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
+//! #     type SlowHash = opaque_ke::slow_hash::Identity;
 //! # }
 //! # #[cfg(not(feature = "ristretto255"))]
 //! # impl CipherSuite for Default {
 //! #     type OprfCs = p256::NistP256;
 //! #     type KeGroup = p256::NistP256;
 //! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDh;
-//! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
+//! #     type SlowHash = opaque_ke::slow_hash::Identity;
 //! # }
 //! # use rand::{rngs::OsRng, RngCore};
 //! # let mut client_rng = OsRng;
@@ -287,7 +287,7 @@
 //! # use opaque_ke::{
 //! #   errors::ProtocolError,
 //! #   ClientRegistration, ServerRegistration, ServerLogin, CredentialFinalization,
-//! #   slow_hash::NoOpHash,
+//! #   slow_hash::Identity,
 //! # };
 //! # use opaque_ke::CipherSuite;
 //! # struct Default;
@@ -296,14 +296,14 @@
 //! #     type OprfCs = opaque_ke::Ristretto255;
 //! #     type KeGroup = opaque_ke::Ristretto255;
 //! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDh;
-//! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
+//! #     type SlowHash = opaque_ke::slow_hash::Identity;
 //! # }
 //! # #[cfg(not(feature = "ristretto255"))]
 //! # impl CipherSuite for Default {
 //! #     type OprfCs = p256::NistP256;
 //! #     type KeGroup = p256::NistP256;
 //! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDh;
-//! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
+//! #     type SlowHash = opaque_ke::slow_hash::Identity;
 //! # }
 //! # use rand::{rngs::OsRng, RngCore};
 //! use opaque_ke::ClientLogin;
@@ -324,7 +324,7 @@
 //! # use opaque_ke::{
 //! #   errors::ProtocolError,
 //! #   ClientRegistration, ClientRegistrationFinishParameters, ServerRegistration, ClientLogin, CredentialFinalization, ServerSetup,
-//! #   slow_hash::NoOpHash,
+//! #   slow_hash::Identity,
 //! # };
 //! # use opaque_ke::CipherSuite;
 //! # struct Default;
@@ -333,14 +333,14 @@
 //! #     type OprfCs = opaque_ke::Ristretto255;
 //! #     type KeGroup = opaque_ke::Ristretto255;
 //! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDh;
-//! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
+//! #     type SlowHash = opaque_ke::slow_hash::Identity;
 //! # }
 //! # #[cfg(not(feature = "ristretto255"))]
 //! # impl CipherSuite for Default {
 //! #     type OprfCs = p256::NistP256;
 //! #     type KeGroup = p256::NistP256;
 //! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDh;
-//! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
+//! #     type SlowHash = opaque_ke::slow_hash::Identity;
 //! # }
 //! # use rand::{rngs::OsRng, RngCore};
 //! # let mut client_rng = OsRng;
@@ -387,7 +387,7 @@
 //! # use opaque_ke::{
 //! #   errors::ProtocolError,
 //! #   ClientRegistration, ClientRegistrationFinishParameters, ServerRegistration, ClientLogin, ClientLoginFinishParameters, ServerLogin, ServerLoginStartParameters, CredentialFinalization, ServerSetup,
-//! #   slow_hash::NoOpHash,
+//! #   slow_hash::Identity,
 //! # };
 //! # use opaque_ke::CipherSuite;
 //! # struct Default;
@@ -396,14 +396,14 @@
 //! #     type OprfCs = opaque_ke::Ristretto255;
 //! #     type KeGroup = opaque_ke::Ristretto255;
 //! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDh;
-//! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
+//! #     type SlowHash = opaque_ke::slow_hash::Identity;
 //! # }
 //! # #[cfg(not(feature = "ristretto255"))]
 //! # impl CipherSuite for Default {
 //! #     type OprfCs = p256::NistP256;
 //! #     type KeGroup = p256::NistP256;
 //! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDh;
-//! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
+//! #     type SlowHash = opaque_ke::slow_hash::Identity;
 //! # }
 //! # use rand::{rngs::OsRng, RngCore};
 //! # let mut client_rng = OsRng;
@@ -443,7 +443,7 @@
 //! # use opaque_ke::{
 //! #   errors::ProtocolError,
 //! #   ClientRegistration, ClientRegistrationFinishParameters, ServerRegistration, ClientLogin, ClientLoginFinishParameters, ServerLogin, ServerLoginStartParameters, CredentialFinalization, ServerSetup,
-//! #   slow_hash::NoOpHash,
+//! #   slow_hash::Identity,
 //! # };
 //! # use opaque_ke::CipherSuite;
 //! # struct Default;
@@ -452,14 +452,14 @@
 //! #     type OprfCs = opaque_ke::Ristretto255;
 //! #     type KeGroup = opaque_ke::Ristretto255;
 //! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDh;
-//! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
+//! #     type SlowHash = opaque_ke::slow_hash::Identity;
 //! # }
 //! # #[cfg(not(feature = "ristretto255"))]
 //! # impl CipherSuite for Default {
 //! #     type OprfCs = p256::NistP256;
 //! #     type KeGroup = p256::NistP256;
 //! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDh;
-//! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
+//! #     type SlowHash = opaque_ke::slow_hash::Identity;
 //! # }
 //! # use rand::{rngs::OsRng, RngCore};
 //! # let mut client_rng = OsRng;
@@ -539,7 +539,7 @@
 //! # use opaque_ke::{
 //! #   errors::ProtocolError,
 //! #   ClientRegistration, ClientRegistrationFinishParameters, ServerRegistration, ClientLogin, ClientLoginFinishParameters, ServerLogin, ServerLoginStartParameters, CredentialFinalization, ServerSetup,
-//! #   slow_hash::NoOpHash,
+//! #   slow_hash::Identity,
 //! # };
 //! # use opaque_ke::CipherSuite;
 //! # struct Default;
@@ -548,14 +548,14 @@
 //! #     type OprfCs = opaque_ke::Ristretto255;
 //! #     type KeGroup = opaque_ke::Ristretto255;
 //! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDh;
-//! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
+//! #     type SlowHash = opaque_ke::slow_hash::Identity;
 //! # }
 //! # #[cfg(not(feature = "ristretto255"))]
 //! # impl CipherSuite for Default {
 //! #     type OprfCs = p256::NistP256;
 //! #     type KeGroup = p256::NistP256;
 //! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDh;
-//! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
+//! #     type SlowHash = opaque_ke::slow_hash::Identity;
 //! # }
 //! # use rand::{rngs::OsRng, RngCore};
 //! # let mut client_rng = OsRng;
@@ -636,7 +636,7 @@
 //! # use opaque_ke::{
 //! #   errors::ProtocolError,
 //! #   ClientRegistration, ClientRegistrationFinishParameters, ServerRegistration, ClientLogin, ClientLoginFinishParameters, ServerLogin, ServerLoginStartParameters, CredentialFinalization, ServerSetup,
-//! #   slow_hash::NoOpHash,
+//! #   slow_hash::Identity,
 //! # };
 //! # use opaque_ke::CipherSuite;
 //! # struct Default;
@@ -645,14 +645,14 @@
 //! #     type OprfCs = opaque_ke::Ristretto255;
 //! #     type KeGroup = opaque_ke::Ristretto255;
 //! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDh;
-//! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
+//! #     type SlowHash = opaque_ke::slow_hash::Identity;
 //! # }
 //! # #[cfg(not(feature = "ristretto255"))]
 //! # impl CipherSuite for Default {
 //! #     type OprfCs = p256::NistP256;
 //! #     type KeGroup = p256::NistP256;
 //! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDh;
-//! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
+//! #     type SlowHash = opaque_ke::slow_hash::Identity;
 //! # }
 //! # use rand::{rngs::OsRng, RngCore};
 //! # let mut client_rng = OsRng;
@@ -717,7 +717,7 @@
 //! # use opaque_ke::{
 //! #   errors::ProtocolError,
 //! #   ClientRegistration, ClientRegistrationFinishParameters, Identifiers, ServerRegistration, ServerSetup,
-//! #   slow_hash::NoOpHash,
+//! #   slow_hash::Identity,
 //! # };
 //! # use opaque_ke::CipherSuite;
 //! # struct Default;
@@ -726,14 +726,14 @@
 //! #     type OprfCs = opaque_ke::Ristretto255;
 //! #     type KeGroup = opaque_ke::Ristretto255;
 //! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDh;
-//! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
+//! #     type SlowHash = opaque_ke::slow_hash::Identity;
 //! # }
 //! # #[cfg(not(feature = "ristretto255"))]
 //! # impl CipherSuite for Default {
 //! #     type OprfCs = p256::NistP256;
 //! #     type KeGroup = p256::NistP256;
 //! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDh;
-//! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
+//! #     type SlowHash = opaque_ke::slow_hash::Identity;
 //! # }
 //! # use rand::{rngs::OsRng, RngCore};
 //! # let mut client_rng = OsRng;
@@ -765,7 +765,7 @@
 //! # use opaque_ke::{
 //! #   errors::ProtocolError,
 //! #   ClientRegistration, ClientRegistrationFinishParameters, ServerRegistration, ClientLogin, CredentialFinalization, Identifiers, ServerSetup,
-//! #   slow_hash::NoOpHash,
+//! #   slow_hash::Identity,
 //! # };
 //! # use opaque_ke::CipherSuite;
 //! # struct Default;
@@ -774,14 +774,14 @@
 //! #     type OprfCs = opaque_ke::Ristretto255;
 //! #     type KeGroup = opaque_ke::Ristretto255;
 //! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDh;
-//! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
+//! #     type SlowHash = opaque_ke::slow_hash::Identity;
 //! # }
 //! # #[cfg(not(feature = "ristretto255"))]
 //! # impl CipherSuite for Default {
 //! #     type OprfCs = p256::NistP256;
 //! #     type KeGroup = p256::NistP256;
 //! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDh;
-//! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
+//! #     type SlowHash = opaque_ke::slow_hash::Identity;
 //! # }
 //! # use rand::{rngs::OsRng, RngCore};
 //! # let mut client_rng = OsRng;
@@ -824,7 +824,7 @@
 //! # use opaque_ke::{
 //! #   errors::ProtocolError,
 //! #   ClientRegistration, ClientRegistrationFinishParameters, ServerRegistration, ClientLogin, ClientLoginFinishParameters, Identifiers, ServerLogin, ServerLoginStartParameters, CredentialFinalization, ServerSetup,
-//! #   slow_hash::NoOpHash,
+//! #   slow_hash::Identity,
 //! # };
 //! # use opaque_ke::CipherSuite;
 //! # struct Default;
@@ -833,14 +833,14 @@
 //! #     type OprfCs = opaque_ke::Ristretto255;
 //! #     type KeGroup = opaque_ke::Ristretto255;
 //! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDh;
-//! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
+//! #     type SlowHash = opaque_ke::slow_hash::Identity;
 //! # }
 //! # #[cfg(not(feature = "ristretto255"))]
 //! # impl CipherSuite for Default {
 //! #     type OprfCs = p256::NistP256;
 //! #     type KeGroup = p256::NistP256;
 //! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDh;
-//! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
+//! #     type SlowHash = opaque_ke::slow_hash::Identity;
 //! # }
 //! # use rand::{rngs::OsRng, RngCore};
 //! # let mut client_rng = OsRng;
@@ -929,14 +929,14 @@
 //! #     type OprfCs = opaque_ke::Ristretto255;
 //! #     type KeGroup = opaque_ke::Ristretto255;
 //! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDh;
-//! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
+//! #     type SlowHash = opaque_ke::slow_hash::Identity;
 //! # }
 //! # #[cfg(not(feature = "ristretto255"))]
 //! # impl CipherSuite for Default {
 //! #     type OprfCs = p256::NistP256;
 //! #     type KeGroup = p256::NistP256;
 //! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDh;
-//! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
+//! #     type SlowHash = opaque_ke::slow_hash::Identity;
 //! # }
 //! # #[derive(Debug)]
 //! # struct YourRemoteKeyError;
@@ -985,7 +985,7 @@
 //!   and implements the `SlowHash` trait for `Argon2` with a set of default parameters.
 //!   In general, secure instantiations should choose to invoke a memory-hard password
 //!   hashing function when the client's password is expected to have low entropy,
-//!   instead of relying on [slow_hash::NoOpHash] as done in the above example. The
+//!   instead of relying on [slow_hash::Identity] as done in the above example. The
 //!   more computationally intensive the `SlowHash` function is, the more resistant
 //!   the server's password file records will be against offline dictionary and precomputation
 //!   attacks; see [the OPAQUE paper](https://eprint.iacr.org/2018/163.pdf) for

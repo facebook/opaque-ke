@@ -22,9 +22,9 @@ pub trait SlowHash: Default {
 
 /// A no-op hash which simply returns its input
 #[derive(Default)]
-pub struct NoOpHash;
+pub struct Identity;
 
-impl SlowHash for NoOpHash {
+impl SlowHash for Identity {
     fn hash<L: ArrayLength<u8>>(
         &self,
         input: GenericArray<u8, L>,
