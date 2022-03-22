@@ -27,7 +27,7 @@ use crate::key_exchange::group::KeGroup;
 use crate::key_exchange::traits::{
     FromBytes, Ke1MessageLen, Ke1StateLen, Ke2MessageLen, KeyExchange, ToBytes,
 };
-use crate::key_exchange::tripledh::{NonceLen, TripleDH};
+use crate::key_exchange::tripledh::{NonceLen, TripleDh};
 use crate::keypair::{KeyPair, SecretKey};
 use crate::messages::CredentialResponseWithoutKeLen;
 use crate::opaque::{ClientLoginLen, ClientRegistrationLen, MaskedResponseLen};
@@ -41,7 +41,7 @@ struct Ristretto255;
 impl CipherSuite for Ristretto255 {
     type OprfCs = crate::Ristretto255;
     type KeGroup = crate::Ristretto255;
-    type KeyExchange = TripleDH;
+    type KeyExchange = TripleDh;
     type SlowHash = crate::slow_hash::NoOpHash;
 }
 
@@ -50,7 +50,7 @@ struct P256;
 impl CipherSuite for P256 {
     type OprfCs = ::p256::NistP256;
     type KeGroup = ::p256::NistP256;
-    type KeyExchange = TripleDH;
+    type KeyExchange = TripleDh;
     type SlowHash = crate::slow_hash::NoOpHash;
 }
 

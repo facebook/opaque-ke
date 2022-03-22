@@ -27,7 +27,7 @@ use crate::errors::*;
 use crate::hash::{Hash, OutputSize, ProxyHash};
 use crate::key_exchange::group::KeGroup;
 use crate::key_exchange::traits::{Ke1MessageLen, Ke1StateLen, Ke2MessageLen};
-use crate::key_exchange::tripledh::{NonceLen, TripleDH};
+use crate::key_exchange::tripledh::{NonceLen, TripleDh};
 use crate::keypair::SecretKey;
 use crate::messages::{
     CredentialRequestLen, CredentialResponseLen, CredentialResponseWithoutKeLen,
@@ -48,7 +48,7 @@ struct Ristretto255;
 impl CipherSuite for Ristretto255 {
     type OprfCs = crate::Ristretto255;
     type KeGroup = crate::Ristretto255;
-    type KeyExchange = TripleDH;
+    type KeyExchange = TripleDh;
     type SlowHash = NoOpHash;
 }
 
@@ -57,7 +57,7 @@ struct P256;
 impl CipherSuite for P256 {
     type OprfCs = p256::NistP256;
     type KeGroup = p256::NistP256;
-    type KeyExchange = TripleDH;
+    type KeyExchange = TripleDh;
     type SlowHash = NoOpHash;
 }
 
@@ -68,7 +68,7 @@ struct X25519Ristretto255;
 impl CipherSuite for X25519Ristretto255 {
     type OprfCs = crate::Ristretto255;
     type KeGroup = crate::X25519;
-    type KeyExchange = TripleDH;
+    type KeyExchange = TripleDh;
     type SlowHash = NoOpHash;
 }
 
@@ -79,7 +79,7 @@ struct X25519P256;
 impl CipherSuite for X25519P256 {
     type OprfCs = p256::NistP256;
     type KeGroup = crate::X25519;
-    type KeyExchange = TripleDH;
+    type KeyExchange = TripleDh;
     type SlowHash = NoOpHash;
 }
 
@@ -1417,7 +1417,7 @@ fn test_zeroize_server_registration_finish() -> Result<(), ProtocolError> {
 
 #[test]
 fn test_zeroize_client_login_start() -> Result<(), ProtocolError> {
-    fn inner<CS: CipherSuite<KeyExchange = TripleDH>>() -> Result<(), ProtocolError>
+    fn inner<CS: CipherSuite<KeyExchange = TripleDh>>() -> Result<(), ProtocolError>
     where
         <OprfHash<CS> as OutputSizeUser>::OutputSize:
             IsLess<U256> + IsLessOrEqual<<OprfHash<CS> as BlockSizeUser>::BlockSize>,
@@ -1537,7 +1537,7 @@ fn test_zeroize_server_login_start() -> Result<(), ProtocolError> {
 
 #[test]
 fn test_zeroize_client_login_finish() -> Result<(), ProtocolError> {
-    fn inner<CS: CipherSuite<KeyExchange = TripleDH>>() -> Result<(), ProtocolError>
+    fn inner<CS: CipherSuite<KeyExchange = TripleDh>>() -> Result<(), ProtocolError>
     where
         <OprfHash<CS> as OutputSizeUser>::OutputSize:
             IsLess<U256> + IsLessOrEqual<<OprfHash<CS> as BlockSizeUser>::BlockSize>,

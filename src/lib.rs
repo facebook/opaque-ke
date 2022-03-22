@@ -35,7 +35,7 @@
 //! impl CipherSuite for Default {
 //!     type OprfCs = opaque_ke::Ristretto255;
 //!     type KeGroup = opaque_ke::Ristretto255;
-//!     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
+//!     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDh;
 //!     type SlowHash = opaque_ke::slow_hash::NoOpHash;
 //! }
 //! ```
@@ -60,14 +60,14 @@
 //! # impl CipherSuite for Default {
 //! #     type OprfCs = opaque_ke::Ristretto255;
 //! #     type KeGroup = opaque_ke::Ristretto255;
-//! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
+//! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDh;
 //! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
 //! # }
 //! # #[cfg(not(feature = "ristretto255"))]
 //! # impl CipherSuite for Default {
 //! #     type OprfCs = p256::NistP256;
 //! #     type KeGroup = p256::NistP256;
-//! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
+//! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDh;
 //! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
 //! # }
 //! use rand::rngs::OsRng;
@@ -109,14 +109,14 @@
 //! # impl CipherSuite for Default {
 //! #     type OprfCs = opaque_ke::Ristretto255;
 //! #     type KeGroup = opaque_ke::Ristretto255;
-//! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
+//! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDh;
 //! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
 //! # }
 //! # #[cfg(not(feature = "ristretto255"))]
 //! # impl CipherSuite for Default {
 //! #     type OprfCs = p256::NistP256;
 //! #     type KeGroup = p256::NistP256;
-//! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
+//! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDh;
 //! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
 //! # }
 //! use opaque_ke::ClientRegistration;
@@ -147,14 +147,14 @@
 //! # impl CipherSuite for Default {
 //! #     type OprfCs = opaque_ke::Ristretto255;
 //! #     type KeGroup = opaque_ke::Ristretto255;
-//! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
+//! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDh;
 //! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
 //! # }
 //! # #[cfg(not(feature = "ristretto255"))]
 //! # impl CipherSuite for Default {
 //! #     type OprfCs = p256::NistP256;
 //! #     type KeGroup = p256::NistP256;
-//! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
+//! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDh;
 //! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
 //! # }
 //! # use rand::{rngs::OsRng, RngCore};
@@ -194,14 +194,14 @@
 //! # impl CipherSuite for Default {
 //! #     type OprfCs = opaque_ke::Ristretto255;
 //! #     type KeGroup = opaque_ke::Ristretto255;
-//! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
+//! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDh;
 //! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
 //! # }
 //! # #[cfg(not(feature = "ristretto255"))]
 //! # impl CipherSuite for Default {
 //! #     type OprfCs = p256::NistP256;
 //! #     type KeGroup = p256::NistP256;
-//! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
+//! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDh;
 //! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
 //! # }
 //! # use rand::{rngs::OsRng, RngCore};
@@ -242,14 +242,14 @@
 //! # impl CipherSuite for Default {
 //! #     type OprfCs = opaque_ke::Ristretto255;
 //! #     type KeGroup = opaque_ke::Ristretto255;
-//! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
+//! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDh;
 //! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
 //! # }
 //! # #[cfg(not(feature = "ristretto255"))]
 //! # impl CipherSuite for Default {
 //! #     type OprfCs = p256::NistP256;
 //! #     type KeGroup = p256::NistP256;
-//! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
+//! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDh;
 //! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
 //! # }
 //! # use rand::{rngs::OsRng, RngCore};
@@ -295,14 +295,14 @@
 //! # impl CipherSuite for Default {
 //! #     type OprfCs = opaque_ke::Ristretto255;
 //! #     type KeGroup = opaque_ke::Ristretto255;
-//! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
+//! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDh;
 //! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
 //! # }
 //! # #[cfg(not(feature = "ristretto255"))]
 //! # impl CipherSuite for Default {
 //! #     type OprfCs = p256::NistP256;
 //! #     type KeGroup = p256::NistP256;
-//! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
+//! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDh;
 //! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
 //! # }
 //! # use rand::{rngs::OsRng, RngCore};
@@ -332,14 +332,14 @@
 //! # impl CipherSuite for Default {
 //! #     type OprfCs = opaque_ke::Ristretto255;
 //! #     type KeGroup = opaque_ke::Ristretto255;
-//! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
+//! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDh;
 //! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
 //! # }
 //! # #[cfg(not(feature = "ristretto255"))]
 //! # impl CipherSuite for Default {
 //! #     type OprfCs = p256::NistP256;
 //! #     type KeGroup = p256::NistP256;
-//! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
+//! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDh;
 //! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
 //! # }
 //! # use rand::{rngs::OsRng, RngCore};
@@ -395,14 +395,14 @@
 //! # impl CipherSuite for Default {
 //! #     type OprfCs = opaque_ke::Ristretto255;
 //! #     type KeGroup = opaque_ke::Ristretto255;
-//! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
+//! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDh;
 //! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
 //! # }
 //! # #[cfg(not(feature = "ristretto255"))]
 //! # impl CipherSuite for Default {
 //! #     type OprfCs = p256::NistP256;
 //! #     type KeGroup = p256::NistP256;
-//! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
+//! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDh;
 //! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
 //! # }
 //! # use rand::{rngs::OsRng, RngCore};
@@ -451,14 +451,14 @@
 //! # impl CipherSuite for Default {
 //! #     type OprfCs = opaque_ke::Ristretto255;
 //! #     type KeGroup = opaque_ke::Ristretto255;
-//! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
+//! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDh;
 //! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
 //! # }
 //! # #[cfg(not(feature = "ristretto255"))]
 //! # impl CipherSuite for Default {
 //! #     type OprfCs = p256::NistP256;
 //! #     type KeGroup = p256::NistP256;
-//! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
+//! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDh;
 //! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
 //! # }
 //! # use rand::{rngs::OsRng, RngCore};
@@ -547,14 +547,14 @@
 //! # impl CipherSuite for Default {
 //! #     type OprfCs = opaque_ke::Ristretto255;
 //! #     type KeGroup = opaque_ke::Ristretto255;
-//! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
+//! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDh;
 //! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
 //! # }
 //! # #[cfg(not(feature = "ristretto255"))]
 //! # impl CipherSuite for Default {
 //! #     type OprfCs = p256::NistP256;
 //! #     type KeGroup = p256::NistP256;
-//! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
+//! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDh;
 //! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
 //! # }
 //! # use rand::{rngs::OsRng, RngCore};
@@ -644,14 +644,14 @@
 //! # impl CipherSuite for Default {
 //! #     type OprfCs = opaque_ke::Ristretto255;
 //! #     type KeGroup = opaque_ke::Ristretto255;
-//! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
+//! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDh;
 //! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
 //! # }
 //! # #[cfg(not(feature = "ristretto255"))]
 //! # impl CipherSuite for Default {
 //! #     type OprfCs = p256::NistP256;
 //! #     type KeGroup = p256::NistP256;
-//! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
+//! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDh;
 //! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
 //! # }
 //! # use rand::{rngs::OsRng, RngCore};
@@ -725,14 +725,14 @@
 //! # impl CipherSuite for Default {
 //! #     type OprfCs = opaque_ke::Ristretto255;
 //! #     type KeGroup = opaque_ke::Ristretto255;
-//! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
+//! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDh;
 //! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
 //! # }
 //! # #[cfg(not(feature = "ristretto255"))]
 //! # impl CipherSuite for Default {
 //! #     type OprfCs = p256::NistP256;
 //! #     type KeGroup = p256::NistP256;
-//! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
+//! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDh;
 //! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
 //! # }
 //! # use rand::{rngs::OsRng, RngCore};
@@ -773,14 +773,14 @@
 //! # impl CipherSuite for Default {
 //! #     type OprfCs = opaque_ke::Ristretto255;
 //! #     type KeGroup = opaque_ke::Ristretto255;
-//! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
+//! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDh;
 //! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
 //! # }
 //! # #[cfg(not(feature = "ristretto255"))]
 //! # impl CipherSuite for Default {
 //! #     type OprfCs = p256::NistP256;
 //! #     type KeGroup = p256::NistP256;
-//! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
+//! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDh;
 //! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
 //! # }
 //! # use rand::{rngs::OsRng, RngCore};
@@ -832,14 +832,14 @@
 //! # impl CipherSuite for Default {
 //! #     type OprfCs = opaque_ke::Ristretto255;
 //! #     type KeGroup = opaque_ke::Ristretto255;
-//! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
+//! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDh;
 //! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
 //! # }
 //! # #[cfg(not(feature = "ristretto255"))]
 //! # impl CipherSuite for Default {
 //! #     type OprfCs = p256::NistP256;
 //! #     type KeGroup = p256::NistP256;
-//! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
+//! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDh;
 //! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
 //! # }
 //! # use rand::{rngs::OsRng, RngCore};
@@ -928,14 +928,14 @@
 //! # impl CipherSuite for Default {
 //! #     type OprfCs = opaque_ke::Ristretto255;
 //! #     type KeGroup = opaque_ke::Ristretto255;
-//! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
+//! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDh;
 //! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
 //! # }
 //! # #[cfg(not(feature = "ristretto255"))]
 //! # impl CipherSuite for Default {
 //! #     type OprfCs = p256::NistP256;
 //! #     type KeGroup = p256::NistP256;
-//! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
+//! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDh;
 //! #     type SlowHash = opaque_ke::slow_hash::NoOpHash;
 //! # }
 //! # #[derive(Debug)]

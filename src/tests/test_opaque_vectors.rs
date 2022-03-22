@@ -24,7 +24,7 @@ use crate::errors::*;
 use crate::hash::{Hash, OutputSize, ProxyHash};
 use crate::key_exchange::group::KeGroup;
 use crate::key_exchange::traits::{Ke1MessageLen, Ke2MessageLen};
-use crate::key_exchange::tripledh::{NonceLen, TripleDH};
+use crate::key_exchange::tripledh::{NonceLen, TripleDh};
 use crate::messages::{
     CredentialRequestLen, CredentialResponseLen, CredentialResponseWithoutKeLen,
     RegistrationResponseLen, RegistrationUploadLen,
@@ -213,7 +213,7 @@ fn tests() -> Result<(), ProtocolError> {
         impl CipherSuite for Ristretto255Sha512NoSlowHash {
             type OprfCs = crate::Ristretto255;
             type KeGroup = crate::Ristretto255;
-            type KeyExchange = TripleDH;
+            type KeyExchange = TripleDh;
             type SlowHash = NoOpHash;
         }
 
@@ -250,7 +250,7 @@ fn tests() -> Result<(), ProtocolError> {
     impl CipherSuite for P256Sha256NoSlowHash {
         type OprfCs = p256::NistP256;
         type KeGroup = p256::NistP256;
-        type KeyExchange = TripleDH;
+        type KeyExchange = TripleDh;
         type SlowHash = NoOpHash;
     }
 

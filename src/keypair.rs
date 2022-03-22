@@ -288,7 +288,7 @@ mod tests {
             type KeGroup = crate::Ristretto255;
             #[cfg(not(feature = "ristretto255"))]
             type KeGroup = ::p256::NistP256;
-            type KeyExchange = crate::key_exchange::tripledh::TripleDH;
+            type KeyExchange = crate::key_exchange::tripledh::TripleDh;
             type SlowHash = crate::slow_hash::NoOpHash;
         }
 

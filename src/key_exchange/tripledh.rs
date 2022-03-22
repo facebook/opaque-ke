@@ -47,9 +47,8 @@ static STR_OPAQUE: &[u8] = b"OPAQUE-";
 // ====================== //
 ////////////////////////////
 
-#[allow(clippy::upper_case_acronyms)]
 /// The Triple Diffie-Hellman key exchange implementation
-pub struct TripleDH;
+pub struct TripleDh;
 
 /// The client state produced after the first key exchange message
 #[cfg_attr(
@@ -153,7 +152,7 @@ where
 // ========================== //
 ////////////////////////////////
 
-impl<D: Hash, KG: KeGroup> KeyExchange<D, KG> for TripleDH
+impl<D: Hash, KG: KeGroup> KeyExchange<D, KG> for TripleDh
 where
     D::Core: ProxyHash,
     <D::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
@@ -229,7 +228,7 @@ where
             .chain(&server_e_kp.public().to_bytes());
 
         let result = derive_3dh_keys::<D, KG, S>(
-            TripleDHComponents {
+            TripleDhComponents {
                 pk1: ke1_message.client_e_pk.clone(),
                 sk1: server_e_kp.private().clone(),
                 pk2: ke1_message.client_e_pk.clone(),
@@ -287,7 +286,7 @@ where
             .chain(ke2_message.to_bytes_without_mac());
 
         let result = derive_3dh_keys::<D, KG, PrivateKey<KG>>(
-            TripleDHComponents {
+            TripleDhComponents {
                 pk1: ke2_message.server_e_pk.clone(),
                 sk1: ke1_state.client_e_sk.clone(),
                 pk2: server_s_pk,
@@ -345,9 +344,8 @@ where
 //==================== //
 /////////////////////////
 
-#[allow(clippy::upper_case_acronyms)]
 // The triple of public and private components used in the 3DH computation
-struct TripleDHComponents<KG: KeGroup, S: SecretKey<KG>> {
+struct TripleDhComponents<KG: KeGroup, S: SecretKey<KG>> {
     pk1: PublicKey<KG>,
     sk1: PrivateKey<KG>,
     pk2: PublicKey<KG>,
@@ -358,10 +356,9 @@ struct TripleDHComponents<KG: KeGroup, S: SecretKey<KG>> {
 
 // Consists of a session key, followed by two mac keys: (session_key, km2, km3)
 #[cfg(not(test))]
-#[allow(clippy::upper_case_acronyms)]
-type TripleDHDerivationResult<D> = (Output<D>, Output<D>, Output<D>);
+type TripleDhDerivationResult<D> = (Output<D>, Output<D>, Output<D>);
 #[cfg(test)]
-type TripleDHDerivationResult<D> = (Output<D>, Output<D>, Output<D>, Output<D>);
+type TripleDhDerivationResult<D> = (Output<D>, Output<D>, Output<D>, Output<D>);
 
 ////////////////////////////////////////////////
 // Helper functions and Trait Implementations //
@@ -374,9 +371,9 @@ type TripleDHDerivationResult<D> = (Output<D>, Output<D>, Output<D>, Output<D>);
 // and server keypairs, along with some auxiliary metadata, to produce the
 // session key and two MAC keys
 fn derive_3dh_keys<D: Hash, KG: KeGroup, S: SecretKey<KG>>(
-    dh: TripleDHComponents<KG, S>,
+    dh: TripleDhComponents<KG, S>,
     hashed_derivation_transcript: &[u8],
-) -> Result<TripleDHDerivationResult<D>, ProtocolError<S::Error>>
+) -> Result<TripleDhDerivationResult<D>, ProtocolError<S::Error>>
 where
     D::Core: ProxyHash,
     <D::Core as BlockSizeUser>::BlockSize: IsLess<U256>,

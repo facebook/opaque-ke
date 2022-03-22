@@ -29,7 +29,7 @@ struct Default;
 impl CipherSuite for Default {
     type OprfCs = opaque_ke::Ristretto255;
     type KeGroup = opaque_ke::Ristretto255;
-    type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
+    type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDh;
     type SlowHash = opaque_ke::slow_hash::NoOpHash;
 }
 
@@ -37,7 +37,7 @@ impl CipherSuite for Default {
 impl CipherSuite for Default {
     type OprfCs = p256::NistP256;
     type KeGroup = p256::NistP256;
-    type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDH;
+    type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDh;
     type SlowHash = opaque_ke::slow_hash::NoOpHash;
 }
 
