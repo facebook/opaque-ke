@@ -995,20 +995,20 @@
 //!
 //! - The backend features are re-exported from [curve25519-dalek](https://doc.dalek.rs/curve25519_dalek/index.html#backends-and-features)
 //!   and allow for selecting the corresponding backend for the curve arithmetic
-//!   used. The `ristretto255_u64` feature is included as the default. Other
-//!   features are mapped as `ristretto255_u32`, `ristretto255_fiat_u64` and
-//!   `ristretto255_fiat_u32`. Any `ristretto255_*` backend feature will enable
+//!   used. The `ristretto255-u64` feature is included as the default. Other
+//!   features are mapped as `ristretto255-u32`, `ristretto255-fiat-u64` and
+//!   `ristretto255-fiat-u32`. Any `ristretto255-*` backend feature will enable
 //!   the `ristretto255` feature, which can be used too, but keep in mind that
 //!   `curve25519-dalek` will fail to compile without a selected backend. This
 //!   enables the use of [`Ristretto255`] as a `KeGroup` and `OprfGroup`.
 //!
 //! - The `x25519` feature is similar to the `ristretto255` feature and requires
-//!   to select a backend like `x25519_u64`, other backends are the same as in
-//!   `ristretto255_*`. This enables [`X25519`] as a `KeGroup`.
+//!   to select a backend like `x25519-u64`, other backends are the same as in
+//!   `ristretto255-*`. This enables [`X25519`] as a `KeGroup`.
 //!
-//! - The `ristretto255_simd` feature is re-exported from [curve25519-dalek](https://doc.dalek.rs/curve25519_dalek/index.html#backends-and-features)
+//! - The `ristretto255-simd` feature is re-exported from [curve25519-dalek](https://doc.dalek.rs/curve25519_dalek/index.html#backends-and-features)
 //!   and enables parallel formulas, using either AVX2 or AVX512-IFMA. This will
-//!   automatically enable the `ristretto255_u64` feature and requires Rust
+//!   automatically enable the `ristretto255-u64` feature and requires Rust
 //!   nightly.
 //!
 //! - The `p256` feature enables the use of [`p256::NistP256`] as a `KeGroup`

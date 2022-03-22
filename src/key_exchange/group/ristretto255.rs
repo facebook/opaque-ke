@@ -102,7 +102,7 @@ impl KeGroup for Ristretto255 {
     }
 }
 
-#[cfg(feature = "ristretto255_voprf")]
+#[cfg(feature = "ristretto255-voprf")]
 impl voprf::CipherSuite for Ristretto255 {
     const ID: u16 = voprf::Ristretto255::ID;
 
