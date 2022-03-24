@@ -26,7 +26,7 @@ use crate::hash::{Hash, OutputSize, ProxyHash};
 use crate::key_exchange::group::KeGroup;
 use crate::keypair::{KeyPair, PublicKey};
 use crate::opaque::{bytestrings_from_identifiers, Identifiers};
-use crate::serialization::{MacExt, Serialize};
+use crate::serialization::{Input, MacExt};
 
 // Constant string used as salt for HKDF computation
 const STR_AUTH_KEY: [u8; 7] = *b"AuthKey";
@@ -95,8 +95,8 @@ where
 {
     pub(crate) client_static_keypair: KeyPair<CS::KeGroup>,
     pub(crate) export_key: Output<OprfHash<CS>>,
-    pub(crate) id_u: Serialize<'a, U2, <CS::KeGroup as KeGroup>::PkLen>,
-    pub(crate) id_s: Serialize<'a, U2, <CS::KeGroup as KeGroup>::PkLen>,
+    pub(crate) id_u: Input<'a, U2, <CS::KeGroup as KeGroup>::PkLen>,
+    pub(crate) id_s: Input<'a, U2, <CS::KeGroup as KeGroup>::PkLen>,
 }
 
 pub(crate) struct OpenedInnerEnvelope<D: Hash>
@@ -148,10 +148,10 @@ where
             build_inner_envelope_internal::<CS>(randomized_pwd_hasher.clone(), nonce)?,
         );
 
-        let server_s_pk_bytes = server_s_pk.to_bytes();
+        let server_s_pk_bytes = server_s_pk.serialize();
         let (id_u, id_s) = bytestrings_from_identifiers::<CS::KeGroup>(
             ids,
-            client_s_pk.to_bytes(),
+            client_s_pk.serialize(),
             server_s_pk_bytes.clone(),
         )?;
         let aad = construct_aad(id_u.iter(), id_s.iter(), &server_s_pk_bytes);
@@ -219,10 +219,10 @@ where
             }
         };
 
-        let server_s_pk_bytes = server_s_pk.to_bytes();
+        let server_s_pk_bytes = server_s_pk.serialize();
         let (id_u, id_s) = bytestrings_from_identifiers::<CS::KeGroup>(
             optional_ids,
-            client_static_keypair.public().to_bytes(),
+            client_static_keypair.public().serialize(),
             server_s_pk_bytes.clone(),
         )?;
         let aad = construct_aad(id_u.iter(), id_s.iter(), &server_s_pk_bytes);

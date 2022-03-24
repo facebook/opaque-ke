@@ -26,7 +26,7 @@ use crate::errors::ProtocolError;
 use crate::hash::{Hash, OutputSize, ProxyHash};
 use crate::key_exchange::group::KeGroup;
 use crate::key_exchange::traits::{
-    FromBytes, Ke1MessageLen, Ke2MessageLen, Ke3MessageLen, KeyExchange, ToBytes,
+    Deserialize, Ke1MessageLen, Ke2MessageLen, Ke3MessageLen, KeyExchange, Serialize,
 };
 use crate::key_exchange::tripledh::NonceLen;
 use crate::keypair::{PublicKey, SecretKey};
@@ -265,7 +265,7 @@ where
         RegistrationResponseLen<CS>: ArrayLength<u8>,
     {
         <OprfGroup<CS> as Group>::serialize_elem(self.evaluation_element.value())
-            .concat(self.server_s_pk.to_bytes())
+            .concat(self.server_s_pk.serialize())
     }
 
     /// Deserialization from bytes
@@ -276,7 +276,7 @@ where
             check_slice_size(input, elem_len + key_len, "registration_response_bytes")?;
 
         // Ensure that public key is valid
-        let server_s_pk = PublicKey::from_bytes(&checked_slice[elem_len..])?;
+        let server_s_pk = PublicKey::deserialize(&checked_slice[elem_len..])?;
 
         Ok(Self {
             evaluation_element: voprf::EvaluationElement::deserialize(&checked_slice[..elem_len])?,
@@ -321,7 +321,7 @@ where
         RegistrationUploadLen<CS>: ArrayLength<u8>,
     {
         self.client_s_pk
-            .to_bytes()
+            .serialize()
             .concat(self.masking_key.clone())
             .concat(self.envelope.serialize())
     }
@@ -338,7 +338,7 @@ where
             masking_key: GenericArray::clone_from_slice(
                 &checked_slice[key_len..key_len + hash_len],
             ),
-            client_s_pk: PublicKey::from_bytes(&checked_slice[..key_len])?,
+            client_s_pk: PublicKey::deserialize(&checked_slice[..key_len])?,
         })
     }
 
@@ -379,7 +379,7 @@ where
         CredentialRequestLen<CS>: ArrayLength<u8>,
     {
         <OprfGroup<CS> as Group>::serialize_elem(self.blinded_element.value())
-            .concat(self.ke1_message.to_bytes())
+            .concat(self.ke1_message.serialize())
     }
 
     pub(crate) fn serialize_iter<'a>(
@@ -406,7 +406,7 @@ where
         }
 
         let ke1_message =
-            <CS::KeyExchange as KeyExchange<OprfHash<CS>, CS::KeGroup>>::KE1Message::from_bytes(
+            <CS::KeyExchange as KeyExchange<OprfHash<CS>, CS::KeGroup>>::KE1Message::deserialize(
                 &checked_slice[elem_len..],
             )?;
 
@@ -459,7 +459,7 @@ where
         <OprfGroup<CS> as Group>::serialize_elem(self.evaluation_element.value())
             .concat(self.masking_nonce)
             .concat(self.masked_response.serialize())
-            .concat(self.ke2_message.to_bytes())
+            .concat(self.ke2_message.serialize())
     }
 
     pub(crate) fn serialize_without_ke<'a>(
@@ -504,7 +504,7 @@ where
             &checked_slice[elem_len + nonce_len..elem_len + nonce_len + masked_response_len],
         );
         let ke2_message =
-            <CS::KeyExchange as KeyExchange<OprfHash<CS>, CS::KeGroup>>::KE2Message::from_bytes(
+            <CS::KeyExchange as KeyExchange<OprfHash<CS>, CS::KeGroup>>::KE2Message::deserialize(
                 &checked_slice[elem_len + nonce_len + masked_response_len..],
             )?;
 
@@ -543,13 +543,13 @@ where
 {
     /// Serialization into bytes
     pub fn serialize(&self) -> GenericArray<u8, CredentialFinalizationLen<CS>> {
-        self.ke3_message.to_bytes()
+        self.ke3_message.serialize()
     }
 
     /// Deserialization from bytes
     pub fn deserialize(input: &[u8]) -> Result<Self, ProtocolError> {
         let ke3_message =
-            <CS::KeyExchange as KeyExchange<OprfHash<CS>, CS::KeGroup>>::KE3Message::from_bytes(
+            <CS::KeyExchange as KeyExchange<OprfHash<CS>, CS::KeGroup>>::KE3Message::deserialize(
                 input,
             )?;
         Ok(Self { ke3_message })

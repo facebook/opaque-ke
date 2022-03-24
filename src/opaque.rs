@@ -27,13 +27,13 @@ use crate::errors::{InternalError, ProtocolError};
 use crate::hash::{Hash, OutputSize, ProxyHash};
 use crate::key_exchange::group::KeGroup;
 use crate::key_exchange::traits::{
-    FromBytes, Ke1MessageLen, Ke1StateLen, Ke2StateLen, KeyExchange, ToBytes,
+    Deserialize, Ke1MessageLen, Ke1StateLen, Ke2StateLen, KeyExchange, Serialize,
 };
 use crate::key_exchange::tripledh::NonceLen;
 use crate::keypair::{KeyPair, PrivateKey, PublicKey, SecretKey};
 use crate::ksf::Ksf;
 use crate::messages::{CredentialRequestLen, RegistrationUploadLen};
-use crate::serialization::Serialize;
+use crate::serialization::Input;
 use crate::{
     CredentialFinalization, CredentialRequest, CredentialResponse, RegistrationRequest,
     RegistrationResponse, RegistrationUpload,
@@ -510,7 +510,7 @@ where
         self.oprf_client
             .serialize()
             .concat(self.credential_request.serialize())
-            .concat(self.ke1_state.to_bytes())
+            .concat(self.ke1_state.serialize())
     }
 
     /// Deserialization from bytes
@@ -522,7 +522,7 @@ where
             check_slice_size(input, client_len + request_len + state_len, "client_login")?;
 
         let ke1_state =
-            <CS::KeyExchange as KeyExchange<OprfHash<CS>, CS::KeGroup>>::KE1State::from_bytes(
+            <CS::KeyExchange as KeyExchange<OprfHash<CS>, CS::KeGroup>>::KE1State::deserialize(
                 &checked_slice[client_len + request_len..],
             )?;
         Ok(Self {
@@ -638,7 +638,7 @@ where
 
         let blinded_element =
             OprfGroup::<CS>::serialize_elem(self.credential_request.blinded_element.value());
-        let ke1_message = self.credential_request.ke1_message.to_bytes();
+        let ke1_message = self.credential_request.ke1_message.serialize();
         let serialized_credential_request =
             CredentialRequest::<CS>::serialize_iter(&blinded_element, &ke1_message);
 
@@ -682,14 +682,14 @@ where
 {
     /// Serialization into bytes
     pub fn serialize(&self) -> GenericArray<u8, Ke2StateLen<CS>> {
-        self.ke2_state.to_bytes()
+        self.ke2_state.serialize()
     }
 
     /// Deserialization from bytes
     pub fn deserialize(bytes: &[u8]) -> Result<Self, ProtocolError> {
         Ok(Self {
             ke2_state:
-                <CS::KeyExchange as KeyExchange<OprfHash<CS>, CS::KeGroup>>::KE2State::from_bytes(
+                <CS::KeyExchange as KeyExchange<OprfHash<CS>, CS::KeGroup>>::KE2State::deserialize(
                     bytes,
                 )?,
         })
@@ -744,14 +744,14 @@ where
 
         let (id_u, id_s) = bytestrings_from_identifiers::<CS::KeGroup>(
             identifiers,
-            client_s_pk.to_bytes(),
-            server_s_pk.to_bytes(),
+            client_s_pk.serialize(),
+            server_s_pk.serialize(),
         )
         .map_err(ProtocolError::into_custom)?;
 
         let blinded_element =
             OprfGroup::<CS>::serialize_elem(credential_request.blinded_element.value());
-        let ke1_message = credential_request.ke1_message.to_bytes();
+        let ke1_message = credential_request.ke1_message.serialize();
         let credential_request_bytes =
             CredentialRequest::<CS>::serialize_iter(&blinded_element, &ke1_message);
 
@@ -1232,7 +1232,7 @@ where
 
     for (x1, x2) in xor_pad.iter_mut().zip(
         server_s_pk
-            .to_bytes()
+            .serialize()
             .as_slice()
             .iter()
             .chain(envelope.serialize().iter()),
@@ -1272,7 +1272,7 @@ where
     }
 
     let key_len = <CS::KeGroup as KeGroup>::PkLen::USIZE;
-    let server_s_pk = PublicKey::from_bytes(&xor_pad[..key_len])
+    let server_s_pk = PublicKey::deserialize(&xor_pad[..key_len])
         .map_err(|_| ProtocolError::SerializationError)?;
     let envelope = Envelope::deserialize(&xor_pad[key_len..])?;
 
@@ -1284,16 +1284,16 @@ pub(crate) fn bytestrings_from_identifiers<KG: KeGroup>(
     ids: Identifiers,
     client_s_pk: GenericArray<u8, KG::PkLen>,
     server_s_pk: GenericArray<u8, KG::PkLen>,
-) -> Result<(Serialize<U2, KG::PkLen>, Serialize<U2, KG::PkLen>), ProtocolError> {
+) -> Result<(Input<U2, KG::PkLen>, Input<U2, KG::PkLen>), ProtocolError> {
     let client_identity = if let Some(client) = ids.client {
-        Serialize::<U2, _>::from(client)?
+        Input::<U2, _>::from(client)?
     } else {
-        Serialize::<U2, _>::from_owned(client_s_pk)?
+        Input::<U2, _>::from_owned(client_s_pk)?
     };
     let server_identity = if let Some(server) = ids.server {
-        Serialize::<U2, _>::from(server)?
+        Input::<U2, _>::from(server)?
     } else {
-        Serialize::<U2, _>::from_owned(server_s_pk)?
+        Input::<U2, _>::from_owned(server_s_pk)?
     };
 
     Ok((client_identity, server_identity))

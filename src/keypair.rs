@@ -176,12 +176,12 @@ pub struct PublicKey<KG: KeGroup>(KG::Pk);
 
 impl<KG: KeGroup> PublicKey<KG> {
     /// Convert from bytes
-    pub fn from_bytes(key_bytes: &[u8]) -> Result<Self, InternalError> {
+    pub fn deserialize(key_bytes: &[u8]) -> Result<Self, InternalError> {
         KG::deserialize_pk(key_bytes).map(Self)
     }
 
     /// Convert to bytes
-    pub fn to_bytes(&self) -> GenericArray<u8, KG::PkLen> {
+    pub fn serialize(&self) -> GenericArray<u8, KG::PkLen> {
         KG::serialize_pk(self.0)
     }
 }

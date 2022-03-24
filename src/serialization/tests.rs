@@ -25,7 +25,7 @@ use crate::errors::*;
 use crate::hash::{Hash, OutputSize, ProxyHash};
 use crate::key_exchange::group::KeGroup;
 use crate::key_exchange::traits::{
-    FromBytes, Ke1MessageLen, Ke1StateLen, Ke2MessageLen, KeyExchange, ToBytes,
+    Deserialize, Ke1MessageLen, Ke1StateLen, Ke2MessageLen, KeyExchange, Serialize,
 };
 use crate::key_exchange::tripledh::{NonceLen, TripleDh};
 use crate::keypair::{KeyPair, SecretKey};
@@ -145,7 +145,7 @@ fn server_registration_roundtrip() -> Result<(), ProtocolError> {
         let mock_client_kp = KeyPair::<CS::KeGroup>::generate_random(&mut rng);
         // serialization order: oprf_key, public key, envelope
         let mut bytes = Vec::<u8>::new();
-        bytes.extend_from_slice(&mock_client_kp.public().to_bytes());
+        bytes.extend_from_slice(&mock_client_kp.public().serialize());
         bytes.extend_from_slice(&masking_key);
         bytes.extend_from_slice(&mock_envelope_bytes);
         let reg = ServerRegistration::<CS>::deserialize(&bytes)?;
@@ -221,7 +221,7 @@ fn registration_response_roundtrip() -> Result<(), ProtocolError> {
         let beta_bytes = CS::KeGroup::serialize_pk(pt);
         let mut rng = OsRng;
         let skp = KeyPair::<CS::KeGroup>::generate_random(&mut rng);
-        let pubkey_bytes = skp.public().to_bytes();
+        let pubkey_bytes = skp.public().serialize();
 
         let mut input = Vec::new();
         input.extend_from_slice(&beta_bytes);
@@ -275,7 +275,7 @@ fn registration_upload_roundtrip() -> Result<(), ProtocolError> {
     {
         let mut rng = OsRng;
         let skp = KeyPair::<CS::KeGroup>::generate_random(&mut rng);
-        let pubkey_bytes = skp.public().to_bytes();
+        let pubkey_bytes = skp.public().serialize();
 
         let mut key = [0u8; 32];
         rng.fill_bytes(&mut key);
@@ -339,7 +339,7 @@ fn credential_request_roundtrip() -> Result<(), ProtocolError> {
 
         let ke1m: Vec<u8> = [
             client_nonce.as_ref(),
-            client_e_kp.public().to_bytes().as_ref(),
+            client_e_kp.public().serialize().as_ref(),
         ]
         .concat();
 
@@ -416,7 +416,7 @@ fn credential_response_roundtrip() -> Result<(), ProtocolError> {
 
         let ke2m: Vec<u8> = [
             server_nonce.as_ref(),
-            server_e_kp.public().to_bytes().as_ref(),
+            server_e_kp.public().serialize().as_ref(),
             &mac,
         ]
         .concat();
@@ -528,10 +528,10 @@ fn client_login_roundtrip() -> Result<(), ProtocolError> {
         let credential_request = CredentialRequest::<CS> {
             blinded_element: blind_result.message,
             ke1_message:
-                <CS::KeyExchange as KeyExchange<OprfHash<CS>, CS::KeGroup>>::KE1Message::from_bytes(
+                <CS::KeyExchange as KeyExchange<OprfHash<CS>, CS::KeGroup>>::KE1Message::deserialize(
                     &[
                         client_nonce.as_ref(),
-                        client_e_kp.public().to_bytes().as_ref(),
+                        client_e_kp.public().serialize().as_ref(),
                     ]
                     .concat(),
                 )?,
@@ -577,14 +577,14 @@ fn ke1_message_roundtrip() -> Result<(), ProtocolError> {
 
         let ke1m = [
             client_nonce.as_slice(),
-            client_e_kp.public().to_bytes().as_ref(),
+            client_e_kp.public().serialize().as_ref(),
         ]
         .concat();
         let reg =
-            <CS::KeyExchange as KeyExchange<OprfHash<CS>, CS::KeGroup>>::KE1Message::from_bytes(
+            <CS::KeyExchange as KeyExchange<OprfHash<CS>, CS::KeGroup>>::KE1Message::deserialize(
                 &ke1m,
             )?;
-        let reg_bytes = reg.to_bytes();
+        let reg_bytes = reg.serialize();
         assert_eq!(*reg_bytes, ke1m);
 
         Ok(())
@@ -618,16 +618,16 @@ fn ke2_message_roundtrip() -> Result<(), ProtocolError> {
 
         let ke2m: Vec<u8> = [
             server_nonce.as_slice(),
-            server_e_kp.public().to_bytes().as_ref(),
+            server_e_kp.public().serialize().as_ref(),
             &mac,
         ]
         .concat();
 
         let reg =
-            <CS::KeyExchange as KeyExchange<OprfHash<CS>, CS::KeGroup>>::KE2Message::from_bytes(
+            <CS::KeyExchange as KeyExchange<OprfHash<CS>, CS::KeGroup>>::KE2Message::deserialize(
                 &ke2m,
             )?;
-        let reg_bytes = reg.to_bytes();
+        let reg_bytes = reg.serialize();
         assert_eq!(*reg_bytes, ke2m);
 
         Ok(())
@@ -658,10 +658,10 @@ fn ke3_message_roundtrip() -> Result<(), ProtocolError> {
         let ke3m: Vec<u8> = [mac].concat();
 
         let reg =
-            <CS::KeyExchange as KeyExchange<OprfHash<CS>, CS::KeGroup>>::KE3Message::from_bytes(
+            <CS::KeyExchange as KeyExchange<OprfHash<CS>, CS::KeGroup>>::KE3Message::deserialize(
                 &ke3m,
             )?;
-        let reg_bytes = reg.to_bytes();
+        let reg_bytes = reg.serialize();
         assert_eq!(*reg_bytes, ke3m);
 
         Ok(())

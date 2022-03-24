@@ -24,11 +24,11 @@ where
     <D::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
     Le<<D::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
 {
-    type KE1State: FromBytes + ToBytes + ZeroizeOnDrop + Clone;
-    type KE2State: FromBytes + ToBytes + ZeroizeOnDrop + Clone;
-    type KE1Message: FromBytes + ToBytes + ZeroizeOnDrop + Clone;
-    type KE2Message: FromBytes + ToBytes + ZeroizeOnDrop + Clone;
-    type KE3Message: FromBytes + ToBytes + ZeroizeOnDrop + Clone;
+    type KE1State: Deserialize + Serialize + ZeroizeOnDrop + Clone;
+    type KE2State: Deserialize + Serialize + ZeroizeOnDrop + Clone;
+    type KE1Message: Deserialize + Serialize + ZeroizeOnDrop + Clone;
+    type KE2Message: Deserialize + Serialize + ZeroizeOnDrop + Clone;
+    type KE3Message: Deserialize + Serialize + ZeroizeOnDrop + Clone;
 
     fn generate_ke1<R: RngCore + CryptoRng>(
         rng: &mut R,
@@ -66,14 +66,14 @@ where
     ) -> Result<Output<D>, ProtocolError>;
 }
 
-pub trait FromBytes: Sized {
-    fn from_bytes(input: &[u8]) -> Result<Self, ProtocolError>;
+pub trait Deserialize: Sized {
+    fn deserialize(input: &[u8]) -> Result<Self, ProtocolError>;
 }
 
-pub trait ToBytes {
+pub trait Serialize {
     type Len: ArrayLength<u8>;
 
-    fn to_bytes(&self) -> GenericArray<u8, Self::Len>;
+    fn serialize(&self) -> GenericArray<u8, Self::Len>;
 }
 
 #[cfg(not(test))]
@@ -99,12 +99,12 @@ pub type GenerateKe3Result<K, D, G> = (
 );
 
 pub type Ke1StateLen<CS: CipherSuite> =
-    <<CS::KeyExchange as KeyExchange<OprfHash<CS>, CS::KeGroup>>::KE1State as ToBytes>::Len;
+    <<CS::KeyExchange as KeyExchange<OprfHash<CS>, CS::KeGroup>>::KE1State as Serialize>::Len;
 pub type Ke1MessageLen<CS: CipherSuite> =
-    <<CS::KeyExchange as KeyExchange<OprfHash<CS>, CS::KeGroup>>::KE1Message as ToBytes>::Len;
+    <<CS::KeyExchange as KeyExchange<OprfHash<CS>, CS::KeGroup>>::KE1Message as Serialize>::Len;
 pub type Ke2StateLen<CS: CipherSuite> =
-    <<CS::KeyExchange as KeyExchange<OprfHash<CS>, CS::KeGroup>>::KE2State as ToBytes>::Len;
+    <<CS::KeyExchange as KeyExchange<OprfHash<CS>, CS::KeGroup>>::KE2State as Serialize>::Len;
 pub type Ke2MessageLen<CS: CipherSuite> =
-    <<CS::KeyExchange as KeyExchange<OprfHash<CS>, CS::KeGroup>>::KE2Message as ToBytes>::Len;
+    <<CS::KeyExchange as KeyExchange<OprfHash<CS>, CS::KeGroup>>::KE2Message as Serialize>::Len;
 pub type Ke3MessageLen<CS: CipherSuite> =
-    <<CS::KeyExchange as KeyExchange<OprfHash<CS>, CS::KeGroup>>::KE3Message as ToBytes>::Len;
+    <<CS::KeyExchange as KeyExchange<OprfHash<CS>, CS::KeGroup>>::KE3Message as Serialize>::Len;

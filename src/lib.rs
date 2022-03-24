@@ -954,13 +954,13 @@
 //!         &self,
 //!         pk: PublicKey<<Default as CipherSuite>::KeGroup>,
 //!     ) -> Result<GenericArray<u8, <<Default as CipherSuite>::KeGroup as KeGroup>::PkLen>, InternalError<Self::Error>> {
-//!         YourRemoteKey::diffie_hellman(self, &pk.to_bytes()).map_err(InternalError::Custom)
+//!         YourRemoteKey::diffie_hellman(self, &pk.serialize()).map_err(InternalError::Custom)
 //!     }
 //!
 //!     fn public_key(
 //!         &self
 //!     ) -> Result<PublicKey<<Default as CipherSuite>::KeGroup>, InternalError<Self::Error>> {
-//!         PublicKey::from_bytes(&YourRemoteKey::public_key(self).map_err(InternalError::Custom)?).map_err(InternalError::into_custom)
+//!         PublicKey::deserialize(&YourRemoteKey::public_key(self).map_err(InternalError::Custom)?).map_err(InternalError::into_custom)
 //!     }
 //!
 //!     fn serialize(&self) -> GenericArray<u8, Self::Len> {

@@ -634,13 +634,13 @@ where
     let credential_finalization_bytes = client_login_finish_result.message.serialize();
 
     Ok(TestVectorParameters {
-        client_s_pk: client_s_kp.public().to_bytes().to_vec(),
+        client_s_pk: client_s_kp.public().serialize().to_vec(),
         client_s_sk: client_s_kp.private().serialize().to_vec(),
-        client_e_pk: client_e_kp.public().to_bytes().to_vec(),
+        client_e_pk: client_e_kp.public().serialize().to_vec(),
         client_e_sk: client_e_kp.private().serialize().to_vec(),
-        server_s_pk: server_s_kp.public().to_bytes().to_vec(),
+        server_s_pk: server_s_kp.public().serialize().to_vec(),
         server_s_sk: server_s_kp.private().serialize().to_vec(),
-        server_e_pk: server_e_kp.public().to_bytes().to_vec(),
+        server_e_pk: server_e_kp.public().serialize().to_vec(),
         server_e_sk: server_e_kp.private().serialize().to_vec(),
         fake_sk,
         credential_identifier: credential_identifier.to_vec(),
@@ -1107,7 +1107,7 @@ fn test_credential_finalization() -> Result<(), ProtocolError> {
 
         assert_eq!(
             hex::encode(&parameters.server_s_pk),
-            hex::encode(&client_login_finish_result.server_s_pk.to_bytes())
+            hex::encode(&client_login_finish_result.server_s_pk.serialize())
         );
         assert_eq!(
             hex::encode(&parameters.session_key),
