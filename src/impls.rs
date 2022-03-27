@@ -9,7 +9,7 @@
 macro_rules! impl_serialize_and_deserialize_for {
     ($item:ident$( where $($path:ty: $bound1:path $(| $bound2:path)*),+$(,)?)?) => {
         #[cfg(feature = "serde")]
-        impl<CS: CipherSuite> serde_::Serialize for $item<CS>
+        impl<CS: CipherSuite> serde::Serialize for $item<CS>
         where
             <OprfHash<CS> as OutputSizeUser>::OutputSize:
                 IsLess<U256> + IsLessOrEqual<<OprfHash<CS> as BlockSizeUser>::BlockSize>,
@@ -21,14 +21,14 @@ macro_rules! impl_serialize_and_deserialize_for {
         {
             fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
             where
-                S: serde_::Serializer,
+                S: serde::Serializer,
             {
                 serializer.serialize_bytes(&self.serialize())
             }
         }
 
         #[cfg(feature = "serde")]
-        impl<'de, CS: CipherSuite> serde_::Deserialize<'de> for $item<CS>
+        impl<'de, CS: CipherSuite> serde::Deserialize<'de> for $item<CS>
         where
             <OprfHash<CS> as OutputSizeUser>::OutputSize:
                 IsLess<U256> + IsLessOrEqual<<OprfHash<CS> as BlockSizeUser>::BlockSize>,
@@ -39,9 +39,9 @@ macro_rules! impl_serialize_and_deserialize_for {
         {
             fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
             where
-                D: serde_::Deserializer<'de>,
+                D: serde::Deserializer<'de>,
             {
-                use serde_::de::Error;
+                use serde::de::Error;
 
                 struct ByteVisitor<CS: CipherSuite>(core::marker::PhantomData<CS>)
                 where
@@ -52,7 +52,7 @@ macro_rules! impl_serialize_and_deserialize_for {
                         <<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
                         Le<<<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize, U256>: NonZero;
 
-                impl<'de, CS: CipherSuite> serde_::de::Visitor<'de> for ByteVisitor<CS>
+                impl<'de, CS: CipherSuite> serde::de::Visitor<'de> for ByteVisitor<CS>
                 where
                     <OprfHash<CS> as OutputSizeUser>::OutputSize:
                         IsLess<U256> + IsLessOrEqual<<OprfHash<CS> as BlockSizeUser>::BlockSize>,
@@ -79,7 +79,7 @@ macro_rules! impl_serialize_and_deserialize_for {
                     {
                         $item::<CS>::deserialize(value).map_err(|_| {
                             Error::invalid_value(
-                                serde_::de::Unexpected::Bytes(value),
+                                serde::de::Unexpected::Bytes(value),
                                 &core::concat!(
                                     "invalid byte sequence for ",
                                     core::stringify!($t)

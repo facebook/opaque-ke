@@ -19,13 +19,13 @@ use crate::key_exchange::group::KeGroup;
 /// A Keypair trait with public-private verification
 #[cfg_attr(
     feature = "serde",
-    derive(serde_::Deserialize, serde_::Serialize),
+    derive(serde::Deserialize, serde::Serialize),
     serde(
         bound(
-            deserialize = "KG::Pk: serde_::Deserialize<'de>, S: serde_::Deserialize<'de>",
-            serialize = "KG::Pk: serde_::Serialize, S: serde_::Serialize"
+            deserialize = "KG::Pk: serde::Deserialize<'de>, S: serde::Deserialize<'de>",
+            serialize = "KG::Pk: serde::Serialize, S: serde::Serialize"
         ),
-        crate = "serde_"
+        crate = "serde"
     )
 )]
 #[derive_where(Clone)]
@@ -98,13 +98,13 @@ where
 /// Wrapper around a Key to enforce that it's a private one.
 #[cfg_attr(
     feature = "serde",
-    derive(serde_::Deserialize, serde_::Serialize),
+    derive(serde::Deserialize, serde::Serialize),
     serde(
         bound(
-            deserialize = "KG::Sk: serde_::Deserialize<'de>",
-            serialize = "KG::Sk: serde_::Serialize"
+            deserialize = "KG::Sk: serde::Deserialize<'de>",
+            serialize = "KG::Sk: serde::Serialize"
         ),
-        crate = "serde_"
+        crate = "serde"
     )
 )]
 #[derive_where(Clone, ZeroizeOnDrop)]
@@ -161,13 +161,13 @@ impl<KG: KeGroup> SecretKey<KG> for PrivateKey<KG> {
 /// Wrapper around a Key to enforce that it's a public one.
 #[cfg_attr(
     feature = "serde",
-    derive(serde_::Deserialize, serde_::Serialize),
+    derive(serde::Deserialize, serde::Serialize),
     serde(
         bound(
-            deserialize = "KG::Pk: serde_::Deserialize<'de>",
-            serialize = "KG::Pk: serde_::Serialize"
+            deserialize = "KG::Pk: serde::Deserialize<'de>",
+            serialize = "KG::Pk: serde::Serialize"
         ),
-        crate = "serde_"
+        crate = "serde"
     )
 )]
 #[derive_where(Clone, ZeroizeOnDrop)]

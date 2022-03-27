@@ -57,15 +57,15 @@ const STR_OPAQUE_DERIVE_KEY_PAIR: &[u8; 20] = b"OPAQUE-DeriveKeyPair";
 /// The state elements the server holds upon setup
 #[cfg_attr(
     feature = "serde",
-    derive(serde_::Deserialize, serde_::Serialize),
+    derive(serde::Deserialize, serde::Serialize),
     serde(
         bound(
-            deserialize = "<CS::KeGroup as KeGroup>::Pk: serde_::Deserialize<'de>, <CS::KeGroup \
-                           as KeGroup>::Sk: serde_::Deserialize<'de>, S: serde_::Deserialize<'de>",
-            serialize = "<CS::KeGroup as KeGroup>::Pk: serde_::Serialize, <CS::KeGroup as \
-                         KeGroup>::Sk: serde_::Serialize, S: serde_::Serialize"
+            deserialize = "<CS::KeGroup as KeGroup>::Pk: serde::Deserialize<'de>, <CS::KeGroup as \
+                           KeGroup>::Sk: serde::Deserialize<'de>, S: serde::Deserialize<'de>",
+            serialize = "<CS::KeGroup as KeGroup>::Pk: serde::Serialize, <CS::KeGroup as \
+                         KeGroup>::Sk: serde::Serialize, S: serde::Serialize"
         ),
-        crate = "serde_"
+        crate = "serde"
     )
 )]
 #[derive_where(Clone)]

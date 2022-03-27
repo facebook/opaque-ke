@@ -53,13 +53,13 @@ pub struct TripleDh;
 /// The client state produced after the first key exchange message
 #[cfg_attr(
     feature = "serde",
-    derive(serde_::Deserialize, serde_::Serialize),
+    derive(serde::Deserialize, serde::Serialize),
     serde(
         bound(
-            deserialize = "KG::Sk: serde_::Deserialize<'de>",
-            serialize = "KG::Sk: serde_::Serialize",
+            deserialize = "KG::Sk: serde::Deserialize<'de>",
+            serialize = "KG::Sk: serde::Serialize",
         ),
-        crate = "serde_"
+        crate = "serde"
     )
 )]
 #[derive_where(Clone, ZeroizeOnDrop)]
@@ -72,13 +72,13 @@ pub struct Ke1State<KG: KeGroup> {
 /// The first key exchange message
 #[cfg_attr(
     feature = "serde",
-    derive(serde_::Deserialize, serde_::Serialize),
+    derive(serde::Deserialize, serde::Serialize),
     serde(
         bound(
-            deserialize = "KG::Pk: serde_::Deserialize<'de>",
-            serialize = "KG::Pk: serde_::Serialize",
+            deserialize = "KG::Pk: serde::Deserialize<'de>",
+            serialize = "KG::Pk: serde::Serialize",
         ),
-        crate = "serde_"
+        crate = "serde"
     )
 )]
 #[derive_where(Clone, ZeroizeOnDrop)]
@@ -91,8 +91,8 @@ pub struct Ke1Message<KG: KeGroup> {
 /// The server state produced after the second key exchange message
 #[cfg_attr(
     feature = "serde",
-    derive(serde_::Deserialize, serde_::Serialize),
-    serde(bound = "", crate = "serde_")
+    derive(serde::Deserialize, serde::Serialize),
+    serde(bound = "", crate = "serde")
 )]
 #[derive_where(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, ZeroizeOnDrop)]
 pub struct Ke2State<D: Hash>
@@ -109,13 +109,13 @@ where
 /// The second key exchange message
 #[cfg_attr(
     feature = "serde",
-    derive(serde_::Deserialize, serde_::Serialize),
+    derive(serde::Deserialize, serde::Serialize),
     serde(
         bound(
-            deserialize = "KG::Pk: serde_::Deserialize<'de>",
-            serialize = "KG::Pk: serde_::Serialize",
+            deserialize = "KG::Pk: serde::Deserialize<'de>",
+            serialize = "KG::Pk: serde::Serialize",
         ),
-        crate = "serde_"
+        crate = "serde"
     )
 )]
 #[derive_where(Clone, ZeroizeOnDrop)]
@@ -134,8 +134,8 @@ where
 /// The third key exchange message
 #[cfg_attr(
     feature = "serde",
-    derive(serde_::Deserialize, serde_::Serialize),
-    serde(bound = "", crate = "serde_")
+    derive(serde::Deserialize, serde::Serialize),
+    serde(bound = "", crate = "serde")
 )]
 #[derive_where(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, ZeroizeOnDrop)]
 pub struct Ke3Message<D: Hash>
