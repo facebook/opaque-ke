@@ -741,8 +741,6 @@ fn test_registration_request() -> Result<(), ProtocolError> {
 #[cfg(feature = "serde")]
 #[test]
 fn test_serialization() -> Result<(), ProtocolError> {
-    use core::mem;
-
     fn inner<CS: CipherSuite>(test_vector: &str) -> Result<(), ProtocolError>
     where
         <OprfHash<CS> as OutputSizeUser>::OutputSize:
@@ -762,7 +760,7 @@ fn test_serialization() -> Result<(), ProtocolError> {
             bincode::serialize(&client_registration_start_result.message).unwrap();
         assert_eq!(
             registration_request.len(),
-            RegistrationRequestLen::<CS>::USIZE + mem::size_of::<usize>()
+            RegistrationRequestLen::<CS>::USIZE
         );
         let registration_request: RegistrationRequest<CS> =
             bincode::deserialize(&registration_request).unwrap();

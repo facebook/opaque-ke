@@ -85,6 +85,11 @@ pub struct ServerSetup<
 }
 
 /// The state elements the client holds to register itself
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Deserialize, serde::Serialize),
+    serde(bound = "", crate = "serde")
+)]
 #[derive_where(Clone, ZeroizeOnDrop)]
 #[derive_where(
     Debug, Eq, Hash, PartialEq;
@@ -104,15 +109,12 @@ where
     pub(crate) blinded_element: voprf::BlindedElement<CS::OprfCs>,
 }
 
-impl_serialize_and_deserialize_for!(
-    ClientRegistration
-    where
-        // ClientRegistration: KgSk + KgPk
-        <OprfGroup<CS> as Group>::ScalarLen: Add<<OprfGroup<CS> as Group>::ElemLen>,
-        ClientRegistrationLen<CS>: ArrayLength<u8>,
-);
-
 /// The state elements the server holds to record a registration
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Deserialize, serde::Serialize),
+    serde(bound = "", crate = "serde")
+)]
 #[derive_where(Clone, ZeroizeOnDrop)]
 #[derive_where(Debug, Eq, Hash, Ord, PartialEq, PartialOrd; <CS::KeGroup as KeGroup>::Pk)]
 pub struct ServerRegistration<CS: CipherSuite>(pub(crate) RegistrationUpload<CS>)
@@ -124,21 +126,23 @@ where
     <<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
     Le<<<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize, U256>: NonZero;
 
-impl_serialize_and_deserialize_for!(
-    ServerRegistration
-    where
-        // Envelope: Nonce + Hash
-        NonceLen: Add<OutputSize<OprfHash<CS>>>,
-        EnvelopeLen<CS>: ArrayLength<u8>,
-        // RegistrationUpload: (KePk + Hash) + Envelope
-        <CS::KeGroup as KeGroup>::PkLen: Add<OutputSize<OprfHash<CS>>>,
-        Sum<<CS::KeGroup as KeGroup>::PkLen, OutputSize<OprfHash<CS>>>:
-            ArrayLength<u8> | Add<EnvelopeLen<CS>>,
-        RegistrationUploadLen<CS>: ArrayLength<u8>,
-        // ServerRegistration = RegistrationUpload
-);
-
 /// The state elements the client holds to perform a login
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Deserialize, serde::Serialize),
+    serde(
+        bound(
+            deserialize = "<CS::KeyExchange as KeyExchange<OprfHash<CS>, \
+                           CS::KeGroup>>::KE1Message: serde::Deserialize<'de>, <CS::KeyExchange \
+                           as KeyExchange<OprfHash<CS>, CS::KeGroup>>::KE1State: \
+                           serde::Deserialize<'de>",
+            serialize = "<CS::KeyExchange as KeyExchange<OprfHash<CS>, CS::KeGroup>>::KE1Message: \
+                         serde::Serialize, <CS::KeyExchange as KeyExchange<OprfHash<CS>, \
+                         CS::KeGroup>>::KE1State: serde::Serialize"
+        ),
+        crate = "serde"
+    )
+)]
 #[derive_where(Clone, ZeroizeOnDrop)]
 #[derive_where(
     Debug, Eq, Hash, PartialEq;
@@ -160,20 +164,20 @@ where
     pub(crate) credential_request: CredentialRequest<CS>,
 }
 
-impl_serialize_and_deserialize_for!(
-    ClientLogin
-    where
-        // CredentialRequest: KgPk + Ke1Message
-        <OprfGroup<CS> as Group>::ElemLen: Add<Ke1MessageLen<CS>>,
-        CredentialRequestLen<CS>: ArrayLength<u8>,
-        // ClientLogin: KgSk + CredentialRequest + Ke1State
-        <OprfGroup<CS> as Group>::ScalarLen: Add<CredentialRequestLen<CS>>,
-        Sum<<OprfGroup<CS> as Group>::ScalarLen, CredentialRequestLen<CS>>:
-            ArrayLength<u8> | Add<Ke1StateLen<CS>>,
-        ClientLoginLen<CS>: ArrayLength<u8>,
-);
-
 /// The state elements the server holds to record a login
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Deserialize, serde::Serialize),
+    serde(
+        bound(
+            deserialize = "<CS::KeyExchange as KeyExchange<OprfHash<CS>, CS::KeGroup>>::KE2State: \
+                           serde::Deserialize<'de>",
+            serialize = "<CS::KeyExchange as KeyExchange<OprfHash<CS>, CS::KeGroup>>::KE2State: \
+                         serde::Serialize"
+        ),
+        crate = "serde"
+    )
+)]
 #[derive_where(Clone, ZeroizeOnDrop)]
 #[derive_where(
     Debug, Eq, Hash, PartialEq;
@@ -190,8 +194,6 @@ where
 {
     ke2_state: <CS::KeyExchange as KeyExchange<OprfHash<CS>, CS::KeGroup>>::KE2State,
 }
-
-impl_serialize_and_deserialize_for!(ServerLogin);
 
 ////////////////////////////////
 // High-level Implementations //
@@ -1147,6 +1149,11 @@ where
     ))
 }
 
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Deserialize, serde::Serialize),
+    serde(bound = "", crate = "serde")
+)]
 #[derive_where(Clone)]
 #[derive_where(Debug, Eq, Hash, PartialEq)]
 pub(crate) struct MaskedResponse<CS: CipherSuite>

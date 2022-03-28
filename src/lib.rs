@@ -1034,8 +1034,6 @@ extern crate serde_ as serde;
 // Error types
 pub mod errors;
 
-#[macro_use]
-mod impls;
 pub mod ciphersuite;
 mod envelope;
 pub mod hash;
