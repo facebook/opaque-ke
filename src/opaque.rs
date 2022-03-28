@@ -60,10 +60,8 @@ const STR_OPAQUE_DERIVE_KEY_PAIR: &[u8; 20] = b"OPAQUE-DeriveKeyPair";
     derive(serde::Deserialize, serde::Serialize),
     serde(
         bound(
-            deserialize = "<CS::KeGroup as KeGroup>::Pk: serde::Deserialize<'de>, <CS::KeGroup as \
-                           KeGroup>::Sk: serde::Deserialize<'de>, S: serde::Deserialize<'de>",
-            serialize = "<CS::KeGroup as KeGroup>::Pk: serde::Serialize, <CS::KeGroup as \
-                         KeGroup>::Sk: serde::Serialize, S: serde::Serialize"
+            deserialize = "S: serde::Deserialize<'de>",
+            serialize = "S: serde::Serialize"
         ),
         crate = "serde"
     )

@@ -54,13 +54,7 @@ pub struct TripleDh;
 #[cfg_attr(
     feature = "serde",
     derive(serde::Deserialize, serde::Serialize),
-    serde(
-        bound(
-            deserialize = "KG::Sk: serde::Deserialize<'de>",
-            serialize = "KG::Sk: serde::Serialize",
-        ),
-        crate = "serde"
-    )
+    serde(bound = "", crate = "serde")
 )]
 #[derive_where(Clone, ZeroizeOnDrop)]
 #[derive_where(Debug, Eq, Hash, Ord, PartialEq, PartialOrd; KG::Sk)]
@@ -73,13 +67,7 @@ pub struct Ke1State<KG: KeGroup> {
 #[cfg_attr(
     feature = "serde",
     derive(serde::Deserialize, serde::Serialize),
-    serde(
-        bound(
-            deserialize = "KG::Pk: serde::Deserialize<'de>",
-            serialize = "KG::Pk: serde::Serialize",
-        ),
-        crate = "serde"
-    )
+    serde(bound = "", crate = "serde")
 )]
 #[derive_where(Clone, ZeroizeOnDrop)]
 #[derive_where(Debug, Eq, Hash, Ord, PartialEq, PartialOrd; KG::Pk)]
@@ -110,13 +98,7 @@ where
 #[cfg_attr(
     feature = "serde",
     derive(serde::Deserialize, serde::Serialize),
-    serde(
-        bound(
-            deserialize = "KG::Pk: serde::Deserialize<'de>",
-            serialize = "KG::Pk: serde::Serialize",
-        ),
-        crate = "serde"
-    )
+    serde(bound = "", crate = "serde")
 )]
 #[derive_where(Clone, ZeroizeOnDrop)]
 #[derive_where(Debug, Eq, Hash, Ord, PartialEq, PartialOrd; KG::Pk)]

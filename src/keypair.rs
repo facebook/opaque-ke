@@ -22,8 +22,8 @@ use crate::key_exchange::group::KeGroup;
     derive(serde::Deserialize, serde::Serialize),
     serde(
         bound(
-            deserialize = "KG::Pk: serde::Deserialize<'de>, S: serde::Deserialize<'de>",
-            serialize = "KG::Pk: serde::Serialize, S: serde::Serialize"
+            deserialize = "S: serde::Deserialize<'de>",
+            serialize = "S: serde::Serialize"
         ),
         crate = "serde"
     )
@@ -96,17 +96,6 @@ where
 }
 
 /// Wrapper around a Key to enforce that it's a private one.
-#[cfg_attr(
-    feature = "serde",
-    derive(serde::Deserialize, serde::Serialize),
-    serde(
-        bound(
-            deserialize = "KG::Sk: serde::Deserialize<'de>",
-            serialize = "KG::Sk: serde::Serialize"
-        ),
-        crate = "serde"
-    )
-)]
 #[derive_where(Clone, ZeroizeOnDrop)]
 #[derive_where(Debug, Eq, Hash, Ord, PartialEq, PartialOrd; KG::Sk)]
 pub struct PrivateKey<KG: KeGroup>(KG::Sk);
@@ -158,18 +147,31 @@ impl<KG: KeGroup> SecretKey<KG> for PrivateKey<KG> {
     }
 }
 
+#[cfg(feature = "serde")]
+impl<'de, KG: KeGroup> serde::Deserialize<'de> for PrivateKey<KG> {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        use serde::de::Error;
+
+        KG::deserialize_sk(&GenericArray::<_, KG::SkLen>::deserialize(deserializer)?)
+            .map(Self)
+            .map_err(D::Error::custom)
+    }
+}
+
+#[cfg(feature = "serde")]
+impl<KG: KeGroup> serde::Serialize for PrivateKey<KG> {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        KG::serialize_sk(self.0).serialize(serializer)
+    }
+}
+
 /// Wrapper around a Key to enforce that it's a public one.
-#[cfg_attr(
-    feature = "serde",
-    derive(serde::Deserialize, serde::Serialize),
-    serde(
-        bound(
-            deserialize = "KG::Pk: serde::Deserialize<'de>",
-            serialize = "KG::Pk: serde::Serialize"
-        ),
-        crate = "serde"
-    )
-)]
 #[derive_where(Clone, ZeroizeOnDrop)]
 #[derive_where(Debug, Eq, Hash, Ord, PartialEq, PartialOrd; KG::Pk)]
 pub struct PublicKey<KG: KeGroup>(KG::Pk);
@@ -183,6 +185,30 @@ impl<KG: KeGroup> PublicKey<KG> {
     /// Convert to bytes
     pub fn serialize(&self) -> GenericArray<u8, KG::PkLen> {
         KG::serialize_pk(self.0)
+    }
+}
+
+#[cfg(feature = "serde")]
+impl<'de, KG: KeGroup> serde::Deserialize<'de> for PublicKey<KG> {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        use serde::de::Error;
+
+        KG::deserialize_pk(&GenericArray::<_, KG::PkLen>::deserialize(deserializer)?)
+            .map(Self)
+            .map_err(D::Error::custom)
+    }
+}
+
+#[cfg(feature = "serde")]
+impl<KG: KeGroup> serde::Serialize for PublicKey<KG> {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        KG::serialize_pk(self.0).serialize(serializer)
     }
 }
 
