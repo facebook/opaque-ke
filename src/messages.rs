@@ -18,7 +18,6 @@ use generic_array::{ArrayLength, GenericArray};
 use rand::{CryptoRng, RngCore};
 use subtle::ConstantTimeEq;
 use voprf::Group;
-use zeroize::{Zeroize, ZeroizeOnDrop};
 
 use crate::ciphersuite::{CipherSuite, OprfGroup, OprfHash};
 use crate::envelope::{Envelope, EnvelopeLen};
@@ -27,7 +26,7 @@ use crate::errors::ProtocolError;
 use crate::hash::{Hash, OutputSize, ProxyHash};
 use crate::key_exchange::group::KeGroup;
 use crate::key_exchange::traits::{
-    FromBytes, Ke1MessageLen, Ke2MessageLen, Ke3MessageLen, KeyExchange, ToBytes,
+    Deserialize, Ke1MessageLen, Ke2MessageLen, Ke3MessageLen, KeyExchange, Serialize,
 };
 use crate::key_exchange::tripledh::NonceLen;
 use crate::keypair::{PublicKey, SecretKey};
@@ -39,8 +38,13 @@ use crate::opaque::{MaskedResponse, MaskedResponseLen, ServerSetup};
 ////////////////////////////
 
 /// The message sent by the client to the server, to initiate registration
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Deserialize, serde::Serialize),
+    serde(bound = "", crate = "serde")
+)]
 #[derive_where(Clone)]
-#[derive_where(Debug, Eq, Hash, Ord, PartialEq, PartialOrd; voprf::BlindedElement<CS::OprfGroup>)]
+#[derive_where(Debug, Eq, Hash, Ord, PartialEq, PartialOrd; voprf::BlindedElement<CS::OprfCs>)]
 pub struct RegistrationRequest<CS: CipherSuite>
 where
     <OprfHash<CS> as OutputSizeUser>::OutputSize:
@@ -51,15 +55,18 @@ where
     Le<<<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
 {
     /// blinded password information
-    pub(crate) blinded_element: voprf::BlindedElement<CS::OprfGroup>,
+    pub(crate) blinded_element: voprf::BlindedElement<CS::OprfCs>,
 }
-
-impl_serialize_and_deserialize_for!(RegistrationRequest);
 
 /// The answer sent by the server to the user, upon reception of the
 /// registration attempt
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Deserialize, serde::Serialize),
+    serde(bound = "", crate = "serde")
+)]
 #[derive_where(Clone)]
-#[derive_where(Debug, Eq, Hash, Ord, PartialEq, PartialOrd; voprf::EvaluationElement<CS::OprfGroup>, <CS::KeGroup as KeGroup>::Pk)]
+#[derive_where(Debug, Eq, Hash, Ord, PartialEq, PartialOrd; voprf::EvaluationElement<CS::OprfCs>, <CS::KeGroup as KeGroup>::Pk)]
 pub struct RegistrationResponse<CS: CipherSuite>
 where
     <OprfHash<CS> as OutputSizeUser>::OutputSize:
@@ -70,22 +77,19 @@ where
     Le<<<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
 {
     /// The server's oprf output
-    pub(crate) evaluation_element: voprf::EvaluationElement<CS::OprfGroup>,
+    pub(crate) evaluation_element: voprf::EvaluationElement<CS::OprfCs>,
     /// Server's static public key
     pub(crate) server_s_pk: PublicKey<CS::KeGroup>,
 }
 
-impl_serialize_and_deserialize_for!(
-    RegistrationResponse
-    where
-        // RegistrationResponse: KgPk + KePk
-        <OprfGroup<CS> as Group>::ElemLen: Add<<CS::KeGroup as KeGroup>::PkLen>,
-        RegistrationResponseLen<CS>: ArrayLength<u8>,
-);
-
 /// The final message from the client, containing sealed cryptographic
 /// identifiers
-#[derive_where(Clone)]
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Deserialize, serde::Serialize),
+    serde(bound = "", crate = "serde")
+)]
+#[derive_where(Clone, ZeroizeOnDrop)]
 #[derive_where(Debug, Eq, Hash, Ord, PartialEq, PartialOrd; <CS::KeGroup as KeGroup>::Pk)]
 pub struct RegistrationUpload<CS: CipherSuite>
 where
@@ -105,49 +109,24 @@ where
     pub(crate) client_s_pk: PublicKey<CS::KeGroup>,
 }
 
-impl<CS: CipherSuite> Drop for RegistrationUpload<CS>
-where
-    <OprfHash<CS> as OutputSizeUser>::OutputSize:
-        IsLess<U256> + IsLessOrEqual<<OprfHash<CS> as BlockSizeUser>::BlockSize>,
-    OprfHash<CS>: Hash,
-    <OprfHash<CS> as CoreProxy>::Core: ProxyHash,
-    <<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
-    Le<<<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
-{
-    fn drop(&mut self) {
-        self.masking_key.zeroize();
-    }
-}
-
-impl<CS: CipherSuite> ZeroizeOnDrop for RegistrationUpload<CS>
-where
-    <OprfHash<CS> as OutputSizeUser>::OutputSize:
-        IsLess<U256> + IsLessOrEqual<<OprfHash<CS> as BlockSizeUser>::BlockSize>,
-    OprfHash<CS>: Hash,
-    <OprfHash<CS> as CoreProxy>::Core: ProxyHash,
-    <<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
-    Le<<<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
-{
-}
-
-impl_serialize_and_deserialize_for!(
-    RegistrationUpload
-    where
-        // Envelope: Nonce + Hash
-        NonceLen: Add<OutputSize<OprfHash<CS>>>,
-        EnvelopeLen<CS>: ArrayLength<u8>,
-        // RegistrationUpload: (KePk + Hash) + Envelope
-        <CS::KeGroup as KeGroup>::PkLen: Add<OutputSize<OprfHash<CS>>>,
-        Sum<<CS::KeGroup as KeGroup>::PkLen, OutputSize<OprfHash<CS>>>:
-            ArrayLength<u8> | Add<EnvelopeLen<CS>>,
-        RegistrationUploadLen<CS>: ArrayLength<u8>,
-);
-
 /// The message sent by the user to the server, to initiate registration
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Deserialize, serde::Serialize),
+    serde(
+        bound(
+            deserialize = "<CS::KeyExchange as KeyExchange<OprfHash<CS>, \
+                           CS::KeGroup>>::KE1Message: serde::Deserialize<'de>",
+            serialize = "<CS::KeyExchange as KeyExchange<OprfHash<CS>, CS::KeGroup>>::KE1Message: \
+                         serde::Serialize"
+        ),
+        crate = "serde"
+    )
+)]
 #[derive_where(Clone, ZeroizeOnDrop)]
 #[derive_where(
     Debug, Eq, Hash, PartialEq;
-    voprf::BlindedElement<CS::OprfGroup>,
+    voprf::BlindedElement<CS::OprfCs>,
     <CS::KeyExchange as KeyExchange<OprfHash<CS>, CS::KeGroup>>::KE1Message,
 )]
 pub struct CredentialRequest<CS: CipherSuite>
@@ -159,24 +138,29 @@ where
     <<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
     Le<<<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
 {
-    pub(crate) blinded_element: voprf::BlindedElement<CS::OprfGroup>,
+    pub(crate) blinded_element: voprf::BlindedElement<CS::OprfCs>,
     pub(crate) ke1_message: <CS::KeyExchange as KeyExchange<OprfHash<CS>, CS::KeGroup>>::KE1Message,
 }
 
-impl_serialize_and_deserialize_for!(
-    CredentialRequest
-    where
-        // CredentialRequest: KgPk + Ke1Message
-        <OprfGroup<CS> as Group>::ElemLen: Add<Ke1MessageLen<CS>>,
-        CredentialRequestLen<CS>: ArrayLength<u8>,
-);
-
 /// The answer sent by the server to the user, upon reception of the login
 /// attempt
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Deserialize, serde::Serialize),
+    serde(
+        bound(
+            deserialize = "<CS::KeyExchange as KeyExchange<OprfHash<CS>, \
+                           CS::KeGroup>>::KE2Message: serde::Deserialize<'de>",
+            serialize = "<CS::KeyExchange as KeyExchange<OprfHash<CS>, CS::KeGroup>>::KE2Message: \
+                         serde::Serialize"
+        ),
+        crate = "serde"
+    )
+)]
 #[derive_where(Clone)]
 #[derive_where(
     Debug, Eq, Hash, PartialEq;
-    voprf::EvaluationElement<CS::OprfGroup>,
+    voprf::EvaluationElement<CS::OprfCs>,
     <CS::KeyExchange as KeyExchange<OprfHash<CS>, CS::KeGroup>>::KE2Message,
 )]
 pub struct CredentialResponse<CS: CipherSuite>
@@ -189,32 +173,27 @@ where
     Le<<<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
 {
     /// the server's oprf output
-    pub(crate) evaluation_element: voprf::EvaluationElement<CS::OprfGroup>,
+    pub(crate) evaluation_element: voprf::EvaluationElement<CS::OprfCs>,
     pub(crate) masking_nonce: GenericArray<u8, NonceLen>,
     pub(crate) masked_response: MaskedResponse<CS>,
     pub(crate) ke2_message: <CS::KeyExchange as KeyExchange<OprfHash<CS>, CS::KeGroup>>::KE2Message,
 }
 
-impl_serialize_and_deserialize_for!(
-    CredentialResponse
-    where
-        // CredentialResponseWithoutKeLen: (KgPk + Nonce) + MaskedResponse
-        <OprfGroup<CS> as Group>::ElemLen: Add<NonceLen>,
-        Sum<<OprfGroup<CS> as Group>::ElemLen, NonceLen>:
-            ArrayLength<u8> | Add<MaskedResponseLen<CS>>,
-        CredentialResponseWithoutKeLen<CS>: ArrayLength<u8>,
-        // MaskedResponse: (Nonce + Hash) + KePk
-        NonceLen: Add<OutputSize<OprfHash<CS>>>,
-        Sum<NonceLen, OutputSize<OprfHash<CS>>>:
-            ArrayLength<u8> | Add<<CS::KeGroup as KeGroup>::PkLen>,
-        MaskedResponseLen<CS>: ArrayLength<u8>,
-        // CredentialResponse: CredentialResponseWithoutKeLen + Ke2Message
-        CredentialResponseWithoutKeLen<CS>: Add<Ke2MessageLen<CS>>,
-        CredentialResponseLen<CS>: ArrayLength<u8>,
-);
-
 /// The answer sent by the client to the server, upon reception of the sealed
 /// envelope
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Deserialize, serde::Serialize),
+    serde(
+        bound(
+            deserialize = "<CS::KeyExchange as KeyExchange<OprfHash<CS>, \
+                           CS::KeGroup>>::KE3Message: serde::Deserialize<'de>",
+            serialize = "<CS::KeyExchange as KeyExchange<OprfHash<CS>, CS::KeGroup>>::KE3Message: \
+                         serde::Serialize"
+        ),
+        crate = "serde"
+    )
+)]
 #[derive_where(Clone)]
 #[derive_where(
     Debug, Eq, Hash, PartialEq;
@@ -231,8 +210,6 @@ where
 {
     pub(crate) ke3_message: <CS::KeyExchange as KeyExchange<OprfHash<CS>, CS::KeGroup>>::KE3Message,
 }
-
-impl_serialize_and_deserialize_for!(CredentialFinalization);
 
 ////////////////////////////////
 // High-level Implementations //
@@ -253,7 +230,7 @@ where
 {
     /// Only used for testing purposes
     #[cfg(test)]
-    pub fn get_blinded_element_for_testing(&self) -> voprf::BlindedElement<CS::OprfGroup> {
+    pub fn get_blinded_element_for_testing(&self) -> voprf::BlindedElement<CS::OprfCs> {
         self.blinded_element.clone()
     }
 
@@ -291,7 +268,7 @@ where
         RegistrationResponseLen<CS>: ArrayLength<u8>,
     {
         <OprfGroup<CS> as Group>::serialize_elem(self.evaluation_element.value())
-            .concat(self.server_s_pk.to_bytes())
+            .concat(self.server_s_pk.serialize())
     }
 
     /// Deserialization from bytes
@@ -347,7 +324,7 @@ where
         RegistrationUploadLen<CS>: ArrayLength<u8>,
     {
         self.client_s_pk
-            .to_bytes()
+            .serialize()
             .concat(self.masking_key.clone())
             .concat(self.envelope.serialize())
     }
@@ -405,7 +382,7 @@ where
         CredentialRequestLen<CS>: ArrayLength<u8>,
     {
         <OprfGroup<CS> as Group>::serialize_elem(self.blinded_element.value())
-            .concat(self.ke1_message.to_bytes())
+            .concat(self.ke1_message.serialize())
     }
 
     pub(crate) fn serialize_iter<'a>(
@@ -424,7 +401,7 @@ where
         // Check that the message is actually containing an element of the correct
         // subgroup
         let blinded_element =
-            voprf::BlindedElement::<CS::OprfGroup>::deserialize(&checked_slice[..elem_len])?;
+            voprf::BlindedElement::<CS::OprfCs>::deserialize(&checked_slice[..elem_len])?;
 
         // Throw an error if the identity group element is encountered
         if bool::from(<OprfGroup<CS> as Group>::identity_elem().ct_eq(&blinded_element.value())) {
@@ -432,7 +409,7 @@ where
         }
 
         let ke1_message =
-            <CS::KeyExchange as KeyExchange<OprfHash<CS>, CS::KeGroup>>::KE1Message::from_bytes(
+            <CS::KeyExchange as KeyExchange<OprfHash<CS>, CS::KeGroup>>::KE1Message::deserialize(
                 &checked_slice[elem_len..],
             )?;
 
@@ -444,7 +421,7 @@ where
 
     /// Only used for testing purposes
     #[cfg(test)]
-    pub fn get_blinded_element_for_testing(&self) -> voprf::BlindedElement<CS::OprfGroup> {
+    pub fn get_blinded_element_for_testing(&self) -> voprf::BlindedElement<CS::OprfCs> {
         self.blinded_element.clone()
     }
 }
@@ -485,7 +462,7 @@ where
         <OprfGroup<CS> as Group>::serialize_elem(self.evaluation_element.value())
             .concat(self.masking_nonce)
             .concat(self.masked_response.serialize())
-            .concat(self.ke2_message.to_bytes())
+            .concat(self.ke2_message.serialize())
     }
 
     pub(crate) fn serialize_without_ke<'a>(
@@ -516,8 +493,7 @@ where
         // Check that the message is actually containing an element of the correct
         // subgroup
         let beta_bytes = &checked_slice[..elem_len];
-        let evaluation_element =
-            voprf::EvaluationElement::<CS::OprfGroup>::deserialize(beta_bytes)?;
+        let evaluation_element = voprf::EvaluationElement::<CS::OprfCs>::deserialize(beta_bytes)?;
 
         // Throw an error if the identity group element is encountered
         if bool::from(<OprfGroup<CS> as Group>::identity_elem().ct_eq(&evaluation_element.value()))
@@ -531,7 +507,7 @@ where
             &checked_slice[elem_len + nonce_len..elem_len + nonce_len + masked_response_len],
         );
         let ke2_message =
-            <CS::KeyExchange as KeyExchange<OprfHash<CS>, CS::KeGroup>>::KE2Message::from_bytes(
+            <CS::KeyExchange as KeyExchange<OprfHash<CS>, CS::KeGroup>>::KE2Message::deserialize(
                 &checked_slice[elem_len + nonce_len + masked_response_len..],
             )?;
 
@@ -570,13 +546,13 @@ where
 {
     /// Serialization into bytes
     pub fn serialize(&self) -> GenericArray<u8, CredentialFinalizationLen<CS>> {
-        self.ke3_message.to_bytes()
+        self.ke3_message.serialize()
     }
 
     /// Deserialization from bytes
     pub fn deserialize(input: &[u8]) -> Result<Self, ProtocolError> {
         let ke3_message =
-            <CS::KeyExchange as KeyExchange<OprfHash<CS>, CS::KeGroup>>::KE3Message::from_bytes(
+            <CS::KeyExchange as KeyExchange<OprfHash<CS>, CS::KeGroup>>::KE3Message::deserialize(
                 input,
             )?;
         Ok(Self { ke3_message })

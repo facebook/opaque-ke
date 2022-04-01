@@ -10,6 +10,7 @@
 use curve25519_dalek::constants::RISTRETTO_BASEPOINT_POINT;
 use curve25519_dalek::ristretto::{CompressedRistretto, RistrettoPoint};
 use curve25519_dalek::scalar::Scalar;
+use curve25519_dalek::traits::Identity;
 use digest::core_api::BlockSizeUser;
 use digest::{Digest, OutputSizeUser};
 use elliptic_curve::hash2curve::{ExpandMsg, ExpandMsgXmd, Expander};
@@ -17,7 +18,6 @@ use generic_array::typenum::{IsLess, IsLessOrEqual, U256, U32, U64};
 use generic_array::GenericArray;
 use rand::{CryptoRng, RngCore};
 use voprf::Group;
-use zeroize::Zeroize;
 
 use super::KeGroup;
 use crate::errors::InternalError;
@@ -33,13 +33,18 @@ impl KeGroup for Ristretto255 {
     type Sk = Scalar;
     type SkLen = U32;
 
-    fn serialize_pk(pk: &Self::Pk) -> GenericArray<u8, Self::PkLen> {
+    fn serialize_pk(pk: Self::Pk) -> GenericArray<u8, Self::PkLen> {
         pk.compress().to_bytes().into()
     }
 
-    fn deserialize_pk(bytes: &GenericArray<u8, Self::PkLen>) -> Result<Self::Pk, InternalError> {
+    fn deserialize_pk(bytes: &[u8]) -> Result<Self::Pk, InternalError> {
+        if bytes.len() != 32 {
+            return Err(InternalError::PointError);
+        }
+
         CompressedRistretto::from_slice(bytes)
             .decompress()
+            .filter(|point| point != &RistrettoPoint::identity())
             .ok_or(InternalError::PointError)
     }
 
@@ -48,9 +53,7 @@ impl KeGroup for Ristretto255 {
             let scalar = {
                 #[cfg(not(test))]
                 {
-                    let mut scalar_bytes = [0u8; 64];
-                    rng.fill_bytes(&mut scalar_bytes);
-                    Scalar::from_bytes_mod_order_wide(&scalar_bytes)
+                    Scalar::random(rng)
                 }
 
                 // Tests need an exact conversion from bytes to scalar, sampling only 32 bytes
@@ -63,7 +66,7 @@ impl KeGroup for Ristretto255 {
                 }
             };
 
-            if scalar != Scalar::zero() && scalar.is_canonical() {
+            if scalar != Scalar::zero() {
                 break scalar;
             }
         }
@@ -81,31 +84,38 @@ impl KeGroup for Ristretto255 {
             .map_err(|_| InternalError::HashToScalar)?
             .fill_bytes(&mut uniform_bytes);
 
-        Ok(Scalar::from_bytes_mod_order_wide(&uniform_bytes.into()))
+        let scalar = Scalar::from_bytes_mod_order_wide(&uniform_bytes.into());
+
+        if scalar == Scalar::zero() {
+            Err(InternalError::HashToScalar)
+        } else {
+            Ok(scalar)
+        }
     }
 
-    fn public_key(sk: &Self::Sk) -> Self::Pk {
+    fn public_key(sk: Self::Sk) -> Self::Pk {
         RISTRETTO_BASEPOINT_POINT * sk
     }
 
-    fn diffie_hellman(pk: &Self::Pk, sk: &Self::Sk) -> GenericArray<u8, Self::PkLen> {
-        Self::serialize_pk(&(pk * sk))
+    fn diffie_hellman(pk: Self::Pk, sk: Self::Sk) -> GenericArray<u8, Self::PkLen> {
+        Self::serialize_pk(pk * sk)
     }
 
-    fn zeroize_sk_on_drop(sk: &mut Self::Sk) {
-        sk.zeroize()
-    }
-
-    fn serialize_sk(sk: &Self::Sk) -> GenericArray<u8, Self::SkLen> {
+    fn serialize_sk(sk: Self::Sk) -> GenericArray<u8, Self::SkLen> {
         sk.to_bytes().into()
     }
 
-    fn deserialize_sk(bytes: &GenericArray<u8, Self::PkLen>) -> Result<Self::Sk, InternalError> {
-        Scalar::from_canonical_bytes((*bytes).into()).ok_or(InternalError::PointError)
+    fn deserialize_sk(bytes: &[u8]) -> Result<Self::Sk, InternalError> {
+        bytes
+            .try_into()
+            .ok()
+            .and_then(Scalar::from_canonical_bytes)
+            .filter(|scalar| scalar != &Scalar::zero())
+            .ok_or(InternalError::PointError)
     }
 }
 
-#[cfg(feature = "ristretto255_voprf")]
+#[cfg(feature = "ristretto255-voprf")]
 impl voprf::CipherSuite for Ristretto255 {
     const ID: u16 = voprf::Ristretto255::ID;
 

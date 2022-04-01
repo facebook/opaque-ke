@@ -15,17 +15,14 @@ use generic_array::typenum::{IsLess, IsLessOrEqual, Le, NonZero, U256};
 use crate::hash::{Hash, ProxyHash};
 use crate::key_exchange::group::KeGroup;
 use crate::key_exchange::traits::KeyExchange;
-use crate::slow_hash::SlowHash;
+use crate::ksf::Ksf;
 
 /// Configures the underlying primitives used in OPAQUE
-/// * `OprfGroup`: a finite cyclic group along with a point representation,
-///   along with an extension trait PasswordToCurve that allows some
-///   customization on how to hash a password to a curve point. See
-///   `group::Group`.
+/// * `OprfCs`: A VOPRF ciphersuite, see [`voprf::CipherSuite`].
 /// * `KeGroup`: A `Group` used for the `KeyExchange`.
 /// * `KeyExchange`: The key exchange protocol to use in the login step
 /// * `Hash`: The main hashing function to use
-/// * `SlowHash`: A slow hashing function, typically used for password hashing
+/// * `Ksf`: A key stretching function, typically used for password hashing
 pub trait CipherSuite
 where
     <OprfHash<Self> as OutputSizeUser>::OutputSize:
@@ -35,17 +32,15 @@ where
     <<OprfHash<Self> as CoreProxy>::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
     Le<<<OprfHash<Self> as CoreProxy>::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
 {
-    /// A finite cyclic group along with a point representation along with an
-    /// extension trait PasswordToCurve that allows some customization on how to
-    /// hash a password to a curve point. See `group::Group`.
-    type OprfGroup: voprf::CipherSuite;
+    /// A VOPRF ciphersuite, see [`voprf::CipherSuite`].
+    type OprfCs: voprf::CipherSuite;
     /// A `Group` used for the `KeyExchange`.
     type KeGroup: KeGroup;
     /// A key exchange protocol
     type KeyExchange: KeyExchange<OprfHash<Self>, Self::KeGroup>;
-    /// A slow hashing function, typically used for password hashing
-    type SlowHash: SlowHash;
+    /// A key stretching function, typically used for password hashing
+    type Ksf: Ksf;
 }
 
-pub(crate) type OprfGroup<CS> = <<CS as CipherSuite>::OprfGroup as voprf::CipherSuite>::Group;
-pub(crate) type OprfHash<CS> = <<CS as CipherSuite>::OprfGroup as voprf::CipherSuite>::Hash;
+pub(crate) type OprfGroup<CS> = <<CS as CipherSuite>::OprfCs as voprf::CipherSuite>::Group;
+pub(crate) type OprfHash<CS> = <<CS as CipherSuite>::OprfCs as voprf::CipherSuite>::Hash;

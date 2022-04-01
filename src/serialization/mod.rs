@@ -45,38 +45,34 @@ pub(crate) fn os2ip(input: &[u8]) -> Result<usize, ProtocolError> {
 
 /// Computes `I2OSP(len(input), max_bytes) || input` and helps hold output
 /// without allocation.
-pub(crate) struct Serialize<
-    'a,
-    L1: ArrayLength<u8>,
-    L2: ArrayLength<u8> = U0,
-    L3: ArrayLength<u8> = U0,
-> {
+pub(crate) struct Input<'a, L1: ArrayLength<u8>, L2: ArrayLength<u8> = U0, L3: ArrayLength<u8> = U0>
+{
     octet: GenericArray<u8, L1>,
-    input: Input<'a, L2, L3>,
+    input: InnerInput<'a, L2, L3>,
 }
 
-enum Input<'a, L1: ArrayLength<u8>, L2: ArrayLength<u8>> {
+enum InnerInput<'a, L1: ArrayLength<u8>, L2: ArrayLength<u8>> {
     Owned(GenericArray<u8, L1>),
     Borrowed(&'a [u8]),
     Label(([&'a [u8]; 2], PhantomData<L2>)),
 }
 
-impl<'a, L1: ArrayLength<u8>, L2: ArrayLength<u8>, L3: ArrayLength<u8>> Serialize<'a, L1, L2, L3> {
+impl<'a, L1: ArrayLength<u8>, L2: ArrayLength<u8>, L3: ArrayLength<u8>> Input<'a, L1, L2, L3> {
     // Variation of `serialize` that takes a borrowed `input
-    pub(crate) fn from(input: &'a [u8]) -> Result<Serialize<'a, L1, L2>, ProtocolError> {
-        Ok(Serialize {
+    pub(crate) fn from(input: &'a [u8]) -> Result<Input<'a, L1, L2>, ProtocolError> {
+        Ok(Input {
             octet: i2osp::<L1>(input.len())?,
-            input: Input::Borrowed(input),
+            input: InnerInput::Borrowed(input),
         })
     }
 
     // Variation of `serialize` that takes an owned `input`
     pub(crate) fn from_owned(
         input: GenericArray<u8, L2>,
-    ) -> Result<Serialize<'a, L1, L2>, ProtocolError> {
-        Ok(Serialize {
+    ) -> Result<Input<'a, L1, L2>, ProtocolError> {
+        Ok(Input {
             octet: i2osp::<L1>(input.len())?,
-            input: Input::Owned(input),
+            input: InnerInput::Owned(input),
         })
     }
 
@@ -84,10 +80,10 @@ impl<'a, L1: ArrayLength<u8>, L2: ArrayLength<u8>, L3: ArrayLength<u8>> Serializ
     pub(crate) fn from_label(
         opaque: &'a [u8],
         label: &'a [u8],
-    ) -> Result<Serialize<'a, L1, U0, U2>, ProtocolError> {
-        Ok(Serialize {
+    ) -> Result<Input<'a, L1, U0, U2>, ProtocolError> {
+        Ok(Input {
             octet: i2osp::<L1>(opaque.len() + label.len())?,
-            input: Input::Label(([opaque, label], PhantomData)),
+            input: InnerInput::Label(([opaque, label], PhantomData)),
         })
     }
 
@@ -96,11 +92,11 @@ impl<'a, L1: ArrayLength<u8>, L2: ArrayLength<u8>, L3: ArrayLength<u8>> Serializ
         [self.octet.as_slice()]
             .into_iter()
             .chain(match &self.input {
-                Input::Owned(bytes) => [bytes.as_slice()],
-                Input::Borrowed(bytes) => [*bytes],
-                Input::Label((iter, _)) => [iter[0]],
+                InnerInput::Owned(bytes) => [bytes.as_slice()],
+                InnerInput::Borrowed(bytes) => [*bytes],
+                InnerInput::Label((iter, _)) => [iter[0]],
             })
-            .chain(if let Input::Label((iter, _)) = &self.input {
+            .chain(if let InnerInput::Label((iter, _)) = &self.input {
                 Some(iter[1])
             } else {
                 None
@@ -108,11 +104,11 @@ impl<'a, L1: ArrayLength<u8>, L2: ArrayLength<u8>, L3: ArrayLength<u8>> Serializ
     }
 }
 
-impl<'a, L1: ArrayLength<u8>, L2: ArrayLength<u8>> Serialize<'a, L1, L2, U0> {
+impl<'a, L1: ArrayLength<u8>, L2: ArrayLength<u8>> Input<'a, L1, L2, U0> {
     pub(crate) fn to_array_2(&self) -> [&[u8]; 2] {
         let input = match &self.input {
-            Input::Borrowed(value) => value,
-            Input::Owned(value) => value.as_slice(),
+            InnerInput::Borrowed(value) => value,
+            InnerInput::Owned(value) => value.as_slice(),
             _ => unreachable!("unexpected `Serialize` constructed with wrong generics"),
         };
 
@@ -120,10 +116,10 @@ impl<'a, L1: ArrayLength<u8>, L2: ArrayLength<u8>> Serialize<'a, L1, L2, U0> {
     }
 }
 
-impl<'a, L1: ArrayLength<u8>, L2: ArrayLength<u8>> Serialize<'a, L1, L2, U2> {
+impl<'a, L1: ArrayLength<u8>, L2: ArrayLength<u8>> Input<'a, L1, L2, U2> {
     pub(crate) fn to_array_3(&self) -> [&[u8]; 3] {
         match self.input {
-            Input::Label((label, _)) => [self.octet.as_slice(), label[0], label[1]],
+            InnerInput::Label((label, _)) => [self.octet.as_slice(), label[0], label[1]],
             _ => unreachable!("unexpected `Serialize` constructed with wrong generics"),
         }
     }

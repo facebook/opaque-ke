@@ -12,22 +12,20 @@
 use derive_where::derive_where;
 use generic_array::{ArrayLength, GenericArray};
 use rand::{CryptoRng, RngCore};
-use zeroize::ZeroizeOnDrop;
 
 use crate::errors::{InternalError, ProtocolError};
 use crate::key_exchange::group::KeGroup;
-use crate::serialization::GenericArrayExt;
 
 /// A Keypair trait with public-private verification
 #[cfg_attr(
     feature = "serde",
-    derive(serde_::Deserialize, serde_::Serialize),
+    derive(serde::Deserialize, serde::Serialize),
     serde(
         bound(
-            deserialize = "KG::Pk: serde_::Deserialize<'de>, S: serde_::Deserialize<'de>",
-            serialize = "KG::Pk: serde_::Serialize, S: serde_::Serialize"
+            deserialize = "S: serde::Deserialize<'de>",
+            serialize = "S: serde::Serialize"
         ),
-        crate = "serde_"
+        crate = "serde"
     )
 )]
 #[derive_where(Clone)]
@@ -64,7 +62,7 @@ impl<KG: KeGroup> KeyPair<KG> {
     /// Generating a random key pair given a cryptographic rng
     pub(crate) fn generate_random<R: RngCore + CryptoRng>(rng: &mut R) -> Self {
         let sk = KG::random_sk(rng);
-        let pk = KG::public_key(&sk);
+        let pk = KG::public_key(sk);
         Self {
             pk: PublicKey(pk),
             sk: PrivateKey(sk),
@@ -98,35 +96,9 @@ where
 }
 
 /// Wrapper around a Key to enforce that it's a private one.
-#[cfg_attr(
-    feature = "serde",
-    derive(serde_::Deserialize, serde_::Serialize),
-    serde(
-        bound(
-            deserialize = "KG::Sk: serde_::Deserialize<'de>",
-            serialize = "KG::Sk: serde_::Serialize"
-        ),
-        crate = "serde_"
-    )
-)]
-#[derive_where(Clone)]
+#[derive_where(Clone, ZeroizeOnDrop)]
 #[derive_where(Debug, Eq, Hash, Ord, PartialEq, PartialOrd; KG::Sk)]
 pub struct PrivateKey<KG: KeGroup>(KG::Sk);
-
-impl<KG: KeGroup> Drop for PrivateKey<KG> {
-    fn drop(&mut self) {
-        KG::zeroize_sk_on_drop(&mut self.0)
-    }
-}
-
-impl<KG: KeGroup> ZeroizeOnDrop for PrivateKey<KG> {}
-
-impl<KG: KeGroup> PrivateKey<KG> {
-    /// Convert from bytes
-    pub fn from_bytes(key_bytes: &GenericArray<u8, KG::SkLen>) -> Result<Self, InternalError> {
-        KG::deserialize_sk(key_bytes).map(Self)
-    }
-}
 
 /// A trait specifying the requirements for a private key container
 pub trait SecretKey<KG: KeGroup>: Clone + Sized {
@@ -159,52 +131,84 @@ impl<KG: KeGroup> SecretKey<KG> for PrivateKey<KG> {
         &self,
         pk: PublicKey<KG>,
     ) -> Result<GenericArray<u8, KG::PkLen>, InternalError> {
-        Ok(KG::diffie_hellman(&pk.0, &self.0))
+        Ok(KG::diffie_hellman(pk.0, self.0))
     }
 
     fn public_key(&self) -> Result<PublicKey<KG>, InternalError> {
-        Ok(PublicKey(KG::public_key(&self.0)))
+        Ok(PublicKey(KG::public_key(self.0)))
     }
 
     fn serialize(&self) -> GenericArray<u8, Self::Len> {
-        KG::serialize_sk(&self.0)
+        KG::serialize_sk(self.0)
     }
 
     fn deserialize(input: &[u8]) -> Result<Self, InternalError> {
-        GenericArray::try_from_slice(input).and_then(Self::from_bytes)
+        KG::deserialize_sk(input).map(Self)
+    }
+}
+
+#[cfg(feature = "serde")]
+impl<'de, KG: KeGroup> serde::Deserialize<'de> for PrivateKey<KG> {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        use serde::de::Error;
+
+        KG::deserialize_sk(&GenericArray::<_, KG::SkLen>::deserialize(deserializer)?)
+            .map(Self)
+            .map_err(D::Error::custom)
+    }
+}
+
+#[cfg(feature = "serde")]
+impl<KG: KeGroup> serde::Serialize for PrivateKey<KG> {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        KG::serialize_sk(self.0).serialize(serializer)
     }
 }
 
 /// Wrapper around a Key to enforce that it's a public one.
-#[cfg_attr(
-    feature = "serde",
-    derive(serde_::Deserialize, serde_::Serialize),
-    serde(
-        bound(
-            deserialize = "KG::Pk: serde_::Deserialize<'de>",
-            serialize = "KG::Pk: serde_::Serialize"
-        ),
-        crate = "serde_"
-    )
-)]
-#[derive_where(Clone)]
+#[derive_where(Clone, ZeroizeOnDrop)]
 #[derive_where(Debug, Eq, Hash, Ord, PartialEq, PartialOrd; KG::Pk)]
 pub struct PublicKey<KG: KeGroup>(KG::Pk);
 
 impl<KG: KeGroup> PublicKey<KG> {
     /// Convert from bytes
-    pub fn from_bytes(key_bytes: &GenericArray<u8, KG::PkLen>) -> Result<Self, InternalError> {
+    pub fn deserialize(key_bytes: &[u8]) -> Result<Self, InternalError> {
         KG::deserialize_pk(key_bytes).map(Self)
     }
 
     /// Convert to bytes
-    pub fn to_bytes(&self) -> GenericArray<u8, KG::PkLen> {
-        KG::serialize_pk(&self.0)
+    pub fn serialize(&self) -> GenericArray<u8, KG::PkLen> {
+        KG::serialize_pk(self.0)
     }
+}
 
-    /// Convert from slice
-    pub fn deserialize(input: &[u8]) -> Result<Self, InternalError> {
-        GenericArray::try_from_slice(input).and_then(Self::from_bytes)
+#[cfg(feature = "serde")]
+impl<'de, KG: KeGroup> serde::Deserialize<'de> for PublicKey<KG> {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        use serde::de::Error;
+
+        KG::deserialize_pk(&GenericArray::<_, KG::PkLen>::deserialize(deserializer)?)
+            .map(Self)
+            .map_err(D::Error::custom)
+    }
+}
+
+#[cfg(feature = "serde")]
+impl<KG: KeGroup> serde::Serialize for PublicKey<KG> {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        KG::serialize_pk(self.0).serialize(serializer)
     }
 }
 
@@ -290,15 +294,15 @@ mod tests {
 
         impl CipherSuite for Default {
             #[cfg(feature = "ristretto255")]
-            type OprfGroup = crate::Ristretto255;
+            type OprfCs = crate::Ristretto255;
             #[cfg(not(feature = "ristretto255"))]
-            type OprfGroup = ::p256::NistP256;
+            type OprfCs = ::p256::NistP256;
             #[cfg(feature = "ristretto255")]
             type KeGroup = crate::Ristretto255;
             #[cfg(not(feature = "ristretto255"))]
             type KeGroup = ::p256::NistP256;
-            type KeyExchange = crate::key_exchange::tripledh::TripleDH;
-            type SlowHash = crate::slow_hash::NoOpHash;
+            type KeyExchange = crate::key_exchange::tripledh::TripleDh;
+            type Ksf = crate::ksf::Identity;
         }
 
         type KeCurve = <Default as CipherSuite>::KeGroup;

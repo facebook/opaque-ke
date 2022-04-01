@@ -11,8 +11,7 @@ use elliptic_curve::group::cofactor::CofactorGroup;
 use elliptic_curve::hash2curve::{ExpandMsgXmd, FromOkm, GroupDigest};
 use elliptic_curve::sec1::{FromEncodedPoint, ModulusSize, ToEncodedPoint};
 use elliptic_curve::{
-    AffinePoint, Curve, FieldSize, NonZeroScalar, ProjectiveArithmetic, ProjectivePoint, PublicKey,
-    Scalar, SecretKey,
+    AffinePoint, Field, FieldSize, Group, ProjectivePoint, PublicKey, Scalar, SecretKey,
 };
 use generic_array::typenum::{IsLess, IsLessOrEqual, U256};
 use generic_array::GenericArray;
@@ -21,31 +20,34 @@ use rand::{CryptoRng, RngCore};
 use super::KeGroup;
 use crate::errors::InternalError;
 
-impl<G: Curve + GroupDigest + ProjectiveArithmetic> KeGroup for G
+impl<G> KeGroup for G
 where
+    G: GroupDigest,
     FieldSize<Self>: ModulusSize,
     AffinePoint<Self>: FromEncodedPoint<Self> + ToEncodedPoint<Self>,
     ProjectivePoint<Self>: CofactorGroup + ToEncodedPoint<Self>,
     Scalar<Self>: FromOkm,
 {
-    type Pk = PublicKey<Self>;
+    type Pk = ProjectivePoint<Self>;
 
     type PkLen = <FieldSize<Self> as ModulusSize>::CompressedPointSize;
 
-    type Sk = SecretKey<Self>;
+    type Sk = Scalar<Self>;
 
     type SkLen = FieldSize<Self>;
 
-    fn serialize_pk(pk: &Self::Pk) -> GenericArray<u8, Self::PkLen> {
+    fn serialize_pk(pk: Self::Pk) -> GenericArray<u8, Self::PkLen> {
         GenericArray::clone_from_slice(pk.to_encoded_point(true).as_bytes())
     }
 
-    fn deserialize_pk(bytes: &GenericArray<u8, Self::PkLen>) -> Result<Self::Pk, InternalError> {
-        PublicKey::from_sec1_bytes(bytes).map_err(|_| InternalError::PointError)
+    fn deserialize_pk(bytes: &[u8]) -> Result<Self::Pk, InternalError> {
+        PublicKey::<Self>::from_sec1_bytes(bytes)
+            .map(|public_key| public_key.to_projective())
+            .map_err(|_| InternalError::PointError)
     }
 
     fn random_sk<R: RngCore + CryptoRng>(rng: &mut R) -> Self::Sk {
-        SecretKey::random(rng)
+        *SecretKey::<Self>::random(rng).to_nonzero_scalar()
     }
 
     // Implements the `HashToScalar()` function
@@ -55,31 +57,31 @@ where
         H::OutputSize: IsLess<U256> + IsLessOrEqual<H::BlockSize>,
     {
         Self::hash_to_scalar::<ExpandMsgXmd<H>>(input, dst)
-            .ok()
-            .and_then(|scalar| Option::<NonZeroScalar<Self>>::from(NonZeroScalar::new(scalar)))
-            .map(SecretKey::from)
-            .ok_or(InternalError::HashToScalar)
+            .map_err(|_| InternalError::HashToScalar)
+            .and_then(|scalar| {
+                if bool::from(scalar.is_zero()) {
+                    Err(InternalError::HashToScalar)
+                } else {
+                    Ok(scalar)
+                }
+            })
     }
 
-    fn public_key(sk: &Self::Sk) -> Self::Pk {
-        sk.public_key()
+    fn public_key(sk: Self::Sk) -> Self::Pk {
+        ProjectivePoint::<Self>::generator() * sk
     }
 
-    fn diffie_hellman(pk: &Self::Pk, sk: &Self::Sk) -> GenericArray<u8, Self::PkLen> {
-        GenericArray::clone_from_slice(
-            (pk.to_projective() * sk.to_nonzero_scalar().as_ref())
-                .to_encoded_point(true)
-                .as_bytes(),
-        )
+    fn diffie_hellman(pk: Self::Pk, sk: Self::Sk) -> GenericArray<u8, Self::PkLen> {
+        Self::serialize_pk(pk * sk)
     }
 
-    fn zeroize_sk_on_drop(_sk: &mut Self::Sk) {}
-
-    fn serialize_sk(sk: &Self::Sk) -> GenericArray<u8, Self::SkLen> {
-        sk.to_be_bytes()
+    fn serialize_sk(sk: Self::Sk) -> GenericArray<u8, Self::SkLen> {
+        sk.into()
     }
 
-    fn deserialize_sk(bytes: &GenericArray<u8, Self::SkLen>) -> Result<Self::Sk, InternalError> {
-        SecretKey::from_be_bytes(bytes).map_err(|_| InternalError::PointError)
+    fn deserialize_sk(bytes: &[u8]) -> Result<Self::Sk, InternalError> {
+        SecretKey::<Self>::from_be_bytes(bytes)
+            .map(|secret_key| *secret_key.to_nonzero_scalar())
+            .map_err(|_| InternalError::PointError)
     }
 }

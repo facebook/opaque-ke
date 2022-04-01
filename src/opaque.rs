@@ -27,13 +27,13 @@ use crate::errors::{InternalError, ProtocolError};
 use crate::hash::{Hash, OutputSize, ProxyHash};
 use crate::key_exchange::group::KeGroup;
 use crate::key_exchange::traits::{
-    FromBytes, Ke1MessageLen, Ke1StateLen, Ke2StateLen, KeyExchange, ToBytes,
+    Deserialize, Ke1MessageLen, Ke1StateLen, Ke2StateLen, KeyExchange, Serialize,
 };
 use crate::key_exchange::tripledh::NonceLen;
 use crate::keypair::{KeyPair, PrivateKey, PublicKey, SecretKey};
+use crate::ksf::Ksf;
 use crate::messages::{CredentialRequestLen, RegistrationUploadLen};
-use crate::serialization::Serialize;
-use crate::slow_hash::SlowHash;
+use crate::serialization::Input;
 use crate::{
     CredentialFinalization, CredentialRequest, CredentialResponse, RegistrationRequest,
     RegistrationResponse, RegistrationUpload,
@@ -57,15 +57,13 @@ const STR_OPAQUE_DERIVE_KEY_PAIR: &[u8; 20] = b"OPAQUE-DeriveKeyPair";
 /// The state elements the server holds upon setup
 #[cfg_attr(
     feature = "serde",
-    derive(serde_::Deserialize, serde_::Serialize),
+    derive(serde::Deserialize, serde::Serialize),
     serde(
         bound(
-            deserialize = "<CS::KeGroup as KeGroup>::Pk: serde_::Deserialize<'de>, <CS::KeGroup \
-                           as KeGroup>::Sk: serde_::Deserialize<'de>, S: serde_::Deserialize<'de>",
-            serialize = "<CS::KeGroup as KeGroup>::Pk: serde_::Serialize, <CS::KeGroup as \
-                         KeGroup>::Sk: serde_::Serialize, S: serde_::Serialize"
+            deserialize = "S: serde::Deserialize<'de>",
+            serialize = "S: serde::Serialize"
         ),
-        crate = "serde_"
+        crate = "serde"
     )
 )]
 #[derive_where(Clone)]
@@ -87,11 +85,16 @@ pub struct ServerSetup<
 }
 
 /// The state elements the client holds to register itself
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Deserialize, serde::Serialize),
+    serde(bound = "", crate = "serde")
+)]
 #[derive_where(Clone, ZeroizeOnDrop)]
 #[derive_where(
     Debug, Eq, Hash, PartialEq;
-    voprf::NonVerifiableClient<CS::OprfGroup>,
-    voprf::BlindedElement<CS::OprfGroup>,
+    voprf::NonVerifiableClient<CS::OprfCs>,
+    voprf::BlindedElement<CS::OprfCs>,
 )]
 pub struct ClientRegistration<CS: CipherSuite>
 where
@@ -102,19 +105,16 @@ where
     <<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
     Le<<<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
 {
-    pub(crate) oprf_client: voprf::NonVerifiableClient<CS::OprfGroup>,
-    pub(crate) blinded_element: voprf::BlindedElement<CS::OprfGroup>,
+    pub(crate) oprf_client: voprf::NonVerifiableClient<CS::OprfCs>,
+    pub(crate) blinded_element: voprf::BlindedElement<CS::OprfCs>,
 }
 
-impl_serialize_and_deserialize_for!(
-    ClientRegistration
-    where
-        // ClientRegistration: KgSk + KgPk
-        <OprfGroup<CS> as Group>::ScalarLen: Add<<OprfGroup<CS> as Group>::ElemLen>,
-        ClientRegistrationLen<CS>: ArrayLength<u8>,
-);
-
 /// The state elements the server holds to record a registration
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Deserialize, serde::Serialize),
+    serde(bound = "", crate = "serde")
+)]
 #[derive_where(Clone, ZeroizeOnDrop)]
 #[derive_where(Debug, Eq, Hash, Ord, PartialEq, PartialOrd; <CS::KeGroup as KeGroup>::Pk)]
 pub struct ServerRegistration<CS: CipherSuite>(pub(crate) RegistrationUpload<CS>)
@@ -126,25 +126,27 @@ where
     <<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
     Le<<<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize, U256>: NonZero;
 
-impl_serialize_and_deserialize_for!(
-    ServerRegistration
-    where
-        // Envelope: Nonce + Hash
-        NonceLen: Add<OutputSize<OprfHash<CS>>>,
-        EnvelopeLen<CS>: ArrayLength<u8>,
-        // RegistrationUpload: (KePk + Hash) + Envelope
-        <CS::KeGroup as KeGroup>::PkLen: Add<OutputSize<OprfHash<CS>>>,
-        Sum<<CS::KeGroup as KeGroup>::PkLen, OutputSize<OprfHash<CS>>>:
-            ArrayLength<u8> | Add<EnvelopeLen<CS>>,
-        RegistrationUploadLen<CS>: ArrayLength<u8>,
-        // ServerRegistration = RegistrationUpload
-);
-
 /// The state elements the client holds to perform a login
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Deserialize, serde::Serialize),
+    serde(
+        bound(
+            deserialize = "<CS::KeyExchange as KeyExchange<OprfHash<CS>, \
+                           CS::KeGroup>>::KE1Message: serde::Deserialize<'de>, <CS::KeyExchange \
+                           as KeyExchange<OprfHash<CS>, CS::KeGroup>>::KE1State: \
+                           serde::Deserialize<'de>",
+            serialize = "<CS::KeyExchange as KeyExchange<OprfHash<CS>, CS::KeGroup>>::KE1Message: \
+                         serde::Serialize, <CS::KeyExchange as KeyExchange<OprfHash<CS>, \
+                         CS::KeGroup>>::KE1State: serde::Serialize"
+        ),
+        crate = "serde"
+    )
+)]
 #[derive_where(Clone, ZeroizeOnDrop)]
 #[derive_where(
     Debug, Eq, Hash, PartialEq;
-    voprf::NonVerifiableClient<CS::OprfGroup>,
+    voprf::NonVerifiableClient<CS::OprfCs>,
     <CS::KeyExchange as KeyExchange<OprfHash<CS>, CS::KeGroup>>::KE1State,
     CredentialRequest<CS>,
 )]
@@ -157,25 +159,25 @@ where
     <<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
     Le<<<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
 {
-    pub(crate) oprf_client: voprf::NonVerifiableClient<CS::OprfGroup>,
+    pub(crate) oprf_client: voprf::NonVerifiableClient<CS::OprfCs>,
     pub(crate) ke1_state: <CS::KeyExchange as KeyExchange<OprfHash<CS>, CS::KeGroup>>::KE1State,
     pub(crate) credential_request: CredentialRequest<CS>,
 }
 
-impl_serialize_and_deserialize_for!(
-    ClientLogin
-    where
-        // CredentialRequest: KgPk + Ke1Message
-        <OprfGroup<CS> as Group>::ElemLen: Add<Ke1MessageLen<CS>>,
-        CredentialRequestLen<CS>: ArrayLength<u8>,
-        // ClientLogin: KgSk + CredentialRequest + Ke1State
-        <OprfGroup<CS> as Group>::ScalarLen: Add<CredentialRequestLen<CS>>,
-        Sum<<OprfGroup<CS> as Group>::ScalarLen, CredentialRequestLen<CS>>:
-            ArrayLength<u8> | Add<Ke1StateLen<CS>>,
-        ClientLoginLen<CS>: ArrayLength<u8>,
-);
-
 /// The state elements the server holds to record a login
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Deserialize, serde::Serialize),
+    serde(
+        bound(
+            deserialize = "<CS::KeyExchange as KeyExchange<OprfHash<CS>, CS::KeGroup>>::KE2State: \
+                           serde::Deserialize<'de>",
+            serialize = "<CS::KeyExchange as KeyExchange<OprfHash<CS>, CS::KeGroup>>::KE2State: \
+                         serde::Serialize"
+        ),
+        crate = "serde"
+    )
+)]
 #[derive_where(Clone, ZeroizeOnDrop)]
 #[derive_where(
     Debug, Eq, Hash, PartialEq;
@@ -192,8 +194,6 @@ where
 {
     ke2_state: <CS::KeyExchange as KeyExchange<OprfHash<CS>, CS::KeGroup>>::KE2State,
 }
-
-impl_serialize_and_deserialize_for!(ServerLogin);
 
 ////////////////////////////////
 // High-level Implementations //
@@ -376,7 +376,7 @@ where
             password,
             self.oprf_client.clone(),
             registration_response.evaluation_element,
-            params.slow_hash,
+            params.ksf,
         )?;
 
         let mut masking_key = Output::<OprfHash<CS>>::default();
@@ -450,7 +450,7 @@ where
         credential_identifier: &[u8],
     ) -> Result<ServerRegistrationStartResult<CS>, ProtocolError> {
         let oprf_key =
-            oprf_key_from_seed::<CS::OprfGroup>(&server_setup.oprf_seed, credential_identifier)?;
+            oprf_key_from_seed::<CS::OprfCs>(&server_setup.oprf_seed, credential_identifier)?;
 
         let server = voprf::NonVerifiableServer::new_with_key(&oprf_key)?;
         let evaluation_element = server.evaluate(&message.blinded_element, None)?;
@@ -510,7 +510,7 @@ where
         self.oprf_client
             .serialize()
             .concat(self.credential_request.serialize())
-            .concat(self.ke1_state.to_bytes())
+            .concat(self.ke1_state.serialize())
     }
 
     /// Deserialization from bytes
@@ -522,7 +522,7 @@ where
             check_slice_size(input, client_len + request_len + state_len, "client_login")?;
 
         let ke1_state =
-            <CS::KeyExchange as KeyExchange<OprfHash<CS>, CS::KeGroup>>::KE1State::from_bytes(
+            <CS::KeyExchange as KeyExchange<OprfHash<CS>, CS::KeGroup>>::KE1State::deserialize(
                 &checked_slice[client_len + request_len..],
             )?;
         Ok(Self {
@@ -598,7 +598,7 @@ where
             password,
             self.oprf_client.clone(),
             credential_response.evaluation_element.clone(),
-            params.slow_hash,
+            params.ksf,
         )?;
 
         let mut masking_key = Output::<OprfHash<CS>>::default();
@@ -638,7 +638,7 @@ where
 
         let blinded_element =
             OprfGroup::<CS>::serialize_elem(self.credential_request.blinded_element.value());
-        let ke1_message = self.credential_request.ke1_message.to_bytes();
+        let ke1_message = self.credential_request.ke1_message.serialize();
         let serialized_credential_request =
             CredentialRequest::<CS>::serialize_iter(&blinded_element, &ke1_message);
 
@@ -682,14 +682,14 @@ where
 {
     /// Serialization into bytes
     pub fn serialize(&self) -> GenericArray<u8, Ke2StateLen<CS>> {
-        self.ke2_state.to_bytes()
+        self.ke2_state.serialize()
     }
 
     /// Deserialization from bytes
     pub fn deserialize(bytes: &[u8]) -> Result<Self, ProtocolError> {
         Ok(Self {
             ke2_state:
-                <CS::KeyExchange as KeyExchange<OprfHash<CS>, CS::KeGroup>>::KE2State::from_bytes(
+                <CS::KeyExchange as KeyExchange<OprfHash<CS>, CS::KeGroup>>::KE2State::deserialize(
                     bytes,
                 )?,
         })
@@ -744,19 +744,19 @@ where
 
         let (id_u, id_s) = bytestrings_from_identifiers::<CS::KeGroup>(
             identifiers,
-            client_s_pk.to_bytes(),
-            server_s_pk.to_bytes(),
+            client_s_pk.serialize(),
+            server_s_pk.serialize(),
         )
         .map_err(ProtocolError::into_custom)?;
 
         let blinded_element =
             OprfGroup::<CS>::serialize_elem(credential_request.blinded_element.value());
-        let ke1_message = credential_request.ke1_message.to_bytes();
+        let ke1_message = credential_request.ke1_message.serialize();
         let credential_request_bytes =
             CredentialRequest::<CS>::serialize_iter(&blinded_element, &ke1_message);
 
         let oprf_key =
-            oprf_key_from_seed::<CS::OprfGroup>(&server_setup.oprf_seed, credential_identifier)
+            oprf_key_from_seed::<CS::OprfCs>(&server_setup.oprf_seed, credential_identifier)
                 .map_err(ProtocolError::into_custom)?;
         let server = voprf::NonVerifiableServer::new_with_key(&oprf_key)
             .map_err(|e| ProtocolError::into_custom(e.into()))?;
@@ -847,8 +847,8 @@ where
 {
     /// Specifying the identifiers idU and idS
     pub identifiers: Identifiers<'i>,
-    /// Specifying a configuration for the slow hash
-    pub slow_hash: Option<&'h CS::SlowHash>,
+    /// Specifying a configuration for the key stretching function
+    pub ksf: Option<&'h CS::Ksf>,
 }
 
 impl<'i, 'h, CS: CipherSuite> ClientRegistrationFinishParameters<'i, 'h, CS>
@@ -861,11 +861,8 @@ where
     Le<<<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
 {
     /// Create a new [`ClientRegistrationFinishParameters`]
-    pub fn new(identifiers: Identifiers<'i>, slow_hash: Option<&'h CS::SlowHash>) -> Self {
-        Self {
-            identifiers,
-            slow_hash,
-        }
+    pub fn new(identifiers: Identifiers<'i>, ksf: Option<&'h CS::Ksf>) -> Self {
+        Self { identifiers, ksf }
     }
 }
 
@@ -968,8 +965,8 @@ where
     /// Specifying a user identifier and server identifier that will be matched
     /// against the server
     pub identifiers: Identifiers<'i>,
-    /// Specifying a configuration for the slow hash
-    pub slow_hash: Option<&'h CS::SlowHash>,
+    /// Specifying a configuration for the key stretching hash
+    pub ksf: Option<&'h CS::Ksf>,
 }
 
 impl<'c, 'i, 'h, CS: CipherSuite> ClientLoginFinishParameters<'c, 'i, 'h, CS>
@@ -985,12 +982,12 @@ where
     pub fn new(
         context: Option<&'c [u8]>,
         identifiers: Identifiers<'i>,
-        slow_hash: Option<&'h CS::SlowHash>,
+        ksf: Option<&'h CS::Ksf>,
     ) -> Self {
         Self {
             context,
             identifiers,
-            slow_hash,
+            ksf,
         }
     }
 }
@@ -1060,7 +1057,7 @@ pub struct ServerLoginStartParameters<'c, 'i> {
 #[derive_where(Clone)]
 #[derive_where(
     Debug;
-    voprf::EvaluationElement<CS::OprfGroup>,
+    voprf::EvaluationElement<CS::OprfCs>,
     <CS::KeyExchange as KeyExchange<OprfHash<CS>, CS::KeGroup>>::KE2Message,
     <CS::KeyExchange as KeyExchange<OprfHash<CS>, CS::KeGroup>>::KE2State,
 )]
@@ -1097,9 +1094,9 @@ where
 #[allow(clippy::type_complexity)]
 fn get_password_derived_key<CS: CipherSuite>(
     input: &[u8],
-    oprf_client: voprf::NonVerifiableClient<CS::OprfGroup>,
-    evaluation_element: voprf::EvaluationElement<CS::OprfGroup>,
-    slow_hash: Option<&CS::SlowHash>,
+    oprf_client: voprf::NonVerifiableClient<CS::OprfCs>,
+    evaluation_element: voprf::EvaluationElement<CS::OprfCs>,
+    ksf: Option<&CS::Ksf>,
 ) -> Result<(Output<OprfHash<CS>>, Hkdf<OprfHash<CS>>), ProtocolError>
 where
     <OprfHash<CS> as OutputSizeUser>::OutputSize:
@@ -1111,10 +1108,10 @@ where
 {
     let oprf_output = oprf_client.finalize(input, &evaluation_element, None)?;
 
-    let hardened_output = if let Some(slow_hash) = slow_hash {
-        slow_hash.hash(oprf_output.clone())
+    let hardened_output = if let Some(ksf) = ksf {
+        ksf.hash(oprf_output.clone())
     } else {
-        CS::SlowHash::default().hash(oprf_output.clone())
+        CS::Ksf::default().hash(oprf_output.clone())
     }
     .map_err(ProtocolError::from)?;
 
@@ -1152,6 +1149,11 @@ where
     ))
 }
 
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Deserialize, serde::Serialize),
+    serde(bound = "", crate = "serde")
+)]
 #[derive_where(Clone)]
 #[derive_where(Debug, Eq, Hash, PartialEq)]
 pub(crate) struct MaskedResponse<CS: CipherSuite>
@@ -1235,7 +1237,7 @@ where
 
     for (x1, x2) in xor_pad.iter_mut().zip(
         server_s_pk
-            .to_bytes()
+            .serialize()
             .as_slice()
             .iter()
             .chain(envelope.serialize().iter()),
@@ -1287,16 +1289,16 @@ pub(crate) fn bytestrings_from_identifiers<KG: KeGroup>(
     ids: Identifiers,
     client_s_pk: GenericArray<u8, KG::PkLen>,
     server_s_pk: GenericArray<u8, KG::PkLen>,
-) -> Result<(Serialize<U2, KG::PkLen>, Serialize<U2, KG::PkLen>), ProtocolError> {
+) -> Result<(Input<U2, KG::PkLen>, Input<U2, KG::PkLen>), ProtocolError> {
     let client_identity = if let Some(client) = ids.client {
-        Serialize::<U2, _>::from(client)?
+        Input::<U2, _>::from(client)?
     } else {
-        Serialize::<U2, _>::from_owned(client_s_pk)?
+        Input::<U2, _>::from_owned(client_s_pk)?
     };
     let server_identity = if let Some(server) = ids.server {
-        Serialize::<U2, _>::from(server)?
+        Input::<U2, _>::from(server)?
     } else {
-        Serialize::<U2, _>::from_owned(server_s_pk)?
+        Input::<U2, _>::from_owned(server_s_pk)?
     };
 
     Ok((client_identity, server_identity))
@@ -1308,7 +1310,7 @@ pub(crate) fn bytestrings_from_identifiers<KG: KeGroup>(
 fn blind<CS: CipherSuite, R: RngCore + CryptoRng>(
     rng: &mut R,
     password: &[u8],
-) -> Result<voprf::NonVerifiableClientBlindResult<CS::OprfGroup>, voprf::Error>
+) -> Result<voprf::NonVerifiableClientBlindResult<CS::OprfCs>, voprf::Error>
 where
     <OprfHash<CS> as OutputSizeUser>::OutputSize:
         IsLess<U256> + IsLessOrEqual<<OprfHash<CS> as BlockSizeUser>::BlockSize>,

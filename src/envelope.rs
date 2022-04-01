@@ -26,7 +26,7 @@ use crate::hash::{Hash, OutputSize, ProxyHash};
 use crate::key_exchange::group::KeGroup;
 use crate::keypair::{KeyPair, PublicKey};
 use crate::opaque::{bytestrings_from_identifiers, Identifiers};
-use crate::serialization::{MacExt, Serialize};
+use crate::serialization::{Input, MacExt};
 
 // Constant string used as salt for HKDF computation
 const STR_AUTH_KEY: [u8; 7] = *b"AuthKey";
@@ -35,6 +35,11 @@ const STR_PRIVATE_KEY: [u8; 10] = *b"PrivateKey";
 const STR_OPAQUE_DERIVE_AUTH_KEY_PAIR: [u8; 24] = *b"OPAQUE-DeriveAuthKeyPair";
 type NonceLen = U32;
 
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Deserialize, serde::Serialize),
+    serde(crate = "serde")
+)]
 #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, ZeroizeOnDrop)]
 pub(crate) enum InnerEnvelopeMode {
     Zero = 0,
@@ -65,7 +70,12 @@ impl TryFrom<u8> for InnerEnvelopeMode {
 /// The specification update has simplified this assumption by taking an
 /// XOR-based approach without compromising on security, and to avoid the
 /// confusion around the implementation of an RKR-secure encryption.
-#[derive_where(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Deserialize, serde::Serialize),
+    serde(bound = "", crate = "serde")
+)]
+#[derive_where(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, ZeroizeOnDrop)]
 pub(crate) struct Envelope<CS: CipherSuite>
 where
     <OprfHash<CS> as OutputSizeUser>::OutputSize:
@@ -78,33 +88,6 @@ where
     pub(crate) mode: InnerEnvelopeMode,
     nonce: GenericArray<u8, NonceLen>,
     hmac: Output<OprfHash<CS>>,
-}
-
-impl<CS: CipherSuite> Drop for Envelope<CS>
-where
-    <OprfHash<CS> as OutputSizeUser>::OutputSize:
-        IsLess<U256> + IsLessOrEqual<<OprfHash<CS> as BlockSizeUser>::BlockSize>,
-    OprfHash<CS>: Hash,
-    <OprfHash<CS> as CoreProxy>::Core: ProxyHash,
-    <<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
-    Le<<<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
-{
-    fn drop(&mut self) {
-        self.mode.zeroize();
-        self.nonce.zeroize();
-        self.hmac.zeroize();
-    }
-}
-
-impl<CS: CipherSuite> ZeroizeOnDrop for Envelope<CS>
-where
-    <OprfHash<CS> as OutputSizeUser>::OutputSize:
-        IsLess<U256> + IsLessOrEqual<<OprfHash<CS> as BlockSizeUser>::BlockSize>,
-    OprfHash<CS>: Hash,
-    <OprfHash<CS> as CoreProxy>::Core: ProxyHash,
-    <<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
-    Le<<<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
-{
 }
 
 // Note that this struct represents an envelope that has been "opened" with the
@@ -122,8 +105,8 @@ where
 {
     pub(crate) client_static_keypair: KeyPair<CS::KeGroup>,
     pub(crate) export_key: Output<OprfHash<CS>>,
-    pub(crate) id_u: Serialize<'a, U2, <CS::KeGroup as KeGroup>::PkLen>,
-    pub(crate) id_s: Serialize<'a, U2, <CS::KeGroup as KeGroup>::PkLen>,
+    pub(crate) id_u: Input<'a, U2, <CS::KeGroup as KeGroup>::PkLen>,
+    pub(crate) id_s: Input<'a, U2, <CS::KeGroup as KeGroup>::PkLen>,
 }
 
 pub(crate) struct OpenedInnerEnvelope<D: Hash>
@@ -175,10 +158,10 @@ where
             build_inner_envelope_internal::<CS>(randomized_pwd_hasher.clone(), nonce)?,
         );
 
-        let server_s_pk_bytes = server_s_pk.to_bytes();
+        let server_s_pk_bytes = server_s_pk.serialize();
         let (id_u, id_s) = bytestrings_from_identifiers::<CS::KeGroup>(
             ids,
-            client_s_pk.to_bytes(),
+            client_s_pk.serialize(),
             server_s_pk_bytes.clone(),
         )?;
         let aad = construct_aad(id_u.iter(), id_s.iter(), &server_s_pk_bytes);
@@ -246,10 +229,10 @@ where
             }
         };
 
-        let server_s_pk_bytes = server_s_pk.to_bytes();
+        let server_s_pk_bytes = server_s_pk.serialize();
         let (id_u, id_s) = bytestrings_from_identifiers::<CS::KeGroup>(
             optional_ids,
-            client_static_keypair.public().to_bytes(),
+            client_static_keypair.public().serialize(),
             server_s_pk_bytes.clone(),
         )?;
         let aad = construct_aad(id_u.iter(), id_s.iter(), &server_s_pk_bytes);
@@ -362,7 +345,7 @@ where
         .expand(&nonce.concat(STR_PRIVATE_KEY.into()), &mut keypair_seed)
         .map_err(|_| InternalError::HkdfError)?;
     let client_static_keypair = KeyPair::<CS::KeGroup>::from_private_key_slice(
-        &CS::KeGroup::serialize_sk(&CS::KeGroup::hash_to_scalar::<OprfHash<CS>>(
+        &CS::KeGroup::serialize_sk(CS::KeGroup::hash_to_scalar::<OprfHash<CS>>(
             &[keypair_seed.as_slice()],
             &GenericArray::from(STR_OPAQUE_DERIVE_AUTH_KEY_PAIR),
         )?),
@@ -388,7 +371,7 @@ where
         .expand(&nonce.concat(STR_PRIVATE_KEY.into()), &mut keypair_seed)
         .map_err(|_| InternalError::HkdfError)?;
     let client_static_keypair = KeyPair::<CS::KeGroup>::from_private_key_slice(
-        &CS::KeGroup::serialize_sk(&CS::KeGroup::hash_to_scalar::<OprfHash<CS>>(
+        &CS::KeGroup::serialize_sk(CS::KeGroup::hash_to_scalar::<OprfHash<CS>>(
             &[keypair_seed.as_slice()],
             &GenericArray::from(STR_OPAQUE_DERIVE_AUTH_KEY_PAIR),
         )?),
