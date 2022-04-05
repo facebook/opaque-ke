@@ -46,7 +46,9 @@ serde_ = { version = "1", package = "serde", default-features = false, features 
   "derive",
 ], optional = true }
 subtle = { version = "2.3", default-features = false }
-voprf = { version = "0.3", default-features = false, features = ["danger"] }
+voprf = { version = "0.4.0-pre.2", default-features = false, features = [
+  "danger",
+] }
 zeroize = { version = "1.5", features = ["zeroize_derive"] }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
@@ -77,4 +79,4 @@ features = ["argon2", "std", "x25519-u64"]
 targets = []
 
 [patch.crates-io]
-voprf = { git = "https://github.com/khonsulabs/voprf", branch = "v08" }
+voprf = { git = "https://github.com/novifinancial/voprf", branch = "main" }

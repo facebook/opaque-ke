@@ -12,11 +12,11 @@ use curve25519_dalek::ristretto::{CompressedRistretto, RistrettoPoint};
 use curve25519_dalek::scalar::Scalar;
 use curve25519_dalek::traits::Identity;
 use digest::core_api::BlockSizeUser;
-use digest::{Digest, OutputSizeUser};
-use elliptic_curve::hash2curve::{ExpandMsg, ExpandMsgXmd, Expander};
-use generic_array::typenum::{IsLess, IsLessOrEqual, U256, U32, U64};
+use digest::Digest;
+use generic_array::typenum::{IsLess, IsLessOrEqual, U256, U32};
 use generic_array::GenericArray;
 use rand::{CryptoRng, RngCore};
+use subtle::ConstantTimeEq;
 use voprf::Group;
 
 use super::KeGroup;
@@ -73,24 +73,18 @@ impl KeGroup for Ristretto255 {
     }
 
     // Implements the `HashToScalar()` function from
-    // https://www.ietf.org/archive/id/draft-irtf-cfrg-voprf-08.html#section-4.1
+    // <https://www.ietf.org/archive/id/draft-irtf-cfrg-voprf-09.html#section-4.1>
     fn hash_to_scalar<'a, H>(input: &[&[u8]], dst: &[u8]) -> Result<Self::Sk, InternalError>
     where
         H: Digest + BlockSizeUser,
         H::OutputSize: IsLess<U256> + IsLessOrEqual<H::BlockSize>,
     {
-        let mut uniform_bytes = GenericArray::<_, U64>::default();
-        ExpandMsgXmd::<H>::expand_message(input, dst, 64)
-            .map_err(|_| InternalError::HashToScalar)?
-            .fill_bytes(&mut uniform_bytes);
+        <voprf::Ristretto255 as Group>::hash_to_scalar::<H>(input, dst)
+            .map_err(InternalError::OprfInternalError)
+    }
 
-        let scalar = Scalar::from_bytes_mod_order_wide(&uniform_bytes.into());
-
-        if scalar == Scalar::zero() {
-            Err(InternalError::HashToScalar)
-        } else {
-            Ok(scalar)
-        }
+    fn is_zero_scalar(scalar: Self::Sk) -> subtle::Choice {
+        scalar.ct_eq(&Scalar::zero())
     }
 
     fn public_key(sk: Self::Sk) -> Self::Pk {
@@ -133,26 +127,26 @@ impl Group for Ristretto255 {
 
     type ScalarLen = <voprf::Ristretto255 as Group>::ScalarLen;
 
-    fn hash_to_curve<CS: voprf::CipherSuite>(
+    fn hash_to_curve<H>(
         input: &[&[u8]],
         dst: &[u8],
     ) -> voprf::Result<Self::Elem, voprf::InternalError>
     where
-        <CS::Hash as OutputSizeUser>::OutputSize:
-            IsLess<U256> + IsLessOrEqual<<CS::Hash as BlockSizeUser>::BlockSize>,
+        H: Digest + BlockSizeUser,
+        H::OutputSize: IsLess<U256> + IsLessOrEqual<H::BlockSize>,
     {
-        <voprf::Ristretto255 as Group>::hash_to_curve::<CS>(input, dst)
+        <voprf::Ristretto255 as Group>::hash_to_curve::<H>(input, dst)
     }
 
-    fn hash_to_scalar<CS: voprf::CipherSuite>(
+    fn hash_to_scalar<H>(
         input: &[&[u8]],
         dst: &[u8],
     ) -> voprf::Result<Self::Scalar, voprf::InternalError>
     where
-        <CS::Hash as OutputSizeUser>::OutputSize:
-            IsLess<U256> + IsLessOrEqual<<CS::Hash as BlockSizeUser>::BlockSize>,
+        H: Digest + BlockSizeUser,
+        H::OutputSize: IsLess<U256> + IsLessOrEqual<H::BlockSize>,
     {
-        <voprf::Ristretto255 as Group>::hash_to_scalar::<CS>(input, dst)
+        <voprf::Ristretto255 as Group>::hash_to_scalar::<H>(input, dst)
     }
 
     fn base_elem() -> Self::Elem {

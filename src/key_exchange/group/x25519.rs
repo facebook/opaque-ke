@@ -17,6 +17,7 @@ use elliptic_curve::hash2curve::{ExpandMsg, ExpandMsgXmd, Expander};
 use generic_array::typenum::{IsLess, IsLessOrEqual, U256, U32, U64};
 use generic_array::GenericArray;
 use rand::{CryptoRng, RngCore};
+use subtle::ConstantTimeEq;
 
 use super::KeGroup;
 use crate::errors::InternalError;
@@ -55,7 +56,7 @@ impl KeGroup for X25519 {
     }
 
     // Implements the `HashToScalar()` function from
-    // https://www.ietf.org/archive/id/draft-irtf-cfrg-voprf-08.html#section-4.1
+    // <https://www.ietf.org/archive/id/draft-irtf-cfrg-voprf-09.html#section-4.1>
     fn hash_to_scalar<'a, H>(input: &[&[u8]], dst: &[u8]) -> Result<Self::Sk, InternalError>
     where
         H: Digest + BlockSizeUser,
@@ -73,6 +74,10 @@ impl KeGroup for X25519 {
         } else {
             Ok(scalar)
         }
+    }
+
+    fn is_zero_scalar(scalar: Self::Sk) -> subtle::Choice {
+        scalar.ct_eq(&Scalar::zero())
     }
 
     fn public_key(sk: Self::Sk) -> Self::Pk {

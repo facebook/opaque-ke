@@ -345,8 +345,8 @@ where
         .expand(&nonce.concat(STR_PRIVATE_KEY.into()), &mut keypair_seed)
         .map_err(|_| InternalError::HkdfError)?;
     let client_static_keypair = KeyPair::<CS::KeGroup>::from_private_key_slice(
-        &CS::KeGroup::serialize_sk(CS::KeGroup::hash_to_scalar::<OprfHash<CS>>(
-            &[keypair_seed.as_slice()],
+        &CS::KeGroup::serialize_sk(CS::KeGroup::derive_auth_keypair::<CS::OprfCs>(
+            keypair_seed.as_slice(),
             &GenericArray::from(STR_OPAQUE_DERIVE_AUTH_KEY_PAIR),
         )?),
     )?;
@@ -371,8 +371,8 @@ where
         .expand(&nonce.concat(STR_PRIVATE_KEY.into()), &mut keypair_seed)
         .map_err(|_| InternalError::HkdfError)?;
     let client_static_keypair = KeyPair::<CS::KeGroup>::from_private_key_slice(
-        &CS::KeGroup::serialize_sk(CS::KeGroup::hash_to_scalar::<OprfHash<CS>>(
-            &[keypair_seed.as_slice()],
+        &CS::KeGroup::serialize_sk(CS::KeGroup::derive_auth_keypair::<CS::OprfCs>(
+            keypair_seed.as_slice(),
             &GenericArray::from(STR_OPAQUE_DERIVE_AUTH_KEY_PAIR),
         )?),
     )?;
