@@ -6,8 +6,8 @@
 // of this source tree.
 
 use core::ops::Add;
+use std::vec;
 use std::vec::Vec;
-use std::{println, vec};
 
 use digest::core_api::{BlockSizeUser, CoreProxy};
 use digest::OutputSizeUser;
@@ -416,11 +416,6 @@ where
             &parameters.client_nonce,
         ]
         .concat();
-
-        println!(
-            "parameters.blind_login: {:?}",
-            hex::encode(&parameters.blind_login)
-        );
 
         let mut client_login_start_rng = CycleRng::new(client_login_start);
         let client_login_start_result =

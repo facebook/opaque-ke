@@ -50,7 +50,8 @@ where
         *SecretKey::<Self>::random(rng).to_nonzero_scalar()
     }
 
-    // Implements the `HashToScalar()` function
+    // Implements the `HashToScalar()` function from
+    // <https://www.ietf.org/archive/id/draft-irtf-cfrg-voprf-09.html#section-4.1>
     fn hash_to_scalar<H>(input: &[&[u8]], dst: &[u8]) -> Result<Self::Sk, InternalError>
     where
         H: Digest + BlockSizeUser,
@@ -69,6 +70,10 @@ where
 
     fn public_key(sk: Self::Sk) -> Self::Pk {
         ProjectivePoint::<Self>::generator() * sk
+    }
+
+    fn is_zero_scalar(scalar: Self::Sk) -> subtle::Choice {
+        scalar.is_zero()
     }
 
     fn diffie_hellman(pk: Self::Pk, sk: Self::Sk) -> GenericArray<u8, Self::PkLen> {

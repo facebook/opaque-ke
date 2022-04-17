@@ -93,7 +93,7 @@ pub struct ServerSetup<
 #[derive_where(Clone, ZeroizeOnDrop)]
 #[derive_where(
     Debug, Eq, Hash, PartialEq;
-    voprf::NonVerifiableClient<CS::OprfCs>,
+    voprf::OprfClient<CS::OprfCs>,
     voprf::BlindedElement<CS::OprfCs>,
 )]
 pub struct ClientRegistration<CS: CipherSuite>
@@ -105,7 +105,7 @@ where
     <<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
     Le<<<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
 {
-    pub(crate) oprf_client: voprf::NonVerifiableClient<CS::OprfCs>,
+    pub(crate) oprf_client: voprf::OprfClient<CS::OprfCs>,
     pub(crate) blinded_element: voprf::BlindedElement<CS::OprfCs>,
 }
 
@@ -146,7 +146,7 @@ where
 #[derive_where(Clone, ZeroizeOnDrop)]
 #[derive_where(
     Debug, Eq, Hash, PartialEq;
-    voprf::NonVerifiableClient<CS::OprfCs>,
+    voprf::OprfClient<CS::OprfCs>,
     <CS::KeyExchange as KeyExchange<OprfHash<CS>, CS::KeGroup>>::KE1State,
     CredentialRequest<CS>,
 )]
@@ -159,7 +159,7 @@ where
     <<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
     Le<<<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
 {
-    pub(crate) oprf_client: voprf::NonVerifiableClient<CS::OprfCs>,
+    pub(crate) oprf_client: voprf::OprfClient<CS::OprfCs>,
     pub(crate) ke1_state: <CS::KeyExchange as KeyExchange<OprfHash<CS>, CS::KeGroup>>::KE1State,
     pub(crate) credential_request: CredentialRequest<CS>,
 }
@@ -317,7 +317,7 @@ where
             check_slice_size(input, client_len + element_len, "client_registration")?;
 
         Ok(Self {
-            oprf_client: voprf::NonVerifiableClient::deserialize(&checked_slice[..client_len])?,
+            oprf_client: voprf::OprfClient::deserialize(&checked_slice[..client_len])?,
             blinded_element: voprf::BlindedElement::deserialize(&checked_slice[client_len..])?,
         })
     }
@@ -452,8 +452,8 @@ where
         let oprf_key =
             oprf_key_from_seed::<CS::OprfCs>(&server_setup.oprf_seed, credential_identifier)?;
 
-        let server = voprf::NonVerifiableServer::new_with_key(&oprf_key)?;
-        let evaluation_element = server.evaluate(&message.blinded_element, None)?;
+        let server = voprf::OprfServer::new_with_key(&oprf_key)?;
+        let evaluation_element = server.evaluate(&message.blinded_element);
 
         Ok(ServerRegistrationStartResult {
             message: RegistrationResponse {
@@ -526,7 +526,7 @@ where
                 &checked_slice[client_len + request_len..],
             )?;
         Ok(Self {
-            oprf_client: voprf::NonVerifiableClient::deserialize(&checked_slice[..client_len])?,
+            oprf_client: voprf::OprfClient::deserialize(&checked_slice[..client_len])?,
             credential_request: CredentialRequest::deserialize(
                 &checked_slice[client_len..client_len + request_len],
             )?,
@@ -758,11 +758,9 @@ where
         let oprf_key =
             oprf_key_from_seed::<CS::OprfCs>(&server_setup.oprf_seed, credential_identifier)
                 .map_err(ProtocolError::into_custom)?;
-        let server = voprf::NonVerifiableServer::new_with_key(&oprf_key)
+        let server = voprf::OprfServer::new_with_key(&oprf_key)
             .map_err(|e| ProtocolError::into_custom(e.into()))?;
-        let evaluation_element = server
-            .evaluate(&credential_request.blinded_element, None)
-            .map_err(|e| ProtocolError::into_custom(e.into()))?;
+        let evaluation_element = server.evaluate(&credential_request.blinded_element);
 
         let beta = OprfGroup::<CS>::serialize_elem(evaluation_element.value());
         let credential_response_component =
@@ -1094,7 +1092,7 @@ where
 #[allow(clippy::type_complexity)]
 fn get_password_derived_key<CS: CipherSuite>(
     input: &[u8],
-    oprf_client: voprf::NonVerifiableClient<CS::OprfCs>,
+    oprf_client: voprf::OprfClient<CS::OprfCs>,
     evaluation_element: voprf::EvaluationElement<CS::OprfCs>,
     ksf: Option<&CS::Ksf>,
 ) -> Result<(Output<OprfHash<CS>>, Hkdf<OprfHash<CS>>), ProtocolError>
@@ -1106,7 +1104,7 @@ where
     <<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
     Le<<<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
 {
-    let oprf_output = oprf_client.finalize(input, &evaluation_element, None)?;
+    let oprf_output = oprf_client.finalize(input, &evaluation_element)?;
 
     let hardened_output = if let Some(ksf) = ksf {
         ksf.hash(oprf_output.clone())
@@ -1141,12 +1139,12 @@ where
                 .ok()
         })
         .ok_or(InternalError::HkdfError)?;
-    Ok(CS::Group::serialize_scalar(
-        CS::Group::hash_to_scalar::<CS>(
-            &[ikm.as_slice()],
-            &GenericArray::from(*STR_OPAQUE_DERIVE_KEY_PAIR),
-        )?,
-    ))
+
+    Ok(CS::Group::serialize_scalar(voprf::derive_key::<CS>(
+        ikm.as_slice(),
+        &GenericArray::from(*STR_OPAQUE_DERIVE_KEY_PAIR),
+        voprf::Mode::Oprf,
+    )?))
 }
 
 #[cfg_attr(
@@ -1310,7 +1308,7 @@ pub(crate) fn bytestrings_from_identifiers<KG: KeGroup>(
 fn blind<CS: CipherSuite, R: RngCore + CryptoRng>(
     rng: &mut R,
     password: &[u8],
-) -> Result<voprf::NonVerifiableClientBlindResult<CS::OprfCs>, voprf::Error>
+) -> Result<voprf::OprfClientBlindResult<CS::OprfCs>, voprf::Error>
 where
     <OprfHash<CS> as OutputSizeUser>::OutputSize:
         IsLess<U256> + IsLessOrEqual<<OprfHash<CS> as BlockSizeUser>::BlockSize>,
@@ -1320,7 +1318,7 @@ where
     Le<<<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
 {
     #[cfg(not(test))]
-    let result = voprf::NonVerifiableClient::blind(password, rng)?;
+    let result = voprf::OprfClient::blind(password, rng)?;
 
     #[cfg(test)]
     let result = {
@@ -1331,7 +1329,7 @@ where
                 break scalar;
             }
         };
-        voprf::NonVerifiableClient::deterministic_blind_unchecked(password, blind)?
+        voprf::OprfClient::deterministic_blind_unchecked(password, blind)?
     };
 
     Ok(result)

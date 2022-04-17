@@ -85,7 +85,7 @@ fn client_registration_roundtrip() -> Result<(), ProtocolError> {
         let pw = b"hunter2";
         let mut rng = OsRng;
 
-        let blind_result = &voprf::NonVerifiableClient::<CS::OprfCs>::blind(pw, &mut rng)?;
+        let blind_result = &voprf::OprfClient::<CS::OprfCs>::blind(pw, &mut rng)?;
 
         let bytes: Vec<u8> = blind_result
             .state
@@ -523,7 +523,7 @@ fn client_login_roundtrip() -> Result<(), ProtocolError> {
         ]
         .concat();
 
-        let blind_result = voprf::NonVerifiableClient::<CS::OprfCs>::blind(pw, &mut rng)?;
+        let blind_result = voprf::OprfClient::<CS::OprfCs>::blind(pw, &mut rng)?;
 
         let credential_request = CredentialRequest::<CS> {
             blinded_element: blind_result.message,
