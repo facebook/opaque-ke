@@ -246,7 +246,9 @@ jobs:
           key: taplo
 
       - name: Install Taplo
-        run: cargo install taplo-cli
+        # Adding the --locked flag because of
+        # https://github.com/tamasfe/taplo/issues/242
+        run: cargo install taplo-cli --locked 
 
       - name: Checkout sources
         uses: actions/checkout@v2
