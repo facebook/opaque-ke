@@ -90,6 +90,10 @@
 //! for each client, and the values consist of their corresponding password
 //! files, to be retrieved upon future login attempts made by the client.
 //!
+//! Note that the [RegistrationUpload] message contains sensitive information
+//! (about as sensitive as a hash of the password), and hence should be
+//! protected with confidentiality guarantees by the consumer of this library.
+//!
 //! ### Client Registration Start
 //! In the first step of registration, the client chooses as input a
 //! registration password. The client runs [ClientRegistration::start] to
