@@ -1,5 +1,8 @@
 # Changelog
 
+## 2.0.0-pre.2 (April 22, 2022)
+* Synced implementation with draft-irtf-cfrg-opaque-08
+
 ## 2.0.0-pre.1 (March 15, 2022)
 
 * Synced implementation with draft-irtf-cfrg-opaque-07

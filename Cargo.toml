@@ -9,7 +9,7 @@ name = "opaque-ke"
 readme = "README.md"
 repository = "https://github.com/novifinancial/opaque-ke"
 rust-version = "1.57"
-version = "2.0.0-pre.1"
+version = "2.0.0-pre.2"
 
 [features]
 default = ["ristretto255-u64", "ristretto255-voprf", "serde"]
@@ -77,6 +77,3 @@ name = "opaque"
 [package.metadata.docs.rs]
 features = ["argon2", "std", "x25519-u64"]
 targets = []
-
-[patch.crates-io]
-voprf = { git = "https://github.com/novifinancial/voprf", branch = "main" }
