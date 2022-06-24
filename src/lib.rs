@@ -89,6 +89,9 @@
 //! key-value database, where the keys consist of these server-side identifiers
 //! for each client, and the values consist of their corresponding password
 //! files, to be retrieved upon future login attempts made by the client.
+//! It is your responsibility to ensure that the identifier used to form the
+//! initial [RegistrationRequest], typically supplied by the client, matches
+//! the database key used in the final [RegistrationUpload] step.
 //!
 //! Note that the [RegistrationUpload] message contains sensitive information
 //! (about as sensitive as a hash of the password), and hence should be
