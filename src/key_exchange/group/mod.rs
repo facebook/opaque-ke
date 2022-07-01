@@ -110,7 +110,7 @@ pub trait KeGroup {
 // Helper functions used to compute DeriveAuthKeyPair() (taken from the voprf
 // crate)
 
-const STR_VOPRF: [u8; 8] = *b"VOPRF09-";
+const STR_VOPRF: [u8; 8] = *b"VOPRF10-";
 const STR_DERIVE_KEYPAIR: [u8; 13] = *b"DeriveKeyPair";
 
 /// Generates the contextString parameter as defined in
