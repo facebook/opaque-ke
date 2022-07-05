@@ -9,7 +9,7 @@ name = "opaque-ke"
 readme = "README.md"
 repository = "https://github.com/novifinancial/opaque-ke"
 rust-version = "1.57"
-version = "2.0.0-pre.2"
+version = "2.0.0-pre.3"
 
 [features]
 default = ["ristretto255-u64", "ristretto255-voprf", "serde"]
@@ -37,7 +37,7 @@ curve25519-dalek = { version = "=4.0.0-pre.1", default-features = false, optiona
 derive-where = { version = "=1.0.0-rc.3", features = ["zeroize-on-drop"] }
 digest = "0.10"
 displaydoc = { version = "0.2", default-features = false }
-elliptic-curve = { version = "0.12.0-pre.1", features = ["hash2curve", "sec1"] }
+elliptic-curve = { version = "0.12", features = ["hash2curve", "sec1"] }
 generic-array = "0.14"
 hkdf = "0.12"
 hmac = "0.12"
@@ -46,7 +46,7 @@ serde_ = { version = "1", package = "serde", default-features = false, features 
   "derive",
 ], optional = true }
 subtle = { version = "2.3", default-features = false }
-voprf = { version = "0.4.0-pre.2", default-features = false, features = [
+voprf = { version = "0.4.0-pre.3", default-features = false, features = [
   "danger",
 ] }
 zeroize = { version = "1.5", features = ["zeroize_derive"] }
@@ -60,7 +60,7 @@ chacha20poly1305 = "=0.10.0-pre"
 criterion = "0.3"
 hex = "0.4"
 json = "0.12"
-p256 = { version = "=0.11.0-pre.0", default-features = false, features = [
+p256 = { version = "0.11", default-features = false, features = [
   "hash2curve",
   "voprf",
 ] }
