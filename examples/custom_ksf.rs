@@ -8,23 +8,12 @@
 //! Demonstrates a simple client-server password-based login protocol using
 //! OPAQUE, over a command-line interface
 //!
-//! The client-server interactions are executed in a three-step protocol within
-//! the account_registration (for password registration) and account_login (for
-//! password login) functions. These steps must be performed in the specific
-//! sequence outlined in each of these functions.
-//!
-//! The CipherSuite trait allows the application to configure the primitives
-//! used by OPAQUE, but must be kept consistent across the steps of the
-//! protocol.
-//!
-//! In a more realistic client-server interaction, the client must send messages
-//! over "the wire" to the server. These bytes are serialized and explicitly
-//! annotated in the below functions.
+//! This specific example shows how to use a custom KSF (Key Stretching
+//! Function). `scrypt` is used for this example, but any KSF can be used.
 
 use std::collections::HashMap;
 use std::process::exit;
 
-use argon2::Argon2;
 use generic_array::GenericArray;
 use opaque_ke::ciphersuite::CipherSuite;
 use opaque_ke::rand::rngs::OsRng;
@@ -37,6 +26,24 @@ use opaque_ke::{
 use rustyline::error::ReadlineError;
 use rustyline::Editor;
 
+// We can define a structure here to hold the parameters for the KSF.
+#[derive(Default)]
+struct CustomKsf(scrypt::Params);
+
+// The Ksf trait must be implemented to be used in the ciphersuite.
+impl opaque_ke::ksf::Ksf for CustomKsf {
+    fn hash<L: generic_array::ArrayLength<u8>>(
+        &self,
+        input: GenericArray<u8, L>,
+    ) -> Result<GenericArray<u8, L>, opaque_ke::errors::InternalError> {
+        let mut output = GenericArray::<u8, L>::default();
+        scrypt::scrypt(&input, &[], &self.0, &mut output)
+            .map_err(|_| opaque_ke::errors::InternalError::KsfError)?;
+
+        Ok(output)
+    }
+}
+
 // The ciphersuite trait allows to specify the underlying primitives that will
 // be used in the OPAQUE protocol
 #[allow(dead_code)]
@@ -48,7 +55,7 @@ impl CipherSuite for Default {
     type KeGroup = opaque_ke::Ristretto255;
     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDh;
 
-    type Ksf = Argon2<'static>;
+    type Ksf = CustomKsf;
 }
 
 #[cfg(not(feature = "ristretto255"))]
@@ -57,7 +64,7 @@ impl CipherSuite for Default {
     type KeGroup = p256::NistP256;
     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDh;
 
-    type Ksf = Argon2<'static>;
+    type Ksf = CustomKsf;
 }
 
 // Password-based registration between a client and server
@@ -83,13 +90,22 @@ fn account_registration(
 
     // Server sends registration_response_bytes to client
 
+    // Sets up custom parameters for the KSF
+    let custom_ksf =
+        CustomKsf(scrypt::Params::new(8, 8, 1).expect("scrypt parameter should be valid"));
+
+    let client_finish_params = ClientRegistrationFinishParameters {
+        ksf: Some(&custom_ksf),
+        ..core::default::Default::default()
+    };
+
     let client_finish_registration_result = client_registration_start_result
         .state
         .finish(
             &mut client_rng,
             password.as_bytes(),
             RegistrationResponse::deserialize(&registration_response_bytes).unwrap(),
-            ClientRegistrationFinishParameters::default(),
+            client_finish_params,
         )
         .unwrap();
     let message_bytes = client_finish_registration_result.message.serialize();
@@ -131,10 +147,19 @@ fn account_login(
 
     // Server sends credential_response_bytes to client
 
+    // Sets up custom parameters for the KSF
+    let custom_ksf =
+        CustomKsf(scrypt::Params::new(8, 8, 1).expect("scrypt parameter should be valid"));
+
+    let client_finish_params = ClientLoginFinishParameters {
+        ksf: Some(&custom_ksf),
+        ..core::default::Default::default()
+    };
+
     let result = client_login_start_result.state.finish(
         password.as_bytes(),
         CredentialResponse::deserialize(&credential_response_bytes).unwrap(),
-        ClientLoginFinishParameters::default(),
+        client_finish_params,
     );
 
     if result.is_err() {
