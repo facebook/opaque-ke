@@ -68,7 +68,8 @@ fn account_registration(
 ) -> GenericArray<u8, ServerRegistrationLen<DefaultCipherSuite>> {
     let mut client_rng = OsRng;
     let client_registration_start_result =
-        ClientRegistration::<DefaultCipherSuite>::start(&mut client_rng, password.as_bytes()).unwrap();
+        ClientRegistration::<DefaultCipherSuite>::start(&mut client_rng, password.as_bytes())
+            .unwrap();
     let registration_request_bytes = client_registration_start_result.message.serialize();
 
     // Client sends registration_request_bytes to server
@@ -116,7 +117,8 @@ fn account_login(
 
     // Client sends credential_request_bytes to server
 
-    let password_file = ServerRegistration::<DefaultCipherSuite>::deserialize(password_file_bytes).unwrap();
+    let password_file =
+        ServerRegistration::<DefaultCipherSuite>::deserialize(password_file_bytes).unwrap();
     let mut server_rng = OsRng;
     let server_login_start_result = ServerLogin::start(
         &mut server_rng,
