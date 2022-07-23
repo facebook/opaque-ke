@@ -990,8 +990,8 @@
 //!
 //! An application might want to use a custom KSF (Key Stretching Function)
 //! that's not supported directly by this crate. The maintainer of the said KSF
-//! or of the application itself can implement the `Ksf` trait to use it with
-//! `opaque-ke`. `scrypt` is used for this example, but any KSF can be used.
+//! or of the application itself can implement the [`Ksf`](ksf::Ksf) trait to use it with
+//! `opaque-ke`. [`scrypt`] is used for this example, but any KSF can be used.
 //! ```
 //! # use generic_array::GenericArray;
 //! #[derive(Default)]
