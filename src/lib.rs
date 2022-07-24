@@ -990,8 +990,9 @@
 //!
 //! An application might want to use a custom KSF (Key Stretching Function)
 //! that's not supported directly by this crate. The maintainer of the said KSF
-//! or of the application itself can implement the [`Ksf`](ksf::Ksf) trait to use it with
-//! `opaque-ke`. [`scrypt`] is used for this example, but any KSF can be used.
+//! or of the application itself can implement the [`Ksf`](ksf::Ksf) trait to
+//! use it with `opaque-ke`. `scrypt` is used for this example, but any KSF
+//! can be used.
 //! ```
 //! # use generic_array::GenericArray;
 //! #[derive(Default)]
@@ -1014,30 +1015,72 @@
 //!
 //! It is also possible to override the default derivation parameters that are
 //! used by the KSF during registration and login. This can be especially
-//! helpful if the `Ksf` trait is already implemented. ```ignore
+//! helpful if the `Ksf` trait is already implemented.
+//! ```
+//! # use opaque_ke::CipherSuite;
+//! # use opaque_ke::ClientRegistration;
+//! # use opaque_ke::ClientRegistrationFinishParameters;
+//! # use opaque_ke::ServerSetup;
+//! # use opaque_ke::errors::ProtocolError;
+//! # use rand::rngs::OsRng;
+//! # use rand::RngCore;
+//! # use std::default::Default;
+//! #[cfg(feature = "argon2")]
+//! # {
+//! # struct DefaultCipherSuite;
+//! # #[cfg(feature = "ristretto255")]
+//! # impl CipherSuite for DefaultCipherSuite {
+//! #     type OprfCs = opaque_ke::Ristretto255;
+//! #     type KeGroup = opaque_ke::Ristretto255;
+//! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDh;
+//! #     type Ksf = argon2::Argon2<'static>;
+//! # }
+//! # #[cfg(not(feature = "ristretto255"))]
+//! # impl CipherSuite for DefaultCipherSuite {
+//! #     type OprfCs = p256::NistP256;
+//! #     type KeGroup = p256::NistP256;
+//! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDh;
+//! #     type Ksf = argon2::Argon2<'static>;
+//! # }
+//! #
+//! # let password = b"password";
+//! # let mut rng = OsRng;
+//! # let server_setup = ServerSetup::<DefaultCipherSuite>::new(&mut rng);
+//! # let mut client_rng = OsRng;
+//! # let client_registration_start_result =
+//! #     ClientRegistration::<DefaultCipherSuite>::start(&mut client_rng, password)?;
+//! # use opaque_ke::ServerRegistration;
+//! # let server_registration_start_result = ServerRegistration::<DefaultCipherSuite>::start(
+//! #     &server_setup,
+//! #     client_registration_start_result.message,
+//! #     b"alice@example.com",
+//! # )?;
+//! #
 //! // Create an Argon2 instance with the specified parameters
 //! let argon2_params = argon2::Params::new(131072, 2, 4, None).unwrap();
 //! let argon2_params = argon2::Argon2::new(
-//!    argon2::Algorithm::Argon2id,
-//!    argon2::Version::V0x13,
-//!    argon2_params,
+//!     argon2::Algorithm::Argon2id,
+//!     argon2::Version::V0x13,
+//!     argon2_params,
 //! );
 //!
 //! // Override the default parameters with the custom ones
 //! let hash_params = ClientRegistrationFinishParameters {
-//!    ksf: Some(&argon2_params),
-//!    ..Default::default()
+//!     ksf: Some(&argon2_params),
+//!     ..Default::default()
 //! };
 //!
 //! let client_registration_finish_result = client_registration_start_result
-//!    .state
-//!    .finish(
-//!        &mut rng,
-//!        password,
-//!        server_registration_start_result,
-//!        hash_params,
-//!    )
-//!    .unwrap();
+//!     .state
+//!     .finish(
+//!         &mut rng,
+//!         password,
+//!         server_registration_start_result.message,
+//!         hash_params,
+//!     )
+//!     .unwrap();
+//! # }
+//! # Ok::<(), ProtocolError>(())
 //! ```
 //!
 //! # Features
