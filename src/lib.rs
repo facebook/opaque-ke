@@ -1025,7 +1025,7 @@
 //! # use rand::rngs::OsRng;
 //! # use rand::RngCore;
 //! # use std::default::Default;
-//! #[cfg(feature = "argon2")]
+//! # #[cfg(feature = "argon2")]
 //! # {
 //! # struct DefaultCipherSuite;
 //! # #[cfg(feature = "ristretto255")]
