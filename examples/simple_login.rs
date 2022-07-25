@@ -24,6 +24,7 @@
 use std::collections::HashMap;
 use std::process::exit;
 
+use argon2::Argon2;
 use generic_array::GenericArray;
 use opaque_ke::ciphersuite::CipherSuite;
 use opaque_ke::rand::rngs::OsRng;
@@ -39,38 +40,41 @@ use rustyline::Editor;
 // The ciphersuite trait allows to specify the underlying primitives that will
 // be used in the OPAQUE protocol
 #[allow(dead_code)]
-struct Default;
+struct DefaultCipherSuite;
 
 #[cfg(feature = "ristretto255")]
-impl CipherSuite for Default {
+impl CipherSuite for DefaultCipherSuite {
     type OprfCs = opaque_ke::Ristretto255;
     type KeGroup = opaque_ke::Ristretto255;
     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDh;
-    type Ksf = opaque_ke::ksf::Identity;
+
+    type Ksf = Argon2<'static>;
 }
 
 #[cfg(not(feature = "ristretto255"))]
-impl CipherSuite for Default {
+impl CipherSuite for DefaultCipherSuite {
     type OprfCs = p256::NistP256;
     type KeGroup = p256::NistP256;
     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDh;
-    type Ksf = opaque_ke::ksf::Identity;
+
+    type Ksf = Argon2<'static>;
 }
 
 // Password-based registration between a client and server
 fn account_registration(
-    server_setup: &ServerSetup<Default>,
+    server_setup: &ServerSetup<DefaultCipherSuite>,
     username: String,
     password: String,
-) -> GenericArray<u8, ServerRegistrationLen<Default>> {
+) -> GenericArray<u8, ServerRegistrationLen<DefaultCipherSuite>> {
     let mut client_rng = OsRng;
     let client_registration_start_result =
-        ClientRegistration::<Default>::start(&mut client_rng, password.as_bytes()).unwrap();
+        ClientRegistration::<DefaultCipherSuite>::start(&mut client_rng, password.as_bytes())
+            .unwrap();
     let registration_request_bytes = client_registration_start_result.message.serialize();
 
     // Client sends registration_request_bytes to server
 
-    let server_registration_start_result = ServerRegistration::<Default>::start(
+    let server_registration_start_result = ServerRegistration::<DefaultCipherSuite>::start(
         server_setup,
         RegistrationRequest::deserialize(&registration_request_bytes).unwrap(),
         username.as_bytes(),
@@ -94,26 +98,27 @@ fn account_registration(
     // Client sends message_bytes to server
 
     let password_file = ServerRegistration::finish(
-        RegistrationUpload::<Default>::deserialize(&message_bytes).unwrap(),
+        RegistrationUpload::<DefaultCipherSuite>::deserialize(&message_bytes).unwrap(),
     );
     password_file.serialize()
 }
 
 // Password-based login between a client and server
 fn account_login(
-    server_setup: &ServerSetup<Default>,
+    server_setup: &ServerSetup<DefaultCipherSuite>,
     username: String,
     password: String,
     password_file_bytes: &[u8],
 ) -> bool {
     let mut client_rng = OsRng;
     let client_login_start_result =
-        ClientLogin::<Default>::start(&mut client_rng, password.as_bytes()).unwrap();
+        ClientLogin::<DefaultCipherSuite>::start(&mut client_rng, password.as_bytes()).unwrap();
     let credential_request_bytes = client_login_start_result.message.serialize();
 
     // Client sends credential_request_bytes to server
 
-    let password_file = ServerRegistration::<Default>::deserialize(password_file_bytes).unwrap();
+    let password_file =
+        ServerRegistration::<DefaultCipherSuite>::deserialize(password_file_bytes).unwrap();
     let mut server_rng = OsRng;
     let server_login_start_result = ServerLogin::start(
         &mut server_rng,
@@ -153,11 +158,11 @@ fn account_login(
 
 fn main() {
     let mut rng = OsRng;
-    let server_setup = ServerSetup::<Default>::new(&mut rng);
+    let server_setup = ServerSetup::<DefaultCipherSuite>::new(&mut rng);
 
     let mut rl = Editor::<()>::new();
     let mut registered_users =
-        HashMap::<String, GenericArray<u8, ServerRegistrationLen<Default>>>::new();
+        HashMap::<String, GenericArray<u8, ServerRegistrationLen<DefaultCipherSuite>>>::new();
     loop {
         println!(
             "\nCurrently registered usernames: {:?}\n",

@@ -68,6 +68,7 @@ proptest = "1"
 rand = "0.8"
 regex = "1"
 rustyline = "9"
+scrypt = "0.10"
 serde_json = "1"
 
 [[bench]]
@@ -77,3 +78,7 @@ name = "opaque"
 [package.metadata.docs.rs]
 features = ["argon2", "std", "x25519-u64"]
 targets = []
+
+[[example]]
+name = "simple_login"
+required-features = ["argon2"]

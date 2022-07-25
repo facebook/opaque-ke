@@ -45,10 +45,10 @@ use rustyline::Editor;
 // The ciphersuite trait allows to specify the underlying primitives that will
 // be used in the OPAQUE protocol
 #[allow(dead_code)]
-struct Default;
+struct DefaultCipherSuite;
 
 #[cfg(feature = "ristretto255")]
-impl CipherSuite for Default {
+impl CipherSuite for DefaultCipherSuite {
     type OprfCs = opaque_ke::Ristretto255;
     type KeGroup = opaque_ke::Ristretto255;
     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDh;
@@ -56,7 +56,7 @@ impl CipherSuite for Default {
 }
 
 #[cfg(not(feature = "ristretto255"))]
-impl CipherSuite for Default {
+impl CipherSuite for DefaultCipherSuite {
     type OprfCs = p256::NistP256;
     type KeGroup = p256::NistP256;
     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDh;
@@ -65,7 +65,7 @@ impl CipherSuite for Default {
 
 struct Locker {
     contents: Vec<u8>,
-    password_file: GenericArray<u8, ServerRegistrationLen<Default>>,
+    password_file: GenericArray<u8, ServerRegistrationLen<DefaultCipherSuite>>,
 }
 
 // Given a key and plaintext, produce an AEAD ciphertext along with a nonce
@@ -96,18 +96,19 @@ fn decrypt(key: &[u8], ciphertext: &[u8]) -> Vec<u8> {
 // Password-based registration and encryption of client secret message between a
 // client and server
 fn register_locker(
-    server_setup: &ServerSetup<Default>,
+    server_setup: &ServerSetup<DefaultCipherSuite>,
     locker_id: usize,
     password: String,
     secret_message: String,
 ) -> Locker {
     let mut client_rng = OsRng;
     let client_registration_start_result =
-        ClientRegistration::<Default>::start(&mut client_rng, password.as_bytes()).unwrap();
+        ClientRegistration::<DefaultCipherSuite>::start(&mut client_rng, password.as_bytes())
+            .unwrap();
     let registration_request_bytes = client_registration_start_result.message.serialize();
 
     // Client sends registration_request_bytes to server
-    let server_registration_start_result = ServerRegistration::<Default>::start(
+    let server_registration_start_result = ServerRegistration::<DefaultCipherSuite>::start(
         server_setup,
         RegistrationRequest::deserialize(&registration_request_bytes).unwrap(),
         &locker_id.to_be_bytes(),
@@ -137,7 +138,7 @@ fn register_locker(
     // Client sends message_bytes to server
 
     let password_file = ServerRegistration::finish(
-        RegistrationUpload::<Default>::deserialize(&message_bytes).unwrap(),
+        RegistrationUpload::<DefaultCipherSuite>::deserialize(&message_bytes).unwrap(),
     );
 
     Locker {
@@ -148,19 +149,20 @@ fn register_locker(
 
 // Open the contents of a locker with a password between a client and server
 fn open_locker(
-    server_setup: &ServerSetup<Default>,
+    server_setup: &ServerSetup<DefaultCipherSuite>,
     locker_id: usize,
     password: String,
     locker: &Locker,
 ) -> Result<String, String> {
     let mut client_rng = OsRng;
     let client_login_start_result =
-        ClientLogin::<Default>::start(&mut client_rng, password.as_bytes()).unwrap();
+        ClientLogin::<DefaultCipherSuite>::start(&mut client_rng, password.as_bytes()).unwrap();
     let credential_request_bytes = client_login_start_result.message.serialize();
 
     // Client sends credential_request_bytes to server
 
-    let password_file = ServerRegistration::<Default>::deserialize(&locker.password_file).unwrap();
+    let password_file =
+        ServerRegistration::<DefaultCipherSuite>::deserialize(&locker.password_file).unwrap();
     let mut server_rng = OsRng;
     let server_login_start_result = ServerLogin::start(
         &mut server_rng,
@@ -212,7 +214,7 @@ fn open_locker(
 
 fn main() {
     let mut rng = OsRng;
-    let server_setup = ServerSetup::<Default>::new(&mut rng);
+    let server_setup = ServerSetup::<DefaultCipherSuite>::new(&mut rng);
 
     let mut rl = Editor::<()>::new();
     let mut registered_lockers: Vec<Locker> = vec![];
