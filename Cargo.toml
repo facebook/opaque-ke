@@ -57,7 +57,7 @@ getrandom = { version = "0.2", features = ["js"], optional = true }
 [dev-dependencies]
 bincode = "1"
 chacha20poly1305 = "=0.10.0-pre"
-criterion = "0.3"
+criterion = "0.4"
 hex = "0.4"
 json = "0.12"
 p256 = { version = "0.11", default-features = false, features = [
