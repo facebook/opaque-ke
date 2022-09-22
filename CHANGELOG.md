@@ -1,16 +1,9 @@
 # Changelog
 
-## 2.0.0-pre.3 (July 11, 2022)
+## 2.0.0 (September 21, 2022)
 * Synced implementation with draft-irtf-cfrg-opaque-10
 * Changed argon2 salt length to recommended value (16 bytes)
 * Fixed issue from 2.0.0-pre.2 not pinning voprf dependency correctly
-
-## 2.0.0-pre.2 (April 22, 2022)
-* Synced implementation with draft-irtf-cfrg-opaque-08
-
-## 2.0.0-pre.1 (March 15, 2022)
-
-* Synced implementation with draft-irtf-cfrg-opaque-07
 * Split out VOPRF implementation into its own crate
 * Added support for running the API without performing
   allocations
