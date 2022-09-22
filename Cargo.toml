@@ -9,7 +9,7 @@ name = "opaque-ke"
 readme = "README.md"
 repository = "https://github.com/novifinancial/opaque-ke"
 rust-version = "1.57"
-version = "2.0.0-pre.3"
+version = "2.0.0"
 
 [features]
 default = ["ristretto255-u64", "ristretto255-voprf", "serde"]
