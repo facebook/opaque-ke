@@ -111,45 +111,43 @@ static TEST_VECTOR: &str = r#"
 "#;
 
 fn decode(values: &Value, key: &str) -> Option<Vec<u8>> {
-    values[key]
-        .as_str()
-        .and_then(|s| hex::decode(&s.to_string()).ok())
+    values[key].as_str().and_then(|s| hex::decode(s).ok())
 }
 
 fn populate_test_vectors(values: &Value) -> TestVectorParameters {
     TestVectorParameters {
-        client_s_pk: decode(&values, "client_s_pk").unwrap(),
-        client_s_sk: decode(&values, "client_s_sk").unwrap(),
-        client_e_pk: decode(&values, "client_e_pk").unwrap(),
-        client_e_sk: decode(&values, "client_e_sk").unwrap(),
-        server_s_pk: decode(&values, "server_s_pk").unwrap(),
-        server_s_sk: decode(&values, "server_s_sk").unwrap(),
-        server_e_pk: decode(&values, "server_e_pk").unwrap(),
-        server_e_sk: decode(&values, "server_e_sk").unwrap(),
-        fake_sk: decode(&values, "fake_sk").unwrap(),
-        credential_identifier: decode(&values, "credential_identifier").unwrap(),
-        id_u: decode(&values, "id_u").unwrap(),
-        id_s: decode(&values, "id_s").unwrap(),
-        password: decode(&values, "password").unwrap(),
-        blinding_factor: decode(&values, "blinding_factor").unwrap(),
-        oprf_seed: decode(&values, "oprf_seed").unwrap(),
-        masking_nonce: decode(&values, "masking_nonce").unwrap(),
-        envelope_nonce: decode(&values, "envelope_nonce").unwrap(),
-        client_nonce: decode(&values, "client_nonce").unwrap(),
-        server_nonce: decode(&values, "server_nonce").unwrap(),
-        context: decode(&values, "context").unwrap(),
-        registration_request: decode(&values, "registration_request").unwrap(),
-        registration_response: decode(&values, "registration_response").unwrap(),
-        registration_upload: decode(&values, "registration_upload").unwrap(),
-        credential_request: decode(&values, "credential_request").unwrap(),
-        credential_response: decode(&values, "credential_response").unwrap(),
-        credential_finalization: decode(&values, "credential_finalization").unwrap(),
-        client_registration_state: decode(&values, "client_registration_state").unwrap(),
-        client_login_state: decode(&values, "client_login_state").unwrap(),
-        server_login_state: decode(&values, "server_login_state").unwrap(),
-        password_file: decode(&values, "password_file").unwrap(),
-        export_key: decode(&values, "export_key").unwrap(),
-        session_key: decode(&values, "session_key").unwrap(),
+        client_s_pk: decode(values, "client_s_pk").unwrap(),
+        client_s_sk: decode(values, "client_s_sk").unwrap(),
+        client_e_pk: decode(values, "client_e_pk").unwrap(),
+        client_e_sk: decode(values, "client_e_sk").unwrap(),
+        server_s_pk: decode(values, "server_s_pk").unwrap(),
+        server_s_sk: decode(values, "server_s_sk").unwrap(),
+        server_e_pk: decode(values, "server_e_pk").unwrap(),
+        server_e_sk: decode(values, "server_e_sk").unwrap(),
+        fake_sk: decode(values, "fake_sk").unwrap(),
+        credential_identifier: decode(values, "credential_identifier").unwrap(),
+        id_u: decode(values, "id_u").unwrap(),
+        id_s: decode(values, "id_s").unwrap(),
+        password: decode(values, "password").unwrap(),
+        blinding_factor: decode(values, "blinding_factor").unwrap(),
+        oprf_seed: decode(values, "oprf_seed").unwrap(),
+        masking_nonce: decode(values, "masking_nonce").unwrap(),
+        envelope_nonce: decode(values, "envelope_nonce").unwrap(),
+        client_nonce: decode(values, "client_nonce").unwrap(),
+        server_nonce: decode(values, "server_nonce").unwrap(),
+        context: decode(values, "context").unwrap(),
+        registration_request: decode(values, "registration_request").unwrap(),
+        registration_response: decode(values, "registration_response").unwrap(),
+        registration_upload: decode(values, "registration_upload").unwrap(),
+        credential_request: decode(values, "credential_request").unwrap(),
+        credential_response: decode(values, "credential_response").unwrap(),
+        credential_finalization: decode(values, "credential_finalization").unwrap(),
+        client_registration_state: decode(values, "client_registration_state").unwrap(),
+        client_login_state: decode(values, "client_login_state").unwrap(),
+        server_login_state: decode(values, "server_login_state").unwrap(),
+        password_file: decode(values, "password_file").unwrap(),
+        export_key: decode(values, "export_key").unwrap(),
+        session_key: decode(values, "session_key").unwrap(),
     }
 }
 
@@ -550,7 +548,7 @@ fn test_registration_upload() -> Result<(), ProtocolError> {
     );
     assert_eq!(
         hex::encode(parameters.export_key),
-        hex::encode(result.export_key.to_vec())
+        hex::encode(result.export_key)
     );
 
     Ok(())
@@ -665,7 +663,7 @@ fn test_credential_finalization() -> Result<(), ProtocolError> {
 
     assert_eq!(
         hex::encode(&parameters.server_s_pk),
-        hex::encode(&client_login_finish_result.server_s_pk.to_arr().to_vec())
+        hex::encode(client_login_finish_result.server_s_pk.to_arr())
     );
     assert_eq!(
         hex::encode(&parameters.session_key),
@@ -758,10 +756,12 @@ fn test_complete_flow(
             hex::encode(client_login_finish_result.export_key)
         );
     } else {
-        assert!(match client_login_result {
-            Err(ProtocolError::VerificationError(PakeError::InvalidLoginError)) => true,
-            _ => false,
-        });
+        assert!(matches!(
+            client_login_result,
+            Err(ProtocolError::VerificationError(
+                PakeError::InvalidLoginError
+            ))
+        ));
     }
 
     Ok(())

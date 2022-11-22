@@ -86,13 +86,13 @@ impl<D: Hash, G: Group> KeyExchange<D, G> for TripleDH {
 
         let mut transcript_hasher = D::new()
             .chain(STR_RFC)
-            .chain(&serialize(&context, 2))
-            .chain(&id_u)
+            .chain(serialize(&context, 2))
+            .chain(id_u)
             .chain(&serialized_credential_request[..])
-            .chain(&id_s)
+            .chain(id_s)
             .chain(&l2_bytes[..])
             .chain(&server_nonce[..])
-            .chain(&server_e_kp.public().to_arr());
+            .chain(server_e_kp.public().to_arr());
 
         let (session_key, km2, km3) = derive_3dh_keys::<D, G>(
             TripleDHComponents {
@@ -141,12 +141,12 @@ impl<D: Hash, G: Group> KeyExchange<D, G> for TripleDH {
     ) -> Result<(Vec<u8>, Self::KE3Message), ProtocolError> {
         let mut transcript_hasher = D::new()
             .chain(STR_RFC)
-            .chain(&serialize(&context, 2))
-            .chain(&id_u)
-            .chain(&serialized_credential_request)
-            .chain(&id_s)
+            .chain(serialize(&context, 2))
+            .chain(id_u)
+            .chain(serialized_credential_request)
+            .chain(id_s)
             .chain(&l2_component[..])
-            .chain(&ke2_message.to_bytes_without_info_or_mac());
+            .chain(ke2_message.to_bytes_without_info_or_mac());
 
         let (session_key, km2, km3) = derive_3dh_keys::<D, G>(
             TripleDHComponents {
