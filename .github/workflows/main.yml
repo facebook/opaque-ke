@@ -17,7 +17,7 @@ jobs:
           - u32_backend
         toolchain:
           - nightly
-          - 1.41.0
+          - 1.51.0
     name: test
     steps:
       - name: Checkout sources
@@ -94,7 +94,7 @@ jobs:
       matrix:
         toolchain:
           - nightly
-          - 1.41.0
+          - 1.51.0
     name: test simple_login command-line example
     steps:
       - name: install expect
@@ -118,7 +118,7 @@ jobs:
       matrix:
         toolchain:
           - nightly
-          - 1.41.0
+          - 1.51.0
     name: test digital_locker command-line example
     steps:
       - name: install expect
