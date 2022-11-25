@@ -45,19 +45,17 @@ static OPRF_RISTRETTO255_SHA512: &[&str] = &[
 ];
 
 fn decode(values: &Value, key: &str) -> Option<Vec<u8>> {
-    values[key]
-        .as_str()
-        .and_then(|s| hex::decode(&s.to_string()).ok())
+    values[key].as_str().and_then(|s| hex::decode(s).ok())
 }
 
 fn populate_test_vectors(values: &Value) -> VOPRFTestVectorParameters {
     VOPRFTestVectorParameters {
-        sksm: decode(&values, "sksm").unwrap(),
-        input: decode(&values, "input").unwrap(),
-        blind: decode(&values, "blind").unwrap(),
-        blinded_element: decode(&values, "blinded_element").unwrap(),
-        evaluation_element: decode(&values, "evaluation_element").unwrap(),
-        output: decode(&values, "output").unwrap(),
+        sksm: decode(values, "sksm").unwrap(),
+        input: decode(values, "input").unwrap(),
+        blind: decode(values, "blind").unwrap(),
+        blinded_element: decode(values, "blinded_element").unwrap(),
+        evaluation_element: decode(values, "evaluation_element").unwrap(),
+        output: decode(values, "output").unwrap(),
     }
 }
 

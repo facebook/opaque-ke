@@ -104,12 +104,12 @@ fn registration_request_roundtrip() {
     let identity = RistrettoPoint::identity();
     let identity_bytes = identity.to_arr().to_vec();
 
-    assert!(
-        match RegistrationRequest::<Default>::deserialize(identity_bytes.as_slice()) {
-            Err(ProtocolError::VerificationError(PakeError::IdentityGroupElementError)) => true,
-            _ => false,
-        }
-    );
+    assert!(matches!(
+        RegistrationRequest::<Default>::deserialize(identity_bytes.as_slice()),
+        Err(ProtocolError::VerificationError(
+            PakeError::IdentityGroupElementError
+        ))
+    ));
 }
 
 #[test]
@@ -122,7 +122,7 @@ fn registration_response_roundtrip() {
 
     let mut input = Vec::new();
     input.extend_from_slice(beta_bytes.as_slice());
-    input.extend_from_slice(&pubkey_bytes.as_slice());
+    input.extend_from_slice(pubkey_bytes.as_slice());
 
     let r2 = RegistrationResponse::<Default>::deserialize(input.as_slice()).unwrap();
     let r2_bytes = r2.serialize();
@@ -132,12 +132,14 @@ fn registration_response_roundtrip() {
     let identity = RistrettoPoint::identity();
     let identity_bytes = identity.to_arr().to_vec();
 
-    assert!(match RegistrationResponse::<Default>::deserialize(
-        &[identity_bytes, pubkey_bytes.to_vec()].concat()
-    ) {
-        Err(ProtocolError::VerificationError(PakeError::IdentityGroupElementError)) => true,
-        _ => false,
-    });
+    assert!(matches!(
+        RegistrationResponse::<Default>::deserialize(
+            &[identity_bytes, pubkey_bytes.to_vec()].concat()
+        ),
+        Err(ProtocolError::VerificationError(
+            PakeError::IdentityGroupElementError
+        ))
+    ));
 }
 
 #[test]
@@ -179,7 +181,7 @@ fn credential_request_roundtrip() {
     let mut client_nonce = vec![0u8; NonceLen::to_usize()];
     rng.fill_bytes(&mut client_nonce);
 
-    let ke1m: Vec<u8> = [&client_nonce[..], &client_e_kp.public()].concat();
+    let ke1m: Vec<u8> = [&client_nonce[..], client_e_kp.public()].concat();
 
     let mut input = Vec::new();
     input.extend_from_slice(&alpha_bytes);
@@ -193,12 +195,12 @@ fn credential_request_roundtrip() {
     let identity = RistrettoPoint::identity();
     let identity_bytes = identity.to_arr().to_vec();
 
-    assert!(match CredentialRequest::<Default>::deserialize(
-        &[identity_bytes, ke1m.to_vec()].concat()
-    ) {
-        Err(ProtocolError::VerificationError(PakeError::IdentityGroupElementError)) => true,
-        _ => false,
-    });
+    assert!(matches!(
+        CredentialRequest::<Default>::deserialize(&[identity_bytes, ke1m.to_vec()].concat()),
+        Err(ProtocolError::VerificationError(
+            PakeError::IdentityGroupElementError
+        ))
+    ));
 }
 
 #[test]
@@ -221,7 +223,7 @@ fn credential_response_roundtrip() {
     let mut server_nonce = vec![0u8; NonceLen::to_usize()];
     rng.fill_bytes(&mut server_nonce);
 
-    let ke2m: Vec<u8> = [&server_nonce[..], &server_e_kp.public(), &mac[..]].concat();
+    let ke2m: Vec<u8> = [&server_nonce[..], server_e_kp.public(), &mac[..]].concat();
 
     let mut input = Vec::new();
     input.extend_from_slice(pt_bytes.as_slice());
@@ -237,18 +239,20 @@ fn credential_response_roundtrip() {
     let identity = RistrettoPoint::identity();
     let identity_bytes = identity.to_arr().to_vec();
 
-    assert!(match CredentialResponse::<Default>::deserialize(
-        &[
-            identity_bytes,
-            masking_nonce.to_vec(),
-            masked_response,
-            ke2m.to_vec()
-        ]
-        .concat()
-    ) {
-        Err(ProtocolError::VerificationError(PakeError::IdentityGroupElementError)) => true,
-        _ => false,
-    });
+    assert!(matches!(
+        CredentialResponse::<Default>::deserialize(
+            &[
+                identity_bytes,
+                masking_nonce.to_vec(),
+                masked_response,
+                ke2m.to_vec()
+            ]
+            .concat()
+        ),
+        Err(ProtocolError::VerificationError(
+            PakeError::IdentityGroupElementError
+        ))
+    ));
 }
 
 #[test]
@@ -298,7 +302,7 @@ fn ke1_message_roundtrip() {
     let mut client_nonce = vec![0u8; NonceLen::to_usize()];
     rng.fill_bytes(&mut client_nonce);
 
-    let ke1m: Vec<u8> = [&client_nonce[..], &client_e_kp.public()].concat();
+    let ke1m: Vec<u8> = [&client_nonce[..], client_e_kp.public()].concat();
     let reg = <TripleDH as KeyExchange<sha2::Sha512, RistrettoPoint>>::KE1Message::from_bytes::<
         Default,
     >(&ke1m[..])
@@ -317,7 +321,7 @@ fn ke2_message_roundtrip() {
     let mut server_nonce = vec![0u8; NonceLen::to_usize()];
     rng.fill_bytes(&mut server_nonce);
 
-    let ke2m: Vec<u8> = [&server_nonce[..], &server_e_kp.public(), &mac[..]].concat();
+    let ke2m: Vec<u8> = [&server_nonce[..], server_e_kp.public(), &mac[..]].concat();
 
     let reg = <TripleDH as KeyExchange<sha2::Sha512, RistrettoPoint>>::KE2Message::from_bytes::<
         Default,
@@ -347,7 +351,7 @@ proptest! {
 
 #[test]
 fn test_i2osp_os2ip(ref bytes in vec(prop::num::u8::ANY, 0..std::mem::size_of::<usize>())) {
-    assert_eq!(&i2osp(os2ip(&bytes)?, bytes.len()), bytes);
+    assert_eq!(&i2osp(os2ip(bytes)?, bytes.len()), bytes);
 }
 
 #[test]

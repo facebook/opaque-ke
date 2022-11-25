@@ -8,7 +8,7 @@ use crate::errors::PakeError;
 // Corresponds to the I2OSP() function from RFC8017
 pub(crate) fn i2osp(input: usize, length: usize) -> Vec<u8> {
     if length <= std::mem::size_of::<usize>() {
-        return (&input.to_be_bytes()[std::mem::size_of::<usize>() - length..]).to_vec();
+        return input.to_be_bytes()[std::mem::size_of::<usize>() - length..].to_vec();
     }
 
     let mut output = vec![0u8; length];

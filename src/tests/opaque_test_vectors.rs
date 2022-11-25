@@ -23,7 +23,7 @@ impl CipherSuite for Ristretto255Sha512NoSlowHash {
     type SlowHash = NoOpHash;
 }
 
-#[derive(PartialEq)]
+#[derive(PartialEq, Eq)]
 pub enum EnvelopeMode {
     Base,
     CustomIdentifier,
@@ -421,11 +421,11 @@ fn rfc_to_json(input: &str) -> String {
             json.push(format!("    \"{}\": \"{}", key, val));
         } else {
             let s = line.trim().to_string();
-            if s.contains("~") || s.contains("#") {
+            if s.contains('~') || s.contains('#') {
                 // Ignore comment lines
                 continue;
             }
-            if s.len() > 0 {
+            if !s.is_empty() {
                 json.push(s);
             }
         }
@@ -435,9 +435,7 @@ fn rfc_to_json(input: &str) -> String {
 }
 
 fn decode(values: &Value, key: &str) -> Option<Vec<u8>> {
-    values[key]
-        .as_str()
-        .and_then(|s| hex::decode(&s.to_string()).ok())
+    values[key].as_str().and_then(|s| hex::decode(s).ok())
 }
 
 fn populate_test_vectors(values: &Value) -> TestVectorParameters {
@@ -573,7 +571,7 @@ fn test_registration_upload() -> Result<(), ProtocolError> {
         );
         assert_eq!(
             hex::encode(parameters.export_key),
-            hex::encode(result.export_key.to_vec())
+            hex::encode(result.export_key)
         );
     }
 
