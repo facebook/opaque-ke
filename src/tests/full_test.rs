@@ -276,7 +276,7 @@ static TEST_VECTOR_X25519_P256: &str = r#"
 "#;
 
 fn decode(values: &Value, key: &str) -> Option<Vec<u8>> {
-    values[key].as_str().and_then(|s| hex::decode(&s).ok())
+    values[key].as_str().and_then(|s| hex::decode(s).ok())
 }
 
 fn populate_test_vectors(values: &Value) -> TestVectorParameters {
