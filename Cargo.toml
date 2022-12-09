@@ -58,6 +58,10 @@ p256 = { version = "0.13", default-features = false, features = [
   "hash2curve",
   "voprf",
 ] }
+p384 = { version = "0.13", default-features = false, features = [
+  "hash2curve",
+  "voprf",
+] }
 proptest = "1"
 rand = "0.8"
 regex = "1"

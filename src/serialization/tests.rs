@@ -54,6 +54,15 @@ impl CipherSuite for P256 {
     type Ksf = crate::ksf::Identity;
 }
 
+struct P384;
+
+impl CipherSuite for P384 {
+    type OprfCs = ::p384::NistP384;
+    type KeGroup = ::p384::NistP384;
+    type KeyExchange = TripleDh;
+    type Ksf = crate::ksf::Identity;
+}
+
 fn random_point<CS: CipherSuite>() -> <CS::KeGroup as KeGroup>::Pk
 where
     <OprfHash<CS> as OutputSizeUser>::OutputSize:
@@ -104,6 +113,7 @@ fn client_registration_roundtrip() -> Result<(), ProtocolError> {
     #[cfg(feature = "ristretto255")]
     inner::<Ristretto255>()?;
     inner::<P256>()?;
+    inner::<P384>()?;
 
     Ok(())
 }
@@ -157,6 +167,7 @@ fn server_registration_roundtrip() -> Result<(), ProtocolError> {
     #[cfg(feature = "ristretto255")]
     inner::<Ristretto255>()?;
     inner::<P256>()?;
+    inner::<P384>()?;
 
     Ok(())
 }
@@ -199,6 +210,7 @@ fn registration_request_roundtrip() -> Result<(), ProtocolError> {
     #[cfg(feature = "ristretto255")]
     inner::<Ristretto255>()?;
     inner::<P256>()?;
+    inner::<P384>()?;
 
     Ok(())
 }
@@ -250,6 +262,7 @@ fn registration_response_roundtrip() -> Result<(), ProtocolError> {
     #[cfg(feature = "ristretto255")]
     inner::<Ristretto255>()?;
     inner::<P256>()?;
+    inner::<P384>()?;
 
     Ok(())
 }
@@ -311,6 +324,7 @@ fn registration_upload_roundtrip() -> Result<(), ProtocolError> {
     #[cfg(feature = "ristretto255")]
     inner::<Ristretto255>()?;
     inner::<P256>()?;
+    inner::<P384>()?;
 
     Ok(())
 }
@@ -368,6 +382,7 @@ fn credential_request_roundtrip() -> Result<(), ProtocolError> {
     #[cfg(feature = "ristretto255")]
     inner::<Ristretto255>()?;
     inner::<P256>()?;
+    inner::<P384>()?;
 
     Ok(())
 }
@@ -456,6 +471,7 @@ fn credential_response_roundtrip() -> Result<(), ProtocolError> {
     #[cfg(feature = "ristretto255")]
     inner::<Ristretto255>()?;
     inner::<P256>()?;
+    inner::<P384>()?;
 
     Ok(())
 }
@@ -487,6 +503,7 @@ fn credential_finalization_roundtrip() -> Result<(), ProtocolError> {
     #[cfg(feature = "ristretto255")]
     inner::<Ristretto255>()?;
     inner::<P256>()?;
+    inner::<P384>()?;
 
     Ok(())
 }
@@ -554,6 +571,7 @@ fn client_login_roundtrip() -> Result<(), ProtocolError> {
     #[cfg(feature = "ristretto255")]
     inner::<Ristretto255>()?;
     inner::<P256>()?;
+    inner::<P384>()?;
 
     Ok(())
 }
@@ -593,6 +611,7 @@ fn ke1_message_roundtrip() -> Result<(), ProtocolError> {
     #[cfg(feature = "ristretto255")]
     inner::<Ristretto255>()?;
     inner::<P256>()?;
+    inner::<P384>()?;
 
     Ok(())
 }
@@ -636,6 +655,7 @@ fn ke2_message_roundtrip() -> Result<(), ProtocolError> {
     #[cfg(feature = "ristretto255")]
     inner::<Ristretto255>()?;
     inner::<P256>()?;
+    inner::<P384>()?;
 
     Ok(())
 }
@@ -670,6 +690,7 @@ fn ke3_message_roundtrip() -> Result<(), ProtocolError> {
     #[cfg(feature = "ristretto255")]
     inner::<Ristretto255>()?;
     inner::<P256>()?;
+    inner::<P384>()?;
 
     Ok(())
 }
@@ -760,3 +781,4 @@ macro_rules! test {
 #[cfg(feature = "ristretto255")]
 test!(ristretto255, Ristretto255);
 test!(p256, P256);
+test!(p384, P384);
