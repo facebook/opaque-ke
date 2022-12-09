@@ -453,7 +453,7 @@ where
             oprf_key_from_seed::<CS::OprfCs>(&server_setup.oprf_seed, credential_identifier)?;
 
         let server = voprf::OprfServer::new_with_key(&oprf_key)?;
-        let evaluation_element = server.evaluate(&message.blinded_element);
+        let evaluation_element = server.blind_evaluate(&message.blinded_element);
 
         Ok(ServerRegistrationStartResult {
             message: RegistrationResponse {
@@ -760,7 +760,7 @@ where
                 .map_err(ProtocolError::into_custom)?;
         let server = voprf::OprfServer::new_with_key(&oprf_key)
             .map_err(|e| ProtocolError::into_custom(e.into()))?;
-        let evaluation_element = server.evaluate(&credential_request.blinded_element);
+        let evaluation_element = server.blind_evaluate(&credential_request.blinded_element);
 
         let beta = OprfGroup::<CS>::serialize_elem(evaluation_element.value());
         let credential_response_component =

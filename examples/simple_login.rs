@@ -160,7 +160,7 @@ fn main() {
     let mut rng = OsRng;
     let server_setup = ServerSetup::<DefaultCipherSuite>::new(&mut rng);
 
-    let mut rl = Editor::<()>::new();
+    let mut rl = Editor::<()>::new().unwrap();
     let mut registered_users =
         HashMap::<String, GenericArray<u8, ServerRegistrationLen<DefaultCipherSuite>>>::new();
     loop {
