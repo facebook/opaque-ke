@@ -50,7 +50,7 @@ impl RngCore for CycleRng {
     #[inline]
     fn fill_bytes(&mut self, dest: &mut [u8]) {
         let len = min(self.v.len(), dest.len());
-        (&mut dest[..len]).copy_from_slice(&self.v[..len]);
+        dest[..len].copy_from_slice(&self.v[..len]);
         rotate_left(&mut self.v, len);
     }
 

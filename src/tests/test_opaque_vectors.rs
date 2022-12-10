@@ -92,7 +92,7 @@ macro_rules! parse_default {
 }
 
 fn decode(values: &JsonValue, key: &str) -> Option<Vec<u8>> {
-    values[key].as_str().and_then(|s| hex::decode(&s).ok())
+    values[key].as_str().and_then(|s| hex::decode(s).ok())
 }
 
 fn populate_test_vectors<CS: CipherSuite>(values: &JsonValue) -> OpaqueTestVectorParameters
