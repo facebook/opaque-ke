@@ -34,7 +34,7 @@ argon2 = { version = "0.4", default-features = false, features = [
   "alloc",
 ], optional = true }
 curve25519-dalek = { version = "=4.0.0-pre.1", default-features = false, optional = true }
-derive-where = { version = "=1.0.0-rc.3", features = ["zeroize-on-drop"] }
+derive-where = { version = "=1.0.0", features = ["zeroize-on-drop"] }
 digest = "0.10"
 displaydoc = { version = "0.2", default-features = false }
 elliptic-curve = { version = "0.12", features = ["hash2curve", "sec1"] }
