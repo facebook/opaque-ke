@@ -30,7 +30,7 @@ jobs:
     name: test
     steps:
       - name: Checkout sources
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
 
       - name: Install ${{ matrix.toolchain }} toolchain
         uses: actions-rs/toolchain@v1
@@ -69,7 +69,7 @@ jobs:
           - x25519-u64
           - x25519-u32
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
       - uses: hecrj/setup-rust-action@v1
       - run: cargo install cross
       # Note: just use `cross` as you would `cargo`, but always
@@ -90,7 +90,7 @@ jobs:
       - name: install expect
         run: sudo apt-get install expect
       - name: Checkout sources
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
       - name: install rust
         uses: actions-rs/toolchain@v1
         with:
@@ -113,7 +113,7 @@ jobs:
       - name: install expect
         run: sudo apt-get install expect
       - name: Checkout sources
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
       - name: install rust
         uses: actions-rs/toolchain@v1
         with:
@@ -146,7 +146,7 @@ jobs:
           - argon2
           - serde
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
       - uses: hecrj/setup-rust-action@v1
       - run: rustup target add ${{ matrix.target }}
       - run: cargo build --verbose --target=${{ matrix.target }} --no-default-features --features ${{ matrix.frontend_feature }} --features ${{ matrix.backend_feature }}
@@ -167,7 +167,7 @@ jobs:
           - --features x25519-u32
     steps:
       - name: Checkout sources
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
 
       - name: Install stable toolchain
         uses: actions-rs/toolchain@v1
@@ -187,7 +187,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout sources
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
 
       - name: Install stable toolchain
         uses: actions-rs/toolchain@v1
@@ -216,7 +216,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout sources
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
 
       - name: Install nightly toolchain
         uses: actions-rs/toolchain@v1
@@ -251,7 +251,7 @@ jobs:
         run: cargo install taplo-cli --locked 
 
       - name: Checkout sources
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
 
       - name: Run Taplo
         run: taplo fmt --check
@@ -260,5 +260,5 @@ jobs:
     name: cargo-deny check
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v1
+      - uses: actions/checkout@v3
       - uses: EmbarkStudios/cargo-deny-action@v1
