@@ -87,7 +87,7 @@ impl<T: Debug> Debug for InternalError<T> {
 impl<T: Error> Error for InternalError<T> {}
 
 impl InternalError {
-    /// Convert `InternalError<Infallible>` into `InternalError<T>
+    /// Convert `InternalError<Infallible>` into `InternalError<T>`
     pub fn into_custom<T>(self) -> InternalError<T> {
         match self {
             Self::Custom(_) => unreachable!(),
@@ -184,7 +184,7 @@ impl<T> From<::core::convert::Infallible> for ProtocolError<T> {
 }
 
 impl ProtocolError {
-    /// Convert `ProtocolError<Infallible>` into `ProtocolError<T>
+    /// Convert `ProtocolError<Infallible>` into `ProtocolError<T>`
     pub fn into_custom<T>(self) -> ProtocolError<T> {
         match self {
             Self::LibraryError(internal_error) => {
