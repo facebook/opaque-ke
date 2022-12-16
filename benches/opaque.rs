@@ -12,14 +12,8 @@ use criterion::Criterion;
 use opaque_ke::*;
 use rand::rngs::OsRng;
 
-#[cfg(feature = "ristretto255-u64")]
-static SUFFIX: &str = "ristretto255-u64";
-#[cfg(feature = "ristretto255-u32")]
-static SUFFIX: &str = "ristretto255-u32";
-#[cfg(feature = "ristretto255-fiat-u64")]
-static SUFFIX: &str = "ristretto255-fiat-u64";
-#[cfg(feature = "ristretto255-fiat-u32")]
-static SUFFIX: &str = "ristretto255-fiat-u32";
+#[cfg(feature = "ristretto255")]
+static SUFFIX: &str = "ristretto255";
 #[cfg(all(not(feature = "ristretto255")))]
 static SUFFIX: &str = "p256";
 

@@ -66,7 +66,7 @@ impl KeGroup for Ristretto255 {
                 }
             };
 
-            if scalar != Scalar::zero() {
+            if scalar != Scalar::ZERO {
                 break scalar;
             }
         }
@@ -84,7 +84,7 @@ impl KeGroup for Ristretto255 {
     }
 
     fn is_zero_scalar(scalar: Self::Sk) -> subtle::Choice {
-        scalar.ct_eq(&Scalar::zero())
+        scalar.ct_eq(&Scalar::ZERO)
     }
 
     fn public_key(sk: Self::Sk) -> Self::Pk {
@@ -103,8 +103,8 @@ impl KeGroup for Ristretto255 {
         bytes
             .try_into()
             .ok()
-            .and_then(Scalar::from_canonical_bytes)
-            .filter(|scalar| scalar != &Scalar::zero())
+            .and_then(|bytes| Scalar::from_canonical_bytes(bytes).into())
+            .filter(|scalar| scalar != &Scalar::ZERO)
             .ok_or(InternalError::PointError)
     }
 }

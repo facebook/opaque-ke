@@ -122,7 +122,7 @@ static STR_PASSWORD: &str = "password";
 static STR_CREDENTIAL_IDENTIFIER: &str = "credential_identifier";
 
 // To regenerate these test vectors, run:
-// cargo test --features curve25519-u64 -- --nocapture generate_test_vectors
+// cargo test --features curve25519 -- --nocapture generate_test_vectors
 #[cfg(feature = "ristretto255")]
 static TEST_VECTOR_RISTRETTO255: &str = r#"
 {

@@ -1097,23 +1097,12 @@
 //!
 //! - The `serde` feature, enabled by default, provides convenience functions for serializing and deserializing with [serde](https://serde.rs/).
 //!
-//! - The backend features are re-exported from [curve25519-dalek](https://doc.dalek.rs/curve25519_dalek/index.html#backends-and-features)
-//!   and allow for selecting the corresponding backend for the curve arithmetic
-//!   used. The `ristretto255-u64` feature is included as the default. Other
-//!   features are mapped as `ristretto255-u32`, `ristretto255-fiat-u64` and
-//!   `ristretto255-fiat-u32`. Any `ristretto255-*` backend feature will enable
-//!   the `ristretto255` feature, which can be used too, but keep in mind that
-//!   `curve25519-dalek` will fail to compile without a selected backend. This
-//!   enables the use of [`Ristretto255`] as a `KeGroup` and `OprfCs`.
+//! - The `ristretto255` feature enables using [`Ristretto255`] as a `KeGroup`
+//!   and `OprfCs`. To select a specific backend see the [curve25519-dalek]
+//!   documentation.
 //!
-//! - The `curve25519` feature is similar to the `ristretto255` feature and
-//!   requires to select a backend like `curve25519-u64`, other backends are the
-//!   same as in `ristretto255-*`. This enables [`Curve25519`] as a `KeGroup`.
-//!
-//! - The `ristretto255-simd` feature is re-exported from [curve25519-dalek](https://doc.dalek.rs/curve25519_dalek/index.html#backends-and-features)
-//!   and enables parallel formulas, using either AVX2 or AVX512-IFMA. This will
-//!   automatically enable the `ristretto255-u64` feature and requires Rust
-//!   nightly.
+//! - The `curve25519` feature enables [`Curve25519`] as a `KeGroup`. To select
+//!   a specific backend see the [curve25519-dalek] documentation.
 //!
 //! - The `p256` feature enables the use of [`p256::NistP256`] as a `KeGroup`
 //!   and a `OprfCs` for `CipherSuite`.
@@ -1121,6 +1110,8 @@
 //! - The `bench` feature is used only for running performance benchmarks for
 //!   this implementation.
 //!
+//! [curve25519-dalek]:
+//!     (https://docs.rs/curve25519-dalek/4.0.0-pre.5/curve25519_dalek/index.html#backends)
 //! [`p256::NistP256`]: https://docs.rs/p256/latest/p256/struct.NistP256.html
 
 #![cfg_attr(not(test), deny(unsafe_code))]

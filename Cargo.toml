@@ -13,18 +13,8 @@ version = "2.0.0"
 
 [features]
 curve25519 = ["curve25519-dalek"]
-curve25519-fiat-u32 = ["curve25519-dalek/fiat_u32_backend", "curve25519"]
-curve25519-fiat-u64 = ["curve25519-dalek/fiat_u64_backend", "curve25519"]
-curve25519-u32 = ["curve25519-dalek/u32_backend", "curve25519"]
-curve25519-u64 = ["curve25519-dalek/u64_backend", "curve25519"]
-curve255195519-simd = ["curve25519-dalek/simd_backend", "curve25519"]
-default = ["ristretto255-u64", "ristretto255-voprf", "serde"]
+default = ["ristretto255-voprf", "serde"]
 ristretto255 = ["curve25519-dalek", "voprf/ristretto255"]
-ristretto255-fiat-u32 = ["curve25519-dalek/fiat_u32_backend", "ristretto255"]
-ristretto255-fiat-u64 = ["curve25519-dalek/fiat_u64_backend", "ristretto255"]
-ristretto255-simd = ["curve25519-dalek/simd_backend", "ristretto255"]
-ristretto255-u32 = ["curve25519-dalek/u32_backend", "ristretto255"]
-ristretto255-u64 = ["curve25519-dalek/u64_backend", "ristretto255"]
 ristretto255-voprf = ["ristretto255", "voprf/ristretto255-ciphersuite"]
 serde = ["serde_", "generic-array/serde", "voprf/serde"]
 std = ["getrandom"]
@@ -33,7 +23,9 @@ std = ["getrandom"]
 argon2 = { version = "0.4", default-features = false, features = [
   "alloc",
 ], optional = true }
-curve25519-dalek = { version = "=4.0.0-pre.1", default-features = false, optional = true }
+curve25519-dalek = { version = "=4.0.0-pre.5", default-features = false, features = [
+  "rand_core",
+], optional = true }
 derive-where = { version = "1", features = ["zeroize-on-drop"] }
 digest = "0.10"
 displaydoc = { version = "0.2", default-features = false }
@@ -74,9 +66,12 @@ harness = false
 name = "opaque"
 
 [package.metadata.docs.rs]
-features = ["argon2", "std", "curve25519-u64"]
+features = ["argon2", "std", "curve25519"]
 targets = []
 
 [[example]]
 name = "simple_login"
 required-features = ["argon2"]
+
+[patch.crates-io]
+voprf = { git = "https://github.com/novifinancial/voprf" }
