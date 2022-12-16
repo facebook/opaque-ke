@@ -66,7 +66,8 @@ harness = false
 name = "opaque"
 
 [package.metadata.docs.rs]
-features = ["argon2", "std", "curve25519"]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
 targets = []
 
 [[example]]
