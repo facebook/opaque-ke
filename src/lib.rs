@@ -1106,9 +1106,9 @@
 //!   `curve25519-dalek` will fail to compile without a selected backend. This
 //!   enables the use of [`Ristretto255`] as a `KeGroup` and `OprfCs`.
 //!
-//! - The `x25519` feature is similar to the `ristretto255` feature and requires
-//!   to select a backend like `x25519-u64`, other backends are the same as in
-//!   `ristretto255-*`. This enables [`X25519`] as a `KeGroup`.
+//! - The `curve25519` feature is similar to the `ristretto255` feature and
+//!   requires to select a backend like `curve25519-u64`, other backends are the
+//!   same as in `ristretto255-*`. This enables [`Curve25519`] as a `KeGroup`.
 //!
 //! - The `ristretto255-simd` feature is re-exported from [curve25519-dalek](https://doc.dalek.rs/curve25519_dalek/index.html#backends-and-features)
 //!   and enables parallel formulas, using either AVX2 or AVX512-IFMA. This will
@@ -1157,10 +1157,10 @@ mod tests;
 pub use ciphersuite::CipherSuite;
 pub use rand;
 
+#[cfg(feature = "curve25519")]
+pub use crate::key_exchange::group::curve25519::Curve25519;
 #[cfg(feature = "ristretto255")]
 pub use crate::key_exchange::group::ristretto255::Ristretto255;
-#[cfg(feature = "x25519")]
-pub use crate::key_exchange::group::x25519::X25519;
 pub use crate::messages::{
     CredentialFinalization, CredentialFinalizationLen, CredentialRequest, CredentialRequestLen,
     CredentialResponse, CredentialResponseLen, RegistrationRequest, RegistrationRequestLen,

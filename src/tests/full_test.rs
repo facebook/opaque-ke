@@ -61,24 +61,24 @@ impl CipherSuite for P256 {
     type Ksf = Identity;
 }
 
-#[cfg(all(feature = "x25519", feature = "ristretto255"))]
-struct X25519Ristretto255;
+#[cfg(all(feature = "curve25519", feature = "ristretto255"))]
+struct Curve25519Ristretto255;
 
-#[cfg(all(feature = "x25519", feature = "ristretto255"))]
-impl CipherSuite for X25519Ristretto255 {
+#[cfg(all(feature = "curve25519", feature = "ristretto255"))]
+impl CipherSuite for Curve25519Ristretto255 {
     type OprfCs = crate::Ristretto255;
-    type KeGroup = crate::X25519;
+    type KeGroup = crate::Curve25519;
     type KeyExchange = TripleDh;
     type Ksf = Identity;
 }
 
-#[cfg(feature = "x25519")]
-struct X25519P256;
+#[cfg(feature = "curve25519")]
+struct Curve25519P256;
 
-#[cfg(feature = "x25519")]
-impl CipherSuite for X25519P256 {
+#[cfg(feature = "curve25519")]
+impl CipherSuite for Curve25519P256 {
     type OprfCs = p256::NistP256;
-    type KeGroup = crate::X25519;
+    type KeGroup = crate::Curve25519;
     type KeyExchange = TripleDh;
     type Ksf = Identity;
 }
@@ -122,7 +122,7 @@ static STR_PASSWORD: &str = "password";
 static STR_CREDENTIAL_IDENTIFIER: &str = "credential_identifier";
 
 // To regenerate these test vectors, run:
-// cargo test --features x25519-u64 -- --nocapture generate_test_vectors
+// cargo test --features curve25519-u64 -- --nocapture generate_test_vectors
 #[cfg(feature = "ristretto255")]
 static TEST_VECTOR_RISTRETTO255: &str = r#"
 {
@@ -199,8 +199,8 @@ static TEST_VECTOR_P256: &str = r#"
 }
 "#;
 
-#[cfg(all(feature = "x25519", feature = "ristretto255"))]
-static TEST_VECTOR_X25519_RISTRETTO255: &str = r#"
+#[cfg(all(feature = "curve25519", feature = "ristretto255"))]
+static TEST_VECTOR_CURVE25519_RISTRETTO255: &str = r#"
 {
     "client_s_pk": "f535ff1f431781ebdf247ba474600b35900c78bae062b78bca336f93125fae78",
     "client_s_sk": "a2965d641d8faac6d78929faaea9d849260374dfbc48fcd8508d619e91549e0f",
@@ -237,8 +237,8 @@ static TEST_VECTOR_X25519_RISTRETTO255: &str = r#"
 }
 "#;
 
-#[cfg(feature = "x25519")]
-static TEST_VECTOR_X25519_P256: &str = r#"
+#[cfg(feature = "curve25519")]
+static TEST_VECTOR_CURVE25519_P256: &str = r#"
 {
     "client_s_pk": "984c4d0154f43c559a6e9c11e53899796c14df117333d23415e6271694fad424",
     "client_s_sk": "2b3e92c34952a4c3deb75b18f9096d22256f54819f608e181720da0d48590108",
@@ -682,19 +682,19 @@ fn generate_test_vectors() -> Result<(), ProtocolError> {
     let parameters = generate_parameters::<P256>()?;
     println!("P-256: {}", stringify_test_vectors(&parameters));
 
-    #[cfg(all(feature = "x25519", feature = "ristretto255"))]
+    #[cfg(all(feature = "curve25519", feature = "ristretto255"))]
     {
-        let parameters = generate_parameters::<X25519Ristretto255>()?;
+        let parameters = generate_parameters::<Curve25519Ristretto255>()?;
         println!(
-            "X25519 Ristretto255: {}",
+            "Curve25519 Ristretto255: {}",
             stringify_test_vectors(&parameters)
         );
     }
 
-    #[cfg(feature = "x25519")]
+    #[cfg(feature = "curve25519")]
     {
-        let parameters = generate_parameters::<X25519P256>()?;
-        println!("X25519 P-256: {}", stringify_test_vectors(&parameters));
+        let parameters = generate_parameters::<Curve25519P256>()?;
+        println!("Curve25519 P-256: {}", stringify_test_vectors(&parameters));
     }
 
     Ok(())
@@ -732,10 +732,10 @@ fn test_registration_request() -> Result<(), ProtocolError> {
     #[cfg(feature = "ristretto255")]
     inner::<Ristretto255>(TEST_VECTOR_RISTRETTO255)?;
     inner::<P256>(TEST_VECTOR_P256)?;
-    #[cfg(all(feature = "x25519", feature = "ristretto255"))]
-    inner::<X25519Ristretto255>(TEST_VECTOR_X25519_RISTRETTO255)?;
-    #[cfg(feature = "x25519")]
-    inner::<X25519P256>(TEST_VECTOR_X25519_P256)?;
+    #[cfg(all(feature = "curve25519", feature = "ristretto255"))]
+    inner::<Curve25519Ristretto255>(TEST_VECTOR_CURVE25519_RISTRETTO255)?;
+    #[cfg(feature = "curve25519")]
+    inner::<Curve25519P256>(TEST_VECTOR_CURVE25519_P256)?;
 
     Ok(())
 }
@@ -777,10 +777,10 @@ fn test_serialization() -> Result<(), ProtocolError> {
     #[cfg(feature = "ristretto255")]
     inner::<Ristretto255>(TEST_VECTOR_RISTRETTO255)?;
     inner::<P256>(TEST_VECTOR_P256)?;
-    #[cfg(all(feature = "x25519", feature = "ristretto255"))]
-    inner::<X25519Ristretto255>(TEST_VECTOR_X25519_RISTRETTO255)?;
-    #[cfg(feature = "x25519")]
-    inner::<X25519P256>(TEST_VECTOR_X25519_P256)?;
+    #[cfg(all(feature = "curve25519", feature = "ristretto255"))]
+    inner::<Curve25519Ristretto255>(TEST_VECTOR_CURVE25519_RISTRETTO255)?;
+    #[cfg(feature = "curve25519")]
+    inner::<Curve25519P256>(TEST_VECTOR_CURVE25519_P256)?;
 
     Ok(())
 }
@@ -827,10 +827,10 @@ fn test_registration_response() -> Result<(), ProtocolError> {
     #[cfg(feature = "ristretto255")]
     inner::<Ristretto255>(TEST_VECTOR_RISTRETTO255)?;
     inner::<P256>(TEST_VECTOR_P256)?;
-    #[cfg(all(feature = "x25519", feature = "ristretto255"))]
-    inner::<X25519Ristretto255>(TEST_VECTOR_X25519_RISTRETTO255)?;
-    #[cfg(feature = "x25519")]
-    inner::<X25519P256>(TEST_VECTOR_X25519_P256)?;
+    #[cfg(all(feature = "curve25519", feature = "ristretto255"))]
+    inner::<Curve25519Ristretto255>(TEST_VECTOR_CURVE25519_RISTRETTO255)?;
+    #[cfg(feature = "curve25519")]
+    inner::<Curve25519P256>(TEST_VECTOR_CURVE25519_P256)?;
 
     Ok(())
 }
@@ -890,10 +890,10 @@ fn test_registration_upload() -> Result<(), ProtocolError> {
     #[cfg(feature = "ristretto255")]
     inner::<Ristretto255>(TEST_VECTOR_RISTRETTO255)?;
     inner::<P256>(TEST_VECTOR_P256)?;
-    #[cfg(all(feature = "x25519", feature = "ristretto255"))]
-    inner::<X25519Ristretto255>(TEST_VECTOR_X25519_RISTRETTO255)?;
-    #[cfg(feature = "x25519")]
-    inner::<X25519P256>(TEST_VECTOR_X25519_P256)?;
+    #[cfg(all(feature = "curve25519", feature = "ristretto255"))]
+    inner::<Curve25519Ristretto255>(TEST_VECTOR_CURVE25519_RISTRETTO255)?;
+    #[cfg(feature = "curve25519")]
+    inner::<Curve25519P256>(TEST_VECTOR_CURVE25519_P256)?;
 
     Ok(())
 }
@@ -934,10 +934,10 @@ fn test_password_file() -> Result<(), ProtocolError> {
     #[cfg(feature = "ristretto255")]
     inner::<Ristretto255>(TEST_VECTOR_RISTRETTO255)?;
     inner::<P256>(TEST_VECTOR_P256)?;
-    #[cfg(all(feature = "x25519", feature = "ristretto255"))]
-    inner::<X25519Ristretto255>(TEST_VECTOR_X25519_RISTRETTO255)?;
-    #[cfg(feature = "x25519")]
-    inner::<X25519P256>(TEST_VECTOR_X25519_P256)?;
+    #[cfg(all(feature = "curve25519", feature = "ristretto255"))]
+    inner::<Curve25519Ristretto255>(TEST_VECTOR_CURVE25519_RISTRETTO255)?;
+    #[cfg(feature = "curve25519")]
+    inner::<Curve25519P256>(TEST_VECTOR_CURVE25519_P256)?;
 
     Ok(())
 }
@@ -986,10 +986,10 @@ fn test_credential_request() -> Result<(), ProtocolError> {
     #[cfg(feature = "ristretto255")]
     inner::<Ristretto255>(TEST_VECTOR_RISTRETTO255)?;
     inner::<P256>(TEST_VECTOR_P256)?;
-    #[cfg(all(feature = "x25519", feature = "ristretto255"))]
-    inner::<X25519Ristretto255>(TEST_VECTOR_X25519_RISTRETTO255)?;
-    #[cfg(feature = "x25519")]
-    inner::<X25519P256>(TEST_VECTOR_X25519_P256)?;
+    #[cfg(all(feature = "curve25519", feature = "ristretto255"))]
+    inner::<Curve25519Ristretto255>(TEST_VECTOR_CURVE25519_RISTRETTO255)?;
+    #[cfg(feature = "curve25519")]
+    inner::<Curve25519P256>(TEST_VECTOR_CURVE25519_P256)?;
 
     Ok(())
 }
@@ -1065,10 +1065,10 @@ fn test_credential_response() -> Result<(), ProtocolError> {
     #[cfg(feature = "ristretto255")]
     inner::<Ristretto255>(TEST_VECTOR_RISTRETTO255)?;
     inner::<P256>(TEST_VECTOR_P256)?;
-    #[cfg(all(feature = "x25519", feature = "ristretto255"))]
-    inner::<X25519Ristretto255>(TEST_VECTOR_X25519_RISTRETTO255)?;
-    #[cfg(feature = "x25519")]
-    inner::<X25519P256>(TEST_VECTOR_X25519_P256)?;
+    #[cfg(all(feature = "curve25519", feature = "ristretto255"))]
+    inner::<Curve25519Ristretto255>(TEST_VECTOR_CURVE25519_RISTRETTO255)?;
+    #[cfg(feature = "curve25519")]
+    inner::<Curve25519P256>(TEST_VECTOR_CURVE25519_P256)?;
 
     Ok(())
 }
@@ -1128,10 +1128,10 @@ fn test_credential_finalization() -> Result<(), ProtocolError> {
     #[cfg(feature = "ristretto255")]
     inner::<Ristretto255>(TEST_VECTOR_RISTRETTO255)?;
     inner::<P256>(TEST_VECTOR_P256)?;
-    #[cfg(all(feature = "x25519", feature = "ristretto255"))]
-    inner::<X25519Ristretto255>(TEST_VECTOR_X25519_RISTRETTO255)?;
-    #[cfg(feature = "x25519")]
-    inner::<X25519P256>(TEST_VECTOR_X25519_P256)?;
+    #[cfg(all(feature = "curve25519", feature = "ristretto255"))]
+    inner::<Curve25519Ristretto255>(TEST_VECTOR_CURVE25519_RISTRETTO255)?;
+    #[cfg(feature = "curve25519")]
+    inner::<Curve25519P256>(TEST_VECTOR_CURVE25519_P256)?;
 
     Ok(())
 }
@@ -1165,10 +1165,10 @@ fn test_server_login_finish() -> Result<(), ProtocolError> {
     #[cfg(feature = "ristretto255")]
     inner::<Ristretto255>(TEST_VECTOR_RISTRETTO255)?;
     inner::<P256>(TEST_VECTOR_P256)?;
-    #[cfg(all(feature = "x25519", feature = "ristretto255"))]
-    inner::<X25519Ristretto255>(TEST_VECTOR_X25519_RISTRETTO255)?;
-    #[cfg(feature = "x25519")]
-    inner::<X25519P256>(TEST_VECTOR_X25519_P256)?;
+    #[cfg(all(feature = "curve25519", feature = "ristretto255"))]
+    inner::<Curve25519Ristretto255>(TEST_VECTOR_CURVE25519_RISTRETTO255)?;
+    #[cfg(feature = "curve25519")]
+    inner::<Curve25519P256>(TEST_VECTOR_CURVE25519_P256)?;
 
     Ok(())
 }
@@ -1252,10 +1252,10 @@ fn test_complete_flow_success() -> Result<(), ProtocolError> {
     #[cfg(feature = "ristretto255")]
     test_complete_flow::<Ristretto255>(b"good password", b"good password")?;
     test_complete_flow::<P256>(b"good password", b"good password")?;
-    #[cfg(all(feature = "x25519", feature = "ristretto255"))]
-    test_complete_flow::<X25519Ristretto255>(b"good password", b"good password")?;
-    #[cfg(feature = "x25519")]
-    test_complete_flow::<X25519P256>(b"good password", b"good password")?;
+    #[cfg(all(feature = "curve25519", feature = "ristretto255"))]
+    test_complete_flow::<Curve25519Ristretto255>(b"good password", b"good password")?;
+    #[cfg(feature = "curve25519")]
+    test_complete_flow::<Curve25519P256>(b"good password", b"good password")?;
 
     Ok(())
 }
@@ -1265,10 +1265,10 @@ fn test_complete_flow_fail() -> Result<(), ProtocolError> {
     #[cfg(feature = "ristretto255")]
     test_complete_flow::<Ristretto255>(b"good password", b"bad password")?;
     test_complete_flow::<P256>(b"good password", b"bad password")?;
-    #[cfg(all(feature = "x25519", feature = "ristretto255"))]
-    test_complete_flow::<X25519Ristretto255>(b"good password", b"bad password")?;
-    #[cfg(feature = "x25519")]
-    test_complete_flow::<X25519P256>(b"good password", b"bad password")?;
+    #[cfg(all(feature = "curve25519", feature = "ristretto255"))]
+    test_complete_flow::<Curve25519Ristretto255>(b"good password", b"bad password")?;
+    #[cfg(feature = "curve25519")]
+    test_complete_flow::<Curve25519P256>(b"good password", b"bad password")?;
 
     Ok(())
 }
@@ -1302,10 +1302,10 @@ fn test_zeroize_client_registration_start() -> Result<(), ProtocolError> {
     #[cfg(feature = "ristretto255")]
     inner::<Ristretto255>()?;
     inner::<P256>()?;
-    #[cfg(all(feature = "x25519", feature = "ristretto255"))]
-    inner::<X25519Ristretto255>()?;
-    #[cfg(feature = "x25519")]
-    inner::<X25519P256>()?;
+    #[cfg(all(feature = "curve25519", feature = "ristretto255"))]
+    inner::<Curve25519Ristretto255>()?;
+    #[cfg(feature = "curve25519")]
+    inner::<Curve25519P256>()?;
 
     Ok(())
 }
@@ -1350,10 +1350,10 @@ fn test_zeroize_client_registration_finish() -> Result<(), ProtocolError> {
     #[cfg(feature = "ristretto255")]
     inner::<Ristretto255>()?;
     inner::<P256>()?;
-    #[cfg(all(feature = "x25519", feature = "ristretto255"))]
-    inner::<X25519Ristretto255>()?;
-    #[cfg(feature = "x25519")]
-    inner::<X25519P256>()?;
+    #[cfg(all(feature = "curve25519", feature = "ristretto255"))]
+    inner::<Curve25519Ristretto255>()?;
+    #[cfg(feature = "curve25519")]
+    inner::<Curve25519P256>()?;
 
     Ok(())
 }
@@ -1407,10 +1407,10 @@ fn test_zeroize_server_registration_finish() -> Result<(), ProtocolError> {
     #[cfg(feature = "ristretto255")]
     inner::<Ristretto255>()?;
     inner::<P256>()?;
-    #[cfg(all(feature = "x25519", feature = "ristretto255"))]
-    inner::<X25519Ristretto255>()?;
-    #[cfg(feature = "x25519")]
-    inner::<X25519P256>()?;
+    #[cfg(all(feature = "curve25519", feature = "ristretto255"))]
+    inner::<Curve25519Ristretto255>()?;
+    #[cfg(feature = "curve25519")]
+    inner::<Curve25519P256>()?;
 
     Ok(())
 }
@@ -1463,10 +1463,10 @@ fn test_zeroize_client_login_start() -> Result<(), ProtocolError> {
     #[cfg(feature = "ristretto255")]
     inner::<Ristretto255>()?;
     inner::<P256>()?;
-    #[cfg(all(feature = "x25519", feature = "ristretto255"))]
-    inner::<X25519Ristretto255>()?;
-    #[cfg(feature = "x25519")]
-    inner::<X25519P256>()?;
+    #[cfg(all(feature = "curve25519", feature = "ristretto255"))]
+    inner::<Curve25519Ristretto255>()?;
+    #[cfg(feature = "curve25519")]
+    inner::<Curve25519P256>()?;
 
     Ok(())
 }
@@ -1527,10 +1527,10 @@ fn test_zeroize_server_login_start() -> Result<(), ProtocolError> {
     #[cfg(feature = "ristretto255")]
     inner::<Ristretto255>()?;
     inner::<P256>()?;
-    #[cfg(all(feature = "x25519", feature = "ristretto255"))]
-    inner::<X25519Ristretto255>()?;
-    #[cfg(feature = "x25519")]
-    inner::<X25519P256>()?;
+    #[cfg(all(feature = "curve25519", feature = "ristretto255"))]
+    inner::<Curve25519Ristretto255>()?;
+    #[cfg(feature = "curve25519")]
+    inner::<Curve25519P256>()?;
 
     Ok(())
 }
@@ -1617,10 +1617,10 @@ fn test_zeroize_client_login_finish() -> Result<(), ProtocolError> {
     #[cfg(feature = "ristretto255")]
     inner::<Ristretto255>()?;
     inner::<P256>()?;
-    #[cfg(all(feature = "x25519", feature = "ristretto255"))]
-    inner::<X25519Ristretto255>()?;
-    #[cfg(feature = "x25519")]
-    inner::<X25519P256>()?;
+    #[cfg(all(feature = "curve25519", feature = "ristretto255"))]
+    inner::<Curve25519Ristretto255>()?;
+    #[cfg(feature = "curve25519")]
+    inner::<Curve25519P256>()?;
 
     Ok(())
 }
@@ -1689,10 +1689,10 @@ fn test_zeroize_server_login_finish() -> Result<(), ProtocolError> {
     #[cfg(feature = "ristretto255")]
     inner::<Ristretto255>()?;
     inner::<P256>()?;
-    #[cfg(all(feature = "x25519", feature = "ristretto255"))]
-    inner::<X25519Ristretto255>()?;
-    #[cfg(feature = "x25519")]
-    inner::<X25519P256>()?;
+    #[cfg(all(feature = "curve25519", feature = "ristretto255"))]
+    inner::<Curve25519Ristretto255>()?;
+    #[cfg(feature = "curve25519")]
+    inner::<Curve25519P256>()?;
 
     Ok(())
 }
@@ -1742,10 +1742,10 @@ fn test_scalar_always_nonzero() -> Result<(), ProtocolError> {
     #[cfg(feature = "ristretto255")]
     inner::<Ristretto255>()?;
     inner::<P256>()?;
-    #[cfg(all(feature = "x25519", feature = "ristretto255"))]
-    inner::<X25519Ristretto255>()?;
-    #[cfg(feature = "x25519")]
-    inner::<X25519P256>()?;
+    #[cfg(all(feature = "curve25519", feature = "ristretto255"))]
+    inner::<Curve25519Ristretto255>()?;
+    #[cfg(feature = "curve25519")]
+    inner::<Curve25519P256>()?;
 
     Ok(())
 }
@@ -1800,10 +1800,10 @@ fn test_reflected_value_error_registration() -> Result<(), ProtocolError> {
     #[cfg(feature = "ristretto255")]
     inner::<Ristretto255>()?;
     inner::<P256>()?;
-    #[cfg(all(feature = "x25519", feature = "ristretto255"))]
-    inner::<X25519Ristretto255>()?;
-    #[cfg(feature = "x25519")]
-    inner::<X25519P256>()?;
+    #[cfg(all(feature = "curve25519", feature = "ristretto255"))]
+    inner::<Curve25519Ristretto255>()?;
+    #[cfg(feature = "curve25519")]
+    inner::<Curve25519P256>()?;
 
     Ok(())
 }
@@ -1877,10 +1877,10 @@ fn test_reflected_value_error_login() -> Result<(), ProtocolError> {
     #[cfg(feature = "ristretto255")]
     inner::<Ristretto255>()?;
     inner::<P256>()?;
-    #[cfg(all(feature = "x25519", feature = "ristretto255"))]
-    inner::<X25519Ristretto255>()?;
-    #[cfg(feature = "x25519")]
-    inner::<X25519P256>()?;
+    #[cfg(all(feature = "curve25519", feature = "ristretto255"))]
+    inner::<Curve25519Ristretto255>()?;
+    #[cfg(feature = "curve25519")]
+    inner::<Curve25519P256>()?;
 
     Ok(())
 }
