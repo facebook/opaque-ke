@@ -38,7 +38,9 @@ serde_ = { version = "1", package = "serde", default-features = false, features 
   "derive",
 ], optional = true }
 subtle = { version = "2.3", default-features = false }
-voprf = { version = "0.4", default-features = false, features = ["danger"] }
+voprf = { version = "=0.5.0-pre.1", default-features = false, features = [
+  "danger",
+] }
 zeroize = { version = "1.5", features = ["zeroize_derive"] }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
@@ -73,6 +75,3 @@ targets = []
 [[example]]
 name = "simple_login"
 required-features = ["argon2"]
-
-[patch.crates-io]
-voprf = { git = "https://github.com/novifinancial/voprf" }
