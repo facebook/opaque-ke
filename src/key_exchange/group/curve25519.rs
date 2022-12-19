@@ -5,7 +5,7 @@
 // License, Version 2.0 found in the LICENSE-APACHE file in the root directory
 // of this source tree.
 
-//! Key Exchange group implementation for X25519
+//! Key Exchange group implementation for Curve25519
 
 use curve25519_dalek::constants::ED25519_BASEPOINT_TABLE;
 use curve25519_dalek::montgomery::MontgomeryPoint;
@@ -22,11 +22,11 @@ use subtle::ConstantTimeEq;
 use super::KeGroup;
 use crate::errors::InternalError;
 
-/// Implementation for X25519.
-pub struct X25519;
+/// Implementation for Curve25519.
+pub struct Curve25519;
 
-/// The implementation of such a subgroup for Ristretto
-impl KeGroup for X25519 {
+/// The implementation of such a subgroup for Curve25519
+impl KeGroup for Curve25519 {
     type Pk = MontgomeryPoint;
     type PkLen = U32;
     type Sk = Scalar;

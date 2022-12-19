@@ -16,10 +16,10 @@ jobs:
           - --features ristretto255-u64,ristretto255-voprf
           - --features ristretto255-u32,ristretto255-voprf
           -
-          - --features x25519-u64,ristretto255-u64,ristretto255-voprf
-          - --features x25519-u32,ristretto255-u32,ristretto255-voprf
-          - --features x25519-u64
-          - --features x25519-u32
+          - --features curve25519-u64,ristretto255-u64,ristretto255-voprf
+          - --features curve25519-u32,ristretto255-u32,ristretto255-voprf
+          - --features curve25519-u64
+          - --features curve25519-u32
         frontend_feature:
           -
           - --features argon2
@@ -64,10 +64,10 @@ jobs:
           - --features ristretto255-u64,ristretto255-voprf
           - --features ristretto255-u32,ristretto255-voprf
           -
-          - x25519-u64,ristretto255-u64,ristretto255-voprf
-          - x25519-u32,ristretto255-u64,ristretto255-voprf
-          - x25519-u64
-          - x25519-u32
+          - curve25519-u64,ristretto255-u64,ristretto255-voprf
+          - curve25519-u32,ristretto255-u64,ristretto255-voprf
+          - curve25519-u64
+          - curve25519-u32
     steps:
       - uses: actions/checkout@v3
       - uses: hecrj/setup-rust-action@v1
@@ -138,10 +138,10 @@ jobs:
           - ristretto255-u64,ristretto255-voprf
           - ristretto255-u32,ristretto255-voprf
           -
-          - x25519-u64,ristretto255-u64,ristretto255-voprf
-          - x25519-u32,ristretto255-u32,ristretto255-voprf
-          - x25519-u64
-          - x25519-u32
+          - curve25519-u64,ristretto255-u64,ristretto255-voprf
+          - curve25519-u32,ristretto255-u32,ristretto255-voprf
+          - curve25519-u64
+          - curve25519-u32
         frontend_feature:
           - argon2
           - serde
@@ -161,10 +161,10 @@ jobs:
           - --features ristretto255-u64,ristretto255-voprf
           - --features ristretto255-u32,ristretto255-voprf
           -
-          - --features x25519-u64,ristretto255-u64,ristretto255-voprf
-          - --features x25519-u32,ristretto255-u32,ristretto255-voprf
-          - --features x25519-u32
-          - --features x25519-u32
+          - --features curve25519-u64,ristretto255-u64,ristretto255-voprf
+          - --features curve25519-u32,ristretto255-u32,ristretto255-voprf
+          - --features curve25519-u32
+          - --features curve25519-u32
     steps:
       - name: Checkout sources
         uses: actions/checkout@v3
@@ -201,7 +201,7 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: clippy
-          args: --all-targets --features argon2,std,x25519-u64 -- -D warnings
+          args: --all-targets --features argon2,std,curve25519-u64 -- -D warnings
 
       - name: Run cargo doc
         uses: actions-rs/cargo@v1
@@ -209,7 +209,7 @@ jobs:
           RUSTDOCFLAGS: -D warnings
         with:
           command: doc
-          args: --no-deps --document-private-items --features argon2,std,x25519-u64
+          args: --no-deps --document-private-items --features argon2,std,curve25519-u64
 
   format:
     name: cargo fmt

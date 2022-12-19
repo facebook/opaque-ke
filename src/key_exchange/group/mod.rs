@@ -7,11 +7,11 @@
 
 //! Includes the KeGroup trait and definitions for the key exchange groups
 
+#[cfg(feature = "curve25519")]
+pub mod curve25519;
 mod elliptic_curve;
 #[cfg(feature = "ristretto255")]
 pub mod ristretto255;
-#[cfg(feature = "x25519")]
-pub mod x25519;
 
 use digest::core_api::BlockSizeUser;
 use digest::{Digest, OutputSizeUser};

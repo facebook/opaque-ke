@@ -12,6 +12,12 @@ rust-version = "1.57"
 version = "2.0.0"
 
 [features]
+curve25519 = ["curve25519-dalek"]
+curve25519-fiat-u32 = ["curve25519-dalek/fiat_u32_backend", "curve25519"]
+curve25519-fiat-u64 = ["curve25519-dalek/fiat_u64_backend", "curve25519"]
+curve25519-u32 = ["curve25519-dalek/u32_backend", "curve25519"]
+curve25519-u64 = ["curve25519-dalek/u64_backend", "curve25519"]
+curve255195519-simd = ["curve25519-dalek/simd_backend", "curve25519"]
 default = ["ristretto255-u64", "ristretto255-voprf", "serde"]
 ristretto255 = ["curve25519-dalek", "voprf/ristretto255"]
 ristretto255-fiat-u32 = ["curve25519-dalek/fiat_u32_backend", "ristretto255"]
@@ -22,12 +28,6 @@ ristretto255-u64 = ["curve25519-dalek/u64_backend", "ristretto255"]
 ristretto255-voprf = ["ristretto255", "voprf/ristretto255-ciphersuite"]
 serde = ["serde_", "generic-array/serde", "voprf/serde"]
 std = ["getrandom"]
-x25519 = ["curve25519-dalek"]
-x25519-fiat-u32 = ["curve25519-dalek/fiat_u32_backend", "x25519"]
-x25519-fiat-u64 = ["curve25519-dalek/fiat_u64_backend", "x25519"]
-x25519-simd = ["curve25519-dalek/simd_backend", "x25519"]
-x25519-u32 = ["curve25519-dalek/u32_backend", "x25519"]
-x25519-u64 = ["curve25519-dalek/u64_backend", "x25519"]
 
 [dependencies]
 argon2 = { version = "0.4", default-features = false, features = [
@@ -74,7 +74,7 @@ harness = false
 name = "opaque"
 
 [package.metadata.docs.rs]
-features = ["argon2", "std", "x25519-u64"]
+features = ["argon2", "std", "curve25519-u64"]
 targets = []
 
 [[example]]
