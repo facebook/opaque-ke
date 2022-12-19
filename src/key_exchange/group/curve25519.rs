@@ -49,7 +49,7 @@ impl KeGroup for Curve25519 {
         loop {
             let scalar = Scalar::random(rng);
 
-            if scalar != Scalar::zero() {
+            if scalar != Scalar::ZERO {
                 break scalar;
             }
         }
@@ -69,7 +69,7 @@ impl KeGroup for Curve25519 {
 
         let scalar = Scalar::from_bytes_mod_order_wide(&uniform_bytes.into());
 
-        if scalar == Scalar::zero() {
+        if scalar == Scalar::ZERO {
             Err(InternalError::HashToScalar)
         } else {
             Ok(scalar)
@@ -77,7 +77,7 @@ impl KeGroup for Curve25519 {
     }
 
     fn is_zero_scalar(scalar: Self::Sk) -> subtle::Choice {
-        scalar.ct_eq(&Scalar::zero())
+        scalar.ct_eq(&Scalar::ZERO)
     }
 
     fn public_key(sk: Self::Sk) -> Self::Pk {
@@ -96,8 +96,8 @@ impl KeGroup for Curve25519 {
         bytes
             .try_into()
             .ok()
-            .and_then(Scalar::from_canonical_bytes)
-            .filter(|scalar| scalar != &Scalar::zero())
+            .and_then(|bytes| Scalar::from_canonical_bytes(bytes).into())
+            .filter(|scalar| scalar != &Scalar::ZERO)
             .ok_or(InternalError::PointError)
     }
 }
