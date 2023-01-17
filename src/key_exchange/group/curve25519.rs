@@ -81,7 +81,7 @@ impl KeGroup for Curve25519 {
     }
 
     fn public_key(sk: Self::Sk) -> Self::Pk {
-        (&ED25519_BASEPOINT_TABLE * &sk).to_montgomery()
+        (ED25519_BASEPOINT_TABLE * &sk).to_montgomery()
     }
 
     fn diffie_hellman(pk: Self::Pk, sk: Self::Sk) -> GenericArray<u8, Self::PkLen> {

@@ -275,13 +275,10 @@ fn main() {
                             &registered_lockers[locker_index],
                         ) {
                             Ok(contents) => {
-                                println!("\n\nSuccess! Contents: {}\n\n", contents);
+                                println!("\n\nSuccess! Contents: {contents}\n\n");
                             }
                             Err(err) => {
-                                println!(
-                                    "\n\nError encountered, could not open locker: {}\n\n",
-                                    err
-                                );
+                                println!("\n\nError encountered, could not open locker: {err}\n\n");
                             }
                         }
                     }
@@ -304,10 +301,7 @@ fn display_lockers(lockers: &[Locker]) {
         locker_numbers.push(i);
     }
 
-    println!(
-        "\nCurrently registered locker numbers: {:?}\n",
-        locker_numbers
-    );
+    println!("\nCurrently registered locker numbers: {locker_numbers:?}\n");
 }
 
 // Handle readline errors
@@ -320,7 +314,7 @@ fn handle_error(err: ReadlineError) {
             println!("CTRL-D");
         }
         err => {
-            println!("Error: {:?}", err);
+            println!("Error: {err:?}");
         }
     }
 }
@@ -333,7 +327,7 @@ fn get_two_strings(
     string1: Option<String>,
 ) -> (String, String) {
     let query = if string1.is_none() { s1 } else { s2 };
-    let readline = rl.readline(&format!("{}: ", query));
+    let readline = rl.readline(&format!("{query}: "));
     match readline {
         Ok(line) => match string1 {
             Some(x) => (x, line),

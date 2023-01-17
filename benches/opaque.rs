@@ -38,7 +38,7 @@ impl CipherSuite for Default {
 fn server_setup(c: &mut Criterion) {
     let mut rng = OsRng;
 
-    c.bench_function(&format!("server setup ({})", SUFFIX), move |b| {
+    c.bench_function(&format!("server setup ({SUFFIX})"), move |b| {
         b.iter(|| {
             ServerSetup::<Default>::new(&mut rng);
         })
@@ -49,14 +49,11 @@ fn client_registration_start(c: &mut Criterion) {
     let mut rng = OsRng;
     let password = b"password";
 
-    c.bench_function(
-        &format!("client registration start ({})", SUFFIX),
-        move |b| {
-            b.iter(|| {
-                ClientRegistration::<Default>::start(&mut rng, password).unwrap();
-            })
-        },
-    );
+    c.bench_function(&format!("client registration start ({SUFFIX})"), move |b| {
+        b.iter(|| {
+            ClientRegistration::<Default>::start(&mut rng, password).unwrap();
+        })
+    });
 }
 
 fn server_registration_start(c: &mut Criterion) {
@@ -67,19 +64,16 @@ fn server_registration_start(c: &mut Criterion) {
     let client_registration_start_result =
         ClientRegistration::<Default>::start(&mut rng, password).unwrap();
 
-    c.bench_function(
-        &format!("server registration start ({})", SUFFIX),
-        move |b| {
-            b.iter(|| {
-                ServerRegistration::<Default>::start(
-                    &server_setup,
-                    client_registration_start_result.message.clone(),
-                    username,
-                )
-                .unwrap();
-            })
-        },
-    );
+    c.bench_function(&format!("server registration start ({SUFFIX})"), move |b| {
+        b.iter(|| {
+            ServerRegistration::<Default>::start(
+                &server_setup,
+                client_registration_start_result.message.clone(),
+                username,
+            )
+            .unwrap();
+        })
+    });
 }
 
 fn client_registration_finish(c: &mut Criterion) {
@@ -97,7 +91,7 @@ fn client_registration_finish(c: &mut Criterion) {
     .unwrap();
 
     c.bench_function(
-        &format!("client registration finish ({})", SUFFIX),
+        &format!("client registration finish ({SUFFIX})"),
         move |b| {
             b.iter(|| {
                 client_registration_start_result
@@ -139,7 +133,7 @@ fn server_registration_finish(c: &mut Criterion) {
         .unwrap();
 
     c.bench_function(
-        &format!("server registration finish ({})", SUFFIX),
+        &format!("server registration finish ({SUFFIX})"),
         move |b| {
             b.iter(|| {
                 ServerRegistration::finish(client_registration_finish_result.clone().message);
@@ -152,7 +146,7 @@ fn client_login_start(c: &mut Criterion) {
     let mut rng = OsRng;
     let password = b"password";
 
-    c.bench_function(&format!("client login start ({})", SUFFIX), move |b| {
+    c.bench_function(&format!("client login start ({SUFFIX})"), move |b| {
         b.iter(|| {
             ClientLogin::<Default>::start(&mut rng, password).unwrap();
         })
@@ -184,22 +178,19 @@ fn server_login_start_real(c: &mut Criterion) {
     let password_file = ServerRegistration::finish(client_registration_finish_result.message);
     let client_login_start_result = ClientLogin::<Default>::start(&mut rng, password).unwrap();
 
-    c.bench_function(
-        &format!("server login start (real) ({})", SUFFIX),
-        move |b| {
-            b.iter(|| {
-                ServerLogin::start(
-                    &mut rng,
-                    &server_setup,
-                    Some(password_file.clone()),
-                    client_login_start_result.clone().message,
-                    username,
-                    ServerLoginStartParameters::default(),
-                )
-                .unwrap();
-            })
-        },
-    );
+    c.bench_function(&format!("server login start (real) ({SUFFIX})"), move |b| {
+        b.iter(|| {
+            ServerLogin::start(
+                &mut rng,
+                &server_setup,
+                Some(password_file.clone()),
+                client_login_start_result.clone().message,
+                username,
+                ServerLoginStartParameters::default(),
+            )
+            .unwrap();
+        })
+    });
 }
 
 fn server_login_start_fake(c: &mut Criterion) {
@@ -209,22 +200,19 @@ fn server_login_start_fake(c: &mut Criterion) {
     let server_setup = ServerSetup::<Default>::new(&mut rng);
     let client_login_start_result = ClientLogin::<Default>::start(&mut rng, password).unwrap();
 
-    c.bench_function(
-        &format!("server login start (fake) ({})", SUFFIX),
-        move |b| {
-            b.iter(|| {
-                ServerLogin::start(
-                    &mut rng,
-                    &server_setup,
-                    None,
-                    client_login_start_result.clone().message,
-                    username,
-                    ServerLoginStartParameters::default(),
-                )
-                .unwrap();
-            })
-        },
-    );
+    c.bench_function(&format!("server login start (fake) ({SUFFIX})"), move |b| {
+        b.iter(|| {
+            ServerLogin::start(
+                &mut rng,
+                &server_setup,
+                None,
+                client_login_start_result.clone().message,
+                username,
+                ServerLoginStartParameters::default(),
+            )
+            .unwrap();
+        })
+    });
 }
 
 fn client_login_finish(c: &mut Criterion) {
@@ -261,7 +249,7 @@ fn client_login_finish(c: &mut Criterion) {
     )
     .unwrap();
 
-    c.bench_function(&format!("client login finish ({})", SUFFIX), move |b| {
+    c.bench_function(&format!("client login finish ({SUFFIX})"), move |b| {
         b.iter(|| {
             client_login_start_result
                 .clone()
@@ -318,7 +306,7 @@ fn server_login_finish(c: &mut Criterion) {
         )
         .unwrap();
 
-    c.bench_function(&format!("server login finish ({})", SUFFIX), move |b| {
+    c.bench_function(&format!("server login finish ({SUFFIX})"), move |b| {
         b.iter(|| {
             server_login_start_result
                 .clone()
