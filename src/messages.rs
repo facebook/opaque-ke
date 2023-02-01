@@ -41,7 +41,7 @@ use crate::opaque::{MaskedResponse, MaskedResponseLen, ServerSetup};
 #[cfg_attr(
     feature = "serde",
     derive(serde::Deserialize, serde::Serialize),
-    serde(bound = "", crate = "serde")
+    serde(bound = "")
 )]
 #[derive_where(Clone)]
 #[derive_where(Debug, Eq, Hash, Ord, PartialEq, PartialOrd; voprf::BlindedElement<CS::OprfCs>)]
@@ -63,7 +63,7 @@ where
 #[cfg_attr(
     feature = "serde",
     derive(serde::Deserialize, serde::Serialize),
-    serde(bound = "", crate = "serde")
+    serde(bound = "")
 )]
 #[derive_where(Clone)]
 #[derive_where(Debug, Eq, Hash, Ord, PartialEq, PartialOrd; voprf::EvaluationElement<CS::OprfCs>, <CS::KeGroup as KeGroup>::Pk)]
@@ -87,7 +87,7 @@ where
 #[cfg_attr(
     feature = "serde",
     derive(serde::Deserialize, serde::Serialize),
-    serde(bound = "", crate = "serde")
+    serde(bound = "")
 )]
 #[derive_where(Clone, ZeroizeOnDrop)]
 #[derive_where(Debug, Eq, Hash, Ord, PartialEq, PartialOrd; <CS::KeGroup as KeGroup>::Pk)]
@@ -113,15 +113,12 @@ where
 #[cfg_attr(
     feature = "serde",
     derive(serde::Deserialize, serde::Serialize),
-    serde(
-        bound(
-            deserialize = "<CS::KeyExchange as KeyExchange<OprfHash<CS>, \
-                           CS::KeGroup>>::KE1Message: serde::Deserialize<'de>",
-            serialize = "<CS::KeyExchange as KeyExchange<OprfHash<CS>, CS::KeGroup>>::KE1Message: \
-                         serde::Serialize"
-        ),
-        crate = "serde"
-    )
+    serde(bound(
+        deserialize = "<CS::KeyExchange as KeyExchange<OprfHash<CS>, CS::KeGroup>>::KE1Message: \
+                       serde::Deserialize<'de>",
+        serialize = "<CS::KeyExchange as KeyExchange<OprfHash<CS>, CS::KeGroup>>::KE1Message: \
+                     serde::Serialize"
+    ))
 )]
 #[derive_where(Clone, ZeroizeOnDrop)]
 #[derive_where(
@@ -147,15 +144,12 @@ where
 #[cfg_attr(
     feature = "serde",
     derive(serde::Deserialize, serde::Serialize),
-    serde(
-        bound(
-            deserialize = "<CS::KeyExchange as KeyExchange<OprfHash<CS>, \
-                           CS::KeGroup>>::KE2Message: serde::Deserialize<'de>",
-            serialize = "<CS::KeyExchange as KeyExchange<OprfHash<CS>, CS::KeGroup>>::KE2Message: \
-                         serde::Serialize"
-        ),
-        crate = "serde"
-    )
+    serde(bound(
+        deserialize = "<CS::KeyExchange as KeyExchange<OprfHash<CS>, CS::KeGroup>>::KE2Message: \
+                       serde::Deserialize<'de>",
+        serialize = "<CS::KeyExchange as KeyExchange<OprfHash<CS>, CS::KeGroup>>::KE2Message: \
+                     serde::Serialize"
+    ))
 )]
 #[derive_where(Clone)]
 #[derive_where(
@@ -184,15 +178,12 @@ where
 #[cfg_attr(
     feature = "serde",
     derive(serde::Deserialize, serde::Serialize),
-    serde(
-        bound(
-            deserialize = "<CS::KeyExchange as KeyExchange<OprfHash<CS>, \
-                           CS::KeGroup>>::KE3Message: serde::Deserialize<'de>",
-            serialize = "<CS::KeyExchange as KeyExchange<OprfHash<CS>, CS::KeGroup>>::KE3Message: \
-                         serde::Serialize"
-        ),
-        crate = "serde"
-    )
+    serde(bound(
+        deserialize = "<CS::KeyExchange as KeyExchange<OprfHash<CS>, CS::KeGroup>>::KE3Message: \
+                       serde::Deserialize<'de>",
+        serialize = "<CS::KeyExchange as KeyExchange<OprfHash<CS>, CS::KeGroup>>::KE3Message: \
+                     serde::Serialize"
+    ))
 )]
 #[derive_where(Clone)]
 #[derive_where(

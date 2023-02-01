@@ -20,13 +20,10 @@ use crate::key_exchange::group::KeGroup;
 #[cfg_attr(
     feature = "serde",
     derive(serde::Deserialize, serde::Serialize),
-    serde(
-        bound(
-            deserialize = "S: serde::Deserialize<'de>",
-            serialize = "S: serde::Serialize"
-        ),
-        crate = "serde"
-    )
+    serde(bound(
+        deserialize = "S: serde::Deserialize<'de>",
+        serialize = "S: serde::Serialize"
+    ))
 )]
 #[derive_where(Clone)]
 #[derive_where(Debug, Eq, Hash, Ord, PartialEq, PartialOrd; KG::Pk, S)]
