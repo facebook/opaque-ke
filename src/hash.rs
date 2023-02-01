@@ -9,7 +9,7 @@
 
 use digest::block_buffer::Eager;
 use digest::core_api::{BlockSizeUser, BufferKindUser, CoreProxy, FixedOutputCore};
-use digest::{Digest, FixedOutputReset, HashMarker, OutputSizeUser};
+use digest::{FixedOutputReset, HashMarker, OutputSizeUser};
 use generic_array::typenum::{IsLess, Le, NonZero, U256};
 
 pub(crate) type OutputSize<D> = <<D as CoreProxy>::Core as OutputSizeUser>::OutputSize;
@@ -35,7 +35,8 @@ where
 /// HKDF and HMAC Associated types could be simplified when they are made as
 /// defaults: <https://github.com/rust-lang/rust/issues/29661>
 pub trait Hash:
-    Digest
+    Default
+    + HashMarker
     + OutputSizeUser<OutputSize = OutputSize<Self>>
     + BlockSizeUser
     + FixedOutputReset
@@ -49,7 +50,8 @@ where
 }
 
 impl<
-        T: Digest
+        T: Default
+            + HashMarker
             + OutputSizeUser<OutputSize = OutputSize<Self>>
             + BlockSizeUser
             + FixedOutputReset
