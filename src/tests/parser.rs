@@ -85,7 +85,7 @@ fn parse_params(input: &str) -> String {
                     let key = iter.next().unwrap().split_whitespace().next().unwrap();
                     let val = iter.next().unwrap().split_whitespace().next().unwrap();
 
-                    param = format!("    \"{}\": \"{}", key, val);
+                    param = format!("    \"{key}\": \"{val}");
                 } else {
                     let s = line.trim().to_string();
                     if s.contains('~') || s.contains('#') {

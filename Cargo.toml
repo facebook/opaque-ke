@@ -8,11 +8,11 @@ license = "Apache-2.0 OR MIT"
 name = "opaque-ke"
 readme = "README.md"
 repository = "https://github.com/novifinancial/opaque-ke"
-rust-version = "1.57"
+rust-version = "1.60"
 version = "2.0.0"
 
 [features]
-curve25519 = ["curve25519-dalek"]
+curve25519 = ["curve25519-dalek/precomputed-tables"]
 default = ["ristretto255-voprf", "serde"]
 ristretto255 = ["curve25519-dalek", "voprf/ristretto255"]
 ristretto255-voprf = ["ristretto255", "voprf/ristretto255-ciphersuite"]
@@ -23,8 +23,9 @@ std = ["getrandom"]
 argon2 = { version = "0.4", default-features = false, features = [
   "alloc",
 ], optional = true }
-curve25519-dalek = { version = "=4.0.0-pre.5", default-features = false, features = [
+curve25519-dalek = { version = "=4.0.0-rc.1", default-features = false, features = [
   "rand_core",
+  "zeroize",
 ], optional = true }
 derive-where = { version = "1", features = ["zeroize-on-drop"] }
 digest = "0.10"
@@ -38,7 +39,7 @@ serde_ = { version = "1", package = "serde", default-features = false, features 
   "derive",
 ], optional = true }
 subtle = { version = "2.3", default-features = false }
-voprf = { version = "=0.5.0-pre.1", default-features = false, features = [
+voprf = { version = "=0.5.0-pre.2", default-features = false, features = [
   "danger",
 ] }
 zeroize = { version = "1.5", features = ["zeroize_derive"] }
@@ -52,14 +53,15 @@ chacha20poly1305 = "0.10"
 criterion = "0.4"
 hex = "0.4"
 json = "0.12"
-p256 = { version = "0.11", default-features = false, features = [
+p256 = { version = "0.12", default-features = false, features = [
   "hash2curve",
   "voprf",
 ] }
 proptest = "1"
 rand = "0.8"
 regex = "1"
-rustyline = "10"
+# MSRV
+rustyline = "10.1.1"
 scrypt = "0.10"
 serde_json = "1"
 

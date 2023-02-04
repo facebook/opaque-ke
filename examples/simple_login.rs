@@ -228,7 +228,7 @@ fn handle_error(err: ReadlineError) {
             println!("CTRL-D");
         }
         err => {
-            println!("Error: {:?}", err);
+            println!("Error: {err:?}");
         }
     }
 }
@@ -241,7 +241,7 @@ fn get_two_strings(
     string1: Option<String>,
 ) -> (String, String) {
     let query = if string1.is_none() { s1 } else { s2 };
-    let readline = rl.readline(&format!("{}: ", query));
+    let readline = rl.readline(&format!("{query}: "));
     match readline {
         Ok(line) => match string1 {
             Some(x) => (x, line),
