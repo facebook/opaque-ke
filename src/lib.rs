@@ -1124,9 +1124,6 @@
 #[cfg(any(feature = "std", test))]
 extern crate std;
 
-#[cfg(feature = "serde")]
-extern crate serde_ as serde;
-
 // Error types
 pub mod errors;
 

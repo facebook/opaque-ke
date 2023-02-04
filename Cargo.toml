@@ -12,12 +12,13 @@ rust-version = "1.60"
 version = "2.0.0"
 
 [features]
-curve25519 = ["curve25519-dalek/precomputed-tables"]
+argon2 = ["dep:argon2"]
+curve25519 = ["dep:curve25519-dalek", "curve25519-dalek?/precomputed-tables"]
 default = ["ristretto255-voprf", "serde"]
-ristretto255 = ["curve25519-dalek", "voprf/ristretto255"]
+ristretto255 = ["dep:curve25519-dalek", "voprf/ristretto255"]
 ristretto255-voprf = ["ristretto255", "voprf/ristretto255-ciphersuite"]
-serde = ["serde_", "generic-array/serde", "voprf/serde"]
-std = ["getrandom"]
+serde = ["dep:serde", "generic-array/serde", "voprf/serde"]
+std = ["dep:getrandom"]
 
 [dependencies]
 argon2 = { version = "0.4", default-features = false, features = [
@@ -35,7 +36,7 @@ generic-array = "0.14"
 hkdf = "0.12"
 hmac = "0.12"
 rand = { version = "0.8", default-features = false }
-serde_ = { version = "1", package = "serde", default-features = false, features = [
+serde = { version = "1", default-features = false, features = [
   "derive",
 ], optional = true }
 subtle = { version = "2.3", default-features = false }
