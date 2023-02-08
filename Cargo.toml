@@ -9,7 +9,7 @@ name = "opaque-ke"
 readme = "README.md"
 repository = "https://github.com/novifinancial/opaque-ke"
 rust-version = "1.60"
-version = "2.0.0"
+version = "3.0.0-pre.1"
 
 [features]
 argon2 = ["dep:argon2"]
