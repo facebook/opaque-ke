@@ -1,5 +1,10 @@
 # Changelog
 
+## 3.0.0-pre.1 (February 8, 2023)
+* Renaming of X25519 to Curve25519
+* Increased MSRV to 1.60
+* Updating dependencies
+
 ## 2.0.0 (September 21, 2022)
 * Synced implementation with draft-irtf-cfrg-opaque-10
 * Changed argon2 salt length to recommended value (16 bytes)
