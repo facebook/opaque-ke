@@ -40,6 +40,7 @@ use opaque_ke::{
     ServerLoginStartParameters, ServerRegistration, ServerRegistrationLen, ServerSetup,
 };
 use rustyline::error::ReadlineError;
+use rustyline::history::DefaultHistory;
 use rustyline::Editor;
 
 // The ciphersuite trait allows to specify the underlying primitives that will
@@ -216,7 +217,7 @@ fn main() {
     let mut rng = OsRng;
     let server_setup = ServerSetup::<DefaultCipherSuite>::new(&mut rng);
 
-    let mut rl = Editor::<()>::new().unwrap();
+    let mut rl = Editor::<(), _>::new().unwrap();
     let mut registered_lockers: Vec<Locker> = vec![];
     loop {
         display_lockers(&registered_lockers);
@@ -323,7 +324,7 @@ fn handle_error(err: ReadlineError) {
 fn get_two_strings(
     s1: &str,
     s2: &str,
-    rl: &mut Editor<()>,
+    rl: &mut Editor<(), DefaultHistory>,
     string1: Option<String>,
 ) -> (String, String) {
     let query = if string1.is_none() { s1 } else { s2 };
