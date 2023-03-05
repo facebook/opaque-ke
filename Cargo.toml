@@ -21,7 +21,7 @@ serde = ["dep:serde", "generic-array/serde", "voprf/serde"]
 std = ["dep:getrandom"]
 
 [dependencies]
-argon2 = { version = "0.4", default-features = false, features = [
+argon2 = { version = "0.5", default-features = false, features = [
   "alloc",
 ], optional = true }
 curve25519-dalek = { version = "=4.0.0-rc.1", default-features = false, features = [
