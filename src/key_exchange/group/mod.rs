@@ -14,9 +14,9 @@ mod elliptic_curve;
 pub mod ristretto255;
 
 use digest::core_api::BlockSizeUser;
-use digest::{Digest, OutputSizeUser};
+use digest::{FixedOutput, HashMarker, OutputSizeUser};
 use generic_array::sequence::Concat;
-use generic_array::typenum::{IsLess, IsLessOrEqual, U11, U256};
+use generic_array::typenum::{IsLess, IsLessOrEqual, U256};
 use generic_array::{ArrayLength, GenericArray};
 use rand::{CryptoRng, RngCore};
 use zeroize::Zeroize;
@@ -48,9 +48,9 @@ pub trait KeGroup {
     /// # Errors
     /// [`InternalError::HashToScalar`] if the `input` is empty or longer then
     /// [`u16::MAX`].
-    fn hash_to_scalar<H>(input: &[&[u8]], dst: &[u8]) -> Result<Self::Sk, InternalError>
+    fn hash_to_scalar<H>(input: &[&[u8]], dst: &[&[u8]]) -> Result<Self::Sk, InternalError>
     where
-        H: Digest + BlockSizeUser,
+        H: BlockSizeUser + Default + FixedOutput + HashMarker,
         H::OutputSize: IsLess<U256> + IsLessOrEqual<H::BlockSize>;
 
     /// Corresponds to the DeriveAuthKeyPair() function defined in
@@ -67,8 +67,11 @@ pub trait KeGroup {
         <CS::Hash as OutputSizeUser>::OutputSize:
             IsLess<U256> + IsLessOrEqual<<CS::Hash as BlockSizeUser>::BlockSize>,
     {
-        let context_string = create_context_string::<CS>(voprf::Mode::Oprf);
-        let dst = GenericArray::from(STR_DERIVE_KEYPAIR).concat(context_string);
+        let dst_1 = GenericArray::from(STR_DERIVE_KEYPAIR)
+            .concat(STR_OPRF.into())
+            .concat([voprf::Mode::Oprf.to_u8()].into())
+            .concat([b'-'].into());
+        let dst_2 = CS::ID.as_bytes();
 
         let info_len = i2osp_2(info.len())
             .map_err(|_| InternalError::OprfError(voprf::Error::DeriveKeyPair))?;
@@ -79,7 +82,7 @@ pub trait KeGroup {
             // || contextString)
             let sk_s = Self::hash_to_scalar::<CS::Hash>(
                 &[seed, &info_len, info, &counter.to_be_bytes()],
-                &dst,
+                &[&dst_1, dst_2],
             )
             .map_err(|_| InternalError::OprfError(voprf::Error::DeriveKeyPair))?;
 
@@ -110,20 +113,8 @@ pub trait KeGroup {
 // Helper functions used to compute DeriveAuthKeyPair() (taken from the voprf
 // crate)
 
-const STR_VOPRF: [u8; 8] = *b"VOPRF10-";
+const STR_OPRF: [u8; 7] = *b"OPRFV1-";
 const STR_DERIVE_KEYPAIR: [u8; 13] = *b"DeriveKeyPair";
-
-/// Generates the contextString parameter as defined in
-/// <https://datatracker.ietf.org/doc/draft-irtf-cfrg-voprf/>
-fn create_context_string<CS: voprf::CipherSuite>(mode: voprf::Mode) -> GenericArray<u8, U11>
-where
-    <CS::Hash as OutputSizeUser>::OutputSize:
-        IsLess<U256> + IsLessOrEqual<<CS::Hash as BlockSizeUser>::BlockSize>,
-{
-    GenericArray::from(STR_VOPRF)
-        .concat([mode.to_u8()].into())
-        .concat(CS::ID.to_be_bytes().into())
-}
 
 fn i2osp_2(input: usize) -> Result<[u8; 2], InternalError> {
     u16::try_from(input)

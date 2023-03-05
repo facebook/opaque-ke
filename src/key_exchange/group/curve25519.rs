@@ -12,7 +12,7 @@ use curve25519_dalek::montgomery::MontgomeryPoint;
 use curve25519_dalek::scalar::Scalar;
 use curve25519_dalek::traits::Identity;
 use digest::core_api::BlockSizeUser;
-use digest::Digest;
+use digest::{FixedOutput, HashMarker};
 use elliptic_curve::hash2curve::{ExpandMsg, ExpandMsgXmd, Expander};
 use generic_array::typenum::{IsLess, IsLessOrEqual, U256, U32, U64};
 use generic_array::GenericArray;
@@ -56,10 +56,10 @@ impl KeGroup for Curve25519 {
     }
 
     // Implements the `HashToScalar()` function from
-    // <https://www.ietf.org/archive/id/draft-irtf-cfrg-voprf-09.html#section-4.1>
-    fn hash_to_scalar<'a, H>(input: &[&[u8]], dst: &[u8]) -> Result<Self::Sk, InternalError>
+    // <https://www.ietf.org/archive/id/draft-irtf-cfrg-voprf-19.html#section-4>
+    fn hash_to_scalar<'a, H>(input: &[&[u8]], dst: &[&[u8]]) -> Result<Self::Sk, InternalError>
     where
-        H: Digest + BlockSizeUser,
+        H: BlockSizeUser + Default + FixedOutput + HashMarker,
         H::OutputSize: IsLess<U256> + IsLessOrEqual<H::BlockSize>,
     {
         let mut uniform_bytes = GenericArray::<_, U64>::default();
