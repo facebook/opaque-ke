@@ -8,7 +8,7 @@ license = "Apache-2.0 OR MIT"
 name = "opaque-ke"
 readme = "README.md"
 repository = "https://github.com/novifinancial/opaque-ke"
-rust-version = "1.62"
+rust-version = "1.65"
 version = "3.0.0-pre.1"
 
 [features]
@@ -21,7 +21,7 @@ serde = ["dep:serde", "generic-array/serde", "voprf/serde"]
 std = ["dep:getrandom"]
 
 [dependencies]
-argon2 = { version = "0.4", default-features = false, features = [
+argon2 = { version = "0.5", default-features = false, features = [
   "alloc",
 ], optional = true }
 curve25519-dalek = { version = "=4.0.0-rc.1", default-features = false, features = [

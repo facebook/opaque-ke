@@ -11,10 +11,6 @@ use generic_array::{ArrayLength, GenericArray};
 
 use crate::errors::InternalError;
 
-/// Recommended salt length for argon2-based password hashing.
-#[cfg(feature = "argon2")]
-const ARGON2_RECOMMENDED_SALT_LEN: usize = 16;
-
 /// Used for the key stretching function in OPAQUE
 pub trait Ksf: Default {
     /// Computes the key stretching function
@@ -44,7 +40,7 @@ impl Ksf for argon2::Argon2<'_> {
         input: GenericArray<u8, L>,
     ) -> Result<GenericArray<u8, L>, InternalError> {
         let mut output = GenericArray::default();
-        self.hash_password_into(&input, &[0; ARGON2_RECOMMENDED_SALT_LEN], &mut output)
+        self.hash_password_into(&input, &[0; argon2::RECOMMENDED_SALT_LEN], &mut output)
             .map_err(|_| InternalError::KsfError)?;
         Ok(output)
     }
