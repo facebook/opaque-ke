@@ -228,6 +228,7 @@ mod tests {
         #[cfg(feature = "ristretto255")]
         inner::<crate::Ristretto255>();
         inner::<::p256::NistP256>();
+        inner::<::p384::NistP384>();
     }
 
     macro_rules! test {
@@ -274,6 +275,7 @@ mod tests {
     #[cfg(feature = "ristretto255")]
     test!(ristretto, crate::Ristretto255);
     test!(p256, ::p256::NistP256);
+    test!(p384, ::p384::NistP384);
 
     #[test]
     fn remote_key() {
