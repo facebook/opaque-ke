@@ -1,5 +1,11 @@
 # Changelog
 
+## 3.0.0-pre.2 (March 14, 2023)
+* Updated VOPRF to draft 19
+* Added P384 testing support
+* Increased MSRV to 1.65
+* Updating dependencies
+
 ## 3.0.0-pre.1 (February 8, 2023)
 * Renaming of X25519 to Curve25519
 * Increased MSRV to 1.60

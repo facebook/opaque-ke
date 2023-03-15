@@ -7,9 +7,9 @@ keywords = ["cryptography", "crypto", "opaque", "passwords", "authentication"]
 license = "Apache-2.0 OR MIT"
 name = "opaque-ke"
 readme = "README.md"
-repository = "https://github.com/novifinancial/opaque-ke"
+repository = "https://github.com/facebook/opaque-ke"
 rust-version = "1.65"
-version = "3.0.0-pre.1"
+version = "3.0.0-pre.2"
 
 [features]
 argon2 = ["dep:argon2"]
