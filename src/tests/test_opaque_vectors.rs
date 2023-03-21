@@ -217,11 +217,19 @@ fn tests() -> Result<(), ProtocolError> {
             type Ksf = Identity;
         }
 
-        let ristretto_real_tvs =
-            json_to_test_vectors!(rfc, "Real", "ristretto255, SHA512", Ristretto255Sha512NoKsf);
+        let ristretto_real_tvs = json_to_test_vectors!(
+            rfc,
+            "Real",
+            "ristretto255-SHA512, ristretto255",
+            Ristretto255Sha512NoKsf
+        );
 
-        let ristretto_fake_tvs =
-            json_to_test_vectors!(rfc, "Fake", "ristretto255, SHA512", Ristretto255Sha512NoKsf);
+        let ristretto_fake_tvs = json_to_test_vectors!(
+            rfc,
+            "Fake",
+            "ristretto255-SHA512, ristretto255",
+            Ristretto255Sha512NoKsf
+        );
 
         assert!(
             !(ristretto_real_tvs.is_empty() || ristretto_fake_tvs.is_empty()),
@@ -238,6 +246,45 @@ fn tests() -> Result<(), ProtocolError> {
         test_fake_vectors::<Ristretto255Sha512NoKsf>(&ristretto_fake_tvs)?;
     }
 
+    #[cfg(all(feature = "ristretto255", feature = "curve25519"))]
+    {
+        struct Ristretto255Sha512Curve25519NoKsf;
+        impl CipherSuite for Ristretto255Sha512Curve25519NoKsf {
+            type OprfCs = crate::Ristretto255;
+            type KeGroup = crate::Curve25519;
+            type KeyExchange = TripleDh;
+            type Ksf = Identity;
+        }
+
+        let ristretto_real_tvs = json_to_test_vectors!(
+            rfc,
+            "Real",
+            "ristretto255-SHA512, x25519",
+            Ristretto255Sha512Curve25519NoKsf
+        );
+
+        let ristretto_fake_tvs = json_to_test_vectors!(
+            rfc,
+            "Fake",
+            "ristretto255-SHA512, x25519",
+            Ristretto255Sha512Curve25519NoKsf
+        );
+
+        assert!(
+            !(ristretto_real_tvs.is_empty() || ristretto_fake_tvs.is_empty()),
+            "Parsing error"
+        );
+
+        test_registration_request::<Ristretto255Sha512Curve25519NoKsf>(&ristretto_real_tvs)?;
+        test_registration_response::<Ristretto255Sha512Curve25519NoKsf>(&ristretto_real_tvs)?;
+        //test_registration_upload::<Ristretto255Sha512Curve25519NoKsf>(&ristretto_real_tvs)?;
+        //test_ke1::<Ristretto255Sha512Curve25519NoKsf>(&ristretto_real_tvs)?;
+        //test_ke2::<Ristretto255Sha512Curve25519NoKsf>(&ristretto_real_tvs)?;
+        //test_ke3::<Ristretto255Sha512Curve25519NoKsf>(&ristretto_real_tvs)?;
+        //test_server_login_finish::<Ristretto255Sha512Curve25519NoKsf>(&ristretto_real_tvs)?;
+        //test_fake_vectors::<Ristretto255Sha512Curve25519NoKsf>(&ristretto_fake_tvs)?;
+    }
+
     struct P256Sha256NoKsf;
     impl CipherSuite for P256Sha256NoKsf {
         type OprfCs = p256::NistP256;
@@ -249,13 +296,13 @@ fn tests() -> Result<(), ProtocolError> {
     let p256_real_tvs = json_to_test_vectors!(
         rfc,
         "Real",
-        "P256_XMD:SHA-256_SSWU_RO_, SHA256",
+        "P256-SHA256, P256_XMD:SHA-256_SSWU_RO_",
         P256Sha256NoKsf
     );
     let p256_fake_tvs = json_to_test_vectors!(
         rfc,
         "Fake",
-        "P256_XMD:SHA-256_SSWU_RO_, SHA256",
+        "P256-SHA256, P256_XMD:SHA-256_SSWU_RO_",
         P256Sha256NoKsf
     );
 
