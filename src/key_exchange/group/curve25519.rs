@@ -96,7 +96,7 @@ impl KeGroup for Curve25519 {
         bytes
             .try_into()
             .ok()
-            .and_then(|bytes| Scalar::from_canonical_bytes(bytes).into())
+            .map(Scalar::from_bits_clamped)
             .filter(|scalar| scalar != &Scalar::ZERO)
             .ok_or(InternalError::PointError)
     }
