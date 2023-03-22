@@ -12,9 +12,8 @@ use curve25519_dalek::montgomery::MontgomeryPoint;
 use curve25519_dalek::scalar::Scalar;
 use curve25519_dalek::traits::Identity;
 use digest::core_api::BlockSizeUser;
-use digest::{FixedOutput, HashMarker};
-use elliptic_curve::hash2curve::{ExpandMsg, ExpandMsgXmd, Expander};
-use generic_array::typenum::{IsLess, IsLessOrEqual, U256, U32, U64};
+use digest::{FixedOutput, HashMarker, OutputSizeUser};
+use generic_array::typenum::{IsLess, IsLessOrEqual, U256, U32};
 use generic_array::GenericArray;
 use rand::{CryptoRng, RngCore};
 use subtle::ConstantTimeEq;
@@ -50,30 +49,28 @@ impl KeGroup for Curve25519 {
             let scalar = Scalar::random(rng);
 
             if scalar != Scalar::ZERO {
-                break scalar;
+                break Scalar::from_bits_clamped(scalar.to_bytes());
             }
         }
     }
 
-    // Implements the `HashToScalar()` function from
-    // <https://www.ietf.org/archive/id/draft-irtf-cfrg-voprf-19.html#section-4>
-    fn hash_to_scalar<'a, H>(input: &[&[u8]], dst: &[&[u8]]) -> Result<Self::Sk, InternalError>
+    fn hash_to_scalar<'a, H>(_input: &[&[u8]], _dst: &[&[u8]]) -> Result<Self::Sk, InternalError>
     where
         H: BlockSizeUser + Default + FixedOutput + HashMarker,
         H::OutputSize: IsLess<U256> + IsLessOrEqual<H::BlockSize>,
     {
-        let mut uniform_bytes = GenericArray::<_, U64>::default();
-        ExpandMsgXmd::<H>::expand_message(input, dst, 64)
-            .map_err(|_| InternalError::HashToScalar)?
-            .fill_bytes(&mut uniform_bytes);
+        unimplemented!()
+    }
 
-        let scalar = Scalar::from_bytes_mod_order_wide(&uniform_bytes.into());
-
-        if scalar == Scalar::ZERO {
-            Err(InternalError::HashToScalar)
-        } else {
-            Ok(scalar)
-        }
+    fn derive_auth_keypair<CS: voprf::CipherSuite>(
+        seed: GenericArray<u8, Self::SkLen>,
+        _info: &[u8],
+    ) -> Result<Self::Sk, InternalError>
+    where
+        <CS::Hash as OutputSizeUser>::OutputSize:
+            IsLess<U256> + IsLessOrEqual<<CS::Hash as BlockSizeUser>::BlockSize>,
+    {
+        Ok(Scalar::from_bits_clamped(seed.into()))
     }
 
     fn is_zero_scalar(scalar: Self::Sk) -> subtle::Choice {
