@@ -60,7 +60,7 @@ pub trait KeGroup {
     /// ensure that the KeGroup is used for the hash_to_scalar operation (as
     /// opposed to the OprfGroup).
     fn derive_auth_keypair<CS: voprf::CipherSuite>(
-        seed: &[u8],
+        seed: GenericArray<u8, Self::SkLen>,
         info: &[u8],
     ) -> Result<Self::Sk, InternalError>
     where
@@ -81,7 +81,7 @@ pub trait KeGroup {
             // skS = G.HashToScalar(deriveInput || I2OSP(counter, 1), DST = "DeriveKeyPair"
             // || contextString)
             let sk_s = Self::hash_to_scalar::<CS::Hash>(
-                &[seed, &info_len, info, &counter.to_be_bytes()],
+                &[&seed, &info_len, info, &counter.to_be_bytes()],
                 &[&dst_1, dst_2],
             )
             .map_err(|_| InternalError::OprfError(voprf::Error::DeriveKeyPair))?;
