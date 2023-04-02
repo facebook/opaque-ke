@@ -46,10 +46,15 @@ impl KeGroup for Curve25519 {
 
     fn random_sk<R: RngCore + CryptoRng>(rng: &mut R) -> Self::Sk {
         loop {
-            let scalar = Scalar::random(rng);
+            let scalar = {
+                // Sample 32 random bytes and then clamp, as described in https://cr.yp.to/ecdh.html
+                let mut scalar_bytes = [0u8; 32];
+                rng.fill_bytes(&mut scalar_bytes);
+                Scalar::from_bits_clamped(scalar_bytes)
+            };
 
             if scalar != Scalar::ZERO {
-                break Scalar::from_bits_clamped(scalar.to_bytes());
+                break scalar;
             }
         }
     }

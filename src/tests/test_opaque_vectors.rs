@@ -278,11 +278,11 @@ fn tests() -> Result<(), ProtocolError> {
         test_registration_request::<Ristretto255Sha512Curve25519NoKsf>(&ristretto_real_tvs)?;
         test_registration_response::<Ristretto255Sha512Curve25519NoKsf>(&ristretto_real_tvs)?;
         test_registration_upload::<Ristretto255Sha512Curve25519NoKsf>(&ristretto_real_tvs)?;
-        //test_ke1::<Ristretto255Sha512Curve25519NoKsf>(&ristretto_real_tvs)?;
-        //test_ke2::<Ristretto255Sha512Curve25519NoKsf>(&ristretto_real_tvs)?;
-        //test_ke3::<Ristretto255Sha512Curve25519NoKsf>(&ristretto_real_tvs)?;
-        //test_server_login_finish::<Ristretto255Sha512Curve25519NoKsf>(&ristretto_real_tvs)?;
-        //test_fake_vectors::<Ristretto255Sha512Curve25519NoKsf>(&ristretto_fake_tvs)?;
+        test_ke1::<Ristretto255Sha512Curve25519NoKsf>(&ristretto_real_tvs)?;
+        test_ke2::<Ristretto255Sha512Curve25519NoKsf>(&ristretto_real_tvs)?;
+        test_ke3::<Ristretto255Sha512Curve25519NoKsf>(&ristretto_real_tvs)?;
+        test_server_login_finish::<Ristretto255Sha512Curve25519NoKsf>(&ristretto_real_tvs)?;
+        test_fake_vectors::<Ristretto255Sha512Curve25519NoKsf>(&ristretto_fake_tvs)?;
     }
 
     struct P256Sha256NoKsf;
