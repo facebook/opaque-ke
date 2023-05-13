@@ -31,7 +31,7 @@ rand = "0.8"
 serde = { version = "1", features = ["derive"], optional = true }
 subtle = { version = "2.3.0", default-features = false }
 thiserror = "1.0.22"
-zeroize = { version = "~1.5", features = ["zeroize_derive"] }
+zeroize = { version = "1.5", features = ["zeroize_derive"] }
 
 [dev-dependencies]
 anyhow = "1.0.35"
