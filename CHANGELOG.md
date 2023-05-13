@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.7.0 (May 13, 2023)
+
+* Update zeroize dependency to allow for beyond version 1.5
+* Increase MSRV to 1.56
+
 ## 0.6.1 (January 25, 2022)
 
 * Fix `zeroize` implementing `Drop` on `enum`s now
