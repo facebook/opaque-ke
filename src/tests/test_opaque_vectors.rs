@@ -259,14 +259,14 @@ fn tests() -> Result<(), ProtocolError> {
         let ristretto_real_tvs = json_to_test_vectors!(
             rfc,
             "Real",
-            "ristretto255-SHA512, x25519",
+            "ristretto255-SHA512, curve25519",
             Ristretto255Sha512Curve25519NoKsf
         );
 
         let ristretto_fake_tvs = json_to_test_vectors!(
             rfc,
             "Fake",
-            "ristretto255-SHA512, x25519",
+            "ristretto255-SHA512, curve25519",
             Ristretto255Sha512Curve25519NoKsf
         );
 
