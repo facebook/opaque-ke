@@ -7,7 +7,7 @@
 
 //! Key Exchange group implementation for Curve25519
 
-use curve25519_dalek::constants::ED25519_BASEPOINT_TABLE;
+use curve25519_dalek::constants::X25519_BASEPOINT;
 use curve25519_dalek::montgomery::MontgomeryPoint;
 use curve25519_dalek::scalar::Scalar;
 use curve25519_dalek::traits::Identity;
@@ -47,7 +47,10 @@ impl KeGroup for Curve25519 {
 
     fn random_sk<R: RngCore + CryptoRng>(rng: &mut R) -> Self::Sk {
         loop {
-            let scalar = Scalar::random(rng);
+            // Sample 32 random bytes and then clamp, as described in https://cr.yp.to/ecdh.html
+            let mut scalar_bytes = [0u8; 32];
+            rng.fill_bytes(&mut scalar_bytes);
+            let scalar = Scalar::from_bits_clamped(scalar_bytes);
 
             if scalar != Scalar::ZERO {
                 break scalar;
@@ -68,6 +71,7 @@ impl KeGroup for Curve25519 {
             .fill_bytes(&mut uniform_bytes);
 
         let scalar = Scalar::from_bytes_mod_order_wide(&uniform_bytes.into());
+        let scalar = Scalar::from_bits_clamped(scalar.to_bytes());
 
         if scalar == Scalar::ZERO {
             Err(InternalError::HashToScalar)
@@ -81,7 +85,7 @@ impl KeGroup for Curve25519 {
     }
 
     fn public_key(sk: Self::Sk) -> Self::Pk {
-        (ED25519_BASEPOINT_TABLE * &sk).to_montgomery()
+        X25519_BASEPOINT * sk
     }
 
     fn diffie_hellman(pk: Self::Pk, sk: Self::Sk) -> GenericArray<u8, Self::PkLen> {
@@ -96,7 +100,10 @@ impl KeGroup for Curve25519 {
         bytes
             .try_into()
             .ok()
-            .and_then(|bytes| Scalar::from_canonical_bytes(bytes).into())
+            .and_then(|bytes| {
+                let scalar = Scalar::from_bits_clamped(bytes);
+                (scalar.as_bytes() == &bytes).then_some(scalar)
+            })
             .filter(|scalar| scalar != &Scalar::ZERO)
             .ok_or(InternalError::PointError)
     }
