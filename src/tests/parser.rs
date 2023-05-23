@@ -35,7 +35,7 @@ fn parse_vector_types(input: &str) -> String {
 
 fn parse_ciphersuites(input: &str) -> String {
     let re = regex::Regex::new(
-        r"# Configuration(.|\n)+?Hash: (?P<hash>.*?)\n(.|\n)*?Group: (?P<group>.*?)\n",
+        r"#### Configuration\n(.|\n)*?OPRF: (?P<oprf>.*?)\n(.|\n)*?Group: (?P<group>.*?)\n",
     )
     .unwrap();
     let mut ciphersuites = vec![];
@@ -46,8 +46,8 @@ fn parse_ciphersuites(input: &str) -> String {
     for caps in re.captures_iter(input) {
         let ciphersuite = format!(
             "{{ \"{}, {}\": {{ {} }} }}",
+            &caps["oprf"],
             &caps["group"],
-            &caps["hash"],
             parse_params(chunks[count])
         );
         ciphersuites.push(ciphersuite);

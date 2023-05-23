@@ -126,11 +126,11 @@ where
         },
         context: parse!(values, "Context"),
         client_private_key: decode(values, "client_private_key"),
-        client_keyshare: parse!(values, "client_keyshare"),
+        client_keyshare: parse!(values, "client_public_keyshare"),
         client_private_keyshare: parse!(values, "client_private_keyshare"),
         server_public_key: parse!(values, "server_public_key"),
         server_private_key: parse!(values, "server_private_key"),
-        server_keyshare: parse!(values, "server_keyshare"),
+        server_keyshare: parse!(values, "server_public_keyshare"),
         server_private_keyshare: parse!(values, "server_private_keyshare"),
         client_identity: decode(values, "client_identity"),
         server_identity: decode(values, "server_identity"),
@@ -154,7 +154,7 @@ where
         export_key: parse!(values, "export_key"),
         session_key: parse!(values, "session_key"),
         auth_key: parse!(values, "auth_key"),
-        randomized_pwd: parse!(values, "randomized_pwd"),
+        randomized_pwd: parse!(values, "randomized_password"),
         handshake_secret: parse!(values, "handshake_secret"),
         server_mac_key: parse!(values, "server_mac_key"),
         client_mac_key: parse!(values, "client_mac_key"),
@@ -217,11 +217,19 @@ fn tests() -> Result<(), ProtocolError> {
             type Ksf = Identity;
         }
 
-        let ristretto_real_tvs =
-            json_to_test_vectors!(rfc, "Real", "ristretto255, SHA512", Ristretto255Sha512NoKsf);
+        let ristretto_real_tvs = json_to_test_vectors!(
+            rfc,
+            "Real",
+            "ristretto255-SHA512, ristretto255",
+            Ristretto255Sha512NoKsf
+        );
 
-        let ristretto_fake_tvs =
-            json_to_test_vectors!(rfc, "Fake", "ristretto255, SHA512", Ristretto255Sha512NoKsf);
+        let ristretto_fake_tvs = json_to_test_vectors!(
+            rfc,
+            "Fake",
+            "ristretto255-SHA512, ristretto255",
+            Ristretto255Sha512NoKsf
+        );
 
         assert!(
             !(ristretto_real_tvs.is_empty() || ristretto_fake_tvs.is_empty()),
@@ -238,6 +246,45 @@ fn tests() -> Result<(), ProtocolError> {
         test_fake_vectors::<Ristretto255Sha512NoKsf>(&ristretto_fake_tvs)?;
     }
 
+    #[cfg(all(feature = "ristretto255", feature = "curve25519"))]
+    {
+        struct Ristretto255Sha512Curve25519NoKsf;
+        impl CipherSuite for Ristretto255Sha512Curve25519NoKsf {
+            type OprfCs = crate::Ristretto255;
+            type KeGroup = crate::Curve25519;
+            type KeyExchange = TripleDh;
+            type Ksf = Identity;
+        }
+
+        let ristretto_real_tvs = json_to_test_vectors!(
+            rfc,
+            "Real",
+            "ristretto255-SHA512, curve25519",
+            Ristretto255Sha512Curve25519NoKsf
+        );
+
+        let ristretto_fake_tvs = json_to_test_vectors!(
+            rfc,
+            "Fake",
+            "ristretto255-SHA512, curve25519",
+            Ristretto255Sha512Curve25519NoKsf
+        );
+
+        assert!(
+            !(ristretto_real_tvs.is_empty() || ristretto_fake_tvs.is_empty()),
+            "Parsing error"
+        );
+
+        test_registration_request::<Ristretto255Sha512Curve25519NoKsf>(&ristretto_real_tvs)?;
+        test_registration_response::<Ristretto255Sha512Curve25519NoKsf>(&ristretto_real_tvs)?;
+        test_registration_upload::<Ristretto255Sha512Curve25519NoKsf>(&ristretto_real_tvs)?;
+        test_ke1::<Ristretto255Sha512Curve25519NoKsf>(&ristretto_real_tvs)?;
+        test_ke2::<Ristretto255Sha512Curve25519NoKsf>(&ristretto_real_tvs)?;
+        test_ke3::<Ristretto255Sha512Curve25519NoKsf>(&ristretto_real_tvs)?;
+        test_server_login_finish::<Ristretto255Sha512Curve25519NoKsf>(&ristretto_real_tvs)?;
+        test_fake_vectors::<Ristretto255Sha512Curve25519NoKsf>(&ristretto_fake_tvs)?;
+    }
+
     struct P256Sha256NoKsf;
     impl CipherSuite for P256Sha256NoKsf {
         type OprfCs = p256::NistP256;
@@ -249,13 +296,13 @@ fn tests() -> Result<(), ProtocolError> {
     let p256_real_tvs = json_to_test_vectors!(
         rfc,
         "Real",
-        "P256_XMD:SHA-256_SSWU_RO_, SHA256",
+        "P256-SHA256, P256_XMD:SHA-256_SSWU_RO_",
         P256Sha256NoKsf
     );
     let p256_fake_tvs = json_to_test_vectors!(
         rfc,
         "Fake",
-        "P256_XMD:SHA-256_SSWU_RO_, SHA256",
+        "P256-SHA256, P256_XMD:SHA-256_SSWU_RO_",
         P256Sha256NoKsf
     );
 
