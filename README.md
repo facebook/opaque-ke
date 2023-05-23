@@ -60,4 +60,6 @@ improvements to the library.
 License
 -------
 
-This project is [licensed](./LICENSE) under either Apache 2.0 or MIT, at your option.
+This project is dual-licensed under either the [MIT license](./LICENSE-MIT)
+or the [Apache License, Version 2.0](./LICENSE-APACHE).
+You may select, at your option, one of the above-listed licenses.

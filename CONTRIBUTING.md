@@ -27,4 +27,5 @@ outlined on that page and do not file a public issue.
 
 ## License
 By contributing to opaque-ke, you agree that your contributions will be
-licensed under the LICENSE file in the root directory of this source tree.
+licensed under both the LICENSE-MIT and LICENSE-APACHE files in the root
+directory of this source tree.
