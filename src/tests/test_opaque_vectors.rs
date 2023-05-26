@@ -42,12 +42,10 @@ pub struct OpaqueTestVectorParameters {
     pub dummy_masking_key: Vec<u8>,
     pub context: Vec<u8>,
     pub client_private_key: Option<Vec<u8>>,
-    pub client_keyshare: Vec<u8>,
-    pub client_private_keyshare: Vec<u8>,
+    pub client_keyshare_seed: Vec<u8>,
     pub server_public_key: Vec<u8>,
     pub server_private_key: Vec<u8>,
-    pub server_keyshare: Vec<u8>,
-    pub server_private_keyshare: Vec<u8>,
+    pub server_keyshare_seed: Vec<u8>,
     pub client_identity: Option<Vec<u8>>,
     pub server_identity: Option<Vec<u8>>,
     pub credential_identifier: Vec<u8>,
@@ -127,12 +125,10 @@ where
         },
         context: parse!(values, "Context"),
         client_private_key: decode(values, "client_private_key"),
-        client_keyshare: parse!(values, "client_public_keyshare"),
-        client_private_keyshare: parse!(values, "client_private_keyshare"),
+        client_keyshare_seed: parse!(values, "client_keyshare_seed"),
         server_public_key: parse!(values, "server_public_key"),
         server_private_key: parse!(values, "server_private_key"),
-        server_keyshare: parse!(values, "server_public_keyshare"),
-        server_private_keyshare: parse!(values, "server_private_keyshare"),
+        server_keyshare_seed: parse!(values, "server_keyshare_seed"),
         client_identity: decode(values, "client_identity"),
         server_identity: decode(values, "server_identity"),
         credential_identifier: parse!(values, "credential_identifier"),
@@ -460,7 +456,7 @@ where
     for parameters in tvs {
         let client_login_start = [
             parameters.blind_login.as_slice(),
-            &parameters.client_private_keyshare,
+            &parameters.client_keyshare_seed,
             &parameters.client_nonce,
         ]
         .concat();
@@ -522,16 +518,16 @@ where
         let record =
             ServerRegistration::<CS>::deserialize(&get_password_file_bytes::<CS>(parameters))?;
 
-        let mut server_private_keyshare_and_nonce_rng = CycleRng::new(
+        let mut server_keyshare_seed_and_nonce_rng = CycleRng::new(
             [
                 parameters.masking_nonce.as_slice(),
-                &parameters.server_private_keyshare,
+                &parameters.server_keyshare_seed,
                 &parameters.server_nonce,
             ]
             .concat(),
         );
         let server_login_start_result = ServerLogin::<CS>::start(
-            &mut server_private_keyshare_and_nonce_rng,
+            &mut server_keyshare_seed_and_nonce_rng,
             &server_setup,
             Some(record),
             CredentialRequest::<CS>::deserialize(&parameters.KE1).unwrap(),
@@ -580,7 +576,7 @@ where
     for parameters in tvs {
         let client_login_start = [
             parameters.blind_login.as_slice(),
-            &parameters.client_private_keyshare,
+            &parameters.client_keyshare_seed,
             &parameters.client_nonce,
         ]
         .concat();
@@ -662,16 +658,16 @@ where
         let record =
             ServerRegistration::<CS>::deserialize(&get_password_file_bytes::<CS>(parameters))?;
 
-        let mut server_private_keyshare_and_nonce_rng = CycleRng::new(
+        let mut server_keyshare_seed_and_nonce_rng = CycleRng::new(
             [
                 parameters.masking_nonce.as_slice(),
-                &parameters.server_private_keyshare,
+                &parameters.server_keyshare_seed,
                 &parameters.server_nonce,
             ]
             .concat(),
         );
         let server_login_start_result = ServerLogin::<CS>::start(
-            &mut server_private_keyshare_and_nonce_rng,
+            &mut server_keyshare_seed_and_nonce_rng,
             &server_setup,
             Some(record),
             CredentialRequest::<CS>::deserialize(&parameters.KE1).unwrap(),
@@ -729,17 +725,17 @@ where
             .concat(),
         )?;
 
-        let mut server_private_keyshare_and_nonce_rng = CycleRng::new(
+        let mut server_keyshare_seed_and_nonce_rng = CycleRng::new(
             [
                 parameters.dummy_masking_key.as_slice(),
                 &parameters.masking_nonce,
-                &parameters.server_private_keyshare,
+                &parameters.server_keyshare_seed,
                 &parameters.server_nonce,
             ]
             .concat(),
         );
         let server_login_start_result = ServerLogin::<CS>::start(
-            &mut server_private_keyshare_and_nonce_rng,
+            &mut server_keyshare_seed_and_nonce_rng,
             &server_setup,
             None,
             CredentialRequest::<CS>::deserialize(&parameters.KE1).unwrap(),
