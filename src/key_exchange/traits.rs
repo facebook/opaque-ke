@@ -6,9 +6,9 @@
 // of this source tree. You may select, at your option, one of the above-listed
 // licenses.
 
-use digest::core_api::BlockSizeUser;
+use digest::core_api::{BlockSizeUser, OutputSizeUser};
 use digest::Output;
-use generic_array::typenum::{IsLess, Le, NonZero, U256};
+use generic_array::typenum::{IsLess, IsLessOrEqual, Le, NonZero, U256};
 use generic_array::{ArrayLength, GenericArray};
 use rand::{CryptoRng, RngCore};
 use zeroize::ZeroizeOnDrop;
@@ -31,12 +31,23 @@ where
     type KE2Message: Deserialize + Serialize + ZeroizeOnDrop + Clone;
     type KE3Message: Deserialize + Serialize + ZeroizeOnDrop + Clone;
 
-    fn generate_ke1<R: RngCore + CryptoRng>(
+    fn generate_ke1<OprfCs: voprf::CipherSuite, R: RngCore + CryptoRng>(
         rng: &mut R,
-    ) -> Result<(Self::KE1State, Self::KE1Message), ProtocolError>;
+    ) -> Result<(Self::KE1State, Self::KE1Message), ProtocolError>
+    where
+        <OprfCs::Hash as OutputSizeUser>::OutputSize:
+            IsLess<U256> + IsLessOrEqual<<OprfCs::Hash as BlockSizeUser>::BlockSize>;
 
     #[allow(clippy::too_many_arguments)]
-    fn generate_ke2<'a, 'b, 'c, 'd, R: RngCore + CryptoRng, S: SecretKey<G>>(
+    fn generate_ke2<
+        'a,
+        'b,
+        'c,
+        'd,
+        OprfCs: voprf::CipherSuite,
+        R: RngCore + CryptoRng,
+        S: SecretKey<G>,
+    >(
         rng: &mut R,
         l1_bytes: impl Iterator<Item = &'a [u8]>,
         l2_bytes: impl Iterator<Item = &'b [u8]>,
@@ -46,7 +57,10 @@ where
         id_u: impl Iterator<Item = &'c [u8]>,
         id_s: impl Iterator<Item = &'d [u8]>,
         context: &[u8],
-    ) -> Result<GenerateKe2Result<Self, D, G>, ProtocolError<S::Error>>;
+    ) -> Result<GenerateKe2Result<Self, D, G>, ProtocolError<S::Error>>
+    where
+        <OprfCs::Hash as OutputSizeUser>::OutputSize:
+            IsLess<U256> + IsLessOrEqual<<OprfCs::Hash as BlockSizeUser>::BlockSize>;
 
     #[allow(clippy::too_many_arguments)]
     fn generate_ke3<'a, 'b, 'c, 'd>(
