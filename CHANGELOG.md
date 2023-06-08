@@ -1,5 +1,11 @@
 # Changelog
 
+## 3.0.0-pre.3 (June 7, 2023)
+* Adjusted curve25519 support logic
+* Adjusted key generation logic to be in line with commit 727b9ac of
+  https://github.com/cfrg/draft-irtf-cfrg-opaque
+* Updated voprf dependency
+
 ## 3.0.0-pre.2 (March 14, 2023)
 * Updated VOPRF to draft 19
 * Added P384 testing support
