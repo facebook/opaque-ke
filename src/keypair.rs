@@ -53,9 +53,12 @@ impl<KG: KeGroup, S: SecretKey<KG>> KeyPair<KG, S> {
     }
 
     /// Obtains a KeyPair from a private key
-    pub fn from_private_key(sk: S) -> Result<Self, ProtocolError<S::Error>> {
-        let pk = sk.public_key()?;
-        Ok(Self { pk, sk })
+    pub fn from_private_key(private_key: S) -> Result<Self, ProtocolError<S::Error>> {
+        let pk = private_key.public_key()?;
+        Ok(Self {
+            pk,
+            sk: private_key,
+        })
     }
 }
 
