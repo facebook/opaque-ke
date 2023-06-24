@@ -8,9 +8,8 @@
 
 //! Key Exchange group implementation for Curve25519
 
-use curve25519_dalek::constants::X25519_BASEPOINT;
 use curve25519_dalek::montgomery::MontgomeryPoint;
-use curve25519_dalek::scalar::Scalar;
+use curve25519_dalek::scalar::{self, Scalar};
 use curve25519_dalek::traits::Identity;
 use digest::core_api::BlockSizeUser;
 use digest::{FixedOutput, HashMarker, OutputSizeUser};
@@ -29,7 +28,7 @@ pub struct Curve25519;
 impl KeGroup for Curve25519 {
     type Pk = MontgomeryPoint;
     type PkLen = U32;
-    type Sk = Scalar;
+    type Sk = [u8; 32];
     type SkLen = U32;
 
     fn serialize_pk(pk: Self::Pk) -> GenericArray<u8, Self::PkLen> {
@@ -50,9 +49,9 @@ impl KeGroup for Curve25519 {
             // Sample 32 random bytes and then clamp, as described in https://cr.yp.to/ecdh.html
             let mut scalar_bytes = [0u8; 32];
             rng.fill_bytes(&mut scalar_bytes);
-            let scalar = Scalar::from_bits_clamped(scalar_bytes);
+            let scalar = scalar::clamp_integer(scalar_bytes);
 
-            if scalar != Scalar::ZERO {
+            if scalar != Scalar::ZERO.to_bytes() {
                 break scalar;
             }
         }
@@ -73,23 +72,23 @@ impl KeGroup for Curve25519 {
         <CS::Hash as OutputSizeUser>::OutputSize:
             IsLess<U256> + IsLessOrEqual<<CS::Hash as BlockSizeUser>::BlockSize>,
     {
-        Ok(Scalar::from_bits_clamped(seed.into()))
+        Ok(scalar::clamp_integer(seed.into()))
     }
 
     fn is_zero_scalar(scalar: Self::Sk) -> subtle::Choice {
-        scalar.ct_eq(&Scalar::ZERO)
+        scalar.ct_eq(&Scalar::ZERO.to_bytes())
     }
 
     fn public_key(sk: Self::Sk) -> Self::Pk {
-        X25519_BASEPOINT * sk
+        MontgomeryPoint::mul_base_clamped(sk)
     }
 
     fn diffie_hellman(pk: Self::Pk, sk: Self::Sk) -> GenericArray<u8, Self::PkLen> {
-        Self::serialize_pk(sk * pk)
+        Self::serialize_pk(pk.mul_clamped(sk))
     }
 
     fn serialize_sk(sk: Self::Sk) -> GenericArray<u8, Self::SkLen> {
-        sk.to_bytes().into()
+        sk.into()
     }
 
     fn deserialize_sk(bytes: &[u8]) -> Result<Self::Sk, InternalError> {
@@ -97,10 +96,10 @@ impl KeGroup for Curve25519 {
             .try_into()
             .ok()
             .and_then(|bytes| {
-                let scalar = Scalar::from_bits_clamped(bytes);
-                (scalar.as_bytes() == &bytes).then_some(scalar)
+                let scalar = scalar::clamp_integer(bytes);
+                (scalar == bytes).then_some(scalar)
             })
-            .filter(|scalar| scalar != &Scalar::ZERO)
+            .filter(|scalar| scalar != &Scalar::ZERO.to_bytes())
             .ok_or(InternalError::PointError)
     }
 }
