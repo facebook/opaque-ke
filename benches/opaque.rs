@@ -15,7 +15,7 @@ use rand::rngs::OsRng;
 
 #[cfg(feature = "ristretto255")]
 static SUFFIX: &str = "ristretto255";
-#[cfg(all(not(feature = "ristretto255")))]
+#[cfg(not(feature = "ristretto255"))]
 static SUFFIX: &str = "p256";
 
 struct Default;
