@@ -42,7 +42,9 @@ Resources
 - [OPAQUE academic publication](https://eprint.iacr.org/2018/163.pdf), including formal definitions and a proof of security
 - [draft-irtf-cfrg-opaque-10](https://datatracker.ietf.org/doc/draft-irtf-cfrg-opaque/10/), containing a detailed (byte-level) specification for OPAQUE
 - ["Let's talk about PAKE"](https://blog.cryptographyengineering.com/2018/10/19/lets-talk-about-pake/), an introductory blog post written by Matthew Green that covers OPAQUE
-- [opaque-wasm](https://github.com/marucjmar/opaque-wasm), a WebAssembly package for this library
+- [@serenity-kit/opaque](https://github.com/serenity-kit/opaque), a WebAssembly package for this library
+- [opaque-wasm](https://github.com/marucjmar/opaque-wasm), a WebAssembly package for this library. A comparison between `@serenity-kit/opaque` and `opaque-wasm` can be found [here](https://opaque-documentation.netlify.app/docs/faq#how-does-it-compare-to-opaque-wasm)
+- [react-native-opaque](https://github.com/serenity-kit/react-native-opaque), a React Native package for this library matching the API of `@serenity-kit/opaque`
 
 Contributors
 ------------
