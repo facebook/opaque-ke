@@ -24,7 +24,7 @@ std = ["dep:getrandom"]
 argon2 = { version = "0.5", default-features = false, features = [
   "alloc",
 ], optional = true }
-curve25519-dalek = { version = "=4.0.0-rc.3", default-features = false, features = [
+curve25519-dalek = { version = "=4.0.0", default-features = false, features = [
   "zeroize",
 ], optional = true }
 derive-where = { version = "1", features = ["zeroize-on-drop"] }
