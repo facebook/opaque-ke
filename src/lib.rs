@@ -523,8 +523,9 @@
 //!
 //! Upon a successful completion of the OPAQUE protocol (the client runs login
 //! with the same password used during registration), the client and server have
-//! access to a session key, which is a pseudorandomly distributed 32-byte
-//! string which only the client and server know. Multiple login runs using the
+//! access to a session key, which is a pseudorandomly distributed byte
+//! string (of length equal to the output size of [voprf::CipherSuite::Hash])
+//! which only the client and server know. Multiple login runs using the
 //! same password for the same client will produce different session keys,
 //! distributed as uniformly random strings. Thus, the session key can be used
 //! to establish a secure channel between the client and server.
@@ -620,11 +621,12 @@
 //!
 //! ## Export Key
 //!
-//! The export key is a pseudorandomly distributed 32-byte string output by both
-//! the [Client Registration Finish](#client-registration-finish) and [Client
-//! Login Finish](#client-login-finish) steps. The same export key string will
-//! be output by both functions only if the exact same password is passed to
-//! [ClientRegistration::start] and [ClientLogin::start].
+//! The export key is a pseudorandomly distributed byte string
+//! (of length equal to the output size of [voprf::CipherSuite::Hash]) output by
+//! both the [Client Registration Finish](#client-registration-finish) and
+//! [Client Login Finish](#client-login-finish) steps. The same export key
+//! string will be output by both functions only if the exact same password is
+//! passed to [ClientRegistration::start] and [ClientLogin::start].
 //!
 //! The export key retains as much secrecy as the password itself, and is
 //! similarly derived through an evaluation of the key stretching function.
