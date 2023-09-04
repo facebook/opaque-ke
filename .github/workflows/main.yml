@@ -64,7 +64,7 @@ jobs:
           - curve25519
     steps:
       - uses: actions/checkout@v3
-      - uses: hecrj/setup-rust-action@v1
+      - uses: hecrj/setup-rust-action@v2
       - run: cargo install cross
       # Note: just use `cross` as you would `cargo`, but always
       # pass the `--target=${{ matrix.target }}` arg. (Yes, really).
@@ -138,7 +138,7 @@ jobs:
           - serde
     steps:
       - uses: actions/checkout@v3
-      - uses: hecrj/setup-rust-action@v1
+      - uses: hecrj/setup-rust-action@v2
       - run: rustup target add ${{ matrix.target }}
       - run: cargo build --verbose --target=${{ matrix.target }} --no-default-features --features ${{ matrix.frontend_feature }},${{ matrix.backend_feature }}
 
