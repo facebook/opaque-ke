@@ -23,11 +23,11 @@ jobs:
           - --features serde
         toolchain:
           - stable
-          - 1.65.0
+          - 1.70.0
     name: test
     steps:
       - name: Checkout sources
-        uses: actions/checkout@v3
+        uses: actions/checkout@main
 
       - name: Install ${{ matrix.toolchain }} toolchain
         uses: actions-rs/toolchain@v1
@@ -63,8 +63,8 @@ jobs:
           - curve25519,ristretto255-voprf
           - curve25519
     steps:
-      - uses: actions/checkout@v3
-      - uses: hecrj/setup-rust-action@v1
+      - uses: actions/checkout@main
+      - uses: hecrj/setup-rust-action@v2
       - run: cargo install cross
       # Note: just use `cross` as you would `cargo`, but always
       # pass the `--target=${{ matrix.target }}` arg. (Yes, really).
@@ -78,13 +78,13 @@ jobs:
       matrix:
         toolchain:
           - stable
-          - 1.65.0
+          - 1.70.0
     name: test simple_login command-line example
     steps:
       - name: install expect
         run: sudo apt-get install expect
       - name: Checkout sources
-        uses: actions/checkout@v3
+        uses: actions/checkout@main
       - name: install rust
         uses: actions-rs/toolchain@v1
         with:
@@ -101,13 +101,13 @@ jobs:
       matrix:
         toolchain:
           - stable
-          - 1.65.0
+          - 1.70.0
     name: test digital_locker command-line example
     steps:
       - name: install expect
         run: sudo apt-get install expect
       - name: Checkout sources
-        uses: actions/checkout@v3
+        uses: actions/checkout@main
       - name: install rust
         uses: actions-rs/toolchain@v1
         with:
@@ -137,8 +137,8 @@ jobs:
           - argon2
           - serde
     steps:
-      - uses: actions/checkout@v3
-      - uses: hecrj/setup-rust-action@v1
+      - uses: actions/checkout@main
+      - uses: hecrj/setup-rust-action@v2
       - run: rustup target add ${{ matrix.target }}
       - run: cargo build --verbose --target=${{ matrix.target }} --no-default-features --features ${{ matrix.frontend_feature }},${{ matrix.backend_feature }}
 
@@ -155,7 +155,7 @@ jobs:
           - --features curve25519
     steps:
       - name: Checkout sources
-        uses: actions/checkout@v3
+        uses: actions/checkout@main
 
       - name: Install stable toolchain
         uses: actions-rs/toolchain@v1
@@ -175,7 +175,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout sources
-        uses: actions/checkout@v3
+        uses: actions/checkout@main
 
       - name: Install stable toolchain
         uses: actions-rs/toolchain@v1
@@ -204,7 +204,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout sources
-        uses: actions/checkout@v3
+        uses: actions/checkout@main
 
       - name: Install nightly toolchain
         uses: actions-rs/toolchain@v1
@@ -239,7 +239,7 @@ jobs:
         run: cargo install taplo-cli --locked 
 
       - name: Checkout sources
-        uses: actions/checkout@v3
+        uses: actions/checkout@main
 
       - name: Run Taplo
         run: taplo fmt --check
@@ -248,5 +248,5 @@ jobs:
     name: cargo-deny check
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@main
       - uses: EmbarkStudios/cargo-deny-action@v1
