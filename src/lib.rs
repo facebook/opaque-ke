@@ -78,7 +78,8 @@
 //! # Ok::<(), ProtocolError>(())
 //! ```
 //! The server must persist an instance of [ServerSetup] for the registration
-//! and login steps.
+//! and login steps, and can use [ServerSetup::serialize] and
+//! [ServerSetup::deserialize] to save and restore the instance.
 //!
 //! ## Registration
 //! The registration protocol between the client and server consists of four
