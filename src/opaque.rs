@@ -224,6 +224,10 @@ where
     Le<<<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
 {
     /// Create [`ServerSetup`] with the given keypair
+    ///
+    /// This function should not be used to restore a previously-existing
+    /// instance of [ServerSetup]. Instead, use [ServerSetup::serialize] and
+    /// [ServerSetup::deserialize] for this purpose.
     pub fn new_with_key<R: CryptoRng + RngCore>(
         rng: &mut R,
         keypair: KeyPair<CS::KeGroup, S>,
