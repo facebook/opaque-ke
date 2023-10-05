@@ -6,7 +6,7 @@
 // of this source tree. You may select, at your option, one of the above-listed
 // licenses.
 
-//! Defines the CipherSuite trait to specify the underlying primitives for
+//! Defines the [`CipherSuite`] trait to specify the underlying primitives for
 //! OPAQUE
 
 use digest::core_api::{BlockSizeUser, CoreProxy};

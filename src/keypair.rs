@@ -47,12 +47,12 @@ impl<KG: KeGroup, S: SecretKey<KG>> KeyPair<KG, S> {
         &self.sk
     }
 
-    /// Obtains a KeyPair from a slice representing the private key
+    /// Obtains a [`KeyPair`] from a slice representing the private key
     pub fn from_private_key_slice(input: &[u8]) -> Result<Self, ProtocolError<S::Error>> {
         Self::from_private_key(S::deserialize(input)?)
     }
 
-    /// Obtains a KeyPair from a private key
+    /// Obtains a [`KeyPair`] from a private key
     pub fn from_private_key(private_key: S) -> Result<Self, ProtocolError<S::Error>> {
         let pk = private_key.public_key()?;
         Ok(Self {
@@ -90,7 +90,7 @@ where
     KG::Sk: std::fmt::Debug,
 {
     /// Test-only strategy returning a proptest Strategy based on
-    /// generate_random
+    /// [`Self::generate_random`]
     fn uniform_keypair_strategy<CS: voprf::CipherSuite>() -> proptest::prelude::BoxedStrategy<Self>
     where
         <CS::Hash as OutputSizeUser>::OutputSize:

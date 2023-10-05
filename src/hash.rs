@@ -32,9 +32,9 @@ where
 {
 }
 
-/// Trait inheriting the requirements from digest::Digest for compatibility with
-/// HKDF and HMAC Associated types could be simplified when they are made as
-/// defaults: <https://github.com/rust-lang/rust/issues/29661>
+/// Trait inheriting the requirements from [`digest::Digest`] for compatibility
+/// with HKDF and HMAC Associated types could be simplified when they are made
+/// as defaults: <https://github.com/rust-lang/rust/issues/29661>
 pub trait Hash:
     Default
     + HashMarker
