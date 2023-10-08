@@ -6,7 +6,7 @@
 // of this source tree. You may select, at your option, one of the above-listed
 // licenses.
 
-//! Includes the KeGroup trait and definitions for the key exchange groups
+//! Includes the [`KeGroup`] trait and definitions for the key exchange groups
 
 #[cfg(feature = "curve25519")]
 pub mod curve25519;
@@ -56,12 +56,13 @@ pub trait KeGroup {
         H: BlockSizeUser + Default + FixedOutput + HashMarker,
         H::OutputSize: IsLess<U256> + IsLessOrEqual<H::BlockSize>;
 
-    /// Corresponds to the DeriveAuthKeyPair() function defined in
+    /// Corresponds to the `DeriveAuthKeyPair()` function defined in
     /// <https://www.ietf.org/archive/id/draft-irtf-cfrg-opaque-08.html#section-6.4.2>
     ///
     /// Note that we cannot call the voprf crate directly since we need to
-    /// ensure that the KeGroup is used for the hash_to_scalar operation (as
-    /// opposed to the OprfGroup).
+    /// ensure that the [`KeGroup`] is used for the
+    /// [`hash_to_scalar`](Self::hash_to_scalar) operation (as opposed to
+    /// the [`OprfGroup`](voprf::Group)).
     fn derive_auth_keypair<CS: voprf::CipherSuite>(
         seed: GenericArray<u8, Self::SkLen>,
     ) -> Result<Self::Sk, InternalError>

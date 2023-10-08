@@ -7,7 +7,7 @@
 // licenses.
 
 //! The OPAQUE test vectors taken from
-//! https://github.com/cfrg/draft-irtf-cfrg-opaque/blob/727b9acb908dce296e15bc14a53a7d04ba9604d0/poc/vectors/formatted.txt
+//! <https://github.com/cfrg/draft-irtf-cfrg-opaque/blob/727b9acb908dce296e15bc14a53a7d04ba9604d0/poc/vectors/formatted.txt>
 
 pub(crate) static VECTORS: &str = r#"
 ## Real Test Vectors {#real-vectors}

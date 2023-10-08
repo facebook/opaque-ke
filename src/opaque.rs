@@ -226,8 +226,8 @@ where
     /// Create [`ServerSetup`] with the given keypair
     ///
     /// This function should not be used to restore a previously-existing
-    /// instance of [ServerSetup]. Instead, use [ServerSetup::serialize] and
-    /// [ServerSetup::deserialize] for this purpose.
+    /// instance of [`ServerSetup`]. Instead, use [`ServerSetup::serialize`] and
+    /// [`ServerSetup::deserialize`] for this purpose.
     pub fn new_with_key<R: CryptoRng + RngCore>(
         rng: &mut R,
         keypair: KeyPair<CS::KeGroup, S>,
@@ -328,7 +328,7 @@ where
     }
 
     /// Returns an initial "blinded" request to send to the server, as well as a
-    /// ClientRegistration
+    /// [`ClientRegistration`]
     pub fn start<R: RngCore + CryptoRng>(
         blinding_factor_rng: &mut R,
         password: &[u8],
@@ -438,7 +438,7 @@ where
     }
 
     /// From the client's "blinded" password, returns a response to be sent back
-    /// to the client, as well as a ServerRegistration
+    /// to the client, as well as a [`ServerRegistration`]
     pub fn start<S: SecretKey<CS::KeGroup>>(
         server_setup: &ServerSetup<CS, S>,
         message: RegistrationRequest<CS>,
@@ -461,7 +461,7 @@ where
     }
 
     /// From the client's cryptographic identifiers, fully populates and returns
-    /// a ServerRegistration
+    /// a [`ServerRegistration`]
     pub fn finish(message: RegistrationUpload<CS>) -> Self {
         Self(message)
     }
@@ -540,7 +540,7 @@ where
     Le<<<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
 {
     /// Returns an initial "blinded" password request to send to the server, as
-    /// well as a ClientLogin
+    /// well as a [`ClientLogin`]
     pub fn start<R: RngCore + CryptoRng>(
         rng: &mut R,
         password: &[u8],
@@ -691,7 +691,7 @@ where
     }
 
     /// From the client's "blinded" password, returns a challenge to be sent
-    /// back to the client, as well as a ServerLogin
+    /// back to the client, as well as a [`ServerLogin`]
     pub fn start<R: RngCore + CryptoRng, S: SecretKey<CS::KeGroup>>(
         rng: &mut R,
         server_setup: &ServerSetup<CS, S>,
