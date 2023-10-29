@@ -727,52 +727,52 @@ macro_rules! test {
             proptest! {
                 #[test]
                 fn test_nocrash_registration_request(bytes in vec(any::<u8>(), 0..200)) {
-                    RegistrationRequest::<$CS>::deserialize(&bytes).map_or(true, |_| true);
+                    let _ = RegistrationRequest::<$CS>::deserialize(&bytes).map_or(true, |_| true);
                 }
 
                 #[test]
                 fn test_nocrash_registration_response(bytes in vec(any::<u8>(), 0..200)) {
-                    RegistrationResponse::<$CS>::deserialize(&bytes).map_or(true, |_| true);
+                    let _ = RegistrationResponse::<$CS>::deserialize(&bytes).map_or(true, |_| true);
                 }
 
                 #[test]
                 fn test_nocrash_registration_upload(bytes in vec(any::<u8>(), 0..200)) {
-                    RegistrationUpload::<$CS>::deserialize(&bytes).map_or(true, |_| true);
+                    let _ = RegistrationUpload::<$CS>::deserialize(&bytes).map_or(true, |_| true);
                 }
 
                 #[test]
                 fn test_nocrash_credential_request(bytes in vec(any::<u8>(), 0..500)) {
-                    CredentialRequest::<$CS>::deserialize(&bytes).map_or(true, |_| true);
+                    let _ = CredentialRequest::<$CS>::deserialize(&bytes).map_or(true, |_| true);
                 }
 
                 #[test]
                 fn test_nocrash_credential_response(bytes in vec(any::<u8>(), 0..500)) {
-                    CredentialResponse::<$CS>::deserialize(&bytes).map_or(true, |_| true);
+                    let _ = CredentialResponse::<$CS>::deserialize(&bytes).map_or(true, |_| true);
                 }
 
                 #[test]
                 fn test_nocrash_credential_finalization(bytes in vec(any::<u8>(), 0..500)) {
-                    CredentialFinalization::<$CS>::deserialize(&bytes).map_or(true, |_| true);
+                    let _ = CredentialFinalization::<$CS>::deserialize(&bytes).map_or(true, |_| true);
                 }
 
                 #[test]
                 fn test_nocrash_client_registration(bytes in vec(any::<u8>(), 0..700)) {
-                    ClientRegistration::<$CS>::deserialize(&bytes).map_or(true, |_| true);
+                    let _ = ClientRegistration::<$CS>::deserialize(&bytes).map_or(true, |_| true);
                 }
 
                 #[test]
                 fn test_nocrash_server_registration(bytes in vec(any::<u8>(), 0..700)) {
-                    ServerRegistration::<$CS>::deserialize(&bytes).map_or(true, |_| true);
+                    let _ = ServerRegistration::<$CS>::deserialize(&bytes).map_or(true, |_| true);
                 }
 
                 #[test]
                 fn test_nocrash_client_login(bytes in vec(any::<u8>(), 0..700)) {
-                    ClientLogin::<$CS>::deserialize(&bytes).map_or(true, |_| true);
+                    let _ = ClientLogin::<$CS>::deserialize(&bytes).map_or(true, |_| true);
                 }
 
                 #[test]
                 fn test_nocrash_server_login(bytes in vec(any::<u8>(), 0..700)) {
-                    ServerLogin::<$CS>::deserialize(&bytes).map_or(true, |_| true);
+                    let _ = ServerLogin::<$CS>::deserialize(&bytes).map_or(true, |_| true);
                 }
             }
         }
