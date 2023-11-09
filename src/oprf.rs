@@ -67,7 +67,7 @@ fn finalize_after_unblind<G: GroupWithMapToCurve, H: Hash>(
     let finalize_dst = [STR_VOPRF_FINALIZE, &G::get_context_string(MODE_BASE)?].concat();
     let hash_input = [
         serialize(input, 2)?,
-        serialize(&unblinded_element.to_arr().to_vec(), 2)?,
+        serialize(&unblinded_element.to_arr(), 2)?,
         serialize(&finalize_dst, 2)?,
     ]
     .concat();
@@ -130,7 +130,7 @@ mod tests {
             RistrettoPoint::from_scalar_slice(GenericArray::from_slice(&oprf_key[..])).unwrap();
         let res = point * scalar;
 
-        finalize_after_unblind::<RistrettoPoint, sha2::Sha512>(&input, res).unwrap()
+        finalize_after_unblind::<RistrettoPoint, sha2::Sha512>(input, res).unwrap()
     }
 
     #[test]
@@ -146,7 +146,7 @@ mod tests {
         let beta = evaluate::<RistrettoPoint>(alpha, &oprf_key);
         let res =
             finalize::<RistrettoPoint, sha2::Sha512>(&token.data, &token.blind, beta).unwrap();
-        let res2 = prf(&input[..], &oprf_key.as_bytes());
+        let res2 = prf(&input[..], oprf_key.as_bytes());
         assert_eq!(res, res2);
     }
 

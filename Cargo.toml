@@ -1,23 +1,23 @@
 [package]
-name = "opaque-ke"
-version = "1.2.0"
-repository = "https://github.com/novifinancial/opaque-ke"
-keywords = ["cryptography", "crypto", "opaque", "passwords", "authentication"]
+authors = ["Kevin Lewi <klewi@fb.com>", "François Garillot <fga@fb.com>"]
 categories = ["no-std"]
 description = "An implementation of the OPAQUE password-authenticated key exchange protocol"
-authors = ["Kevin Lewi <klewi@fb.com>", "François Garillot <fga@fb.com>"]
+edition = "2021"
+keywords = ["cryptography", "crypto", "opaque", "passwords", "authentication"]
 license = "MIT"
-edition = "2018"
+name = "opaque-ke"
 readme = "README.md"
-resolver = "2"
+repository = "https://github.com/novifinancial/opaque-ke"
+rust-version = "1.65"
+version = "1.2.0"
 
 [features]
+bench = []
 default = ["u64_backend"]
 slow-hash = ["scrypt"]
 std = ["curve25519-dalek/std", "getrandom", "rand/std", "rand/std_rng"]
-bench = []
-u64_backend = ["curve25519-dalek/u64_backend"]
 u32_backend = ["curve25519-dalek/u32_backend"]
+u64_backend = ["curve25519-dalek/u64_backend"]
 
 [dependencies]
 constant_time_eq = "0.1"
@@ -44,12 +44,12 @@ criterion = "0.3"
 hex = "0.4"
 lazy_static = "1"
 opaque-ke = { path = "", default-features = false, features = ["std"] }
-serde_json = "1"
-sha2 = "0.9"
 proptest = "1"
 rustyline = "8"
+serde_json = "1"
+sha2 = "0.9"
 
 [[bench]]
-name = "oprf"
 harness = false
+name = "oprf"
 required-features = ["bench"]

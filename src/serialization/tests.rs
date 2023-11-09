@@ -136,7 +136,7 @@ fn registration_response_roundtrip() {
 
     let mut input = Vec::new();
     input.extend_from_slice(beta_bytes.as_slice());
-    input.extend_from_slice(&pubkey_bytes.as_slice());
+    input.extend_from_slice(pubkey_bytes.as_slice());
 
     let r2 = RegistrationResponse::<Default>::deserialize(input.as_slice()).unwrap();
     let r2_bytes = r2.serialize();
@@ -200,7 +200,7 @@ fn credential_request_roundtrip() {
 
     let ke1m: Vec<u8> = [
         &client_nonce[..],
-        &serialize(&info.to_vec(), 2).unwrap(),
+        &serialize(info.as_ref(), 2).unwrap(),
         &client_e_kp.public(),
     ]
     .concat();
@@ -261,7 +261,7 @@ fn credential_response_roundtrip() {
     let ke2m: Vec<u8> = [
         &server_nonce[..],
         &server_e_kp.public(),
-        &serialize(&e_info.to_vec(), 2).unwrap(),
+        &serialize(e_info.as_ref(), 2).unwrap(),
         &mac[..],
     ]
     .concat();
@@ -270,7 +270,7 @@ fn credential_response_roundtrip() {
 
     let mut input = Vec::new();
     input.extend_from_slice(pt_bytes.as_slice());
-    input.extend_from_slice(&pubkey_bytes.as_slice());
+    input.extend_from_slice(pubkey_bytes.as_slice());
     input.extend_from_slice(&serialized_envelope);
     input.extend_from_slice(&ke2m[..]);
 
@@ -348,7 +348,7 @@ fn ke1_message_roundtrip() {
 
     let ke1m: Vec<u8> = [
         &client_nonce[..],
-        &serialize(&info.to_vec(), 2).unwrap(),
+        &serialize(info.as_ref(), 2).unwrap(),
         &client_e_kp.public(),
     ]
     .concat();
@@ -374,7 +374,7 @@ fn ke2_message_roundtrip() {
     let ke2m: Vec<u8> = [
         &server_nonce[..],
         &server_e_kp.public(),
-        &serialize(&e_info.to_vec(), 2).unwrap(),
+        &serialize(e_info.as_ref(), 2).unwrap(),
         &mac[..],
     ]
     .concat();
@@ -410,52 +410,52 @@ fn test_i2osp_os2ip(bytes in vec(any::<u8>(), 0..core::mem::size_of::<usize>()))
 
 #[test]
 fn test_nocrash_registration_request(bytes in vec(any::<u8>(), 0..200)) {
-    RegistrationRequest::<Default>::deserialize(&bytes[..]).map_or(true, |_| true);
+    let _ =RegistrationRequest::<Default>::deserialize(&bytes[..]).map_or(true, |_| true);
 }
 
 #[test]
 fn test_nocrash_registration_response(bytes in vec(any::<u8>(), 0..200)) {
-    RegistrationResponse::<Default>::deserialize(&bytes[..]).map_or(true, |_| true);
+    let _ =RegistrationResponse::<Default>::deserialize(&bytes[..]).map_or(true, |_| true);
 }
 
 #[test]
 fn test_nocrash_registration_upload(bytes in vec(any::<u8>(), 0..200)) {
-    RegistrationUpload::<Default>::deserialize(&bytes[..]).map_or(true, |_| true);
+    let _ =RegistrationUpload::<Default>::deserialize(&bytes[..]).map_or(true, |_| true);
 }
 
 #[test]
 fn test_nocrash_credential_request(bytes in vec(any::<u8>(), 0..500)) {
-    CredentialRequest::<Default>::deserialize(&bytes[..]).map_or(true, |_| true);
+    let _ =CredentialRequest::<Default>::deserialize(&bytes[..]).map_or(true, |_| true);
 }
 
 #[test]
 fn test_nocrash_credential_response(bytes in vec(any::<u8>(), 0..500)) {
-    CredentialResponse::<Default>::deserialize(&bytes[..]).map_or(true, |_| true);
+    let _ =CredentialResponse::<Default>::deserialize(&bytes[..]).map_or(true, |_| true);
 }
 
 #[test]
 fn test_nocrash_credential_finalization(bytes in vec(any::<u8>(), 0..500)) {
-    CredentialFinalization::<Default>::deserialize(&bytes[..]).map_or(true, |_| true);
+    let _ =CredentialFinalization::<Default>::deserialize(&bytes[..]).map_or(true, |_| true);
 }
 
 #[test]
 fn test_nocrash_client_registration(bytes in vec(any::<u8>(), 0..700)) {
-    ClientRegistration::<Default>::deserialize(&bytes[..]).map_or(true, |_| true);
+    let _ =ClientRegistration::<Default>::deserialize(&bytes[..]).map_or(true, |_| true);
 }
 
 #[test]
 fn test_nocrash_server_registration(bytes in vec(any::<u8>(), 0..700)) {
-    ServerRegistration::<Default>::deserialize(&bytes[..]).map_or(true, |_| true);
+    let _ =ServerRegistration::<Default>::deserialize(&bytes[..]).map_or(true, |_| true);
 }
 
 #[test]
 fn test_nocrash_client_login(bytes in vec(any::<u8>(), 0..700)) {
-    ClientLogin::<Default>::deserialize(&bytes[..]).map_or(true, |_| true);
+    let _ =ClientLogin::<Default>::deserialize(&bytes[..]).map_or(true, |_| true);
 }
 
 #[test]
 fn test_nocrash_server_login(bytes in vec(any::<u8>(), 0..700)) {
-    ServerLogin::<Default>::deserialize(&bytes[..]).map_or(true, |_| true);
+    let _ =ServerLogin::<Default>::deserialize(&bytes[..]).map_or(true, |_| true);
 }
 
 }

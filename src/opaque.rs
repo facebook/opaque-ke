@@ -41,7 +41,7 @@ impl<CS: CipherSuite> ClientRegistration<CS> {
     /// Serialization into bytes
     pub fn serialize(&self) -> Vec<u8> {
         let output: Vec<u8> = [
-            &self.alpha.to_arr().to_vec(),
+            &self.alpha.to_arr(),
             &CS::Group::scalar_as_bytes(&self.token.blind)[..],
             &self.token.data,
         ]
@@ -217,7 +217,7 @@ impl<CS: CipherSuite> ClientRegistration<CS> {
         let (envelope, export_key) = Envelope::<CS::Hash>::seal(
             rng,
             &password_derived_key,
-            &client_static_keypair.private().to_arr().to_vec(),
+            &client_static_keypair.private().to_arr(),
             &r2.server_s_pk,
             optional_ids,
         )?;

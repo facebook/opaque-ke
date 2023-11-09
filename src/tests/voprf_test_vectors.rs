@@ -5,7 +5,6 @@
 
 use crate::tests::mock_rng::CycleRng;
 use crate::{errors::*, group::Group, oprf};
-use alloc::string::ToString;
 use alloc::vec::Vec;
 use curve25519_dalek::ristretto::RistrettoPoint;
 use generic_array::GenericArray;
@@ -23,7 +22,7 @@ struct VOPRFTestVectorParameters {
 
 // Taken from https://github.com/cfrg/draft-irtf-cfrg-voprf/blob/master/draft-irtf-cfrg-voprf.md
 // in base mode
-static OPRF_RISTRETTO255_SHA512: &'static [&str] = &[
+static OPRF_RISTRETTO255_SHA512: &[&str] = &[
     r#"
     {
         "sksm": "758cbac0e1eb4265d80f6e6489d9a74d788f7ddeda67d7fb3c08b08f44bda30a",
@@ -47,19 +46,17 @@ static OPRF_RISTRETTO255_SHA512: &'static [&str] = &[
 ];
 
 fn decode(values: &Value, key: &str) -> Option<Vec<u8>> {
-    values[key]
-        .as_str()
-        .and_then(|s| hex::decode(&s.to_string()).ok())
+    values[key].as_str().and_then(|s| hex::decode(s).ok())
 }
 
 fn populate_test_vectors(values: &Value) -> VOPRFTestVectorParameters {
     VOPRFTestVectorParameters {
-        sksm: decode(&values, "sksm").unwrap(),
-        input: decode(&values, "input").unwrap(),
-        blind: decode(&values, "blind").unwrap(),
-        blinded_element: decode(&values, "blinded_element").unwrap(),
-        evaluation_element: decode(&values, "evaluation_element").unwrap(),
-        output: decode(&values, "output").unwrap(),
+        sksm: decode(values, "sksm").unwrap(),
+        input: decode(values, "input").unwrap(),
+        blind: decode(values, "blind").unwrap(),
+        blinded_element: decode(values, "blinded_element").unwrap(),
+        evaluation_element: decode(values, "evaluation_element").unwrap(),
+        output: decode(values, "output").unwrap(),
     }
 }
 

@@ -16,7 +16,7 @@ pub(crate) fn i2osp(input: usize, length: usize) -> Result<Vec<u8>, PakeError> {
     }
 
     if length <= sizeof_usize {
-        return Ok((&input.to_be_bytes()[sizeof_usize - length..]).to_vec());
+        return Ok(input.to_be_bytes()[sizeof_usize - length..].to_vec());
     }
 
     let mut output = alloc::vec![0u8; length];
