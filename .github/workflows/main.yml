@@ -4,7 +4,7 @@ on:
     branches:
       - master
   pull_request:
-    types: [opened, repoened, synchronize]
+    types: [opened, reopened, synchronize]
 
 jobs:
   test:
@@ -17,7 +17,7 @@ jobs:
           - u32_backend
         toolchain:
           - stable
-          - 1.51.0
+          - 1.65
     name: test
     steps:
       - name: Checkout sources
@@ -87,7 +87,7 @@ jobs:
       matrix:
         toolchain:
           - stable
-          - 1.51.0
+          - 1.65
     name: test simple_login command-line example
     steps:
       - name: install expect
@@ -111,7 +111,7 @@ jobs:
       matrix:
         toolchain:
           - stable
-          - 1.51.0
+          - 1.65
     name: test digital_locker command-line example
     steps:
       - name: install expect

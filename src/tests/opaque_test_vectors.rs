@@ -283,20 +283,20 @@ fn rfc_to_json(input: &str) -> String {
     let mut json = vec![];
     for line in input.lines() {
         // If line contains colon, then
-        if line.contains(":") {
-            if json.len() > 0 {
+        if line.contains(':') {
+            if !json.is_empty() {
                 // Adding closing quote for previous line, comma, and newline
                 json.push("\",\n".to_string());
             }
 
-            let mut iter = line.split(":");
+            let mut iter = line.split(':');
             let key = iter.next().unwrap().split_whitespace().next().unwrap();
             let val = iter.next().unwrap().split_whitespace().next().unwrap();
 
             json.push(format!("    \"{}\": \"{}", key, val));
         } else {
             let s = line.trim().to_string();
-            if s.len() > 0 {
+            if !s.is_empty() {
                 json.push(s);
             }
         }
@@ -306,9 +306,7 @@ fn rfc_to_json(input: &str) -> String {
 }
 
 fn decode(values: &Value, key: &str) -> Option<Vec<u8>> {
-    values[key]
-        .as_str()
-        .and_then(|s| hex::decode(&s.to_string()).ok())
+    values[key].as_str().and_then(|s| hex::decode(s).ok())
 }
 
 fn populate_test_vectors(values: &Value) -> TestVectorParameters {
@@ -431,7 +429,7 @@ fn test_registration_upload() -> Result<(), ProtocolError> {
         );
         assert_eq!(
             hex::encode(parameters.export_key),
-            hex::encode(result.export_key.to_vec())
+            hex::encode(result.export_key)
         );
     }
 

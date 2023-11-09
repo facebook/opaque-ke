@@ -155,7 +155,7 @@ fn open_locker(
     let server_login_start_result = ServerLogin::start(
         &mut server_rng,
         password_file,
-        &server_kp.private(),
+        server_kp.private(),
         CredentialRequest::deserialize(&credential_request_bytes[..]).unwrap(),
         ServerLoginStartParameters::default(),
     )
