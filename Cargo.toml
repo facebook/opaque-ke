@@ -7,9 +7,9 @@ keywords = ["cryptography", "crypto", "opaque", "passwords", "authentication"]
 license = "MIT"
 name = "opaque-ke"
 readme = "README.md"
-repository = "https://github.com/novifinancial/opaque-ke"
+repository = "https://github.com/facebook/opaque-ke"
 rust-version = "1.65"
-version = "1.2.0"
+version = "1.3.0"
 
 [features]
 bench = []

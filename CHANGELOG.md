@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.3.0 (November 10, 2023)
+
+* Re-exported the curve25519-dalek crate
+* Upgraded MSRV to 1.65
+
 ## 1.2.0 (October 7, 2021)
 
 * Added explicit support for the thumbv6m-none-eabi target (no-std)
