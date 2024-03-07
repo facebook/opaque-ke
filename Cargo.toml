@@ -39,7 +39,7 @@ serde = { version = "1", default-features = false, features = [
   "derive",
 ], optional = true }
 subtle = { version = "2.3", default-features = false }
-voprf = { version = "=0.5.0-pre.6", default-features = false, features = [
+voprf = { version = "=0.5.0", default-features = false, features = [
   "danger",
 ] }
 zeroize = { version = "1.5", features = ["zeroize_derive"] }
