@@ -41,6 +41,7 @@ pub struct OpaqueTestVectorParameters {
     pub dummy_private_key: Vec<u8>,
     pub dummy_masking_key: Vec<u8>,
     pub context: Vec<u8>,
+    #[allow(dead_code)] // client_private_key is not tested in the test vectors
     pub client_private_key: Option<Vec<u8>>,
     pub client_keyshare_seed: Vec<u8>,
     pub server_public_key: Vec<u8>,
@@ -56,8 +57,6 @@ pub struct OpaqueTestVectorParameters {
     pub envelope_nonce: Vec<u8>,
     pub client_nonce: Vec<u8>,
     pub server_nonce: Vec<u8>,
-    pub client_info: Vec<u8>,
-    pub server_info: Vec<u8>,
     pub registration_request: Vec<u8>,
     pub registration_response: Vec<u8>,
     pub registration_upload: Vec<u8>,
@@ -139,8 +138,6 @@ where
         envelope_nonce: parse!(values, "envelope_nonce"),
         client_nonce: parse!(values, "client_nonce"),
         server_nonce: parse!(values, "server_nonce"),
-        client_info: parse!(values, "client_info"),
-        server_info: parse!(values, "server_info"),
         registration_request: parse!(values, "registration_request"),
         registration_response: parse!(values, "registration_response"),
         registration_upload: parse!(values, "registration_upload"),
@@ -371,6 +368,10 @@ where
             RegistrationRequest::deserialize(&parameters.registration_request).unwrap(),
             &parameters.credential_identifier,
         )?;
+        assert_eq!(
+            hex::encode(&parameters.server_public_key),
+            hex::encode(server_setup.keypair().public().serialize()),
+        );
         assert_eq!(
             hex::encode(&parameters.oprf_key),
             hex::encode(server_registration_start_result.oprf_key)

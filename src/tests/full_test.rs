@@ -1319,7 +1319,7 @@ fn test_credential_finalization() -> Result<(), ProtocolError> {
 
         assert_eq!(
             hex::encode(&parameters.server_s_pk),
-            hex::encode(&client_login_finish_result.server_s_pk.serialize())
+            hex::encode(client_login_finish_result.server_s_pk.serialize())
         );
         assert_eq!(
             hex::encode(&parameters.session_key),

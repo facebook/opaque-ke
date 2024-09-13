@@ -21,6 +21,7 @@ pub enum InternalError<T = Infallible> {
     Custom(T),
     /// Deserializing from a byte sequence failed
     InvalidByteSequence,
+    #[allow(clippy::doc_markdown)]
     /// Invalid length for {name}: expected {len}, but is actually {actual_len}.
     SizeError {
         /// name
