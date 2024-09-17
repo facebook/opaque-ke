@@ -23,7 +23,7 @@ jobs:
           - --features serde
         toolchain:
           - stable
-          - 1.70.0
+          - 1.74.0
     name: test
     steps:
       - name: Checkout sources
@@ -78,7 +78,7 @@ jobs:
       matrix:
         toolchain:
           - stable
-          - 1.70.0
+          - 1.74.0
     name: test simple_login command-line example
     steps:
       - name: install expect
@@ -101,7 +101,7 @@ jobs:
       matrix:
         toolchain:
           - stable
-          - 1.70.0
+          - 1.74.0
     name: test digital_locker command-line example
     steps:
       - name: install expect

@@ -716,13 +716,7 @@ where
         };
 
         let client_s_pk = record.0.client_s_pk.clone();
-
-        let context = if let Some(context) = context {
-            context
-        } else {
-            &[]
-        };
-
+        let context = context.unwrap_or(&[]);
         let server_s_sk = server_setup.keypair.private();
         let server_s_pk = server_s_sk.public_key()?;
 

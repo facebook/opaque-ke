@@ -226,7 +226,7 @@ where
             .chain_iter(id_s.into_iter())
             .chain_iter(l2_bytes)
             .chain(server_nonce)
-            .chain(&server_e_kp.public().serialize());
+            .chain(server_e_kp.public().serialize());
 
         let result = derive_3dh_keys::<D, KG, S>(
             TripleDhComponents {
