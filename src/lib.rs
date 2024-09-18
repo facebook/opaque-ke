@@ -9,7 +9,7 @@
 //! An implementation of the OPAQUE asymmetric password authentication key
 //! exchange protocol
 //!
-//! Note: This implementation is in sync with [draft-irtf-cfrg-opaque-10](https://datatracker.ietf.org/doc/draft-irtf-cfrg-opaque/10/),
+//! Note: This implementation is in sync with [draft-irtf-cfrg-opaque-16](https://datatracker.ietf.org/doc/draft-irtf-cfrg-opaque/16/),
 //! but this specification is subject to change, until the final version
 //! published by the IETF.
 //!
@@ -40,7 +40,7 @@
 //!     type Ksf = opaque_ke::ksf::Identity;
 //! }
 //! ```
-//! See [examples/simple_login.rs](https://github.com/novifinancial/opaque-ke/blob/main/examples/simple_login.rs)
+//! See [examples/simple_login.rs](https://github.com/facebook/opaque-ke/blob/main/examples/simple_login.rs)
 //! for a working example of a simple password-based login using OPAQUE.
 //!
 //! Note that our choice of key stretching function in this example, `Identity`,
@@ -648,7 +648,7 @@
 //! which only the client should be able to process. For instance, if the server
 //! is expected to maintain any client-side secrets which require a password to
 //! access, then this export key can be used to encrypt these secrets so that
-//! they remain hidden from the server (see [examples/digital_locker.rs](https://github.com/novifinancial/opaque-ke/blob/main/examples/digital_locker.rs)
+//! they remain hidden from the server (see [examples/digital_locker.rs](https://github.com/facebook/opaque-ke/blob/main/examples/digital_locker.rs)
 //! for a working example).
 //!
 //! You can access the export key from the `export_key` field of
