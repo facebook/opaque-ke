@@ -1,7 +1,8 @@
 # Changelog
 
-## 3.0.0-pre.5 (TBD)
-* Increased MSRV to 1.70
+## 3.0.0-pre.5 (September 18, 2024)
+* Increased MSRV to 1.74
+* Updated voprf dependency
 
 ## 3.0.0-pre.4 (July 25, 2023)
 * Updated voprf and curve25519-dalek dependencies
