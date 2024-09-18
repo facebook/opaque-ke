@@ -390,11 +390,18 @@
 //!
 //! ### Client Login Finish
 //! In the third step of login, the client takes as input a
-//! [`CredentialResponse`] from the server. The client runs
-//! [`ClientLogin::finish`] and produces an output consisting of a
-//! [`CredentialFinalization`] to be sent to the server to complete the
-//! protocol, the `session_key` sequence of bytes which will match the server's
-//! session key upon a successful login.
+//! [`CredentialResponse`] from the server and runs [`ClientLogin::finish`]
+//! on it.
+//! If the authentication is successful, then the client obtains a
+//! [`ClientLoginFinishResult`]. Otherwise, on failure, the
+//! algorithm outputs an
+//! [`InvalidLoginError`](errors::ProtocolError::InvalidLoginError) error.
+//!
+//! The resulting [`ClientLoginFinishResult`] obtained by client in this step
+//! contains, among other things, a [`CredentialFinalization`] to be sent to the
+//! server to complete the protocol, and a
+//! [`session_key`](struct.ClientLoginFinishResult.html#structfield.session_key)
+//! which will match the server's session key upon a successful login.
 //! ```
 //! # use opaque_ke::{
 //! #   errors::ProtocolError,
@@ -1108,8 +1115,8 @@
 //!   and `OprfCs`. To select a specific backend see the [curve25519-dalek]
 //!   documentation.
 //!
-//! - The `curve25519` feature enables [`Curve25519`] as a `KeGroup`. To select
-//!   a specific backend see the [curve25519-dalek] documentation.
+//! - The `curve25519` feature enables Curve25519 as a `KeGroup`. To select a
+//!   specific backend see the [curve25519-dalek] documentation.
 //!
 //! - The `p256` feature enables the use of [`p256::NistP256`] as a `KeGroup`
 //!   and a `OprfCs` for `CipherSuite`.
