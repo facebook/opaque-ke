@@ -38,7 +38,7 @@ use crate::serialization::{Input, UpdateExt};
 ///////////////
 
 pub(crate) type NonceLen = U32;
-static STR_RFC: &[u8] = b"RFCXXXX";
+static STR_CONTEXT: &[u8] = b"OPAQUEv1-";
 static STR_CLIENT_MAC: &[u8] = b"ClientMAC";
 static STR_HANDSHAKE_SECRET: &[u8] = b"HandshakeSecret";
 static STR_SERVER_MAC: &[u8] = b"ServerMAC";
@@ -215,7 +215,7 @@ where
         let server_nonce = generate_nonce::<R>(rng);
 
         let mut transcript_hasher = D::new()
-            .chain(STR_RFC)
+            .chain(STR_CONTEXT)
             .chain_iter(
                 Input::<U2>::from(context)
                     .map_err(ProtocolError::into_custom)?
@@ -278,7 +278,7 @@ where
         context: &[u8],
     ) -> Result<GenerateKe3Result<Self, D, KG>, ProtocolError> {
         let mut transcript_hasher = D::new()
-            .chain(STR_RFC)
+            .chain(STR_CONTEXT)
             .chain_iter(Input::<U2>::from(context)?.iter())
             .chain_iter(id_u)
             .chain_iter(serialized_credential_request)

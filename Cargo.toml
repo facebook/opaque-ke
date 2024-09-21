@@ -9,7 +9,7 @@ name = "opaque-ke"
 readme = "README.md"
 repository = "https://github.com/facebook/opaque-ke"
 rust-version = "1.74"
-version = "3.0.0-pre.5"
+version = "3.0.0-pre.6"
 
 [features]
 argon2 = ["dep:argon2"]
@@ -38,9 +38,9 @@ rand = { version = "0.8", default-features = false }
 serde = { version = "1", default-features = false, features = [
   "derive",
 ], optional = true }
-subtle = { version = "2.3", default-features = false }
+subtle = { version = "2.6", default-features = false }
 voprf = { version = "0.5", default-features = false, features = ["danger"] }
-zeroize = { version = "1.5", features = ["zeroize_derive"] }
+zeroize = { version = "1.8", features = ["zeroize_derive"] }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 getrandom = { version = "0.2", features = ["js"], optional = true }
@@ -50,7 +50,6 @@ bincode = "1"
 chacha20poly1305 = "0.10"
 criterion = "0.5"
 hex = "0.4"
-json = "0.12"
 p256 = { version = "0.13", default-features = false, features = [
   "hash2curve",
   "voprf",

@@ -6,7 +6,7 @@
 // of this source tree. You may select, at your option, one of the above-listed
 // licenses.
 
-//! An implementation of the OPAQUE asymmetric password authentication key
+//! An implementation of the OPAQUE augmented password authentication key
 //! exchange protocol
 //!
 //! Note: This implementation is in sync with [draft-irtf-cfrg-opaque-16](https://datatracker.ietf.org/doc/draft-irtf-cfrg-opaque/16/),
