@@ -18,6 +18,7 @@
 # this list would mean the nix crate, as well as any of its exclusive
 # dependencies not shared by any other crates, would be ignored, as the target
 # list here is effectively saying which targets you are building for.
+all-features = true
 targets = [
   # The triple can be any string, but only the target triples built in to
   # rustc (as of 1.40) can be checked against actual config expressions
@@ -27,7 +28,6 @@ targets = [
   # the actual valid features supported by the target architecture.
   #{ triple = "wasm32-unknown-unknown", features = ["atomics"] },
 ]
-all-features = true
 
 # This section is considered when running `cargo deny check advisories`
 # More documentation for the advisories section can be found here:
