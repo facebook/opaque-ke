@@ -1,13 +1,13 @@
 ##  The OPAQUE key exchange protocol ![Build Status](https://github.com/facebook/opaque-ke/workflows/Rust%20CI/badge.svg)
 
-[OPAQUE](https://eprint.iacr.org/2018/163.pdf) is an asymmetric password-authenticated key exchange protocol. It allows a client to authenticate to a server using a password, without ever having to expose the plaintext password to the server.
+[OPAQUE](https://eprint.iacr.org/2018/163.pdf) is an augmented password-authenticated key exchange protocol. It allows a client to authenticate to a server using a password, without ever having to expose the plaintext password to the server.
 
 This implementation is based on the [Internet Draft for OPAQUE](https://github.com/cfrg/draft-irtf-cfrg-opaque).
 
 Background
 ----------
 
-Asymmetric Password Authenticated Key Exchange (aPAKE) protocols are designed to provide password authentication and mutually authenticated key exchange without relying on PKI (except during user/password registration) and without disclosing passwords to servers or other entities other than the client machine.
+Augmented Password Authenticated Key Exchange (aPAKE) protocols are designed to provide password authentication and mutually authenticated key exchange without relying on PKI (except during user/password registration) and without disclosing passwords to servers or other entities other than the client machine.
 
 OPAQUE is a PKI-free aPAKE that is secure against pre-computation attacks and capable of using a secret salt.
 

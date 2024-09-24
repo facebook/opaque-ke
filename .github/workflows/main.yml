@@ -236,7 +236,7 @@ jobs:
       - name: Install Taplo
         # Adding the --locked flag because of
         # https://github.com/tamasfe/taplo/issues/242
-        run: cargo install taplo-cli --locked 
+        run: cargo install taplo-cli --locked
 
       - name: Checkout sources
         uses: actions/checkout@main
@@ -249,4 +249,4 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@main
-      - uses: EmbarkStudios/cargo-deny-action@v1
+      - uses: EmbarkStudios/cargo-deny-action@v2

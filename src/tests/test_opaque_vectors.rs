@@ -14,9 +14,9 @@ use digest::core_api::{BlockSizeUser, CoreProxy};
 use digest::OutputSizeUser;
 use generic_array::typenum::{IsLess, IsLessOrEqual, Le, NonZero, Sum, U256};
 use generic_array::{ArrayLength, GenericArray};
-use json::JsonValue;
 use rand::rngs::OsRng;
 use rand::RngCore;
+use serde_json::Value;
 use voprf::Group;
 
 use crate::ciphersuite::{CipherSuite, OprfGroup, OprfHash};
@@ -89,11 +89,11 @@ macro_rules! parse_default {
     };
 }
 
-fn decode(values: &JsonValue, key: &str) -> Option<Vec<u8>> {
+fn decode(values: &Value, key: &str) -> Option<Vec<u8>> {
     values[key].as_str().and_then(|s| hex::decode(s).ok())
 }
 
-fn populate_test_vectors<CS: CipherSuite>(values: &JsonValue) -> OpaqueTestVectorParameters
+fn populate_test_vectors<CS: CipherSuite>(values: &Value) -> OpaqueTestVectorParameters
 where
     <OprfHash<CS> as OutputSizeUser>::OutputSize:
         IsLess<U256> + IsLessOrEqual<<OprfHash<CS> as BlockSizeUser>::BlockSize>,
@@ -184,10 +184,12 @@ where
 macro_rules! json_to_test_vectors {
     ( $v:ident, $vector_type:expr, $cs:expr, $cs_ty:ty) => {
         $v[$vector_type]
-            .members()
+            .as_array()
+            .into_iter()
+            .flatten()
             .filter_map(|x| {
-                if x.has_key($cs) {
-                    Some(populate_test_vectors::<$cs_ty>(&x[$cs]))
+                if let Some(val) = x.get($cs) {
+                    Some(populate_test_vectors::<$cs_ty>(val))
                 } else {
                     None
                 }
@@ -198,8 +200,9 @@ macro_rules! json_to_test_vectors {
 
 #[test]
 fn tests() -> Result<(), ProtocolError> {
-    let rfc = json::parse(super::parser::rfc_to_json(super::opaque_vectors::VECTORS).as_str())
-        .expect("Could not parse json");
+    let rfc: Value =
+        serde_json::from_str(super::parser::rfc_to_json(super::opaque_vectors::VECTORS).as_str())
+            .expect("Could not parse json");
 
     #[cfg(feature = "ristretto255")]
     {

@@ -1,5 +1,11 @@
 # Changelog
 
+## 3.0.0-pre.6 (TBD)
+* Synced implementation with draft-irtf-cfrg-opaque-16
+  * **Breaking: protocol context string changed from `RFCXXXX` to `OPAQUEv1-`**
+* Dropped unmaintained json crate in favor of serde_json
+* Updated dependencies
+
 ## 3.0.0-pre.5 (September 18, 2024)
 * Increased MSRV to 1.74
 * Updated voprf dependency
@@ -15,6 +21,7 @@
 
 ## 3.0.0-pre.2 (March 14, 2023)
 * Updated VOPRF to draft 19
+  * **Breaking: backwards-incompatible changes introduced in OPRF protocol**
 * Added P384 testing support
 * Increased MSRV to 1.65
 * Updating dependencies
