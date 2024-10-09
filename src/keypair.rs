@@ -11,9 +11,6 @@
 #![allow(unsafe_code)]
 
 use derive_where::derive_where;
-use digest::core_api::BlockSizeUser;
-use digest::OutputSizeUser;
-use generic_array::typenum::{IsLess, IsLessOrEqual, U256};
 use generic_array::{ArrayLength, GenericArray};
 use rand::{CryptoRng, RngCore};
 
@@ -64,17 +61,8 @@ impl<KG: KeGroup, S: SecretKey<KG>> KeyPair<KG, S> {
 
 impl<KG: KeGroup> KeyPair<KG> {
     /// Generating a random key pair given a cryptographic rng
-    pub(crate) fn generate_random<CS: voprf::CipherSuite, R: RngCore + CryptoRng>(
-        rng: &mut R,
-    ) -> Self
-    where
-        <CS::Hash as OutputSizeUser>::OutputSize:
-            IsLess<U256> + IsLessOrEqual<<CS::Hash as BlockSizeUser>::BlockSize>,
-    {
-        let mut scalar_bytes = GenericArray::<_, <KG as KeGroup>::SkLen>::default();
-        rng.fill_bytes(&mut scalar_bytes);
-        let sk =
-            KG::derive_auth_keypair::<CS>(GenericArray::clone_from_slice(&scalar_bytes)).unwrap();
+    pub(crate) fn generate_random<R: RngCore + CryptoRng>(rng: &mut R) -> Self {
+        let sk = KG::random_sk(rng);
         let pk = KG::public_key(sk);
         Self {
             pk: PublicKey(pk),
@@ -91,11 +79,7 @@ where
 {
     /// Test-only strategy returning a proptest Strategy based on
     /// [`Self::generate_random`]
-    fn uniform_keypair_strategy<CS: voprf::CipherSuite>() -> proptest::prelude::BoxedStrategy<Self>
-    where
-        <CS::Hash as OutputSizeUser>::OutputSize:
-            IsLess<U256> + IsLessOrEqual<<CS::Hash as BlockSizeUser>::BlockSize>,
-    {
+    fn uniform_keypair_strategy() -> proptest::prelude::BoxedStrategy<Self> {
         use proptest::prelude::*;
         use rand::rngs::StdRng;
         use rand::SeedableRng;
@@ -105,7 +89,7 @@ where
         any::<[u8; 32]>()
             .prop_filter_map("valid random keypair", |seed| {
                 let mut rng = StdRng::from_seed(seed);
-                Some(Self::generate_random::<CS, _>(&mut rng))
+                Some(Self::generate_random(&mut rng))
             })
             .no_shrink()
             .boxed()
@@ -263,15 +247,15 @@ mod tests {
 
                 proptest! {
                     #[test]
-                    fn pub_from_priv(kp in KeyPair::<$point>::uniform_keypair_strategy::<$point>()) {
+                    fn pub_from_priv(kp in KeyPair::<$point>::uniform_keypair_strategy()) {
                         let pk = kp.public();
                         let sk = kp.private();
                         prop_assert_eq!(&sk.public_key()?, pk);
                     }
 
                     #[test]
-                    fn dh(kp1 in KeyPair::<$point>::uniform_keypair_strategy::<$point>(),
-                                      kp2 in KeyPair::<$point>::uniform_keypair_strategy::<$point>()) {
+                    fn dh(kp1 in KeyPair::<$point>::uniform_keypair_strategy(),
+                                      kp2 in KeyPair::<$point>::uniform_keypair_strategy()) {
 
                         let dh1 = kp2.private().diffie_hellman(kp1.public().clone())?;
                         let dh2 = kp1.private().diffie_hellman(kp2.public().clone())?;
@@ -280,7 +264,7 @@ mod tests {
                     }
 
                     #[test]
-                    fn private_key_slice(kp in KeyPair::<$point>::uniform_keypair_strategy::<$point>()) {
+                    fn private_key_slice(kp in KeyPair::<$point>::uniform_keypair_strategy()) {
                         let sk_bytes = kp.private().serialize().to_vec();
 
                         let kp2 = KeyPair::<$point>::from_private_key_slice(&sk_bytes)?;

@@ -24,8 +24,6 @@ use zeroize::Zeroize;
 
 use crate::errors::InternalError;
 
-const STR_OPAQUE_DERIVE_AUTH_KEY_PAIR: [u8; 33] = *b"OPAQUE-DeriveDiffieHellmanKeyPair";
-
 /// A group representation for use in the key exchange
 pub trait KeGroup {
     /// Public key
@@ -65,12 +63,12 @@ pub trait KeGroup {
     /// the [`OprfGroup`](voprf::Group)).
     fn derive_auth_keypair<CS: voprf::CipherSuite>(
         seed: GenericArray<u8, Self::SkLen>,
+        info: &[u8],
     ) -> Result<Self::Sk, InternalError>
     where
         <CS::Hash as OutputSizeUser>::OutputSize:
             IsLess<U256> + IsLessOrEqual<<CS::Hash as BlockSizeUser>::BlockSize>,
     {
-        let info = &STR_OPAQUE_DERIVE_AUTH_KEY_PAIR;
         let dst_1 = GenericArray::from(STR_DERIVE_KEYPAIR)
             .concat(STR_OPRF.into())
             .concat([voprf::Mode::Oprf.to_u8()].into())

@@ -205,7 +205,7 @@ where
 {
     /// Generate a new instance of server setup
     pub fn new<R: CryptoRng + RngCore>(rng: &mut R) -> Self {
-        let keypair = KeyPair::generate_random::<CS::OprfCs, _>(rng);
+        let keypair = KeyPair::generate_random(rng);
         Self::new_with_key(rng, keypair)
     }
 }
@@ -238,7 +238,7 @@ where
         Self {
             oprf_seed,
             keypair,
-            fake_keypair: KeyPair::<CS::KeGroup>::generate_random::<CS::OprfCs, _>(rng),
+            fake_keypair: KeyPair::<CS::KeGroup>::generate_random(rng),
         }
     }
 
@@ -546,7 +546,7 @@ where
         password: &[u8],
     ) -> Result<ClientLoginStartResult<CS>, ProtocolError> {
         let blind_result = blind::<CS, _>(rng, password)?;
-        let (ke1_state, ke1_message) = CS::KeyExchange::generate_ke1::<CS::OprfCs, _>(rng)?;
+        let (ke1_state, ke1_message) = CS::KeyExchange::generate_ke1(rng)?;
 
         let credential_request = CredentialRequest {
             blinded_element: blind_result.message,
@@ -755,7 +755,7 @@ where
         let credential_response_component =
             CredentialResponse::<CS>::serialize_without_ke(&beta, &masking_nonce, &masked_response);
 
-        let result = CS::KeyExchange::generate_ke2::<CS::OprfCs, _, _>(
+        let result = CS::KeyExchange::generate_ke2(
             rng,
             credential_request_bytes,
             credential_response_component,

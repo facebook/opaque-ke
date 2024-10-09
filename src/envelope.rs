@@ -33,6 +33,7 @@ use crate::serialization::{Input, MacExt};
 const STR_AUTH_KEY: [u8; 7] = *b"AuthKey";
 const STR_EXPORT_KEY: [u8; 9] = *b"ExportKey";
 const STR_PRIVATE_KEY: [u8; 10] = *b"PrivateKey";
+const STR_OPAQUE_DERIVE_AUTH_KEY_PAIR: [u8; 24] = *b"OPAQUE-DeriveAuthKeyPair";
 type NonceLen = U32;
 
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
@@ -340,10 +341,12 @@ where
     randomized_pwd_hasher
         .expand(&nonce.concat(STR_PRIVATE_KEY.into()), &mut keypair_seed)
         .map_err(|_| InternalError::HkdfError)?;
-    let client_static_keypair =
-        KeyPair::<CS::KeGroup>::from_private_key_slice(&CS::KeGroup::serialize_sk(
-            CS::KeGroup::derive_auth_keypair::<CS::OprfCs>(keypair_seed)?,
-        ))?;
+    let client_static_keypair = KeyPair::<CS::KeGroup>::from_private_key_slice(
+        &CS::KeGroup::serialize_sk(CS::KeGroup::derive_auth_keypair::<CS::OprfCs>(
+            keypair_seed,
+            &GenericArray::from(STR_OPAQUE_DERIVE_AUTH_KEY_PAIR),
+        )?),
+    )?;
 
     Ok(client_static_keypair.public().clone())
 }
@@ -364,10 +367,12 @@ where
     randomized_pwd_hasher
         .expand(&nonce.concat(STR_PRIVATE_KEY.into()), &mut keypair_seed)
         .map_err(|_| InternalError::HkdfError)?;
-    let client_static_keypair =
-        KeyPair::<CS::KeGroup>::from_private_key_slice(&CS::KeGroup::serialize_sk(
-            CS::KeGroup::derive_auth_keypair::<CS::OprfCs>(keypair_seed)?,
-        ))?;
+    let client_static_keypair = KeyPair::<CS::KeGroup>::from_private_key_slice(
+        &CS::KeGroup::serialize_sk(CS::KeGroup::derive_auth_keypair::<CS::OprfCs>(
+            keypair_seed,
+            &GenericArray::from(STR_OPAQUE_DERIVE_AUTH_KEY_PAIR),
+        )?),
+    )?;
 
     Ok(client_static_keypair)
 }

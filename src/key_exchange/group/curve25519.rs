@@ -67,6 +67,7 @@ impl KeGroup for Curve25519 {
 
     fn derive_auth_keypair<CS: voprf::CipherSuite>(
         seed: GenericArray<u8, Self::SkLen>,
+        _info: &[u8],
     ) -> Result<Self::Sk, InternalError>
     where
         <CS::Hash as OutputSizeUser>::OutputSize:

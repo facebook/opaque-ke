@@ -12,11 +12,9 @@ use core::ops::Add;
 
 use derive_where::derive_where;
 use digest::core_api::BlockSizeUser;
-use digest::{Digest, Output, OutputSizeUser};
+use digest::{Digest, Output};
 use generic_array::sequence::Concat;
-use generic_array::typenum::{
-    IsLess, IsLessOrEqual, Le, NonZero, Sum, Unsigned, U1, U2, U256, U32,
-};
+use generic_array::typenum::{IsLess, Le, NonZero, Sum, Unsigned, U1, U2, U256, U32};
 use generic_array::{ArrayLength, GenericArray};
 use hkdf::{Hkdf, HkdfExtract};
 use hmac::{Hmac, Mac};
@@ -163,14 +161,10 @@ where
     type KE2Message = Ke2Message<D, KG>;
     type KE3Message = Ke3Message<D>;
 
-    fn generate_ke1<OprfCs: voprf::CipherSuite, R: RngCore + CryptoRng>(
+    fn generate_ke1<R: RngCore + CryptoRng>(
         rng: &mut R,
-    ) -> Result<(Self::KE1State, Self::KE1Message), ProtocolError>
-    where
-        <OprfCs::Hash as OutputSizeUser>::OutputSize:
-            IsLess<U256> + IsLessOrEqual<<OprfCs::Hash as BlockSizeUser>::BlockSize>,
-    {
-        let client_e_kp = KeyPair::<KG>::generate_random::<OprfCs, _>(rng);
+    ) -> Result<(Self::KE1State, Self::KE1Message), ProtocolError> {
+        let client_e_kp = KeyPair::<KG>::generate_random(rng);
         let client_nonce = generate_nonce::<R>(rng);
 
         let ke1_message = Ke1Message {
@@ -188,15 +182,7 @@ where
     }
 
     #[allow(clippy::type_complexity)]
-    fn generate_ke2<
-        'a,
-        'b,
-        'c,
-        'd,
-        OprfCs: voprf::CipherSuite,
-        R: RngCore + CryptoRng,
-        S: SecretKey<KG>,
-    >(
+    fn generate_ke2<'a, 'b, 'c, 'd, R: RngCore + CryptoRng, S: SecretKey<KG>>(
         rng: &mut R,
         serialized_credential_request: impl Iterator<Item = &'a [u8]>,
         l2_bytes: impl Iterator<Item = &'b [u8]>,
@@ -206,12 +192,8 @@ where
         id_u: impl Iterator<Item = &'c [u8]>,
         id_s: impl Iterator<Item = &'d [u8]>,
         context: &[u8],
-    ) -> Result<GenerateKe2Result<Self, D, KG>, ProtocolError<S::Error>>
-    where
-        <OprfCs::Hash as OutputSizeUser>::OutputSize:
-            IsLess<U256> + IsLessOrEqual<<OprfCs::Hash as BlockSizeUser>::BlockSize>,
-    {
-        let server_e_kp = KeyPair::<KG>::generate_random::<OprfCs, _>(rng);
+    ) -> Result<GenerateKe2Result<Self, D, KG>, ProtocolError<S::Error>> {
+        let server_e_kp = KeyPair::<KG>::generate_random(rng);
         let server_nonce = generate_nonce::<R>(rng);
 
         let mut transcript_hasher = D::new()
