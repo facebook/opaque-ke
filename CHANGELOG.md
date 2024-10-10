@@ -1,28 +1,7 @@
 # Changelog
 
-## 3.0.0-pre.5 (September 18, 2024)
-* Increased MSRV to 1.74
-* Updated voprf dependency
-
-## 3.0.0-pre.4 (July 25, 2023)
-* Updated voprf and curve25519-dalek dependencies
-
-## 3.0.0-pre.3 (June 7, 2023)
-* Adjusted curve25519 support logic
-* Adjusted key generation logic to be in line with commit 727b9ac of
-  https://github.com/cfrg/draft-irtf-cfrg-opaque
-* Updated voprf dependency
-
-## 3.0.0-pre.2 (March 14, 2023)
-* Updated VOPRF to draft 19
-* Added P384 testing support
-* Increased MSRV to 1.65
-* Updating dependencies
-
-## 3.0.0-pre.1 (February 8, 2023)
-* Renaming of X25519 to Curve25519
-* Increased MSRV to 1.60
-* Updating dependencies
+## 2.1.0-pre.1 (October 10, 2024)
+* Updated dependencies: voprf v0.4.1, curve25519-dalek v4
 
 ## 2.0.0 (September 21, 2022)
 * Synced implementation with draft-irtf-cfrg-opaque-10

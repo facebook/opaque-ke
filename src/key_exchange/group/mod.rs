@@ -17,7 +17,7 @@ pub mod ristretto255;
 use digest::core_api::BlockSizeUser;
 use digest::{FixedOutput, HashMarker, OutputSizeUser};
 use generic_array::sequence::Concat;
-use generic_array::typenum::{IsLess, IsLessOrEqual, U256};
+use generic_array::typenum::{IsLess, IsLessOrEqual, U11, U256};
 use generic_array::{ArrayLength, GenericArray};
 use rand::{CryptoRng, RngCore};
 use zeroize::Zeroize;
@@ -49,7 +49,7 @@ pub trait KeGroup {
     /// # Errors
     /// [`InternalError::HashToScalar`] if the `input` is empty or longer then
     /// [`u16::MAX`].
-    fn hash_to_scalar<H>(input: &[&[u8]], dst: &[&[u8]]) -> Result<Self::Sk, InternalError>
+    fn hash_to_scalar<H>(input: &[&[u8]], dst: &[u8]) -> Result<Self::Sk, InternalError>
     where
         H: BlockSizeUser + Default + FixedOutput + HashMarker,
         H::OutputSize: IsLess<U256> + IsLessOrEqual<H::BlockSize>;
@@ -69,11 +69,8 @@ pub trait KeGroup {
         <CS::Hash as OutputSizeUser>::OutputSize:
             IsLess<U256> + IsLessOrEqual<<CS::Hash as BlockSizeUser>::BlockSize>,
     {
-        let dst_1 = GenericArray::from(STR_DERIVE_KEYPAIR)
-            .concat(STR_OPRF.into())
-            .concat([voprf::Mode::Oprf.to_u8()].into())
-            .concat([b'-'].into());
-        let dst_2 = CS::ID.as_bytes();
+        let context_string = create_context_string::<CS>(voprf::Mode::Oprf);
+        let dst = GenericArray::from(STR_DERIVE_KEYPAIR).concat(context_string);
 
         let info_len = i2osp_2(info.len())
             .map_err(|_| InternalError::OprfError(voprf::Error::DeriveKeyPair))?;
@@ -84,7 +81,7 @@ pub trait KeGroup {
             // || contextString)
             let sk_s = Self::hash_to_scalar::<CS::Hash>(
                 &[&seed, &info_len, info, &counter.to_be_bytes()],
-                &[&dst_1, dst_2],
+                &dst,
             )
             .map_err(|_| InternalError::OprfError(voprf::Error::DeriveKeyPair))?;
 
@@ -115,8 +112,30 @@ pub trait KeGroup {
 // Helper functions used to compute DeriveAuthKeyPair() (taken from the voprf
 // crate)
 
-const STR_OPRF: [u8; 7] = *b"OPRFV1-";
+const STR_VOPRF: [u8; 8] = *b"VOPRF10-";
 const STR_DERIVE_KEYPAIR: [u8; 13] = *b"DeriveKeyPair";
+
+/// Generates the contextString parameter as defined in
+/// <https://datatracker.ietf.org/doc/draft-irtf-cfrg-voprf/>
+fn create_context_string<CS: voprf::CipherSuite>(mode: voprf::Mode) -> GenericArray<u8, U11>
+where
+    <CS::Hash as OutputSizeUser>::OutputSize:
+        IsLess<U256> + IsLessOrEqual<<CS::Hash as BlockSizeUser>::BlockSize>,
+{
+    // FIXME: this should be in voprf library
+    let cs_id_u16: u16 = match CS::ID {
+        "ristretto255-SHA512" => 0x0001,
+        "decaf448-SHAKE256" => 0x0002,
+        "P256-SHA256" => 0x0003,
+        "P384-SHA384" => 0x0004,
+        "P521-SHA512" => 0x0005,
+        _ => panic!("Incompatible ciphersuite: {}", CS::ID),
+    };
+
+    GenericArray::from(STR_VOPRF)
+        .concat([mode.to_u8()].into())
+        .concat(cs_id_u16.to_be_bytes().into())
+}
 
 fn i2osp_2(input: usize) -> Result<[u8; 2], InternalError> {
     u16::try_from(input)

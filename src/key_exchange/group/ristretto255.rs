@@ -72,12 +72,12 @@ impl KeGroup for Ristretto255 {
 
     // Implements the `HashToScalar()` function from
     // <https://www.ietf.org/archive/id/draft-irtf-cfrg-voprf-19.html#section-4>
-    fn hash_to_scalar<'a, H>(input: &[&[u8]], dst: &[&[u8]]) -> Result<Self::Sk, InternalError>
+    fn hash_to_scalar<'a, H>(input: &[&[u8]], dst: &[u8]) -> Result<Self::Sk, InternalError>
     where
         H: BlockSizeUser + Default + FixedOutput + HashMarker,
         H::OutputSize: IsLess<U256> + IsLessOrEqual<H::BlockSize>,
     {
-        <voprf::Ristretto255 as Group>::hash_to_scalar::<H>(input, dst)
+        <voprf::Ristretto255 as Group>::hash_to_scalar::<H>(input, &[dst])
             .map_err(InternalError::OprfInternalError)
     }
 

@@ -53,12 +53,12 @@ where
 
     // Implements the `HashToScalar()` function from
     // <https://www.ietf.org/archive/id/draft-irtf-cfrg-voprf-19.html#section-4>
-    fn hash_to_scalar<H>(input: &[&[u8]], dst: &[&[u8]]) -> Result<Self::Sk, InternalError>
+    fn hash_to_scalar<'a, H>(input: &[&[u8]], dst: &[u8]) -> Result<Self::Sk, InternalError>
     where
         H: BlockSizeUser + Default + FixedOutput + HashMarker,
         H::OutputSize: IsLess<U256> + IsLessOrEqual<H::BlockSize>,
     {
-        Self::hash_to_scalar::<ExpandMsgXmd<H>>(input, dst)
+        Self::hash_to_scalar::<ExpandMsgXmd<H>>(input, &[dst])
             .map_err(|_| InternalError::HashToScalar)
             .and_then(|scalar| {
                 if bool::from(scalar.is_zero()) {
