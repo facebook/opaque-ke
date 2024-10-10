@@ -1,20 +1,21 @@
-// Copyright (c) Facebook, Inc. and its affiliates.
+// Copyright (c) Meta Platforms, Inc. and affiliates.
 //
-// This source code is licensed under both the MIT license found in the
-// LICENSE-MIT file in the root directory of this source tree and the Apache
+// This source code is dual-licensed under either the MIT license found in the
+// LICENSE-MIT file in the root directory of this source tree or the Apache
 // License, Version 2.0 found in the LICENSE-APACHE file in the root directory
-// of this source tree.
+// of this source tree. You may select, at your option, one of the above-listed
+// licenses.
 
-//! Includes the KeGroup trait and definitions for the key exchange groups
+//! Includes the [`KeGroup`] trait and definitions for the key exchange groups
 
+#[cfg(feature = "curve25519")]
+pub mod curve25519;
 mod elliptic_curve;
 #[cfg(feature = "ristretto255")]
 pub mod ristretto255;
-#[cfg(feature = "x25519")]
-pub mod x25519;
 
 use digest::core_api::BlockSizeUser;
-use digest::{Digest, OutputSizeUser};
+use digest::{FixedOutput, HashMarker, OutputSizeUser};
 use generic_array::sequence::Concat;
 use generic_array::typenum::{IsLess, IsLessOrEqual, U11, U256};
 use generic_array::{ArrayLength, GenericArray};
@@ -50,17 +51,18 @@ pub trait KeGroup {
     /// [`u16::MAX`].
     fn hash_to_scalar<H>(input: &[&[u8]], dst: &[u8]) -> Result<Self::Sk, InternalError>
     where
-        H: Digest + BlockSizeUser,
+        H: BlockSizeUser + Default + FixedOutput + HashMarker,
         H::OutputSize: IsLess<U256> + IsLessOrEqual<H::BlockSize>;
 
-    /// Corresponds to the DeriveAuthKeyPair() function defined in
+    /// Corresponds to the `DeriveAuthKeyPair()` function defined in
     /// <https://www.ietf.org/archive/id/draft-irtf-cfrg-opaque-08.html#section-6.4.2>
     ///
     /// Note that we cannot call the voprf crate directly since we need to
-    /// ensure that the KeGroup is used for the hash_to_scalar operation (as
-    /// opposed to the OprfGroup).
+    /// ensure that the [`KeGroup`] is used for the
+    /// [`hash_to_scalar`](Self::hash_to_scalar) operation (as opposed to
+    /// the [`OprfGroup`](voprf::Group)).
     fn derive_auth_keypair<CS: voprf::CipherSuite>(
-        seed: &[u8],
+        seed: GenericArray<u8, Self::SkLen>,
         info: &[u8],
     ) -> Result<Self::Sk, InternalError>
     where
@@ -78,7 +80,7 @@ pub trait KeGroup {
             // skS = G.HashToScalar(deriveInput || I2OSP(counter, 1), DST = "DeriveKeyPair"
             // || contextString)
             let sk_s = Self::hash_to_scalar::<CS::Hash>(
-                &[seed, &info_len, info, &counter.to_be_bytes()],
+                &[&seed, &info_len, info, &counter.to_be_bytes()],
                 &dst,
             )
             .map_err(|_| InternalError::OprfError(voprf::Error::DeriveKeyPair))?;
@@ -120,9 +122,19 @@ where
     <CS::Hash as OutputSizeUser>::OutputSize:
         IsLess<U256> + IsLessOrEqual<<CS::Hash as BlockSizeUser>::BlockSize>,
 {
+    // FIXME: this should be in voprf library
+    let cs_id_u16: u16 = match CS::ID {
+        "ristretto255-SHA512" => 0x0001,
+        "decaf448-SHAKE256" => 0x0002,
+        "P256-SHA256" => 0x0003,
+        "P384-SHA384" => 0x0004,
+        "P521-SHA512" => 0x0005,
+        _ => panic!("Incompatible ciphersuite: {}", CS::ID),
+    };
+
     GenericArray::from(STR_VOPRF)
         .concat([mode.to_u8()].into())
-        .concat(CS::ID.to_be_bytes().into())
+        .concat(cs_id_u16.to_be_bytes().into())
 }
 
 fn i2osp_2(input: usize) -> Result<[u8; 2], InternalError> {

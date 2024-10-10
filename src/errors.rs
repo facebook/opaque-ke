@@ -1,9 +1,10 @@
-// Copyright (c) Facebook, Inc. and its affiliates.
+// Copyright (c) Meta Platforms, Inc. and affiliates.
 //
-// This source code is licensed under both the MIT license found in the
-// LICENSE-MIT file in the root directory of this source tree and the Apache
+// This source code is dual-licensed under either the MIT license found in the
+// LICENSE-MIT file in the root directory of this source tree or the Apache
 // License, Version 2.0 found in the LICENSE-APACHE file in the root directory
-// of this source tree.
+// of this source tree. You may select, at your option, one of the above-listed
+// licenses.
 
 //! A list of error types which are produced during an execution of the protocol
 use core::convert::Infallible;
@@ -20,6 +21,7 @@ pub enum InternalError<T = Infallible> {
     Custom(T),
     /// Deserializing from a byte sequence failed
     InvalidByteSequence,
+    #[allow(clippy::doc_markdown)]
     /// Invalid length for {name}: expected {len}, but is actually {actual_len}.
     SizeError {
         /// name
@@ -87,7 +89,7 @@ impl<T: Debug> Debug for InternalError<T> {
 impl<T: Error> Error for InternalError<T> {}
 
 impl InternalError {
-    /// Convert `InternalError<Infallible>` into `InternalError<T>
+    /// Convert `InternalError<Infallible>` into `InternalError<T>`
     pub fn into_custom<T>(self) -> InternalError<T> {
         match self {
             Self::Custom(_) => unreachable!(),
@@ -184,7 +186,7 @@ impl<T> From<::core::convert::Infallible> for ProtocolError<T> {
 }
 
 impl ProtocolError {
-    /// Convert `ProtocolError<Infallible>` into `ProtocolError<T>
+    /// Convert `ProtocolError<Infallible>` into `ProtocolError<T>`
     pub fn into_custom<T>(self) -> ProtocolError<T> {
         match self {
             Self::LibraryError(internal_error) => {

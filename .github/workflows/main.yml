@@ -13,24 +13,21 @@ jobs:
       fail-fast: false
       matrix:
         backend_feature:
-          - --features ristretto255-u64,ristretto255-voprf
-          - --features ristretto255-u32,ristretto255-voprf
+          - --features ristretto255-voprf
           -
-          - --features x25519-u64,ristretto255-u64,ristretto255-voprf
-          - --features x25519-u32,ristretto255-u32,ristretto255-voprf
-          - --features x25519-u64
-          - --features x25519-u32
+          - --features curve25519,ristretto255-voprf
+          - --features curve25519
         frontend_feature:
           -
           - --features argon2
           - --features serde
         toolchain:
           - stable
-          - 1.57.0
+          - 1.74.0
     name: test
     steps:
       - name: Checkout sources
-        uses: actions/checkout@v2
+        uses: actions/checkout@main
 
       - name: Install ${{ matrix.toolchain }} toolchain
         uses: actions-rs/toolchain@v1
@@ -61,16 +58,13 @@ jobs:
           # 32-bit x86
           - i686-unknown-linux-gnu
         backend_feature:
-          - --features ristretto255-u64,ristretto255-voprf
-          - --features ristretto255-u32,ristretto255-voprf
+          - --features ristretto255-voprf
           -
-          - x25519-u64,ristretto255-u64,ristretto255-voprf
-          - x25519-u32,ristretto255-u64,ristretto255-voprf
-          - x25519-u64
-          - x25519-u32
+          - curve25519,ristretto255-voprf
+          - curve25519
     steps:
-      - uses: actions/checkout@v2
-      - uses: hecrj/setup-rust-action@v1
+      - uses: actions/checkout@main
+      - uses: hecrj/setup-rust-action@v2
       - run: cargo install cross
       # Note: just use `cross` as you would `cargo`, but always
       # pass the `--target=${{ matrix.target }}` arg. (Yes, really).
@@ -84,13 +78,13 @@ jobs:
       matrix:
         toolchain:
           - stable
-          - 1.57.0
+          - 1.74.0
     name: test simple_login command-line example
     steps:
       - name: install expect
         run: sudo apt-get install expect
       - name: Checkout sources
-        uses: actions/checkout@v2
+        uses: actions/checkout@main
       - name: install rust
         uses: actions-rs/toolchain@v1
         with:
@@ -107,13 +101,13 @@ jobs:
       matrix:
         toolchain:
           - stable
-          - 1.57.0
+          - 1.74.0
     name: test digital_locker command-line example
     steps:
       - name: install expect
         run: sudo apt-get install expect
       - name: Checkout sources
-        uses: actions/checkout@v2
+        uses: actions/checkout@main
       - name: install rust
         uses: actions-rs/toolchain@v1
         with:
@@ -135,21 +129,18 @@ jobs:
           # for any no_std target
           - thumbv6m-none-eabi
         backend_feature:
-          - ristretto255-u64,ristretto255-voprf
-          - ristretto255-u32,ristretto255-voprf
+          - ristretto255-voprf
           -
-          - x25519-u64,ristretto255-u64,ristretto255-voprf
-          - x25519-u32,ristretto255-u32,ristretto255-voprf
-          - x25519-u64
-          - x25519-u32
+          - curve25519,ristretto255-voprf
+          - curve25519
         frontend_feature:
           - argon2
           - serde
     steps:
-      - uses: actions/checkout@v2
-      - uses: hecrj/setup-rust-action@v1
+      - uses: actions/checkout@main
+      - uses: hecrj/setup-rust-action@v2
       - run: rustup target add ${{ matrix.target }}
-      - run: cargo build --verbose --target=${{ matrix.target }} --no-default-features --features ${{ matrix.frontend_feature }} --features ${{ matrix.backend_feature }}
+      - run: cargo build --verbose --target=${{ matrix.target }} --no-default-features --features ${{ matrix.frontend_feature }},${{ matrix.backend_feature }}
 
   benches:
     name: cargo bench compilation
@@ -158,16 +149,13 @@ jobs:
       fail-fast: false
       matrix:
         backend_feature:
-          - --features ristretto255-u64,ristretto255-voprf
-          - --features ristretto255-u32,ristretto255-voprf
+          - --features ristretto255-voprf
           -
-          - --features x25519-u64,ristretto255-u64,ristretto255-voprf
-          - --features x25519-u32,ristretto255-u32,ristretto255-voprf
-          - --features x25519-u32
-          - --features x25519-u32
+          - --features curve25519,ristretto255-voprf
+          - --features curve25519
     steps:
       - name: Checkout sources
-        uses: actions/checkout@v2
+        uses: actions/checkout@main
 
       - name: Install stable toolchain
         uses: actions-rs/toolchain@v1
@@ -187,7 +175,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout sources
-        uses: actions/checkout@v2
+        uses: actions/checkout@main
 
       - name: Install stable toolchain
         uses: actions-rs/toolchain@v1
@@ -201,7 +189,7 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: clippy
-          args: --all-targets --features argon2,std,x25519-u64 -- -D warnings
+          args: --all-targets --features argon2,std,curve25519 -- -D warnings
 
       - name: Run cargo doc
         uses: actions-rs/cargo@v1
@@ -209,14 +197,14 @@ jobs:
           RUSTDOCFLAGS: -D warnings
         with:
           command: doc
-          args: --no-deps --document-private-items --features argon2,std,x25519-u64
+          args: --no-deps --document-private-items --features argon2,std,curve25519
 
   format:
     name: cargo fmt
     runs-on: ubuntu-latest
     steps:
       - name: Checkout sources
-        uses: actions/checkout@v2
+        uses: actions/checkout@main
 
       - name: Install nightly toolchain
         uses: actions-rs/toolchain@v1
@@ -237,7 +225,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Cache
-        uses: actions/cache@v2
+        uses: actions/cache@v4
         with:
           path: |
             ~/.cargo/.crates.toml
@@ -251,7 +239,7 @@ jobs:
         run: cargo install taplo-cli --locked 
 
       - name: Checkout sources
-        uses: actions/checkout@v2
+        uses: actions/checkout@main
 
       - name: Run Taplo
         run: taplo fmt --check
@@ -260,5 +248,5 @@ jobs:
     name: cargo-deny check
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v1
+      - uses: actions/checkout@main
       - uses: EmbarkStudios/cargo-deny-action@v1

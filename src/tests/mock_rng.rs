@@ -1,9 +1,10 @@
-// Copyright (c) Facebook, Inc. and its affiliates.
+// Copyright (c) Meta Platforms, Inc. and affiliates.
 //
-// This source code is licensed under both the MIT license found in the
-// LICENSE-MIT file in the root directory of this source tree and the Apache
+// This source code is dual-licensed under either the MIT license found in the
+// LICENSE-MIT file in the root directory of this source tree or the Apache
 // License, Version 2.0 found in the LICENSE-APACHE file in the root directory
-// of this source tree.
+// of this source tree. You may select, at your option, one of the above-listed
+// licenses.
 
 use core::cmp::min;
 use std::vec::Vec;
@@ -50,7 +51,7 @@ impl RngCore for CycleRng {
     #[inline]
     fn fill_bytes(&mut self, dest: &mut [u8]) {
         let len = min(self.v.len(), dest.len());
-        (&mut dest[..len]).copy_from_slice(&self.v[..len]);
+        dest[..len].copy_from_slice(&self.v[..len]);
         rotate_left(&mut self.v, len);
     }
 

@@ -1,17 +1,18 @@
-// Copyright (c) Facebook, Inc. and its affiliates.
+// Copyright (c) Meta Platforms, Inc. and affiliates.
 //
-// This source code is licensed under both the MIT license found in the
-// LICENSE-MIT file in the root directory of this source tree and the Apache
+// This source code is dual-licensed under either the MIT license found in the
+// LICENSE-MIT file in the root directory of this source tree or the Apache
 // License, Version 2.0 found in the LICENSE-APACHE file in the root directory
-// of this source tree.
+// of this source tree. You may select, at your option, one of the above-listed
+// licenses.
 
 use digest::core_api::BlockSizeUser;
-use digest::Digest;
+use digest::{FixedOutput, HashMarker};
 use elliptic_curve::group::cofactor::CofactorGroup;
 use elliptic_curve::hash2curve::{ExpandMsgXmd, FromOkm, GroupDigest};
 use elliptic_curve::sec1::{FromEncodedPoint, ModulusSize, ToEncodedPoint};
 use elliptic_curve::{
-    AffinePoint, Field, FieldSize, Group, ProjectivePoint, PublicKey, Scalar, SecretKey,
+    AffinePoint, Field, FieldBytesSize, Group, ProjectivePoint, PublicKey, Scalar, SecretKey,
 };
 use generic_array::typenum::{IsLess, IsLessOrEqual, U256};
 use generic_array::GenericArray;
@@ -23,18 +24,18 @@ use crate::errors::InternalError;
 impl<G> KeGroup for G
 where
     G: GroupDigest,
-    FieldSize<Self>: ModulusSize,
+    FieldBytesSize<Self>: ModulusSize,
     AffinePoint<Self>: FromEncodedPoint<Self> + ToEncodedPoint<Self>,
     ProjectivePoint<Self>: CofactorGroup + ToEncodedPoint<Self>,
     Scalar<Self>: FromOkm,
 {
     type Pk = ProjectivePoint<Self>;
 
-    type PkLen = <FieldSize<Self> as ModulusSize>::CompressedPointSize;
+    type PkLen = <FieldBytesSize<Self> as ModulusSize>::CompressedPointSize;
 
     type Sk = Scalar<Self>;
 
-    type SkLen = FieldSize<Self>;
+    type SkLen = FieldBytesSize<Self>;
 
     fn serialize_pk(pk: Self::Pk) -> GenericArray<u8, Self::PkLen> {
         GenericArray::clone_from_slice(pk.to_encoded_point(true).as_bytes())
@@ -51,13 +52,13 @@ where
     }
 
     // Implements the `HashToScalar()` function from
-    // <https://www.ietf.org/archive/id/draft-irtf-cfrg-voprf-09.html#section-4.1>
-    fn hash_to_scalar<H>(input: &[&[u8]], dst: &[u8]) -> Result<Self::Sk, InternalError>
+    // <https://www.ietf.org/archive/id/draft-irtf-cfrg-voprf-19.html#section-4>
+    fn hash_to_scalar<'a, H>(input: &[&[u8]], dst: &[u8]) -> Result<Self::Sk, InternalError>
     where
-        H: Digest + BlockSizeUser,
+        H: BlockSizeUser + Default + FixedOutput + HashMarker,
         H::OutputSize: IsLess<U256> + IsLessOrEqual<H::BlockSize>,
     {
-        Self::hash_to_scalar::<ExpandMsgXmd<H>>(input, dst)
+        Self::hash_to_scalar::<ExpandMsgXmd<H>>(input, &[dst])
             .map_err(|_| InternalError::HashToScalar)
             .and_then(|scalar| {
                 if bool::from(scalar.is_zero()) {
@@ -85,7 +86,7 @@ where
     }
 
     fn deserialize_sk(bytes: &[u8]) -> Result<Self::Sk, InternalError> {
-        SecretKey::<Self>::from_be_bytes(bytes)
+        SecretKey::<Self>::from_slice(bytes)
             .map(|secret_key| *secret_key.to_nonzero_scalar())
             .map_err(|_| InternalError::PointError)
     }

@@ -1,9 +1,10 @@
-// Copyright (c) Facebook, Inc. and its affiliates.
+// Copyright (c) Meta Platforms, Inc. and affiliates.
 //
-// This source code is licensed under both the MIT license found in the
-// LICENSE-MIT file in the root directory of this source tree and the Apache
+// This source code is dual-licensed under either the MIT license found in the
+// LICENSE-MIT file in the root directory of this source tree or the Apache
 // License, Version 2.0 found in the LICENSE-APACHE file in the root directory
-// of this source tree.
+// of this source tree. You may select, at your option, one of the above-listed
+// licenses.
 
 use core::marker::PhantomData;
 
@@ -12,7 +13,7 @@ use generic_array::typenum::{U0, U2};
 use generic_array::{ArrayLength, GenericArray};
 use hmac::Mac;
 
-use crate::errors::{InternalError, ProtocolError};
+use crate::errors::ProtocolError;
 
 // Corresponds to the I2OSP() function from RFC8017
 pub(crate) fn i2osp<L: ArrayLength<u8>>(
@@ -149,20 +150,6 @@ impl<T: Mac> MacExt for T {
     fn update_iter<'a>(&mut self, iter: impl Iterator<Item = &'a [u8]>) {
         for bytes in iter {
             self.update(bytes);
-        }
-    }
-}
-
-pub(crate) trait GenericArrayExt {
-    fn try_from_slice(slice: &[u8]) -> Result<&Self, InternalError>;
-}
-
-impl<L: ArrayLength<u8>> GenericArrayExt for GenericArray<u8, L> {
-    fn try_from_slice(slice: &[u8]) -> Result<&Self, InternalError> {
-        if slice.len() == L::USIZE {
-            Ok(Self::from_slice(slice))
-        } else {
-            Err(InternalError::InvalidByteSequence)
         }
     }
 }

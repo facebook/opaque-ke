@@ -1,5 +1,8 @@
 # Changelog
 
+## 2.1.0-pre.1 (October 10, 2024)
+* Updated dependencies: voprf v0.4.1, curve25519-dalek v4
+
 ## 2.0.0 (September 21, 2022)
 * Synced implementation with draft-irtf-cfrg-opaque-10
 * Changed argon2 salt length to recommended value (16 bytes)

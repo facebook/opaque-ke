@@ -1,9 +1,10 @@
-// Copyright (c) Facebook, Inc. and its affiliates.
+// Copyright (c) Meta Platforms, Inc. and affiliates.
 //
-// This source code is licensed under both the MIT license found in the
-// LICENSE-MIT file in the root directory of this source tree and the Apache
+// This source code is dual-licensed under either the MIT license found in the
+// LICENSE-MIT file in the root directory of this source tree or the Apache
 // License, Version 2.0 found in the LICENSE-APACHE file in the root directory
-// of this source tree.
+// of this source tree. You may select, at your option, one of the above-listed
+// licenses.
 
 //! Demonstrates an implementation of a server-side secured digital locker using
 //! the client's OPAQUE export key, over a command-line interface
@@ -27,7 +28,7 @@
 
 use std::process::exit;
 
-use chacha20poly1305::aead::{Aead, NewAead};
+use chacha20poly1305::aead::{Aead, KeyInit};
 use chacha20poly1305::{ChaCha20Poly1305, Key, Nonce};
 use generic_array::GenericArray;
 use opaque_ke::ciphersuite::CipherSuite;
@@ -40,6 +41,7 @@ use opaque_ke::{
     ServerLoginStartParameters, ServerRegistration, ServerRegistrationLen, ServerSetup,
 };
 use rustyline::error::ReadlineError;
+use rustyline::history::DefaultHistory;
 use rustyline::Editor;
 
 // The ciphersuite trait allows to specify the underlying primitives that will
@@ -216,7 +218,7 @@ fn main() {
     let mut rng = OsRng;
     let server_setup = ServerSetup::<DefaultCipherSuite>::new(&mut rng);
 
-    let mut rl = Editor::<()>::new();
+    let mut rl = Editor::<(), _>::new().unwrap();
     let mut registered_lockers: Vec<Locker> = vec![];
     loop {
         display_lockers(&registered_lockers);
@@ -275,13 +277,10 @@ fn main() {
                             &registered_lockers[locker_index],
                         ) {
                             Ok(contents) => {
-                                println!("\n\nSuccess! Contents: {}\n\n", contents);
+                                println!("\n\nSuccess! Contents: {contents}\n\n");
                             }
                             Err(err) => {
-                                println!(
-                                    "\n\nError encountered, could not open locker: {}\n\n",
-                                    err
-                                );
+                                println!("\n\nError encountered, could not open locker: {err}\n\n");
                             }
                         }
                     }
@@ -304,10 +303,7 @@ fn display_lockers(lockers: &[Locker]) {
         locker_numbers.push(i);
     }
 
-    println!(
-        "\nCurrently registered locker numbers: {:?}\n",
-        locker_numbers
-    );
+    println!("\nCurrently registered locker numbers: {locker_numbers:?}\n");
 }
 
 // Handle readline errors
@@ -320,7 +316,7 @@ fn handle_error(err: ReadlineError) {
             println!("CTRL-D");
         }
         err => {
-            println!("Error: {:?}", err);
+            println!("Error: {err:?}");
         }
     }
 }
@@ -329,11 +325,11 @@ fn handle_error(err: ReadlineError) {
 fn get_two_strings(
     s1: &str,
     s2: &str,
-    rl: &mut Editor<()>,
+    rl: &mut Editor<(), DefaultHistory>,
     string1: Option<String>,
 ) -> (String, String) {
     let query = if string1.is_none() { s1 } else { s2 };
-    let readline = rl.readline(&format!("{}: ", query));
+    let readline = rl.readline(&format!("{query}: "));
     match readline {
         Ok(line) => match string1 {
             Some(x) => (x, line),

@@ -1,9 +1,10 @@
-// Copyright (c) Facebook, Inc. and its affiliates.
+// Copyright (c) Meta Platforms, Inc. and affiliates.
 //
-// This source code is licensed under both the MIT license found in the
-// LICENSE-MIT file in the root directory of this source tree and the Apache
+// This source code is dual-licensed under either the MIT license found in the
+// LICENSE-MIT file in the root directory of this source tree or the Apache
 // License, Version 2.0 found in the LICENSE-APACHE file in the root directory
-// of this source tree.
+// of this source tree. You may select, at your option, one of the above-listed
+// licenses.
 
 use core::convert::TryFrom;
 use core::ops::Add;
@@ -35,11 +36,7 @@ const STR_PRIVATE_KEY: [u8; 10] = *b"PrivateKey";
 const STR_OPAQUE_DERIVE_AUTH_KEY_PAIR: [u8; 24] = *b"OPAQUE-DeriveAuthKeyPair";
 type NonceLen = U32;
 
-#[cfg_attr(
-    feature = "serde",
-    derive(serde::Deserialize, serde::Serialize),
-    serde(crate = "serde")
-)]
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, ZeroizeOnDrop)]
 pub(crate) enum InnerEnvelopeMode {
     Zero = 0,
@@ -73,7 +70,7 @@ impl TryFrom<u8> for InnerEnvelopeMode {
 #[cfg_attr(
     feature = "serde",
     derive(serde::Deserialize, serde::Serialize),
-    serde(bound = "", crate = "serde")
+    serde(bound = "")
 )]
 #[derive_where(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, ZeroizeOnDrop)]
 pub(crate) struct Envelope<CS: CipherSuite>
@@ -346,7 +343,7 @@ where
         .map_err(|_| InternalError::HkdfError)?;
     let client_static_keypair = KeyPair::<CS::KeGroup>::from_private_key_slice(
         &CS::KeGroup::serialize_sk(CS::KeGroup::derive_auth_keypair::<CS::OprfCs>(
-            keypair_seed.as_slice(),
+            keypair_seed,
             &GenericArray::from(STR_OPAQUE_DERIVE_AUTH_KEY_PAIR),
         )?),
     )?;
@@ -372,7 +369,7 @@ where
         .map_err(|_| InternalError::HkdfError)?;
     let client_static_keypair = KeyPair::<CS::KeGroup>::from_private_key_slice(
         &CS::KeGroup::serialize_sk(CS::KeGroup::derive_auth_keypair::<CS::OprfCs>(
-            keypair_seed.as_slice(),
+            keypair_seed,
             &GenericArray::from(STR_OPAQUE_DERIVE_AUTH_KEY_PAIR),
         )?),
     )?;

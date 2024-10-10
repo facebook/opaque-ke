@@ -11,12 +11,13 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest]
+        rust: [stable]
 
     steps:
-    - uses: hecrj/setup-rust-action@v1
+    - uses: hecrj/setup-rust-action@v2
       with:
         rust-version: ${{ matrix.rust }}
-    - uses: actions/checkout@master
+    - uses: actions/checkout@main
     - name: Login to crates.io
       run: cargo login $CRATES_IO_TOKEN
       env:

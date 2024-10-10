@@ -1,9 +1,10 @@
-// Copyright (c) Facebook, Inc. and its affiliates.
+// Copyright (c) Meta Platforms, Inc. and affiliates.
 //
-// This source code is licensed under both the MIT license found in the
-// LICENSE-MIT file in the root directory of this source tree and the Apache
+// This source code is dual-licensed under either the MIT license found in the
+// LICENSE-MIT file in the root directory of this source tree or the Apache
 // License, Version 2.0 found in the LICENSE-APACHE file in the root directory
-// of this source tree.
+// of this source tree. You may select, at your option, one of the above-listed
+// licenses.
 
 #[macro_use]
 extern crate criterion;
@@ -12,15 +13,9 @@ use criterion::Criterion;
 use opaque_ke::*;
 use rand::rngs::OsRng;
 
-#[cfg(feature = "ristretto255-u64")]
-static SUFFIX: &str = "ristretto255-u64";
-#[cfg(feature = "ristretto255-u32")]
-static SUFFIX: &str = "ristretto255-u32";
-#[cfg(feature = "ristretto255-fiat-u64")]
-static SUFFIX: &str = "ristretto255-fiat-u64";
-#[cfg(feature = "ristretto255-fiat-u32")]
-static SUFFIX: &str = "ristretto255-fiat-u32";
-#[cfg(all(not(feature = "ristretto255")))]
+#[cfg(feature = "ristretto255")]
+static SUFFIX: &str = "ristretto255";
+#[cfg(not(feature = "ristretto255"))]
 static SUFFIX: &str = "p256";
 
 struct Default;
@@ -44,7 +39,7 @@ impl CipherSuite for Default {
 fn server_setup(c: &mut Criterion) {
     let mut rng = OsRng;
 
-    c.bench_function(&format!("server setup ({})", SUFFIX), move |b| {
+    c.bench_function(&format!("server setup ({SUFFIX})"), move |b| {
         b.iter(|| {
             ServerSetup::<Default>::new(&mut rng);
         })
@@ -55,14 +50,11 @@ fn client_registration_start(c: &mut Criterion) {
     let mut rng = OsRng;
     let password = b"password";
 
-    c.bench_function(
-        &format!("client registration start ({})", SUFFIX),
-        move |b| {
-            b.iter(|| {
-                ClientRegistration::<Default>::start(&mut rng, password).unwrap();
-            })
-        },
-    );
+    c.bench_function(&format!("client registration start ({SUFFIX})"), move |b| {
+        b.iter(|| {
+            ClientRegistration::<Default>::start(&mut rng, password).unwrap();
+        })
+    });
 }
 
 fn server_registration_start(c: &mut Criterion) {
@@ -73,19 +65,16 @@ fn server_registration_start(c: &mut Criterion) {
     let client_registration_start_result =
         ClientRegistration::<Default>::start(&mut rng, password).unwrap();
 
-    c.bench_function(
-        &format!("server registration start ({})", SUFFIX),
-        move |b| {
-            b.iter(|| {
-                ServerRegistration::<Default>::start(
-                    &server_setup,
-                    client_registration_start_result.message.clone(),
-                    username,
-                )
-                .unwrap();
-            })
-        },
-    );
+    c.bench_function(&format!("server registration start ({SUFFIX})"), move |b| {
+        b.iter(|| {
+            ServerRegistration::<Default>::start(
+                &server_setup,
+                client_registration_start_result.message.clone(),
+                username,
+            )
+            .unwrap();
+        })
+    });
 }
 
 fn client_registration_finish(c: &mut Criterion) {
@@ -103,7 +92,7 @@ fn client_registration_finish(c: &mut Criterion) {
     .unwrap();
 
     c.bench_function(
-        &format!("client registration finish ({})", SUFFIX),
+        &format!("client registration finish ({SUFFIX})"),
         move |b| {
             b.iter(|| {
                 client_registration_start_result
@@ -145,7 +134,7 @@ fn server_registration_finish(c: &mut Criterion) {
         .unwrap();
 
     c.bench_function(
-        &format!("server registration finish ({})", SUFFIX),
+        &format!("server registration finish ({SUFFIX})"),
         move |b| {
             b.iter(|| {
                 ServerRegistration::finish(client_registration_finish_result.clone().message);
@@ -158,7 +147,7 @@ fn client_login_start(c: &mut Criterion) {
     let mut rng = OsRng;
     let password = b"password";
 
-    c.bench_function(&format!("client login start ({})", SUFFIX), move |b| {
+    c.bench_function(&format!("client login start ({SUFFIX})"), move |b| {
         b.iter(|| {
             ClientLogin::<Default>::start(&mut rng, password).unwrap();
         })
@@ -190,22 +179,19 @@ fn server_login_start_real(c: &mut Criterion) {
     let password_file = ServerRegistration::finish(client_registration_finish_result.message);
     let client_login_start_result = ClientLogin::<Default>::start(&mut rng, password).unwrap();
 
-    c.bench_function(
-        &format!("server login start (real) ({})", SUFFIX),
-        move |b| {
-            b.iter(|| {
-                ServerLogin::start(
-                    &mut rng,
-                    &server_setup,
-                    Some(password_file.clone()),
-                    client_login_start_result.clone().message,
-                    username,
-                    ServerLoginStartParameters::default(),
-                )
-                .unwrap();
-            })
-        },
-    );
+    c.bench_function(&format!("server login start (real) ({SUFFIX})"), move |b| {
+        b.iter(|| {
+            ServerLogin::start(
+                &mut rng,
+                &server_setup,
+                Some(password_file.clone()),
+                client_login_start_result.clone().message,
+                username,
+                ServerLoginStartParameters::default(),
+            )
+            .unwrap();
+        })
+    });
 }
 
 fn server_login_start_fake(c: &mut Criterion) {
@@ -215,22 +201,19 @@ fn server_login_start_fake(c: &mut Criterion) {
     let server_setup = ServerSetup::<Default>::new(&mut rng);
     let client_login_start_result = ClientLogin::<Default>::start(&mut rng, password).unwrap();
 
-    c.bench_function(
-        &format!("server login start (fake) ({})", SUFFIX),
-        move |b| {
-            b.iter(|| {
-                ServerLogin::start(
-                    &mut rng,
-                    &server_setup,
-                    None,
-                    client_login_start_result.clone().message,
-                    username,
-                    ServerLoginStartParameters::default(),
-                )
-                .unwrap();
-            })
-        },
-    );
+    c.bench_function(&format!("server login start (fake) ({SUFFIX})"), move |b| {
+        b.iter(|| {
+            ServerLogin::start(
+                &mut rng,
+                &server_setup,
+                None,
+                client_login_start_result.clone().message,
+                username,
+                ServerLoginStartParameters::default(),
+            )
+            .unwrap();
+        })
+    });
 }
 
 fn client_login_finish(c: &mut Criterion) {
@@ -267,7 +250,7 @@ fn client_login_finish(c: &mut Criterion) {
     )
     .unwrap();
 
-    c.bench_function(&format!("client login finish ({})", SUFFIX), move |b| {
+    c.bench_function(&format!("client login finish ({SUFFIX})"), move |b| {
         b.iter(|| {
             client_login_start_result
                 .clone()
@@ -324,7 +307,7 @@ fn server_login_finish(c: &mut Criterion) {
         )
         .unwrap();
 
-    c.bench_function(&format!("server login finish ({})", SUFFIX), move |b| {
+    c.bench_function(&format!("server login finish ({SUFFIX})"), move |b| {
         b.iter(|| {
             server_login_start_result
                 .clone()

@@ -1,9 +1,10 @@
-// Copyright (c) Facebook, Inc. and its affiliates.
+// Copyright (c) Meta Platforms, Inc. and affiliates.
 //
-// This source code is licensed under both the MIT license found in the
-// LICENSE-MIT file in the root directory of this source tree and the Apache
+// This source code is dual-licensed under either the MIT license found in the
+// LICENSE-MIT file in the root directory of this source tree or the Apache
 // License, Version 2.0 found in the LICENSE-APACHE file in the root directory
-// of this source tree.
+// of this source tree. You may select, at your option, one of the above-listed
+// licenses.
 
 //! Contains the messages used for OPAQUE
 
@@ -41,7 +42,7 @@ use crate::opaque::{MaskedResponse, MaskedResponseLen, ServerSetup};
 #[cfg_attr(
     feature = "serde",
     derive(serde::Deserialize, serde::Serialize),
-    serde(bound = "", crate = "serde")
+    serde(bound = "")
 )]
 #[derive_where(Clone)]
 #[derive_where(Debug, Eq, Hash, Ord, PartialEq, PartialOrd; voprf::BlindedElement<CS::OprfCs>)]
@@ -63,7 +64,7 @@ where
 #[cfg_attr(
     feature = "serde",
     derive(serde::Deserialize, serde::Serialize),
-    serde(bound = "", crate = "serde")
+    serde(bound = "")
 )]
 #[derive_where(Clone)]
 #[derive_where(Debug, Eq, Hash, Ord, PartialEq, PartialOrd; voprf::EvaluationElement<CS::OprfCs>, <CS::KeGroup as KeGroup>::Pk)]
@@ -87,7 +88,7 @@ where
 #[cfg_attr(
     feature = "serde",
     derive(serde::Deserialize, serde::Serialize),
-    serde(bound = "", crate = "serde")
+    serde(bound = "")
 )]
 #[derive_where(Clone, ZeroizeOnDrop)]
 #[derive_where(Debug, Eq, Hash, Ord, PartialEq, PartialOrd; <CS::KeGroup as KeGroup>::Pk)]
@@ -113,15 +114,12 @@ where
 #[cfg_attr(
     feature = "serde",
     derive(serde::Deserialize, serde::Serialize),
-    serde(
-        bound(
-            deserialize = "<CS::KeyExchange as KeyExchange<OprfHash<CS>, \
-                           CS::KeGroup>>::KE1Message: serde::Deserialize<'de>",
-            serialize = "<CS::KeyExchange as KeyExchange<OprfHash<CS>, CS::KeGroup>>::KE1Message: \
-                         serde::Serialize"
-        ),
-        crate = "serde"
-    )
+    serde(bound(
+        deserialize = "<CS::KeyExchange as KeyExchange<OprfHash<CS>, CS::KeGroup>>::KE1Message: \
+                       serde::Deserialize<'de>",
+        serialize = "<CS::KeyExchange as KeyExchange<OprfHash<CS>, CS::KeGroup>>::KE1Message: \
+                     serde::Serialize"
+    ))
 )]
 #[derive_where(Clone, ZeroizeOnDrop)]
 #[derive_where(
@@ -147,15 +145,12 @@ where
 #[cfg_attr(
     feature = "serde",
     derive(serde::Deserialize, serde::Serialize),
-    serde(
-        bound(
-            deserialize = "<CS::KeyExchange as KeyExchange<OprfHash<CS>, \
-                           CS::KeGroup>>::KE2Message: serde::Deserialize<'de>",
-            serialize = "<CS::KeyExchange as KeyExchange<OprfHash<CS>, CS::KeGroup>>::KE2Message: \
-                         serde::Serialize"
-        ),
-        crate = "serde"
-    )
+    serde(bound(
+        deserialize = "<CS::KeyExchange as KeyExchange<OprfHash<CS>, CS::KeGroup>>::KE2Message: \
+                       serde::Deserialize<'de>",
+        serialize = "<CS::KeyExchange as KeyExchange<OprfHash<CS>, CS::KeGroup>>::KE2Message: \
+                     serde::Serialize"
+    ))
 )]
 #[derive_where(Clone)]
 #[derive_where(
@@ -184,15 +179,12 @@ where
 #[cfg_attr(
     feature = "serde",
     derive(serde::Deserialize, serde::Serialize),
-    serde(
-        bound(
-            deserialize = "<CS::KeyExchange as KeyExchange<OprfHash<CS>, \
-                           CS::KeGroup>>::KE3Message: serde::Deserialize<'de>",
-            serialize = "<CS::KeyExchange as KeyExchange<OprfHash<CS>, CS::KeGroup>>::KE3Message: \
-                         serde::Serialize"
-        ),
-        crate = "serde"
-    )
+    serde(bound(
+        deserialize = "<CS::KeyExchange as KeyExchange<OprfHash<CS>, CS::KeGroup>>::KE3Message: \
+                       serde::Deserialize<'de>",
+        serialize = "<CS::KeyExchange as KeyExchange<OprfHash<CS>, CS::KeGroup>>::KE3Message: \
+                     serde::Serialize"
+    ))
 )]
 #[derive_where(Clone)]
 #[derive_where(

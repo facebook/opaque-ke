@@ -1,15 +1,16 @@
-// Copyright (c) Facebook, Inc. and its affiliates.
+// Copyright (c) Meta Platforms, Inc. and affiliates.
 //
-// This source code is licensed under both the MIT license found in the
-// LICENSE-MIT file in the root directory of this source tree and the Apache
+// This source code is dual-licensed under either the MIT license found in the
+// LICENSE-MIT file in the root directory of this source tree or the Apache
 // License, Version 2.0 found in the LICENSE-APACHE file in the root directory
-// of this source tree.
+// of this source tree. You may select, at your option, one of the above-listed
+// licenses.
 
 //! A convenience trait for digest bounds used throughout the library
 
 use digest::block_buffer::Eager;
 use digest::core_api::{BlockSizeUser, BufferKindUser, CoreProxy, FixedOutputCore};
-use digest::{Digest, FixedOutputReset, HashMarker, OutputSizeUser};
+use digest::{FixedOutputReset, HashMarker, OutputSizeUser};
 use generic_array::typenum::{IsLess, Le, NonZero, U256};
 
 pub(crate) type OutputSize<D> = <<D as CoreProxy>::Core as OutputSizeUser>::OutputSize;
@@ -31,11 +32,12 @@ where
 {
 }
 
-/// Trait inheriting the requirements from digest::Digest for compatibility with
-/// HKDF and HMAC Associated types could be simplified when they are made as
-/// defaults: <https://github.com/rust-lang/rust/issues/29661>
+/// Trait inheriting the requirements from [`digest::Digest`] for compatibility
+/// with HKDF and HMAC Associated types could be simplified when they are made
+/// as defaults: <https://github.com/rust-lang/rust/issues/29661>
 pub trait Hash:
-    Digest
+    Default
+    + HashMarker
     + OutputSizeUser<OutputSize = OutputSize<Self>>
     + BlockSizeUser
     + FixedOutputReset
@@ -49,7 +51,8 @@ where
 }
 
 impl<
-        T: Digest
+        T: Default
+            + HashMarker
             + OutputSizeUser<OutputSize = OutputSize<Self>>
             + BlockSizeUser
             + FixedOutputReset

@@ -1,9 +1,10 @@
-// Copyright (c) Facebook, Inc. and its affiliates.
+// Copyright (c) Meta Platforms, Inc. and affiliates.
 //
-// This source code is licensed under both the MIT license found in the
-// LICENSE-MIT file in the root directory of this source tree and the Apache
+// This source code is dual-licensed under either the MIT license found in the
+// LICENSE-MIT file in the root directory of this source tree or the Apache
 // License, Version 2.0 found in the LICENSE-APACHE file in the root directory
-// of this source tree.
+// of this source tree. You may select, at your option, one of the above-listed
+// licenses.
 
 //! Provides the main OPAQUE API
 
@@ -58,13 +59,10 @@ const STR_OPAQUE_DERIVE_KEY_PAIR: &[u8; 20] = b"OPAQUE-DeriveKeyPair";
 #[cfg_attr(
     feature = "serde",
     derive(serde::Deserialize, serde::Serialize),
-    serde(
-        bound(
-            deserialize = "S: serde::Deserialize<'de>",
-            serialize = "S: serde::Serialize"
-        ),
-        crate = "serde"
-    )
+    serde(bound(
+        deserialize = "S: serde::Deserialize<'de>",
+        serialize = "S: serde::Serialize"
+    ))
 )]
 #[derive_where(Clone)]
 #[derive_where(Debug, Eq, Hash, Ord, PartialEq, PartialOrd; <CS::KeGroup as KeGroup>::Pk, <CS::KeGroup as KeGroup>::Sk, S)]
@@ -88,7 +86,7 @@ pub struct ServerSetup<
 #[cfg_attr(
     feature = "serde",
     derive(serde::Deserialize, serde::Serialize),
-    serde(bound = "", crate = "serde")
+    serde(bound = "")
 )]
 #[derive_where(Clone, ZeroizeOnDrop)]
 #[derive_where(
@@ -113,7 +111,7 @@ where
 #[cfg_attr(
     feature = "serde",
     derive(serde::Deserialize, serde::Serialize),
-    serde(bound = "", crate = "serde")
+    serde(bound = "")
 )]
 #[derive_where(Clone, ZeroizeOnDrop)]
 #[derive_where(Debug, Eq, Hash, Ord, PartialEq, PartialOrd; <CS::KeGroup as KeGroup>::Pk)]
@@ -130,18 +128,14 @@ where
 #[cfg_attr(
     feature = "serde",
     derive(serde::Deserialize, serde::Serialize),
-    serde(
-        bound(
-            deserialize = "<CS::KeyExchange as KeyExchange<OprfHash<CS>, \
-                           CS::KeGroup>>::KE1Message: serde::Deserialize<'de>, <CS::KeyExchange \
-                           as KeyExchange<OprfHash<CS>, CS::KeGroup>>::KE1State: \
-                           serde::Deserialize<'de>",
-            serialize = "<CS::KeyExchange as KeyExchange<OprfHash<CS>, CS::KeGroup>>::KE1Message: \
-                         serde::Serialize, <CS::KeyExchange as KeyExchange<OprfHash<CS>, \
-                         CS::KeGroup>>::KE1State: serde::Serialize"
-        ),
-        crate = "serde"
-    )
+    serde(bound(
+        deserialize = "<CS::KeyExchange as KeyExchange<OprfHash<CS>, CS::KeGroup>>::KE1Message: \
+                       serde::Deserialize<'de>, <CS::KeyExchange as KeyExchange<OprfHash<CS>, \
+                       CS::KeGroup>>::KE1State: serde::Deserialize<'de>",
+        serialize = "<CS::KeyExchange as KeyExchange<OprfHash<CS>, CS::KeGroup>>::KE1Message: \
+                     serde::Serialize, <CS::KeyExchange as KeyExchange<OprfHash<CS>, \
+                     CS::KeGroup>>::KE1State: serde::Serialize"
+    ))
 )]
 #[derive_where(Clone, ZeroizeOnDrop)]
 #[derive_where(
@@ -168,15 +162,12 @@ where
 #[cfg_attr(
     feature = "serde",
     derive(serde::Deserialize, serde::Serialize),
-    serde(
-        bound(
-            deserialize = "<CS::KeyExchange as KeyExchange<OprfHash<CS>, CS::KeGroup>>::KE2State: \
-                           serde::Deserialize<'de>",
-            serialize = "<CS::KeyExchange as KeyExchange<OprfHash<CS>, CS::KeGroup>>::KE2State: \
-                         serde::Serialize"
-        ),
-        crate = "serde"
-    )
+    serde(bound(
+        deserialize = "<CS::KeyExchange as KeyExchange<OprfHash<CS>, CS::KeGroup>>::KE2State: \
+                       serde::Deserialize<'de>",
+        serialize = "<CS::KeyExchange as KeyExchange<OprfHash<CS>, CS::KeGroup>>::KE2State: \
+                     serde::Serialize"
+    ))
 )]
 #[derive_where(Clone, ZeroizeOnDrop)]
 #[derive_where(
@@ -233,6 +224,10 @@ where
     Le<<<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
 {
     /// Create [`ServerSetup`] with the given keypair
+    ///
+    /// This function should not be used to restore a previously-existing
+    /// instance of [`ServerSetup`]. Instead, use [`ServerSetup::serialize`] and
+    /// [`ServerSetup::deserialize`] for this purpose.
     pub fn new_with_key<R: CryptoRng + RngCore>(
         rng: &mut R,
         keypair: KeyPair<CS::KeGroup, S>,
@@ -333,7 +328,7 @@ where
     }
 
     /// Returns an initial "blinded" request to send to the server, as well as a
-    /// ClientRegistration
+    /// [`ClientRegistration`]
     pub fn start<R: RngCore + CryptoRng>(
         blinding_factor_rng: &mut R,
         password: &[u8],
@@ -443,7 +438,7 @@ where
     }
 
     /// From the client's "blinded" password, returns a response to be sent back
-    /// to the client, as well as a ServerRegistration
+    /// to the client, as well as a [`ServerRegistration`]
     pub fn start<S: SecretKey<CS::KeGroup>>(
         server_setup: &ServerSetup<CS, S>,
         message: RegistrationRequest<CS>,
@@ -453,7 +448,7 @@ where
             oprf_key_from_seed::<CS::OprfCs>(&server_setup.oprf_seed, credential_identifier)?;
 
         let server = voprf::OprfServer::new_with_key(&oprf_key)?;
-        let evaluation_element = server.evaluate(&message.blinded_element);
+        let evaluation_element = server.blind_evaluate(&message.blinded_element);
 
         Ok(ServerRegistrationStartResult {
             message: RegistrationResponse {
@@ -466,7 +461,7 @@ where
     }
 
     /// From the client's cryptographic identifiers, fully populates and returns
-    /// a ServerRegistration
+    /// a [`ServerRegistration`]
     pub fn finish(message: RegistrationUpload<CS>) -> Self {
         Self(message)
     }
@@ -545,7 +540,7 @@ where
     Le<<<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
 {
     /// Returns an initial "blinded" password request to send to the server, as
-    /// well as a ClientLogin
+    /// well as a [`ClientLogin`]
     pub fn start<R: RngCore + CryptoRng>(
         rng: &mut R,
         password: &[u8],
@@ -696,7 +691,7 @@ where
     }
 
     /// From the client's "blinded" password, returns a challenge to be sent
-    /// back to the client, as well as a ServerLogin
+    /// back to the client, as well as a [`ServerLogin`]
     pub fn start<R: RngCore + CryptoRng, S: SecretKey<CS::KeGroup>>(
         rng: &mut R,
         server_setup: &ServerSetup<CS, S>,
@@ -721,13 +716,7 @@ where
         };
 
         let client_s_pk = record.0.client_s_pk.clone();
-
-        let context = if let Some(context) = context {
-            context
-        } else {
-            &[]
-        };
-
+        let context = context.unwrap_or(&[]);
         let server_s_sk = server_setup.keypair.private();
         let server_s_pk = server_s_sk.public_key()?;
 
@@ -760,7 +749,7 @@ where
                 .map_err(ProtocolError::into_custom)?;
         let server = voprf::OprfServer::new_with_key(&oprf_key)
             .map_err(|e| ProtocolError::into_custom(e.into()))?;
-        let evaluation_element = server.evaluate(&credential_request.blinded_element);
+        let evaluation_element = server.blind_evaluate(&credential_request.blinded_element);
 
         let beta = OprfGroup::<CS>::serialize_elem(evaluation_element.value());
         let credential_response_component =
@@ -1150,7 +1139,7 @@ where
 #[cfg_attr(
     feature = "serde",
     derive(serde::Deserialize, serde::Serialize),
-    serde(bound = "", crate = "serde")
+    serde(bound = "")
 )]
 #[derive_where(Clone)]
 #[derive_where(Debug, Eq, Hash, PartialEq)]

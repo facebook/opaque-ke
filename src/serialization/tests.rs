@@ -1,9 +1,10 @@
-// Copyright (c) Facebook, Inc. and its affiliates.
+// Copyright (c) Meta Platforms, Inc. and affiliates.
 //
-// This source code is licensed under both the MIT license found in the
-// LICENSE-MIT file in the root directory of this source tree and the Apache
+// This source code is dual-licensed under either the MIT license found in the
+// LICENSE-MIT file in the root directory of this source tree or the Apache
 // License, Version 2.0 found in the LICENSE-APACHE file in the root directory
-// of this source tree.
+// of this source tree. You may select, at your option, one of the above-listed
+// licenses.
 
 use core::ops::Add;
 use std::vec;
@@ -50,6 +51,24 @@ struct P256;
 impl CipherSuite for P256 {
     type OprfCs = ::p256::NistP256;
     type KeGroup = ::p256::NistP256;
+    type KeyExchange = TripleDh;
+    type Ksf = crate::ksf::Identity;
+}
+
+struct P384;
+
+impl CipherSuite for P384 {
+    type OprfCs = ::p384::NistP384;
+    type KeGroup = ::p384::NistP384;
+    type KeyExchange = TripleDh;
+    type Ksf = crate::ksf::Identity;
+}
+
+struct P521;
+
+impl CipherSuite for P521 {
+    type OprfCs = ::p521::NistP521;
+    type KeGroup = ::p521::NistP521;
     type KeyExchange = TripleDh;
     type Ksf = crate::ksf::Identity;
 }
@@ -104,6 +123,8 @@ fn client_registration_roundtrip() -> Result<(), ProtocolError> {
     #[cfg(feature = "ristretto255")]
     inner::<Ristretto255>()?;
     inner::<P256>()?;
+    inner::<P384>()?;
+    inner::<P521>()?;
 
     Ok(())
 }
@@ -157,6 +178,8 @@ fn server_registration_roundtrip() -> Result<(), ProtocolError> {
     #[cfg(feature = "ristretto255")]
     inner::<Ristretto255>()?;
     inner::<P256>()?;
+    inner::<P384>()?;
+    inner::<P521>()?;
 
     Ok(())
 }
@@ -199,6 +222,8 @@ fn registration_request_roundtrip() -> Result<(), ProtocolError> {
     #[cfg(feature = "ristretto255")]
     inner::<Ristretto255>()?;
     inner::<P256>()?;
+    inner::<P384>()?;
+    inner::<P521>()?;
 
     Ok(())
 }
@@ -250,6 +275,8 @@ fn registration_response_roundtrip() -> Result<(), ProtocolError> {
     #[cfg(feature = "ristretto255")]
     inner::<Ristretto255>()?;
     inner::<P256>()?;
+    inner::<P384>()?;
+    inner::<P521>()?;
 
     Ok(())
 }
@@ -311,6 +338,8 @@ fn registration_upload_roundtrip() -> Result<(), ProtocolError> {
     #[cfg(feature = "ristretto255")]
     inner::<Ristretto255>()?;
     inner::<P256>()?;
+    inner::<P384>()?;
+    inner::<P521>()?;
 
     Ok(())
 }
@@ -368,6 +397,8 @@ fn credential_request_roundtrip() -> Result<(), ProtocolError> {
     #[cfg(feature = "ristretto255")]
     inner::<Ristretto255>()?;
     inner::<P256>()?;
+    inner::<P384>()?;
+    inner::<P521>()?;
 
     Ok(())
 }
@@ -456,6 +487,8 @@ fn credential_response_roundtrip() -> Result<(), ProtocolError> {
     #[cfg(feature = "ristretto255")]
     inner::<Ristretto255>()?;
     inner::<P256>()?;
+    inner::<P384>()?;
+    inner::<P521>()?;
 
     Ok(())
 }
@@ -487,6 +520,8 @@ fn credential_finalization_roundtrip() -> Result<(), ProtocolError> {
     #[cfg(feature = "ristretto255")]
     inner::<Ristretto255>()?;
     inner::<P256>()?;
+    inner::<P384>()?;
+    inner::<P521>()?;
 
     Ok(())
 }
@@ -554,6 +589,8 @@ fn client_login_roundtrip() -> Result<(), ProtocolError> {
     #[cfg(feature = "ristretto255")]
     inner::<Ristretto255>()?;
     inner::<P256>()?;
+    inner::<P384>()?;
+    inner::<P521>()?;
 
     Ok(())
 }
@@ -593,6 +630,8 @@ fn ke1_message_roundtrip() -> Result<(), ProtocolError> {
     #[cfg(feature = "ristretto255")]
     inner::<Ristretto255>()?;
     inner::<P256>()?;
+    inner::<P384>()?;
+    inner::<P521>()?;
 
     Ok(())
 }
@@ -636,6 +675,8 @@ fn ke2_message_roundtrip() -> Result<(), ProtocolError> {
     #[cfg(feature = "ristretto255")]
     inner::<Ristretto255>()?;
     inner::<P256>()?;
+    inner::<P384>()?;
+    inner::<P521>()?;
 
     Ok(())
 }
@@ -670,6 +711,8 @@ fn ke3_message_roundtrip() -> Result<(), ProtocolError> {
     #[cfg(feature = "ristretto255")]
     inner::<Ristretto255>()?;
     inner::<P256>()?;
+    inner::<P384>()?;
+    inner::<P521>()?;
 
     Ok(())
 }
@@ -705,52 +748,52 @@ macro_rules! test {
             proptest! {
                 #[test]
                 fn test_nocrash_registration_request(bytes in vec(any::<u8>(), 0..200)) {
-                    RegistrationRequest::<$CS>::deserialize(&bytes).map_or(true, |_| true);
+                    let _ = RegistrationRequest::<$CS>::deserialize(&bytes).map_or(true, |_| true);
                 }
 
                 #[test]
                 fn test_nocrash_registration_response(bytes in vec(any::<u8>(), 0..200)) {
-                    RegistrationResponse::<$CS>::deserialize(&bytes).map_or(true, |_| true);
+                    let _ = RegistrationResponse::<$CS>::deserialize(&bytes).map_or(true, |_| true);
                 }
 
                 #[test]
                 fn test_nocrash_registration_upload(bytes in vec(any::<u8>(), 0..200)) {
-                    RegistrationUpload::<$CS>::deserialize(&bytes).map_or(true, |_| true);
+                    let _ = RegistrationUpload::<$CS>::deserialize(&bytes).map_or(true, |_| true);
                 }
 
                 #[test]
                 fn test_nocrash_credential_request(bytes in vec(any::<u8>(), 0..500)) {
-                    CredentialRequest::<$CS>::deserialize(&bytes).map_or(true, |_| true);
+                    let _ = CredentialRequest::<$CS>::deserialize(&bytes).map_or(true, |_| true);
                 }
 
                 #[test]
                 fn test_nocrash_credential_response(bytes in vec(any::<u8>(), 0..500)) {
-                    CredentialResponse::<$CS>::deserialize(&bytes).map_or(true, |_| true);
+                    let _ = CredentialResponse::<$CS>::deserialize(&bytes).map_or(true, |_| true);
                 }
 
                 #[test]
                 fn test_nocrash_credential_finalization(bytes in vec(any::<u8>(), 0..500)) {
-                    CredentialFinalization::<$CS>::deserialize(&bytes).map_or(true, |_| true);
+                    let _ = CredentialFinalization::<$CS>::deserialize(&bytes).map_or(true, |_| true);
                 }
 
                 #[test]
                 fn test_nocrash_client_registration(bytes in vec(any::<u8>(), 0..700)) {
-                    ClientRegistration::<$CS>::deserialize(&bytes).map_or(true, |_| true);
+                    let _ = ClientRegistration::<$CS>::deserialize(&bytes).map_or(true, |_| true);
                 }
 
                 #[test]
                 fn test_nocrash_server_registration(bytes in vec(any::<u8>(), 0..700)) {
-                    ServerRegistration::<$CS>::deserialize(&bytes).map_or(true, |_| true);
+                    let _ = ServerRegistration::<$CS>::deserialize(&bytes).map_or(true, |_| true);
                 }
 
                 #[test]
                 fn test_nocrash_client_login(bytes in vec(any::<u8>(), 0..700)) {
-                    ClientLogin::<$CS>::deserialize(&bytes).map_or(true, |_| true);
+                    let _ = ClientLogin::<$CS>::deserialize(&bytes).map_or(true, |_| true);
                 }
 
                 #[test]
                 fn test_nocrash_server_login(bytes in vec(any::<u8>(), 0..700)) {
-                    ServerLogin::<$CS>::deserialize(&bytes).map_or(true, |_| true);
+                    let _ = ServerLogin::<$CS>::deserialize(&bytes).map_or(true, |_| true);
                 }
             }
         }
@@ -760,3 +803,5 @@ macro_rules! test {
 #[cfg(feature = "ristretto255")]
 test!(ristretto255, Ristretto255);
 test!(p256, P256);
+test!(p384, P384);
+test!(p521, P521);

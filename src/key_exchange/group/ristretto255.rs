@@ -1,9 +1,10 @@
-// Copyright (c) Facebook, Inc. and its affiliates.
+// Copyright (c) Meta Platforms, Inc. and affiliates.
 //
-// This source code is licensed under both the MIT license found in the
-// LICENSE-MIT file in the root directory of this source tree and the Apache
+// This source code is dual-licensed under either the MIT license found in the
+// LICENSE-MIT file in the root directory of this source tree or the Apache
 // License, Version 2.0 found in the LICENSE-APACHE file in the root directory
-// of this source tree.
+// of this source tree. You may select, at your option, one of the above-listed
+// licenses.
 
 //! Key Exchange group implementation for ristretto255
 
@@ -12,7 +13,7 @@ use curve25519_dalek::ristretto::{CompressedRistretto, RistrettoPoint};
 use curve25519_dalek::scalar::Scalar;
 use curve25519_dalek::traits::Identity;
 use digest::core_api::BlockSizeUser;
-use digest::Digest;
+use digest::{FixedOutput, HashMarker};
 use generic_array::typenum::{IsLess, IsLessOrEqual, U256, U32};
 use generic_array::GenericArray;
 use rand::{CryptoRng, RngCore};
@@ -38,11 +39,8 @@ impl KeGroup for Ristretto255 {
     }
 
     fn deserialize_pk(bytes: &[u8]) -> Result<Self::Pk, InternalError> {
-        if bytes.len() != 32 {
-            return Err(InternalError::PointError);
-        }
-
         CompressedRistretto::from_slice(bytes)
+            .map_err(|_| InternalError::PointError)?
             .decompress()
             .filter(|point| point != &RistrettoPoint::identity())
             .ok_or(InternalError::PointError)
@@ -66,25 +64,25 @@ impl KeGroup for Ristretto255 {
                 }
             };
 
-            if scalar != Scalar::zero() {
+            if scalar != Scalar::ZERO {
                 break scalar;
             }
         }
     }
 
     // Implements the `HashToScalar()` function from
-    // <https://www.ietf.org/archive/id/draft-irtf-cfrg-voprf-09.html#section-4.1>
+    // <https://www.ietf.org/archive/id/draft-irtf-cfrg-voprf-19.html#section-4>
     fn hash_to_scalar<'a, H>(input: &[&[u8]], dst: &[u8]) -> Result<Self::Sk, InternalError>
     where
-        H: Digest + BlockSizeUser,
+        H: BlockSizeUser + Default + FixedOutput + HashMarker,
         H::OutputSize: IsLess<U256> + IsLessOrEqual<H::BlockSize>,
     {
-        <voprf::Ristretto255 as Group>::hash_to_scalar::<H>(input, dst)
+        <voprf::Ristretto255 as Group>::hash_to_scalar::<H>(input, &[dst])
             .map_err(InternalError::OprfInternalError)
     }
 
     fn is_zero_scalar(scalar: Self::Sk) -> subtle::Choice {
-        scalar.ct_eq(&Scalar::zero())
+        scalar.ct_eq(&Scalar::ZERO)
     }
 
     fn public_key(sk: Self::Sk) -> Self::Pk {
@@ -103,15 +101,15 @@ impl KeGroup for Ristretto255 {
         bytes
             .try_into()
             .ok()
-            .and_then(Scalar::from_canonical_bytes)
-            .filter(|scalar| scalar != &Scalar::zero())
+            .and_then(|bytes| Scalar::from_canonical_bytes(bytes).into())
+            .filter(|scalar| scalar != &Scalar::ZERO)
             .ok_or(InternalError::PointError)
     }
 }
 
 #[cfg(feature = "ristretto255-voprf")]
 impl voprf::CipherSuite for Ristretto255 {
-    const ID: u16 = voprf::Ristretto255::ID;
+    const ID: &'static str = voprf::Ristretto255::ID;
 
     type Group = <voprf::Ristretto255 as voprf::CipherSuite>::Group;
 
@@ -129,10 +127,10 @@ impl Group for Ristretto255 {
 
     fn hash_to_curve<H>(
         input: &[&[u8]],
-        dst: &[u8],
+        dst: &[&[u8]],
     ) -> voprf::Result<Self::Elem, voprf::InternalError>
     where
-        H: Digest + BlockSizeUser,
+        H: BlockSizeUser + Default + FixedOutput + HashMarker,
         H::OutputSize: IsLess<U256> + IsLessOrEqual<H::BlockSize>,
     {
         <voprf::Ristretto255 as Group>::hash_to_curve::<H>(input, dst)
@@ -140,10 +138,10 @@ impl Group for Ristretto255 {
 
     fn hash_to_scalar<H>(
         input: &[&[u8]],
-        dst: &[u8],
+        dst: &[&[u8]],
     ) -> voprf::Result<Self::Scalar, voprf::InternalError>
     where
-        H: Digest + BlockSizeUser,
+        H: BlockSizeUser + Default + FixedOutput + HashMarker,
         H::OutputSize: IsLess<U256> + IsLessOrEqual<H::BlockSize>,
     {
         <voprf::Ristretto255 as Group>::hash_to_scalar::<H>(input, dst)

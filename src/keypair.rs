@@ -1,9 +1,10 @@
-// Copyright (c) Facebook, Inc. and its affiliates.
+// Copyright (c) Meta Platforms, Inc. and affiliates.
 //
-// This source code is licensed under both the MIT license found in the
-// LICENSE-MIT file in the root directory of this source tree and the Apache
+// This source code is dual-licensed under either the MIT license found in the
+// LICENSE-MIT file in the root directory of this source tree or the Apache
 // License, Version 2.0 found in the LICENSE-APACHE file in the root directory
-// of this source tree.
+// of this source tree. You may select, at your option, one of the above-listed
+// licenses.
 
 //! Contains the keypair types that must be supplied for the OPAQUE API
 
@@ -20,13 +21,10 @@ use crate::key_exchange::group::KeGroup;
 #[cfg_attr(
     feature = "serde",
     derive(serde::Deserialize, serde::Serialize),
-    serde(
-        bound(
-            deserialize = "S: serde::Deserialize<'de>",
-            serialize = "S: serde::Serialize"
-        ),
-        crate = "serde"
-    )
+    serde(bound(
+        deserialize = "S: serde::Deserialize<'de>",
+        serialize = "S: serde::Serialize"
+    ))
 )]
 #[derive_where(Clone)]
 #[derive_where(Debug, Eq, Hash, Ord, PartialEq, PartialOrd; KG::Pk, S)]
@@ -46,15 +44,18 @@ impl<KG: KeGroup, S: SecretKey<KG>> KeyPair<KG, S> {
         &self.sk
     }
 
-    /// Obtains a KeyPair from a slice representing the private key
+    /// Obtains a [`KeyPair`] from a slice representing the private key
     pub fn from_private_key_slice(input: &[u8]) -> Result<Self, ProtocolError<S::Error>> {
         Self::from_private_key(S::deserialize(input)?)
     }
 
-    /// Obtains a KeyPair from a private key
-    pub fn from_private_key(sk: S) -> Result<Self, ProtocolError<S::Error>> {
-        let pk = sk.public_key()?;
-        Ok(Self { pk, sk })
+    /// Obtains a [`KeyPair`] from a private key
+    pub fn from_private_key(private_key: S) -> Result<Self, ProtocolError<S::Error>> {
+        let pk = private_key.public_key()?;
+        Ok(Self {
+            pk,
+            sk: private_key,
+        })
     }
 }
 
@@ -77,7 +78,7 @@ where
     KG::Sk: std::fmt::Debug,
 {
     /// Test-only strategy returning a proptest Strategy based on
-    /// generate_random
+    /// [`Self::generate_random`]
     fn uniform_keypair_strategy() -> proptest::prelude::BoxedStrategy<Self> {
         use proptest::prelude::*;
         use rand::rngs::StdRng;
@@ -231,6 +232,8 @@ mod tests {
         #[cfg(feature = "ristretto255")]
         inner::<crate::Ristretto255>();
         inner::<::p256::NistP256>();
+        inner::<::p384::NistP384>();
+        inner::<::p521::NistP521>();
     }
 
     macro_rules! test {
@@ -277,6 +280,8 @@ mod tests {
     #[cfg(feature = "ristretto255")]
     test!(ristretto, crate::Ristretto255);
     test!(p256, ::p256::NistP256);
+    test!(p384, ::p384::NistP384);
+    test!(p521, ::p521::NistP521);
 
     #[test]
     fn remote_key() {

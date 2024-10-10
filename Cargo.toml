@@ -7,48 +7,39 @@ keywords = ["cryptography", "crypto", "opaque", "passwords", "authentication"]
 license = "Apache-2.0 OR MIT"
 name = "opaque-ke"
 readme = "README.md"
-repository = "https://github.com/novifinancial/opaque-ke"
-rust-version = "1.57"
-version = "2.0.0"
+repository = "https://github.com/facebook/opaque-ke"
+rust-version = "1.74"
+version = "2.1.0-pre.1"
 
 [features]
-default = ["ristretto255-u64", "ristretto255-voprf", "serde"]
-ristretto255 = ["curve25519-dalek", "voprf/ristretto255"]
-ristretto255-fiat-u32 = ["curve25519-dalek/fiat_u32_backend", "ristretto255"]
-ristretto255-fiat-u64 = ["curve25519-dalek/fiat_u64_backend", "ristretto255"]
-ristretto255-simd = ["curve25519-dalek/simd_backend", "ristretto255"]
-ristretto255-u32 = ["curve25519-dalek/u32_backend", "ristretto255"]
-ristretto255-u64 = ["curve25519-dalek/u64_backend", "ristretto255"]
+argon2 = ["dep:argon2"]
+curve25519 = ["dep:curve25519-dalek"]
+default = ["ristretto255-voprf", "serde"]
+ristretto255 = ["dep:curve25519-dalek", "voprf/ristretto255"]
 ristretto255-voprf = ["ristretto255", "voprf/ristretto255-ciphersuite"]
-serde = ["serde_", "generic-array/serde", "voprf/serde"]
-std = ["getrandom"]
-x25519 = ["curve25519-dalek"]
-x25519-fiat-u32 = ["curve25519-dalek/fiat_u32_backend", "x25519"]
-x25519-fiat-u64 = ["curve25519-dalek/fiat_u64_backend", "x25519"]
-x25519-simd = ["curve25519-dalek/simd_backend", "x25519"]
-x25519-u32 = ["curve25519-dalek/u32_backend", "x25519"]
-x25519-u64 = ["curve25519-dalek/u64_backend", "x25519"]
+serde = ["dep:serde", "generic-array/serde", "voprf/serde"]
+std = ["dep:getrandom"]
 
 [dependencies]
-argon2 = { version = "0.4", default-features = false, features = [
+argon2 = { version = "0.5", default-features = false, features = [
   "alloc",
 ], optional = true }
-curve25519-dalek = { version = "=4.0.0-pre.1", default-features = false, optional = true }
-derive-where = { version = "=1.0.0-rc.3", features = ["zeroize-on-drop"] }
+curve25519-dalek = { version = "4", default-features = false, features = [
+  "zeroize",
+], optional = true }
+derive-where = { version = "1", features = ["zeroize-on-drop"] }
 digest = "0.10"
 displaydoc = { version = "0.2", default-features = false }
-elliptic-curve = { version = "0.12", features = ["hash2curve", "sec1"] }
+elliptic-curve = { version = "0.13", features = ["hash2curve", "sec1"] }
 generic-array = "0.14"
 hkdf = "0.12"
 hmac = "0.12"
 rand = { version = "0.8", default-features = false }
-serde_ = { version = "1", package = "serde", default-features = false, features = [
+serde = { version = "1", default-features = false, features = [
   "derive",
 ], optional = true }
 subtle = { version = "2.3", default-features = false }
-voprf = { version = "=0.4.0-pre.3", default-features = false, features = [
-  "danger",
-] }
+voprf = { version = "0.4.1", default-features = false, features = ["danger"] }
 zeroize = { version = "1.5", features = ["zeroize_derive"] }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
@@ -56,19 +47,28 @@ getrandom = { version = "0.2", features = ["js"], optional = true }
 
 [dev-dependencies]
 bincode = "1"
-chacha20poly1305 = "=0.10.0-pre"
-criterion = "0.4"
+chacha20poly1305 = "0.10"
+criterion = "0.5"
 hex = "0.4"
 json = "0.12"
-p256 = { version = "0.11", default-features = false, features = [
+p256 = { version = "0.13", default-features = false, features = [
+  "hash2curve",
+  "voprf",
+] }
+p384 = { version = "0.13", default-features = false, features = [
+  "hash2curve",
+  "voprf",
+] }
+p521 = { version = "0.13.3", default-features = false, features = [
   "hash2curve",
   "voprf",
 ] }
 proptest = "1"
 rand = "0.8"
 regex = "1"
-rustyline = "9"
-scrypt = "0.10"
+# MSRV
+rustyline = "14"
+scrypt = "0.11"
 serde_json = "1"
 
 [[bench]]
@@ -76,7 +76,8 @@ harness = false
 name = "opaque"
 
 [package.metadata.docs.rs]
-features = ["argon2", "std", "x25519-u64"]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
 targets = []
 
 [[example]]

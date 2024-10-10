@@ -1,9 +1,10 @@
-// Copyright (c) Facebook, Inc. and its affiliates.
+// Copyright (c) Meta Platforms, Inc. and affiliates.
 //
-// This source code is licensed under both the MIT license found in the
-// LICENSE-MIT file in the root directory of this source tree and the Apache
+// This source code is dual-licensed under either the MIT license found in the
+// LICENSE-MIT file in the root directory of this source tree or the Apache
 // License, Version 2.0 found in the LICENSE-APACHE file in the root directory
-// of this source tree.
+// of this source tree. You may select, at your option, one of the above-listed
+// licenses.
 
 //! An implementation of the OPAQUE asymmetric password authentication key
 //! exchange protocol
@@ -14,7 +15,7 @@
 //!
 //! ### Minimum Supported Rust Version
 //!
-//! Rust **1.57** or higher.
+//! Rust **1.74** or higher.
 //!
 //! # Overview
 //!
@@ -39,7 +40,7 @@
 //!     type Ksf = opaque_ke::ksf::Identity;
 //! }
 //! ```
-//! See [examples/simple_login.rs](https://github.com/novifinancial/opaque-ke/blob/main/examples/simple_login.rs)
+//! See [examples/simple_login.rs](https://github.com/facebook/opaque-ke/blob/main/examples/simple_login.rs)
 //! for a working example of a simple password-based login using OPAQUE.
 //!
 //! Note that our choice of key stretching function in this example, `Identity`,
@@ -76,34 +77,35 @@
 //! let server_setup = ServerSetup::<Default>::new(&mut rng);
 //! # Ok::<(), ProtocolError>(())
 //! ```
-//! The server must persist an instance of [ServerSetup] for the registration
-//! and login steps.
+//! The server must persist an instance of [`ServerSetup`] for the registration
+//! and login steps, and can use [`ServerSetup::serialize`] and
+//! [`ServerSetup::deserialize`] to save and restore the instance.
 //!
 //! ## Registration
 //! The registration protocol between the client and server consists of four
-//! steps along with three messages: [RegistrationRequest],
-//! [RegistrationResponse], and [RegistrationUpload]. A successful execution of
-//! the registration protocol results in the server producing a password file
+//! steps along with three messages: [`RegistrationRequest`],
+//! [`RegistrationResponse`], and [`RegistrationUpload`]. A successful execution
+//! of the registration protocol results in the server producing a password file
 //! corresponding to a server-side identifier for the client, along with the
 //! password provided by the client. This password file is typically stored in a
 //! key-value database, where the keys consist of these server-side identifiers
 //! for each client, and the values consist of their corresponding password
 //! files, to be retrieved upon future login attempts made by the client.
 //! It is your responsibility to ensure that the identifier used to form the
-//! initial [RegistrationRequest], typically supplied by the client, matches
-//! the database key used in the final [RegistrationUpload] step.
+//! initial [`RegistrationRequest`], typically supplied by the client, matches
+//! the database key used in the final [`RegistrationUpload`] step.
 //!
-//! Note that the [RegistrationUpload] message contains sensitive information
+//! Note that the [`RegistrationUpload`] message contains sensitive information
 //! (about as sensitive as a hash of the password), and hence should be
 //! protected with confidentiality guarantees by the consumer of this library.
 //!
 //! ### Client Registration Start
 //! In the first step of registration, the client chooses as input a
-//! registration password. The client runs [ClientRegistration::start] to
-//! produce a [ClientRegistrationStartResult], which consists of a
-//! [RegistrationRequest] to be sent to the server and a [ClientRegistration]
-//! which must be persisted on the client for the final step of client
-//! registration.
+//! registration password. The client runs [`ClientRegistration::start`] to
+//! produce a [`ClientRegistrationStartResult`], which consists of a
+//! [`RegistrationRequest`] to be sent to the server and a
+//! [`ClientRegistration`] which must be persisted on the client for the final
+//! step of client registration.
 //! ```
 //! # use opaque_ke::{
 //! #   errors::ProtocolError,
@@ -137,10 +139,11 @@
 //!
 //! ### Server Registration Start
 //! In the second step of registration, the server takes as input a persisted
-//! instance of [ServerSetup], a [RegistrationRequest] from the client, and a
-//! server-side identifier for the client. The server runs
-//! [ServerRegistration::start] to produce a [ServerRegistrationStartResult],
-//! which consists of a [RegistrationResponse] to be returned to the client.
+//! instance of [`ServerSetup`], a [`RegistrationRequest`] from the client, and
+//! a server-side identifier for the client. The server runs
+//! [`ServerRegistration::start`] to produce a
+//! [`ServerRegistrationStartResult`], which consists of a
+//! [`RegistrationResponse`] to be returned to the client.
 //! ```
 //! # use opaque_ke::{
 //! #   errors::ProtocolError,
@@ -183,10 +186,11 @@
 //!
 //! ### Client Registration Finish
 //! In the third step of registration, the client takes as input a
-//! [RegistrationResponse] from the server, and a [ClientRegistration] from the
-//! first step of registration. The client runs [ClientRegistration::finish] to
-//! produce a [ClientRegistrationFinishResult], which consists of a
-//! [RegistrationUpload] to be sent to the server and an `export_key` field
+//! [`RegistrationResponse`] from the server, and a [`ClientRegistration`] from
+//! the first step of registration. The client runs
+//! [`ClientRegistration::finish`] to
+//! produce a [`ClientRegistrationFinishResult`], which consists of a
+//! [`RegistrationUpload`] to be sent to the server and an `export_key` field
 //! which can be used optionally as described in the [Export Key](#export-key)
 //! section.
 //! ```
@@ -231,11 +235,11 @@
 //!
 //! ### Server Registration Finish
 //! In the fourth step of registration, the server takes as input a
-//! [RegistrationUpload] from the client, and a [ServerRegistration] from the
-//! second step. The server runs [ServerRegistration::finish] to produce a
-//! finalized [ServerRegistration]. At this point, the client can be considered
-//! as successfully registered, and the server can invoke
-//! [ServerRegistration::serialize] to store the password file for use during
+//! [`RegistrationUpload`] from the client, and a [`ServerRegistration`] from
+//! the second step. The server runs [`ServerRegistration::finish`] to produce a
+//! finalized [`ServerRegistration`]. At this point, the client can be
+//! considered as successfully registered, and the server can invoke
+//! [`ServerRegistration::serialize`] to store the password file for use during
 //! the login protocol.
 //! ```
 //! # use opaque_ke::{
@@ -277,8 +281,8 @@
 //!
 //! ## Login
 //! The login protocol between a client and server also consists of four steps
-//! along with three messages: [CredentialRequest], [CredentialResponse],
-//! [CredentialFinalization]. The server is expected to have access to the
+//! along with three messages: [`CredentialRequest`], [`CredentialResponse`],
+//! [`CredentialFinalization`]. The server is expected to have access to the
 //! password file corresponding to an output of the registration phase (see
 //! [Dummy Server Login](#dummy-server-login) for handling the scenario where no
 //! password file is available). The login protocol will execute successfully
@@ -287,9 +291,9 @@
 //!
 //! ### Client Login Start
 //! In the first step of login, the client chooses as input a login password.
-//! The client runs [ClientLogin::start] to produce an output consisting of a
-//! [CredentialRequest] to be sent to the server, and a [ClientLogin] which must
-//! be persisted on the client for the final step of client login.
+//! The client runs [`ClientLogin::start`] to produce an output consisting of a
+//! [`CredentialRequest`] to be sent to the server, and a [`ClientLogin`] which
+//! must be persisted on the client for the final step of client login.
 //! ```
 //! # use opaque_ke::{
 //! #   errors::ProtocolError,
@@ -321,12 +325,12 @@
 //!
 //! ### Server Login Start
 //! In the second step of login, the server takes as input a persisted instance
-//! of [ServerSetup], the password file output from registration, a
-//! [CredentialRequest] from the client, and a server-side identifier for the
-//! client. The server runs [ServerLogin::start] to produce an output consisting
-//! of a [CredentialResponse] which is returned to the client, and a
-//! [ServerLogin] which must be persisted on the server for the final step of
-//! login.
+//! of [`ServerSetup`], the password file output from registration, a
+//! [`CredentialRequest`] from the client, and a server-side identifier for the
+//! client. The server runs [`ServerLogin::start`] to produce an output
+//! consisting of a [`CredentialResponse`] which is returned to the client, and
+//! a [`ServerLogin`] which must be persisted on the server for the final step
+//! of login.
 //! ```
 //! # use opaque_ke::{
 //! #   errors::ProtocolError,
@@ -379,17 +383,25 @@
 //! ```
 //! Note that if there is no corresponding password file found for the user, the
 //! server can use `None` in place of `Some(password_file)` in order to generate
-//! a [CredentialResponse] that is indistinguishable from a valid
-//! [CredentialResponse] returned for a registered client. This allows the
+//! a [`CredentialResponse`] that is indistinguishable from a valid
+//! [`CredentialResponse`] returned for a registered client. This allows the
 //! server to prevent leaking information about whether or not a client has
 //! previously registered with the server.
 //!
 //! ### Client Login Finish
-//! In the third step of login, the client takes as input a [CredentialResponse]
-//! from the server. The client runs [ClientLogin::finish] and produces an
-//! output consisting of a [CredentialFinalization] to be sent to the server to
-//! complete the protocol, the `session_key` sequence of bytes which will match
-//! the server's session key upon a successful login.
+//! In the third step of login, the client takes as input a
+//! [`CredentialResponse`] from the server and runs [`ClientLogin::finish`]
+//! on it.
+//! If the authentication is successful, then the client obtains a
+//! [`ClientLoginFinishResult`]. Otherwise, on failure, the
+//! algorithm outputs an
+//! [`InvalidLoginError`](errors::ProtocolError::InvalidLoginError) error.
+//!
+//! The resulting [`ClientLoginFinishResult`] obtained by client in this step
+//! contains, among other things, a [`CredentialFinalization`] to be sent to the
+//! server to complete the protocol, and a
+//! [`session_key`](struct.ClientLoginFinishResult.html#structfield.session_key)
+//! which will match the server's session key upon a successful login.
 //! ```
 //! # use opaque_ke::{
 //! #   errors::ProtocolError,
@@ -443,8 +455,8 @@
 //!
 //! ### Server Login Finish
 //! In the fourth step of login, the server takes as input a
-//! [CredentialFinalization] from the client and runs [ServerLogin::finish] to
-//! produce an output consisting of the `session_key` sequence of bytes which
+//! [`CredentialFinalization`] from the client and runs [`ServerLogin::finish`]
+//! to produce an output consisting of the `session_key` sequence of bytes which
 //! will match the client's session key upon a successful login.
 //! ```
 //! # use opaque_ke::{
@@ -508,8 +520,8 @@
 //! `server_login_finish_result.session_key` which is guaranteed to match
 //! `client_login_finish_result.session_key` (see the [Session
 //! Key](#session-key) section). Otherwise, on failure, the
-//! [ServerLogin::finish] algorithm outputs the error
-//! [InvalidLoginError](errors::ProtocolError::InvalidLoginError).
+//! [`ServerLogin::finish`] algorithm outputs the error
+//! [`InvalidLoginError`](errors::ProtocolError::InvalidLoginError).
 //!
 //! # Advanced Usage
 //!
@@ -522,26 +534,27 @@
 //!
 //! Upon a successful completion of the OPAQUE protocol (the client runs login
 //! with the same password used during registration), the client and server have
-//! access to a session key, which is a pseudorandomly distributed 32-byte
-//! string which only the client and server know. Multiple login runs using the
+//! access to a session key, which is a pseudorandomly distributed byte
+//! string (of length equal to the output size of [`voprf::CipherSuite::Hash`])
+//! which only the client and server know. Multiple login runs using the
 //! same password for the same client will produce different session keys,
 //! distributed as uniformly random strings. Thus, the session key can be used
 //! to establish a secure channel between the client and server.
 //!
 //! The session key can be accessed from the `session_key` field of
-//! [ClientLoginFinishResult] and [ServerLoginFinishResult]. See the combination
-//! of [Client Login Finish](#client-login-finish) and [Server Login
+//! [`ClientLoginFinishResult`] and [`ServerLoginFinishResult`]. See the
+//! combination of [Client Login Finish](#client-login-finish) and [Server Login
 //! Finish](#server-login-finish) for example usage.
 //!
 //! ## Checking Server Consistency
 //!
-//! A [ClientLoginFinishResult] contains the `server_s_pk` field, which is
+//! A [`ClientLoginFinishResult`] contains the `server_s_pk` field, which is
 //! represents the static public key of the server that is established during
 //! the setup phase. This can be used by the client to verify the authenticity
 //! of the server it engages with during the login phase. In particular, the
 //! client can check that the static public key of the server supplied during
 //! registration (with the `server_s_pk` field of
-//! [ClientRegistrationFinishResult]) matches this field during login.
+//! [`ClientRegistrationFinishResult`]) matches this field during login.
 //! ```
 //! # use opaque_ke::{
 //! #   errors::ProtocolError,
@@ -619,11 +632,12 @@
 //!
 //! ## Export Key
 //!
-//! The export key is a pseudorandomly distributed 32-byte string output by both
-//! the [Client Registration Finish](#client-registration-finish) and [Client
-//! Login Finish](#client-login-finish) steps. The same export key string will
-//! be output by both functions only if the exact same password is passed to
-//! [ClientRegistration::start] and [ClientLogin::start].
+//! The export key is a pseudorandomly distributed byte string
+//! (of length equal to the output size of [`voprf::CipherSuite::Hash`]) output
+//! by both the [Client Registration Finish](#client-registration-finish) and
+//! [Client Login Finish](#client-login-finish) steps. The same export key
+//! string will be output by both functions only if the exact same password is
+//! passed to [`ClientRegistration::start`] and [`ClientLogin::start`].
 //!
 //! The export key retains as much secrecy as the password itself, and is
 //! similarly derived through an evaluation of the key stretching function.
@@ -634,11 +648,11 @@
 //! which only the client should be able to process. For instance, if the server
 //! is expected to maintain any client-side secrets which require a password to
 //! access, then this export key can be used to encrypt these secrets so that
-//! they remain hidden from the server (see [examples/digital_locker.rs](https://github.com/novifinancial/opaque-ke/blob/main/examples/digital_locker.rs)
+//! they remain hidden from the server (see [examples/digital_locker.rs](https://github.com/facebook/opaque-ke/blob/main/examples/digital_locker.rs)
 //! for a working example).
 //!
 //! You can access the export key from the `export_key` field of
-//! [ClientRegistrationFinishResult] and [ClientLoginFinishResult].
+//! [`ClientRegistrationFinishResult`] and [`ClientLoginFinishResult`].
 //! ```
 //! # use opaque_ke::{
 //! #   errors::ProtocolError,
@@ -718,7 +732,7 @@
 //! But, for applications that wish to cryptographically bind these identities
 //! to the registered password file as well as the session key output by the
 //! login phase, these custom identifiers can be specified through
-//! [ClientRegistrationFinishParameters] in [Client Registration
+//! [`ClientRegistrationFinishParameters`] in [Client Registration
 //! Finish](#client-registration-finish):
 //! ```
 //! # use opaque_ke::{
@@ -767,7 +781,7 @@
 //! ```
 //!
 //! The same identifiers must also be supplied using
-//! [ServerLoginStartParameters] in [Server Login Start](#server-login-start):
+//! [`ServerLoginStartParameters`] in [Server Login Start](#server-login-start):
 //! ```
 //! # use opaque_ke::{
 //! #   errors::ProtocolError,
@@ -825,7 +839,7 @@
 //! # Ok::<(), ProtocolError>(())
 //! ```
 //!
-//! as well as [ClientLoginFinishParameters] in [Client Login
+//! as well as [`ClientLoginFinishParameters`] in [Client Login
 //! Finish](#client-login-finish):
 //! ```
 //! # use opaque_ke::{
@@ -899,9 +913,9 @@
 //! configuration parameters to the security of the key exchange. During the
 //! login phase, the client and server can specify this context using:
 //! - The second login message, where the server can populate
-//!   [ServerLoginStartParameters], and
+//!   [`ServerLoginStartParameters`], and
 //! - The third login message, where the client can populate
-//!   [ClientLoginFinishParameters].
+//!   [`ClientLoginFinishParameters`].
 //!
 //! For both of these messages, the `WithContextAndIdentifiers` variant can be
 //! used to specify these fields in addition to [custom
@@ -916,8 +930,8 @@
 //! a "dummy" credential response message to the client for an unregistered
 //! client, which is indistinguishable from the normal credential response
 //! message that the server would return for a registered client. The dummy
-//! message is created by passing a `None` to the password_file parameter for
-//! [ServerLogin::start].
+//! message is created by passing a `None` to the `password_file` parameter for
+//! [`ServerLogin::start`].
 //!
 //! ## Remote Private Keys
 //!
@@ -1089,7 +1103,7 @@
 //!   and implements the `Ksf` trait for `Argon2` with a set of default parameters.
 //!   In general, secure instantiations should choose to invoke a memory-hard password
 //!   hashing function when the client's password is expected to have low entropy,
-//!   instead of relying on [ksf::Identity] as done in the above example. The
+//!   instead of relying on [`ksf::Identity`] as done in the above example. The
 //!   more computationally intensive the `Ksf` function is, the more resistant
 //!   the server's password file records will be against offline dictionary and precomputation
 //!   attacks; see [the OPAQUE paper](https://eprint.iacr.org/2018/163.pdf) for
@@ -1097,23 +1111,12 @@
 //!
 //! - The `serde` feature, enabled by default, provides convenience functions for serializing and deserializing with [serde](https://serde.rs/).
 //!
-//! - The backend features are re-exported from [curve25519-dalek](https://doc.dalek.rs/curve25519_dalek/index.html#backends-and-features)
-//!   and allow for selecting the corresponding backend for the curve arithmetic
-//!   used. The `ristretto255-u64` feature is included as the default. Other
-//!   features are mapped as `ristretto255-u32`, `ristretto255-fiat-u64` and
-//!   `ristretto255-fiat-u32`. Any `ristretto255-*` backend feature will enable
-//!   the `ristretto255` feature, which can be used too, but keep in mind that
-//!   `curve25519-dalek` will fail to compile without a selected backend. This
-//!   enables the use of [`Ristretto255`] as a `KeGroup` and `OprfCs`.
+//! - The `ristretto255` feature enables using [`Ristretto255`] as a `KeGroup`
+//!   and `OprfCs`. To select a specific backend see the [curve25519-dalek]
+//!   documentation.
 //!
-//! - The `x25519` feature is similar to the `ristretto255` feature and requires
-//!   to select a backend like `x25519-u64`, other backends are the same as in
-//!   `ristretto255-*`. This enables [`X25519`] as a `KeGroup`.
-//!
-//! - The `ristretto255-simd` feature is re-exported from [curve25519-dalek](https://doc.dalek.rs/curve25519_dalek/index.html#backends-and-features)
-//!   and enables parallel formulas, using either AVX2 or AVX512-IFMA. This will
-//!   automatically enable the `ristretto255-u64` feature and requires Rust
-//!   nightly.
+//! - The `curve25519` feature enables Curve25519 as a `KeGroup`. To select a
+//!   specific backend see the [curve25519-dalek] documentation.
 //!
 //! - The `p256` feature enables the use of [`p256::NistP256`] as a `KeGroup`
 //!   and a `OprfCs` for `CipherSuite`.
@@ -1121,19 +1124,19 @@
 //! - The `bench` feature is used only for running performance benchmarks for
 //!   this implementation.
 //!
+//! [curve25519-dalek]:
+//!     (https://docs.rs/curve25519-dalek/4.0.0-pre.5/curve25519_dalek/index.html#backends)
 //! [`p256::NistP256`]: https://docs.rs/p256/latest/p256/struct.NistP256.html
 
-#![cfg_attr(not(test), deny(unsafe_code))]
 #![no_std]
-#![warn(clippy::cargo, missing_docs)]
+#![cfg_attr(docsrs, feature(doc_auto_cfg))]
+#![cfg_attr(not(test), deny(unsafe_code))]
+#![warn(clippy::cargo, clippy::doc_markdown, missing_docs, rustdoc::all)]
 #![cfg_attr(not(test), warn(unused_crate_dependencies))]
 #![allow(type_alias_bounds)]
 
 #[cfg(any(feature = "std", test))]
 extern crate std;
-
-#[cfg(feature = "serde")]
-extern crate serde_ as serde;
 
 // Error types
 pub mod errors;
@@ -1157,10 +1160,10 @@ mod tests;
 pub use ciphersuite::CipherSuite;
 pub use rand;
 
+#[cfg(feature = "curve25519")]
+pub use crate::key_exchange::group::curve25519::Curve25519;
 #[cfg(feature = "ristretto255")]
 pub use crate::key_exchange::group::ristretto255::Ristretto255;
-#[cfg(feature = "x25519")]
-pub use crate::key_exchange::group::x25519::X25519;
 pub use crate::messages::{
     CredentialFinalization, CredentialFinalizationLen, CredentialRequest, CredentialRequestLen,
     CredentialResponse, CredentialResponseLen, RegistrationRequest, RegistrationRequestLen,
