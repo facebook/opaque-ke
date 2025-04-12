@@ -43,5 +43,5 @@ where
     type Ksf: Ksf;
 }
 
-pub(crate) type OprfGroup<CS> = <<CS as CipherSuite>::OprfCs as voprf::CipherSuite>::Group;
-pub(crate) type OprfHash<CS> = <<CS as CipherSuite>::OprfCs as voprf::CipherSuite>::Hash;
+pub(crate) type OprfGroup<CS: CipherSuite> = <CS::OprfCs as voprf::CipherSuite>::Group;
+pub(crate) type OprfHash<CS: CipherSuite> = <CS::OprfCs as voprf::CipherSuite>::Hash;

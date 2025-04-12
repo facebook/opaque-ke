@@ -12,11 +12,9 @@ use core::ops::Add;
 
 use derive_where::derive_where;
 use digest::core_api::BlockSizeUser;
-use digest::{Digest, Output, OutputSizeUser};
+use digest::{Digest, Output};
 use generic_array::sequence::Concat;
-use generic_array::typenum::{
-    IsLess, IsLessOrEqual, Le, NonZero, Sum, Unsigned, U1, U2, U256, U32,
-};
+use generic_array::typenum::{IsLess, Le, NonZero, Sum, Unsigned, U1, U2, U256, U32};
 use generic_array::{ArrayLength, GenericArray};
 use hkdf::{Hkdf, HkdfExtract};
 use hmac::{Hmac, Mac};
@@ -165,11 +163,7 @@ where
 
     fn generate_ke1<OprfCs: voprf::CipherSuite, R: RngCore + CryptoRng>(
         rng: &mut R,
-    ) -> Result<(Self::KE1State, Self::KE1Message), ProtocolError>
-    where
-        <OprfCs::Hash as OutputSizeUser>::OutputSize:
-            IsLess<U256> + IsLessOrEqual<<OprfCs::Hash as BlockSizeUser>::BlockSize>,
-    {
+    ) -> Result<(Self::KE1State, Self::KE1Message), ProtocolError> {
         let client_e_kp = KeyPair::<KG>::generate_random::<OprfCs, _>(rng);
         let client_nonce = generate_nonce::<R>(rng);
 
@@ -206,11 +200,7 @@ where
         id_u: impl Iterator<Item = &'c [u8]>,
         id_s: impl Iterator<Item = &'d [u8]>,
         context: &[u8],
-    ) -> Result<GenerateKe2Result<Self, D, KG>, ProtocolError<S::Error>>
-    where
-        <OprfCs::Hash as OutputSizeUser>::OutputSize:
-            IsLess<U256> + IsLessOrEqual<<OprfCs::Hash as BlockSizeUser>::BlockSize>,
-    {
+    ) -> Result<GenerateKe2Result<Self, D, KG>, ProtocolError<S::Error>> {
         let server_e_kp = KeyPair::<KG>::generate_random::<OprfCs, _>(rng);
         let server_nonce = generate_nonce::<R>(rng);
 
@@ -414,9 +404,9 @@ where
         .map_err(ProtocolError::into_custom)?;
 
     Ok((
-        GenericArray::clone_from_slice(&session_key),
-        GenericArray::clone_from_slice(&km2),
-        GenericArray::clone_from_slice(&km3),
+        session_key,
+        km2,
+        km3,
         #[cfg(test)]
         handshake_secret,
     ))

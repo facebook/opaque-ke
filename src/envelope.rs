@@ -10,10 +10,9 @@ use core::convert::TryFrom;
 use core::ops::Add;
 
 use derive_where::derive_where;
-use digest::core_api::{BlockSizeUser, CoreProxy};
-use digest::{Output, OutputSizeUser};
+use digest::Output;
 use generic_array::sequence::Concat;
-use generic_array::typenum::{IsLess, IsLessOrEqual, Le, NonZero, Sum, Unsigned, U2, U256, U32};
+use generic_array::typenum::{Sum, Unsigned, U2, U32};
 use generic_array::{ArrayLength, GenericArray};
 use hkdf::Hkdf;
 use hmac::{Hmac, Mac};
@@ -23,7 +22,7 @@ use zeroize::{Zeroize, ZeroizeOnDrop};
 use crate::ciphersuite::{CipherSuite, OprfHash};
 use crate::errors::utils::check_slice_size;
 use crate::errors::{InternalError, ProtocolError};
-use crate::hash::{Hash, OutputSize, ProxyHash};
+use crate::hash::OutputSize;
 use crate::key_exchange::group::KeGroup;
 use crate::keypair::{KeyPair, PublicKey};
 use crate::opaque::{bytestrings_from_identifiers, Identifiers};
@@ -33,7 +32,7 @@ use crate::serialization::{Input, MacExt};
 const STR_AUTH_KEY: [u8; 7] = *b"AuthKey";
 const STR_EXPORT_KEY: [u8; 9] = *b"ExportKey";
 const STR_PRIVATE_KEY: [u8; 10] = *b"PrivateKey";
-type NonceLen = U32;
+pub(crate) type NonceLen = U32;
 
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, ZeroizeOnDrop)]
@@ -72,15 +71,7 @@ impl TryFrom<u8> for InnerEnvelopeMode {
     serde(bound = "")
 )]
 #[derive_where(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, ZeroizeOnDrop)]
-pub(crate) struct Envelope<CS: CipherSuite>
-where
-    <OprfHash<CS> as OutputSizeUser>::OutputSize:
-        IsLess<U256> + IsLessOrEqual<<OprfHash<CS> as BlockSizeUser>::BlockSize>,
-    OprfHash<CS>: Hash,
-    <OprfHash<CS> as CoreProxy>::Core: ProxyHash,
-    <<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
-    Le<<<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
-{
+pub(crate) struct Envelope<CS: CipherSuite> {
     pub(crate) mode: InnerEnvelopeMode,
     nonce: GenericArray<u8, NonceLen>,
     hmac: Output<OprfHash<CS>>,
@@ -90,28 +81,15 @@ where
 // asssociated key. This key is also used to derive the export_key parameter,
 // which is technically unrelated to the envelope's encrypted and authenticated
 // contents.
-pub(crate) struct OpenedEnvelope<'a, CS: CipherSuite>
-where
-    <OprfHash<CS> as OutputSizeUser>::OutputSize:
-        IsLess<U256> + IsLessOrEqual<<OprfHash<CS> as BlockSizeUser>::BlockSize>,
-    OprfHash<CS>: Hash,
-    <OprfHash<CS> as CoreProxy>::Core: ProxyHash,
-    <<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
-    Le<<<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
-{
+pub(crate) struct OpenedEnvelope<'a, CS: CipherSuite> {
     pub(crate) client_static_keypair: KeyPair<CS::KeGroup>,
     pub(crate) export_key: Output<OprfHash<CS>>,
     pub(crate) id_u: Input<'a, U2, <CS::KeGroup as KeGroup>::PkLen>,
     pub(crate) id_s: Input<'a, U2, <CS::KeGroup as KeGroup>::PkLen>,
 }
 
-pub(crate) struct OpenedInnerEnvelope<D: Hash>
-where
-    D::Core: ProxyHash,
-    <D::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
-    Le<<D::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
-{
-    pub(crate) export_key: Output<D>,
+pub(crate) struct OpenedInnerEnvelope<CS: CipherSuite> {
+    pub(crate) export_key: Output<OprfHash<CS>>,
 }
 
 #[cfg(not(test))]
@@ -130,15 +108,7 @@ type SealResult<CS: CipherSuite> = (
 
 pub(crate) type EnvelopeLen<CS: CipherSuite> = Sum<NonceLen, OutputSize<OprfHash<CS>>>;
 
-impl<CS: CipherSuite> Envelope<CS>
-where
-    <OprfHash<CS> as OutputSizeUser>::OutputSize:
-        IsLess<U256> + IsLessOrEqual<<OprfHash<CS> as BlockSizeUser>::BlockSize>,
-    OprfHash<CS>: Hash,
-    <OprfHash<CS> as CoreProxy>::Core: ProxyHash,
-    <<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
-    Le<<<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
-{
+impl<CS: CipherSuite> Envelope<CS> {
     #[allow(clippy::type_complexity)]
     pub(crate) fn seal<R: RngCore + CryptoRng>(
         rng: &mut R,
@@ -249,7 +219,7 @@ where
         &self,
         randomized_pwd_hasher: Hkdf<OprfHash<CS>>,
         aad: impl Iterator<Item = &'a [u8]>,
-    ) -> Result<OpenedInnerEnvelope<OprfHash<CS>>, InternalError> {
+    ) -> Result<OpenedInnerEnvelope<CS>, InternalError> {
         let mut hmac_key = Output::<OprfHash<CS>>::default();
         let mut export_key = Output::<OprfHash<CS>>::default();
 
@@ -327,15 +297,7 @@ where
 fn build_inner_envelope_internal<CS: CipherSuite>(
     randomized_pwd_hasher: Hkdf<OprfHash<CS>>,
     nonce: GenericArray<u8, NonceLen>,
-) -> Result<PublicKey<CS::KeGroup>, ProtocolError>
-where
-    <OprfHash<CS> as OutputSizeUser>::OutputSize:
-        IsLess<U256> + IsLessOrEqual<<OprfHash<CS> as BlockSizeUser>::BlockSize>,
-    OprfHash<CS>: Hash,
-    <OprfHash<CS> as CoreProxy>::Core: ProxyHash,
-    <<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
-    Le<<<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
-{
+) -> Result<PublicKey<CS::KeGroup>, ProtocolError> {
     let mut keypair_seed = GenericArray::<_, <CS::KeGroup as KeGroup>::SkLen>::default();
     randomized_pwd_hasher
         .expand(&nonce.concat(STR_PRIVATE_KEY.into()), &mut keypair_seed)
@@ -351,15 +313,7 @@ where
 fn recover_keys_internal<CS: CipherSuite>(
     randomized_pwd_hasher: Hkdf<OprfHash<CS>>,
     nonce: GenericArray<u8, NonceLen>,
-) -> Result<KeyPair<CS::KeGroup>, ProtocolError>
-where
-    <OprfHash<CS> as OutputSizeUser>::OutputSize:
-        IsLess<U256> + IsLessOrEqual<<OprfHash<CS> as BlockSizeUser>::BlockSize>,
-    OprfHash<CS>: Hash,
-    <OprfHash<CS> as CoreProxy>::Core: ProxyHash,
-    <<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
-    Le<<<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
-{
+) -> Result<KeyPair<CS::KeGroup>, ProtocolError> {
     let mut keypair_seed = GenericArray::<_, <CS::KeGroup as KeGroup>::SkLen>::default();
     randomized_pwd_hasher
         .expand(&nonce.concat(STR_PRIVATE_KEY.into()), &mut keypair_seed)

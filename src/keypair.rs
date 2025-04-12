@@ -11,9 +11,6 @@
 #![allow(unsafe_code)]
 
 use derive_where::derive_where;
-use digest::core_api::BlockSizeUser;
-use digest::OutputSizeUser;
-use generic_array::typenum::{IsLess, IsLessOrEqual, U256};
 use generic_array::{ArrayLength, GenericArray};
 use rand::{CryptoRng, RngCore};
 
@@ -66,15 +63,10 @@ impl<KG: KeGroup> KeyPair<KG> {
     /// Generating a random key pair given a cryptographic rng
     pub(crate) fn generate_random<CS: voprf::CipherSuite, R: RngCore + CryptoRng>(
         rng: &mut R,
-    ) -> Self
-    where
-        <CS::Hash as OutputSizeUser>::OutputSize:
-            IsLess<U256> + IsLessOrEqual<<CS::Hash as BlockSizeUser>::BlockSize>,
-    {
+    ) -> Self {
         let mut scalar_bytes = GenericArray::<_, <KG as KeGroup>::SkLen>::default();
         rng.fill_bytes(&mut scalar_bytes);
-        let sk =
-            KG::derive_auth_keypair::<CS>(GenericArray::clone_from_slice(&scalar_bytes)).unwrap();
+        let sk = KG::derive_auth_keypair::<CS>(scalar_bytes).unwrap();
         let pk = KG::public_key(sk);
         Self {
             pk: PublicKey(pk),
@@ -92,9 +84,6 @@ where
     /// Test-only strategy returning a proptest Strategy based on
     /// [`Self::generate_random`]
     fn uniform_keypair_strategy<CS: voprf::CipherSuite>() -> proptest::prelude::BoxedStrategy<Self>
-    where
-        <CS::Hash as OutputSizeUser>::OutputSize:
-            IsLess<U256> + IsLessOrEqual<<CS::Hash as BlockSizeUser>::BlockSize>,
     {
         use proptest::prelude::*;
         use rand::rngs::StdRng;
