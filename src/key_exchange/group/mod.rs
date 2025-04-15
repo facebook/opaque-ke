@@ -22,7 +22,7 @@ use generic_array::{ArrayLength, GenericArray};
 use rand::{CryptoRng, RngCore};
 use zeroize::Zeroize;
 
-use crate::errors::InternalError;
+use crate::errors::{InternalError, ProtocolError};
 
 const STR_OPAQUE_DERIVE_AUTH_KEY_PAIR: [u8; 33] = *b"OPAQUE-DeriveDiffieHellmanKeyPair";
 
@@ -41,7 +41,7 @@ pub trait KeGroup {
     fn serialize_pk(pk: Self::Pk) -> GenericArray<u8, Self::PkLen>;
 
     /// Return a public key from its fixed-length bytes representation
-    fn deserialize_pk(bytes: &[u8]) -> Result<Self::Pk, InternalError>;
+    fn deserialize_pk(bytes: &[u8]) -> Result<Self::Pk, ProtocolError>;
 
     /// Generate a random secret key
     fn random_sk<R: RngCore + CryptoRng>(rng: &mut R) -> Self::Sk;
@@ -104,14 +104,11 @@ pub trait KeGroup {
     /// Return a public key from its secret key
     fn public_key(sk: Self::Sk) -> Self::Pk;
 
-    /// Diffie-Hellman key exchange
-    fn diffie_hellman(pk: Self::Pk, sk: Self::Sk) -> GenericArray<u8, Self::PkLen>;
-
     /// Serializes `self`
     fn serialize_sk(sk: Self::Sk) -> GenericArray<u8, Self::SkLen>;
 
     /// Return a public key from its fixed-length bytes representation
-    fn deserialize_sk(bytes: &[u8]) -> Result<Self::Sk, InternalError>;
+    fn deserialize_sk(bytes: &[u8]) -> Result<Self::Sk, ProtocolError>;
 }
 
 // Helper functions used to compute DeriveAuthKeyPair() (taken from the voprf

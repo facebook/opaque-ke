@@ -18,6 +18,7 @@ use generic_array::{ArrayLength, GenericArray};
 use rand::{CryptoRng, RngCore};
 use subtle::ConstantTimeEq;
 use voprf::Group;
+use zeroize::Zeroizing;
 
 use crate::ciphersuite::{CipherSuite, OprfGroup, OprfHash};
 use crate::envelope::{Envelope, EnvelopeLen};
@@ -29,8 +30,10 @@ use crate::key_exchange::traits::{
     Deserialize, Ke1MessageLen, Ke2MessageLen, Ke3MessageLen, KeyExchange, Serialize,
 };
 use crate::key_exchange::tripledh::NonceLen;
-use crate::keypair::{PublicKey, SecretKey};
-use crate::opaque::{MaskedResponse, MaskedResponseLen, ServerSetup};
+use crate::keypair::PublicKey;
+use crate::opaque::{
+    MaskedResponse, MaskedResponseLen, ServerLogin, ServerLoginStartResult, ServerSetup,
+};
 
 ////////////////////////////
 // High-level API Structs //
@@ -105,6 +108,63 @@ pub struct RegistrationUpload<CS: CipherSuite> {
 pub struct CredentialRequest<CS: CipherSuite> {
     pub(crate) blinded_element: voprf::BlindedElement<CS::OprfCs>,
     pub(crate) ke1_message: <CS::KeyExchange as KeyExchange<OprfHash<CS>, CS::KeGroup>>::KE1Message,
+}
+
+/// Builder for [`ServerLogin`](crate::ServerLogin) when using remote keys.
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Deserialize, serde::Serialize),
+    serde(bound(
+        deserialize = "S: serde::Deserialize<'de>, <CS::KeyExchange as KeyExchange<OprfHash<CS>, \
+                       CS::KeGroup>>::KE2Builder: serde::Deserialize<'de>",
+        serialize = "S: serde::Serialize, <CS::KeyExchange as KeyExchange<OprfHash<CS>, \
+                     CS::KeGroup>>::KE2Builder: serde::Serialize"
+    ))
+)]
+#[derive_where(Clone)]
+#[derive_where(
+    Debug, Eq, PartialEq;
+    S,
+    voprf::EvaluationElement<CS::OprfCs>,
+    <CS::KeyExchange as KeyExchange<OprfHash<CS>, CS::KeGroup>>::KE2Builder,
+)]
+pub struct ServerLoginBuilder<CS: CipherSuite, S: Clone> {
+    pub(crate) server_s_sk: S,
+    pub(crate) evaluation_element: voprf::EvaluationElement<CS::OprfCs>,
+    pub(crate) masking_nonce: Zeroizing<GenericArray<u8, NonceLen>>,
+    pub(crate) masked_response: MaskedResponse<CS>,
+    #[cfg(test)]
+    pub(crate) oprf_key: Zeroizing<GenericArray<u8, <OprfGroup<CS> as Group>::ScalarLen>>,
+    pub(crate) ke2_builder: <CS::KeyExchange as KeyExchange<OprfHash<CS>, CS::KeGroup>>::KE2Builder,
+}
+
+impl<CS: CipherSuite, S: Clone> ServerLoginBuilder<CS, S> {
+    /// The returned data here has to be processed and the result given as an
+    /// input to [`ServerLoginBuilder::build()`]. To understand what kind of
+    /// output is expected here and how to process it, refer to the
+    /// documentation of your chosen [`CipherSuite::KeyExchange`].
+    pub fn data(
+        &self,
+    ) -> <CS::KeyExchange as KeyExchange<OprfHash<CS>, CS::KeGroup>>::KE2BuilderData<'_> {
+        CS::KeyExchange::ke2_builder_data(&self.ke2_builder)
+    }
+
+    /// The handle to the corresponding [`ServerSetup`]s private key.
+    pub fn private_key(&self) -> &S {
+        &self.server_s_sk
+    }
+
+    /// Build [`ServerLogin`] after attaining the input for the key exchange. To
+    /// understand what kind of input is expected here, refer to the
+    /// documentation of your chosen [`CipherSuite::KeyExchange`].
+    ///
+    /// See [`ServerLogin::start()`] for the regular path.
+    pub fn build(
+        self,
+        input: <CS::KeyExchange as KeyExchange<OprfHash<CS>, CS::KeGroup>>::KE2BuilderInput,
+    ) -> Result<ServerLoginStartResult<CS>, ProtocolError> {
+        ServerLogin::build(self, input)
+    }
 }
 
 /// The answer sent by the server to the user, upon reception of the login
@@ -265,7 +325,7 @@ impl<CS: CipherSuite> RegistrationUpload<CS> {
     }
 
     // Creates a dummy instance used for faking a [CredentialResponse]
-    pub(crate) fn dummy<R: RngCore + CryptoRng, S: SecretKey<CS::KeGroup>>(
+    pub(crate) fn dummy<R: RngCore + CryptoRng, S: Clone>(
         rng: &mut R,
         server_setup: &ServerSetup<CS, S>,
     ) -> Self {

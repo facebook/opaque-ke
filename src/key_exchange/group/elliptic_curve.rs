@@ -19,7 +19,8 @@ use generic_array::GenericArray;
 use rand::{CryptoRng, RngCore};
 
 use super::KeGroup;
-use crate::errors::InternalError;
+use crate::errors::{InternalError, ProtocolError};
+use crate::key_exchange::tripledh::DiffieHellman;
 
 impl<G> KeGroup for G
 where
@@ -41,10 +42,10 @@ where
         GenericArray::clone_from_slice(pk.to_encoded_point(true).as_bytes())
     }
 
-    fn deserialize_pk(bytes: &[u8]) -> Result<Self::Pk, InternalError> {
+    fn deserialize_pk(bytes: &[u8]) -> Result<Self::Pk, ProtocolError> {
         PublicKey::<Self>::from_sec1_bytes(bytes)
             .map(|public_key| public_key.to_projective())
-            .map_err(|_| InternalError::PointError)
+            .map_err(|_| ProtocolError::SerializationError)
     }
 
     fn random_sk<R: RngCore + CryptoRng>(rng: &mut R) -> Self::Sk {
@@ -77,17 +78,29 @@ where
         scalar.is_zero()
     }
 
-    fn diffie_hellman(pk: Self::Pk, sk: Self::Sk) -> GenericArray<u8, Self::PkLen> {
-        Self::serialize_pk(pk * sk)
-    }
-
     fn serialize_sk(sk: Self::Sk) -> GenericArray<u8, Self::SkLen> {
         sk.into()
     }
 
-    fn deserialize_sk(bytes: &[u8]) -> Result<Self::Sk, InternalError> {
+    fn deserialize_sk(bytes: &[u8]) -> Result<Self::Sk, ProtocolError> {
         SecretKey::<Self>::from_slice(bytes)
             .map(|secret_key| *secret_key.to_nonzero_scalar())
-            .map_err(|_| InternalError::PointError)
+            .map_err(|_| ProtocolError::SerializationError)
+    }
+}
+
+impl<G> DiffieHellman<G> for Scalar<G>
+where
+    G: GroupDigest,
+    FieldBytesSize<G>: ModulusSize,
+    AffinePoint<G>: FromEncodedPoint<G> + ToEncodedPoint<G>,
+    ProjectivePoint<G>: CofactorGroup + ToEncodedPoint<G>,
+    Scalar<G>: FromOkm,
+{
+    fn diffie_hellman(
+        self,
+        pk: ProjectivePoint<G>,
+    ) -> GenericArray<u8, <FieldBytesSize<G> as ModulusSize>::CompressedPointSize> {
+        GenericArray::clone_from_slice((pk * self).to_encoded_point(true).as_bytes())
     }
 }

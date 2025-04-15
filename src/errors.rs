@@ -15,23 +15,7 @@ use displaydoc::Display;
 
 /// Represents an error in the manipulation of internal cryptographic data
 #[derive(Clone, Copy, Display, Eq, Hash, Ord, PartialEq, PartialOrd)]
-pub enum InternalError<T = Infallible> {
-    /// Custom [`SecretKey`](crate::keypair::SecretKey) error type
-    Custom(T),
-    /// Deserializing from a byte sequence failed
-    InvalidByteSequence,
-    #[allow(clippy::doc_markdown)]
-    /// Invalid length for {name}: expected {len}, but is actually {actual_len}.
-    SizeError {
-        /// name
-        name: &'static str,
-        /// length
-        len: usize,
-        /// actual
-        actual_len: usize,
-    },
-    /// Could not decompress point.
-    PointError,
+pub enum InternalError {
     /// Size of input is empty or longer then [`u16::MAX`].
     HashToScalar,
     /// Computing HKDF failed while deriving subkeys
@@ -52,22 +36,9 @@ pub enum InternalError<T = Infallible> {
     OprfInternalError(voprf::InternalError),
 }
 
-impl<T: Debug> Debug for InternalError<T> {
+impl Debug for InternalError {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {
-            Self::Custom(custom) => f.debug_tuple("InvalidByteSequence").field(custom).finish(),
-            Self::InvalidByteSequence => f.debug_tuple("InvalidByteSequence").finish(),
-            Self::SizeError {
-                name,
-                len,
-                actual_len,
-            } => f
-                .debug_struct("SizeError")
-                .field("name", name)
-                .field("len", len)
-                .field("actual_len", actual_len)
-                .finish(),
-            Self::PointError => f.debug_tuple("PointError").finish(),
             Self::HashToScalar => f.debug_tuple("HashToScalar").finish(),
             Self::HkdfError => f.debug_tuple("HkdfError").finish(),
             Self::HmacError => f.debug_tuple("HmacError").finish(),
@@ -84,35 +55,7 @@ impl<T: Debug> Debug for InternalError<T> {
     }
 }
 
-impl<T: Error> Error for InternalError<T> {}
-
-impl InternalError {
-    /// Convert `InternalError<Infallible>` into `InternalError<T>`
-    pub fn into_custom<T>(self) -> InternalError<T> {
-        match self {
-            Self::Custom(_) => unreachable!(),
-            Self::InvalidByteSequence => InternalError::InvalidByteSequence,
-            Self::SizeError {
-                name,
-                len,
-                actual_len,
-            } => InternalError::SizeError {
-                name,
-                len,
-                actual_len,
-            },
-            Self::PointError => InternalError::PointError,
-            Self::HashToScalar => InternalError::HashToScalar,
-            Self::HkdfError => InternalError::HkdfError,
-            Self::HmacError => InternalError::HmacError,
-            Self::KsfError => InternalError::KsfError,
-            Self::SealOpenHmacError => InternalError::SealOpenHmacError,
-            Self::IncompatibleEnvelopeModeError => InternalError::IncompatibleEnvelopeModeError,
-            Self::OprfError(error) => InternalError::OprfError(error),
-            Self::OprfInternalError(error) => InternalError::OprfInternalError(error),
-        }
-    }
-}
+impl Error for InternalError {}
 
 impl From<voprf::Error> for InternalError {
     fn from(voprf_error: voprf::Error) -> Self {
@@ -136,17 +79,28 @@ impl From<voprf::InternalError> for ProtocolError {
 #[derive(Clone, Copy, Display, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub enum ProtocolError<T = Infallible> {
     /// Internal error encountered
-    LibraryError(InternalError<T>),
+    LibraryError(InternalError),
     /// Error in validating credentials
     InvalidLoginError,
     /// Error with serializing / deserializing protocol messages
     SerializationError,
+    /// Invalid length for `name`: expected `len`, but is actually `actual_len`.
+    SizeError {
+        /// name
+        name: &'static str,
+        /// length
+        len: usize,
+        /// actual
+        actual_len: usize,
+    },
     /** This error occurs when the client detects that the server has
     reflected the OPRF value (beta == alpha) */
     ReflectedValueError,
     /** Identity group element was encountered during deserialization, which is
     invalid */
     IdentityGroupElementError,
+    /// Custom [`SecretKey`](crate::keypair::PrivateKeySerialization) error type
+    Custom(T),
 }
 
 impl<T: Debug> Debug for ProtocolError<T> {
@@ -157,8 +111,19 @@ impl<T: Debug> Debug for ProtocolError<T> {
             }
             Self::InvalidLoginError => f.debug_tuple("InvalidLoginError").finish(),
             Self::SerializationError => f.debug_tuple("SerializationError").finish(),
+            Self::SizeError {
+                name,
+                len,
+                actual_len,
+            } => f
+                .debug_struct("SizeError")
+                .field("name", name)
+                .field("len", len)
+                .field("actual_len", actual_len)
+                .finish(),
             Self::ReflectedValueError => f.debug_tuple("ReflectedValueError").finish(),
             Self::IdentityGroupElementError => f.debug_tuple("IdentityGroupElementError").finish(),
+            Self::Custom(custom) => f.debug_tuple("Custom").field(custom).finish(),
         }
     }
 }
@@ -167,8 +132,8 @@ impl<T: Error> Error for ProtocolError<T> {}
 
 // This is meant to express future(ly) non-trivial ways of converting the
 // internal error into a ProtocolError
-impl<T> From<InternalError<T>> for ProtocolError<T> {
-    fn from(e: InternalError<T>) -> ProtocolError<T> {
+impl<T> From<InternalError> for ProtocolError<T> {
+    fn from(e: InternalError) -> ProtocolError<T> {
         Self::LibraryError(e)
     }
 }
@@ -186,11 +151,18 @@ impl ProtocolError {
     /// Convert `ProtocolError<Infallible>` into `ProtocolError<T>`
     pub fn into_custom<T>(self) -> ProtocolError<T> {
         match self {
-            Self::LibraryError(internal_error) => {
-                ProtocolError::LibraryError(internal_error.into_custom())
-            }
+            Self::LibraryError(internal_error) => ProtocolError::LibraryError(internal_error),
             Self::InvalidLoginError => ProtocolError::InvalidLoginError,
             Self::SerializationError => ProtocolError::SerializationError,
+            Self::SizeError {
+                name,
+                len,
+                actual_len,
+            } => ProtocolError::SizeError {
+                name,
+                len,
+                actual_len,
+            },
             Self::ReflectedValueError => ProtocolError::ReflectedValueError,
             Self::IdentityGroupElementError => ProtocolError::IdentityGroupElementError,
         }
@@ -200,13 +172,13 @@ impl ProtocolError {
 pub(crate) mod utils {
     use super::*;
 
-    pub fn check_slice_size<'a, T>(
+    pub fn check_slice_size<'a>(
         slice: &'a [u8],
         expected_len: usize,
         arg_name: &'static str,
-    ) -> Result<&'a [u8], InternalError<T>> {
+    ) -> Result<&'a [u8], ProtocolError> {
         if slice.len() != expected_len {
-            return Err(InternalError::SizeError {
+            return Err(ProtocolError::SizeError {
                 name: arg_name,
                 len: expected_len,
                 actual_len: slice.len(),
@@ -219,9 +191,9 @@ pub(crate) mod utils {
         slice: &'a [u8],
         expected_len: usize,
         arg_name: &'static str,
-    ) -> Result<&'a [u8], InternalError> {
+    ) -> Result<&'a [u8], ProtocolError> {
         if slice.len() < expected_len {
-            return Err(InternalError::SizeError {
+            return Err(ProtocolError::SizeError {
                 name: arg_name,
                 len: expected_len,
                 actual_len: slice.len(),

@@ -9,7 +9,7 @@
 //! Key Exchange group implementation for Curve25519
 
 use curve25519_dalek::montgomery::MontgomeryPoint;
-use curve25519_dalek::scalar::{self, Scalar};
+use curve25519_dalek::scalar;
 use curve25519_dalek::traits::Identity;
 use digest::core_api::BlockSizeUser;
 use digest::{FixedOutput, HashMarker, OutputSizeUser};
@@ -17,9 +17,11 @@ use generic_array::typenum::{IsLess, IsLessOrEqual, U256, U32};
 use generic_array::GenericArray;
 use rand::{CryptoRng, RngCore};
 use subtle::ConstantTimeEq;
+use zeroize::Zeroize;
 
 use super::KeGroup;
-use crate::errors::InternalError;
+use crate::errors::{InternalError, ProtocolError};
+use crate::key_exchange::tripledh::DiffieHellman;
 
 /// Implementation for Curve25519.
 pub struct Curve25519;
@@ -28,20 +30,20 @@ pub struct Curve25519;
 impl KeGroup for Curve25519 {
     type Pk = MontgomeryPoint;
     type PkLen = U32;
-    type Sk = [u8; 32];
+    type Sk = Scalar;
     type SkLen = U32;
 
     fn serialize_pk(pk: Self::Pk) -> GenericArray<u8, Self::PkLen> {
         pk.to_bytes().into()
     }
 
-    fn deserialize_pk(bytes: &[u8]) -> Result<Self::Pk, InternalError> {
+    fn deserialize_pk(bytes: &[u8]) -> Result<Self::Pk, ProtocolError> {
         bytes
             .try_into()
             .ok()
             .map(MontgomeryPoint)
             .filter(|pk| pk != &MontgomeryPoint::identity())
-            .ok_or(InternalError::PointError)
+            .ok_or(ProtocolError::SerializationError)
     }
 
     fn random_sk<R: RngCore + CryptoRng>(rng: &mut R) -> Self::Sk {
@@ -51,8 +53,8 @@ impl KeGroup for Curve25519 {
             rng.fill_bytes(&mut scalar_bytes);
             let scalar = scalar::clamp_integer(scalar_bytes);
 
-            if scalar != Scalar::ZERO.to_bytes() {
-                break scalar;
+            if scalar != curve25519_dalek::Scalar::ZERO.to_bytes() {
+                break Scalar(scalar);
             }
         }
     }
@@ -72,26 +74,22 @@ impl KeGroup for Curve25519 {
         <CS::Hash as OutputSizeUser>::OutputSize:
             IsLess<U256> + IsLessOrEqual<<CS::Hash as BlockSizeUser>::BlockSize>,
     {
-        Ok(scalar::clamp_integer(seed.into()))
+        Ok(Scalar(scalar::clamp_integer(seed.into())))
     }
 
     fn is_zero_scalar(scalar: Self::Sk) -> subtle::Choice {
-        scalar.ct_eq(&Scalar::ZERO.to_bytes())
+        scalar.0.ct_eq(&curve25519_dalek::Scalar::ZERO.to_bytes())
     }
 
     fn public_key(sk: Self::Sk) -> Self::Pk {
-        MontgomeryPoint::mul_base_clamped(sk)
-    }
-
-    fn diffie_hellman(pk: Self::Pk, sk: Self::Sk) -> GenericArray<u8, Self::PkLen> {
-        Self::serialize_pk(pk.mul_clamped(sk))
+        MontgomeryPoint::mul_base_clamped(sk.0)
     }
 
     fn serialize_sk(sk: Self::Sk) -> GenericArray<u8, Self::SkLen> {
-        sk.into()
+        sk.0.into()
     }
 
-    fn deserialize_sk(bytes: &[u8]) -> Result<Self::Sk, InternalError> {
+    fn deserialize_sk(bytes: &[u8]) -> Result<Self::Sk, ProtocolError> {
         bytes
             .try_into()
             .ok()
@@ -99,7 +97,18 @@ impl KeGroup for Curve25519 {
                 let scalar = scalar::clamp_integer(bytes);
                 (scalar == bytes).then_some(scalar)
             })
-            .filter(|scalar| scalar != &Scalar::ZERO.to_bytes())
-            .ok_or(InternalError::PointError)
+            .filter(|scalar| scalar != &curve25519_dalek::Scalar::ZERO.to_bytes())
+            .map(Scalar)
+            .ok_or(ProtocolError::SerializationError)
+    }
+}
+
+/// Curve25519 scalar.
+#[derive(Clone, Copy, Zeroize)]
+pub struct Scalar([u8; 32]);
+
+impl DiffieHellman<Curve25519> for Scalar {
+    fn diffie_hellman(self, pk: MontgomeryPoint) -> GenericArray<u8, U32> {
+        Curve25519::serialize_pk(pk.mul_clamped(self.0))
     }
 }
