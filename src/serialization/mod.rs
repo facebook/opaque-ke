@@ -105,7 +105,7 @@ impl<'a, L1: ArrayLength<u8>, L2: ArrayLength<u8>, L3: ArrayLength<u8>> Input<'a
     }
 }
 
-impl<'a, L1: ArrayLength<u8>, L2: ArrayLength<u8>> Input<'a, L1, L2, U0> {
+impl<L1: ArrayLength<u8>, L2: ArrayLength<u8>> Input<'_, L1, L2, U0> {
     pub(crate) fn to_array_2(&self) -> [&[u8]; 2] {
         let input = match &self.input {
             InnerInput::Borrowed(value) => value,
@@ -117,7 +117,7 @@ impl<'a, L1: ArrayLength<u8>, L2: ArrayLength<u8>> Input<'a, L1, L2, U0> {
     }
 }
 
-impl<'a, L1: ArrayLength<u8>, L2: ArrayLength<u8>> Input<'a, L1, L2, U2> {
+impl<L1: ArrayLength<u8>, L2: ArrayLength<u8>> Input<'_, L1, L2, U2> {
     pub(crate) fn to_array_3(&self) -> [&[u8]; 3] {
         match self.input {
             InnerInput::Label((label, _)) => [self.octet.as_slice(), label[0], label[1]],

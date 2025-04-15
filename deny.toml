@@ -77,7 +77,7 @@ confidence-threshold = 0.95
 exceptions = [
   # Each entry is the crate and version constraint, and its specific allow
   # list
-  { allow = ["Unicode-DFS-2016"], name = "unicode-ident", version = "*" },
+  { allow = ["Unicode-3.0"], name = "unicode-ident", version = "*" },
 ]
 
 # Some crates don't have (easily) machine readable licensing information,

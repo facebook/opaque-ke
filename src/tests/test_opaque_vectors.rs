@@ -10,9 +10,8 @@ use core::ops::Add;
 use std::vec;
 use std::vec::Vec;
 
-use digest::core_api::{BlockSizeUser, CoreProxy};
 use digest::OutputSizeUser;
-use generic_array::typenum::{IsLess, IsLessOrEqual, Le, NonZero, Sum, U256};
+use generic_array::typenum::Sum;
 use generic_array::{ArrayLength, GenericArray};
 use rand::rngs::OsRng;
 use rand::RngCore;
@@ -22,7 +21,7 @@ use voprf::Group;
 use crate::ciphersuite::{CipherSuite, OprfGroup, OprfHash};
 use crate::envelope::EnvelopeLen;
 use crate::errors::*;
-use crate::hash::{Hash, OutputSize, ProxyHash};
+use crate::hash::OutputSize;
 use crate::key_exchange::group::KeGroup;
 use crate::key_exchange::traits::{Ke1MessageLen, Ke2MessageLen};
 use crate::key_exchange::tripledh::{NonceLen, TripleDh};
@@ -93,15 +92,7 @@ fn decode(values: &Value, key: &str) -> Option<Vec<u8>> {
     values[key].as_str().and_then(|s| hex::decode(s).ok())
 }
 
-fn populate_test_vectors<CS: CipherSuite>(values: &Value) -> OpaqueTestVectorParameters
-where
-    <OprfHash<CS> as OutputSizeUser>::OutputSize:
-        IsLess<U256> + IsLessOrEqual<<OprfHash<CS> as BlockSizeUser>::BlockSize>,
-    OprfHash<CS>: Hash,
-    <OprfHash<CS> as CoreProxy>::Core: ProxyHash,
-    <<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
-    Le<<<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
-{
+fn populate_test_vectors<CS: CipherSuite>(values: &Value) -> OpaqueTestVectorParameters {
     let mut rng = OsRng;
 
     OpaqueTestVectorParameters {
@@ -158,12 +149,6 @@ where
 
 fn get_password_file_bytes<CS: CipherSuite>(parameters: &OpaqueTestVectorParameters) -> Vec<u8>
 where
-    <OprfHash<CS> as OutputSizeUser>::OutputSize:
-        IsLess<U256> + IsLessOrEqual<<OprfHash<CS> as BlockSizeUser>::BlockSize>,
-    OprfHash<CS>: Hash,
-    <OprfHash<CS> as CoreProxy>::Core: ProxyHash,
-    <<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
-    Le<<<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
     // Envelope: Nonce + Hash
     NonceLen: Add<OutputSize<OprfHash<CS>>>,
     EnvelopeLen<CS>: ArrayLength<u8>,
@@ -322,15 +307,7 @@ fn tests() -> Result<(), ProtocolError> {
 
 fn test_registration_request<CS: CipherSuite>(
     tvs: &[OpaqueTestVectorParameters],
-) -> Result<(), ProtocolError>
-where
-    <OprfHash<CS> as OutputSizeUser>::OutputSize:
-        IsLess<U256> + IsLessOrEqual<<OprfHash<CS> as BlockSizeUser>::BlockSize>,
-    OprfHash<CS>: Hash,
-    <OprfHash<CS> as CoreProxy>::Core: ProxyHash,
-    <<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
-    Le<<<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
-{
+) -> Result<(), ProtocolError> {
     for parameters in tvs {
         let mut rng = CycleRng::new(parameters.blind_registration.to_vec());
         let client_registration_start_result =
@@ -347,12 +324,6 @@ fn test_registration_response<CS: CipherSuite>(
     tvs: &[OpaqueTestVectorParameters],
 ) -> Result<(), ProtocolError>
 where
-    <OprfHash<CS> as OutputSizeUser>::OutputSize:
-        IsLess<U256> + IsLessOrEqual<<OprfHash<CS> as BlockSizeUser>::BlockSize>,
-    OprfHash<CS>: Hash,
-    <OprfHash<CS> as CoreProxy>::Core: ProxyHash,
-    <<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
-    Le<<<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
     // RegistrationResponse: KgPk + KePk
     <OprfGroup<CS> as Group>::ElemLen: Add<<CS::KeGroup as KeGroup>::PkLen>,
     RegistrationResponseLen<CS>: ArrayLength<u8>,
@@ -391,12 +362,6 @@ fn test_registration_upload<CS: CipherSuite>(
     tvs: &[OpaqueTestVectorParameters],
 ) -> Result<(), ProtocolError>
 where
-    <OprfHash<CS> as OutputSizeUser>::OutputSize:
-        IsLess<U256> + IsLessOrEqual<<OprfHash<CS> as BlockSizeUser>::BlockSize>,
-    OprfHash<CS>: Hash,
-    <OprfHash<CS> as CoreProxy>::Core: ProxyHash,
-    <<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
-    Le<<<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
     // Envelope: Nonce + Hash
     NonceLen: Add<OutputSize<OprfHash<CS>>>,
     EnvelopeLen<CS>: ArrayLength<u8>,
@@ -447,12 +412,6 @@ where
 
 fn test_ke1<CS: CipherSuite>(tvs: &[OpaqueTestVectorParameters]) -> Result<(), ProtocolError>
 where
-    <OprfHash<CS> as OutputSizeUser>::OutputSize:
-        IsLess<U256> + IsLessOrEqual<<OprfHash<CS> as BlockSizeUser>::BlockSize>,
-    OprfHash<CS>: Hash,
-    <OprfHash<CS> as CoreProxy>::Core: ProxyHash,
-    <<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
-    Le<<<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
     // CredentialRequest: KgPk + Ke1Message
     <OprfGroup<CS> as Group>::ElemLen: Add<Ke1MessageLen<CS>>,
     CredentialRequestLen<CS>: ArrayLength<u8>,
@@ -478,12 +437,6 @@ where
 
 fn test_ke2<CS: CipherSuite>(tvs: &[OpaqueTestVectorParameters]) -> Result<(), ProtocolError>
 where
-    <OprfHash<CS> as OutputSizeUser>::OutputSize:
-        IsLess<U256> + IsLessOrEqual<<OprfHash<CS> as BlockSizeUser>::BlockSize>,
-    OprfHash<CS>: Hash,
-    <OprfHash<CS> as CoreProxy>::Core: ProxyHash,
-    <<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
-    Le<<<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
     // Envelope: Nonce + Hash
     NonceLen: Add<OutputSize<OprfHash<CS>>>,
     EnvelopeLen<CS>: ArrayLength<u8>,
@@ -566,12 +519,6 @@ where
 
 fn test_ke3<CS: CipherSuite>(tvs: &[OpaqueTestVectorParameters]) -> Result<(), ProtocolError>
 where
-    <OprfHash<CS> as OutputSizeUser>::OutputSize:
-        IsLess<U256> + IsLessOrEqual<<OprfHash<CS> as BlockSizeUser>::BlockSize>,
-    OprfHash<CS>: Hash,
-    <OprfHash<CS> as CoreProxy>::Core: ProxyHash,
-    <<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
-    Le<<<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
     // MaskedResponse: (Nonce + Hash) + KePk
     NonceLen: Add<OutputSize<OprfHash<CS>>>,
     Sum<NonceLen, OutputSize<OprfHash<CS>>>: ArrayLength<u8> + Add<<CS::KeGroup as KeGroup>::PkLen>,
@@ -629,12 +576,6 @@ fn test_server_login_finish<CS: CipherSuite>(
     tvs: &[OpaqueTestVectorParameters],
 ) -> Result<(), ProtocolError>
 where
-    <OprfHash<CS> as OutputSizeUser>::OutputSize:
-        IsLess<U256> + IsLessOrEqual<<OprfHash<CS> as BlockSizeUser>::BlockSize>,
-    OprfHash<CS>: Hash,
-    <OprfHash<CS> as CoreProxy>::Core: ProxyHash,
-    <<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
-    Le<<<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
     // Envelope: Nonce + Hash
     NonceLen: Add<OutputSize<OprfHash<CS>>>,
     EnvelopeLen<CS>: ArrayLength<u8>,
@@ -701,12 +642,6 @@ fn test_fake_vectors<CS: CipherSuite>(
     tvs: &[OpaqueTestVectorParameters],
 ) -> Result<(), ProtocolError>
 where
-    <OprfHash<CS> as OutputSizeUser>::OutputSize:
-        IsLess<U256> + IsLessOrEqual<<OprfHash<CS> as BlockSizeUser>::BlockSize>,
-    OprfHash<CS>: Hash,
-    <OprfHash<CS> as CoreProxy>::Core: ProxyHash,
-    <<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
-    Le<<<OprfHash<CS> as CoreProxy>::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
     // MaskedResponse: (Nonce + Hash) + KePk
     NonceLen: Add<OutputSize<OprfHash<CS>>>,
     Sum<NonceLen, OutputSize<OprfHash<CS>>>: ArrayLength<u8> + Add<<CS::KeGroup as KeGroup>::PkLen>,
