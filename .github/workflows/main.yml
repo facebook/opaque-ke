@@ -25,6 +25,10 @@ jobs:
           - stable
           - 1.83.0
     name: test
+    env:
+      PKCS11_MODULE: /usr/lib/softhsm/libsofthsm2.so
+      SOFTHSM2_CONF: /tmp/softhsm2.conf
+      RUSTFLAGS: --cfg test_hsm
     steps:
       - name: Checkout sources
         uses: actions/checkout@main
@@ -35,6 +39,13 @@ jobs:
           profile: minimal
           toolchain: ${{ matrix.toolchain }}
           override: true
+
+      - name: Install SoftHSM
+        run: |
+          sudo apt-get update -y -qq &&
+          sudo apt-get install -y -qq libsofthsm2 &&
+          mkdir /tmp/tokens
+          echo "directories.tokendir = /tmp/tokens" > /tmp/softhsm2.conf
 
       - name: Run cargo test
         uses: actions-rs/cargo@v1

@@ -28,7 +28,7 @@ use crate::key_exchange::traits::{
     Deserialize, Ke1MessageLen, Ke1StateLen, Ke2MessageLen, KeyExchange, Serialize,
 };
 use crate::key_exchange::tripledh::{NonceLen, TripleDh};
-use crate::keypair::{KeyPair, SecretKey};
+use crate::keypair::KeyPair;
 use crate::messages::CredentialResponseWithoutKeLen;
 use crate::opaque::{ClientLoginLen, ClientRegistrationLen, MaskedResponseLen};
 use crate::serialization::{i2osp, os2ip};

@@ -36,7 +36,7 @@ where
     /// A VOPRF ciphersuite, see [`voprf::CipherSuite`].
     type OprfCs: voprf::CipherSuite;
     /// A `Group` used for the `KeyExchange`.
-    type KeGroup: KeGroup;
+    type KeGroup: 'static + KeGroup;
     /// A key exchange protocol
     type KeyExchange: KeyExchange<OprfHash<Self>, Self::KeGroup>;
     /// A key stretching function, typically used for password hashing

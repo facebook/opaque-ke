@@ -936,14 +936,12 @@
 //! ## Remote Private Keys
 //!
 //! Servers that want to store their private key in an external location (e.g.
-//! in an HSM or vault) can do so with the [`SecretKey`](keypair::SecretKey`)
-//! trait. This allows [`ServerSetup`] to be constructed using an existing
-//! keypair without exposing the bytes of the private key to this library.
+//! in an HSM or vault) can do so with [`ServerLogin::builder()`] without
+//! exposing the bytes of the private key to this library.
 //! ```
 //! # use generic_array::{GenericArray, typenum::U0};
-//! # use opaque_ke::{CipherSuite, errors::{InternalError}, key_exchange::group::KeGroup, keypair::{KeyPair, PrivateKey, PublicKey, SecretKey}, ServerSetup};
+//! # use opaque_ke::{CipherSuite, ClientLogin, ClientRegistration, ClientRegistrationFinishParameters, ServerRegistration, errors::ProtocolError, keypair::PrivateKey, key_exchange::{group::KeGroup as OKeGroup, tripledh::DiffieHellman}};
 //! # use rand::rngs::OsRng;
-//! # use zeroize::Zeroize;
 //! # struct Default;
 //! # #[cfg(feature = "ristretto255")]
 //! # impl CipherSuite for Default {
@@ -959,45 +957,66 @@
 //! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDh;
 //! #     type Ksf = opaque_ke::ksf::Identity;
 //! # }
-//! # #[derive(Debug)]
+//! # type KeGroup = <Default as CipherSuite>::KeGroup;
+//! # #[derive(Debug, thiserror::Error)]
+//! # #[error("test error")]
 //! # struct YourRemoteKeyError;
 //! # #[derive(Clone)]
-//! # struct YourRemoteKey(<<Default as CipherSuite>::KeGroup as KeGroup>::Sk);
+//! # struct YourRemoteKey(<KeGroup as OKeGroup>::Sk);
 //! # impl YourRemoteKey {
-//! #     fn diffie_hellman(&self, pk: &[u8]) -> Result<GenericArray<u8, <<Default as CipherSuite>::KeGroup as KeGroup>::PkLen>, YourRemoteKeyError> { todo!() }
-//! #     fn public_key(&self) -> Result<GenericArray<u8, <<Default as CipherSuite>::KeGroup as KeGroup>::PkLen>, YourRemoteKeyError> { Ok(<<Default as CipherSuite>::KeGroup>::serialize_pk(<<Default as CipherSuite>::KeGroup>::public_key(self.0))) }
+//! #     fn diffie_hellman(&self, pk: &PublicKey<KeGroup>) -> Result<GenericArray<u8, <KeGroup as OKeGroup>::PkLen>, YourRemoteKeyError> {
+//! #         Ok(<<KeGroup as OKeGroup>::Sk as DiffieHellman<KeGroup>>::diffie_hellman(self.0, KeGroup::deserialize_pk(&pk.serialize()).unwrap()))
+//! #     }
 //! # }
-//! impl SecretKey<<Default as CipherSuite>::KeGroup> for YourRemoteKey {
+//! use opaque_ke::{ServerLogin, ServerLoginStartParameters, ServerSetup};
+//! use opaque_ke::keypair::{KeyPair, PrivateKeySerialization, PublicKey};
+//!
+//! // Implement if you intend to use `ServerSetup::de/serialize` instead of `serde`.
+//! impl PrivateKeySerialization<KeGroup> for YourRemoteKey {
 //!     type Error = YourRemoteKeyError;
 //!     type Len = U0;
 //!
-//!     fn diffie_hellman(
-//!         &self,
-//!         pk: PublicKey<<Default as CipherSuite>::KeGroup>,
-//!     ) -> Result<GenericArray<u8, <<Default as CipherSuite>::KeGroup as KeGroup>::PkLen>, InternalError<Self::Error>> {
-//!         YourRemoteKey::diffie_hellman(self, &pk.serialize()).map_err(InternalError::Custom)
+//!     fn serialize_key_pair(_: &KeyPair<KeGroup, Self>) -> GenericArray<u8, Self::Len> {
+//!         unimplemented!()
 //!     }
 //!
-//!     fn public_key(
-//!         &self
-//!     ) -> Result<PublicKey<<Default as CipherSuite>::KeGroup>, InternalError<Self::Error>> {
-//!         PublicKey::deserialize(&YourRemoteKey::public_key(self).map_err(InternalError::Custom)?).map_err(InternalError::into_custom)
-//!     }
-//!
-//!     fn serialize(&self) -> GenericArray<u8, Self::Len> {
-//!         // if you use Serde and the "serde" crate feature, you won't need this
-//!         todo!()
-//!     }
-//!
-//!     fn deserialize(input: &[u8]) -> Result<Self, InternalError<Self::Error>> {
-//!         // if you use Serde and the "serde" crate feature, you won't need this
-//!         todo!()
+//!     fn deserialize_key_pair(input: &[u8]) -> Result<KeyPair<KeGroup, Self>, ProtocolError<Self::Error>> {
+//!         unimplemented!()
 //!     }
 //! }
 //!
-//! # let remote_key = YourRemoteKey(<<Default as CipherSuite>::KeGroup>::random_sk(&mut OsRng));
-//! let keypair = KeyPair::from_private_key(remote_key).unwrap();
-//! let server_setup = ServerSetup::<Default, YourRemoteKey>::new_with_key(&mut OsRng, keypair);
+//! # let sk = KeGroup::random_sk(&mut OsRng);
+//! # let pk = KeGroup::public_key(sk);
+//! # let pk = KeGroup::serialize_pk(pk);
+//! # let public_key = PublicKey::deserialize(&pk).unwrap();
+//! # let remote_key = YourRemoteKey(sk);
+//! # let mut server_rng = OsRng;
+//! let keypair = KeyPair::new(remote_key, public_key);
+//! let server_setup = ServerSetup::<Default, YourRemoteKey>::new_with_key_pair(&mut server_rng, keypair);
+//! # let client_registration_start_result = ClientRegistration::<Default>::start(
+//! #     &mut OsRng,
+//! #     b"password",
+//! # )?;
+//! # let server_registration_start_result = ServerRegistration::<Default>::start(&server_setup, client_registration_start_result.message, b"alice@example.com")?;
+//! # let client_registration_finish_result = client_registration_start_result.state.finish(&mut OsRng, b"password", server_registration_start_result.message, ClientRegistrationFinishParameters::default())?;
+//! # let password_file_bytes = ServerRegistration::<Default>::finish(client_registration_finish_result.message).serialize();
+//! # let client_login_start_result = ClientLogin::<Default>::start(
+//! #   &mut OsRng,
+//! #   b"password",
+//! # )?;
+//! let password_file = ServerRegistration::<Default>::deserialize(&password_file_bytes)?;
+//! let server_login_builder = ServerLogin::builder(
+//!     &mut server_rng,
+//!     &server_setup,
+//!     Some(password_file),
+//!     client_login_start_result.message,
+//!     b"alice@example.com",
+//!     ServerLoginStartParameters::default(),
+//! )?;
+//! let client_e_public_key = server_login_builder.data();
+//! let shared_secret = server_login_builder.private_key().diffie_hellman(&client_e_public_key)?;
+//! let server_login_start_result = server_login_builder.build(shared_secret)?;
+//! # Ok::<(), anyhow::Error>(())
 //! ```
 //!
 //! ## Custom KSF and Parameters
@@ -1168,6 +1187,7 @@ pub use crate::messages::{
     CredentialFinalization, CredentialFinalizationLen, CredentialRequest, CredentialRequestLen,
     CredentialResponse, CredentialResponseLen, RegistrationRequest, RegistrationRequestLen,
     RegistrationResponse, RegistrationResponseLen, RegistrationUpload, RegistrationUploadLen,
+    ServerLoginBuilder,
 };
 pub use crate::opaque::{
     ClientLogin, ClientLoginFinishParameters, ClientLoginFinishResult, ClientLoginStartResult,

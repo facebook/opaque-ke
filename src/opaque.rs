@@ -8,7 +8,7 @@
 
 //! Provides the main OPAQUE API
 
-use core::ops::Add;
+use core::ops::{Add, Deref};
 
 use derive_where::derive_where;
 use digest::Output;
@@ -19,6 +19,7 @@ use hkdf::{Hkdf, HkdfExtract};
 use rand::{CryptoRng, RngCore};
 use subtle::ConstantTimeEq;
 use voprf::Group;
+use zeroize::Zeroizing;
 
 use crate::ciphersuite::{CipherSuite, OprfGroup, OprfHash};
 use crate::envelope::{Envelope, EnvelopeLen};
@@ -30,13 +31,13 @@ use crate::key_exchange::traits::{
     Deserialize, Ke1MessageLen, Ke1StateLen, Ke2StateLen, KeyExchange, Serialize,
 };
 use crate::key_exchange::tripledh::NonceLen;
-use crate::keypair::{KeyPair, PrivateKey, PublicKey, SecretKey};
+use crate::keypair::{KeyPair, PrivateKey, PrivateKeySerialization, PublicKey};
 use crate::ksf::Ksf;
 use crate::messages::{CredentialRequestLen, RegistrationUploadLen};
 use crate::serialization::Input;
 use crate::{
     CredentialFinalization, CredentialRequest, CredentialResponse, RegistrationRequest,
-    RegistrationResponse, RegistrationUpload,
+    RegistrationResponse, RegistrationUpload, ServerLoginBuilder,
 };
 
 ///////////////
@@ -64,12 +65,9 @@ const STR_OPAQUE_DERIVE_KEY_PAIR: &[u8; 20] = b"OPAQUE-DeriveKeyPair";
     ))
 )]
 #[derive_where(Clone)]
-#[derive_where(Debug, Eq, Hash, Ord, PartialEq, PartialOrd; <CS::KeGroup as KeGroup>::Pk, <CS::KeGroup as KeGroup>::Sk, S)]
-pub struct ServerSetup<
-    CS: CipherSuite,
-    S: SecretKey<CS::KeGroup> = PrivateKey<<CS as CipherSuite>::KeGroup>,
-> {
-    oprf_seed: Output<OprfHash<CS>>,
+#[derive_where(Debug, Eq, PartialEq; <CS::KeGroup as KeGroup>::Pk, <CS::KeGroup as KeGroup>::Sk, S)]
+pub struct ServerSetup<CS: CipherSuite, S: Clone = PrivateKey<<CS as CipherSuite>::KeGroup>> {
+    oprf_seed: Zeroizing<Output<OprfHash<CS>>>,
     keypair: KeyPair<CS::KeGroup, S>,
     pub(crate) fake_keypair: KeyPair<CS::KeGroup>,
 }
@@ -159,21 +157,21 @@ impl<CS: CipherSuite> ServerSetup<CS, PrivateKey<CS::KeGroup>> {
     /// Generate a new instance of server setup
     pub fn new<R: CryptoRng + RngCore>(rng: &mut R) -> Self {
         let keypair = KeyPair::generate_random::<CS::OprfCs, _>(rng);
-        Self::new_with_key(rng, keypair)
+        Self::new_with_key_pair(rng, keypair)
     }
 }
 
 /// Length of [`ServerSetup`] in bytes for serialization.
-pub type ServerSetupLen<CS: CipherSuite, S: SecretKey<CS::KeGroup>> =
+pub type ServerSetupLen<CS: CipherSuite, S: PrivateKeySerialization<CS::KeGroup>> =
     Sum<Sum<OutputSize<OprfHash<CS>>, S::Len>, <CS::KeGroup as KeGroup>::SkLen>;
 
-impl<CS: CipherSuite, S: SecretKey<CS::KeGroup>> ServerSetup<CS, S> {
+impl<CS: CipherSuite, S: Clone> ServerSetup<CS, S> {
     /// Create [`ServerSetup`] with the given keypair
     ///
     /// This function should not be used to restore a previously-existing
     /// instance of [`ServerSetup`]. Instead, use [`ServerSetup::serialize`] and
     /// [`ServerSetup::deserialize`] for this purpose.
-    pub fn new_with_key<R: CryptoRng + RngCore>(
+    pub fn new_with_key_pair<R: CryptoRng + RngCore>(
         rng: &mut R,
         keypair: KeyPair<CS::KeGroup, S>,
     ) -> Self {
@@ -181,7 +179,7 @@ impl<CS: CipherSuite, S: SecretKey<CS::KeGroup>> ServerSetup<CS, S> {
         rng.fill_bytes(&mut oprf_seed);
 
         Self {
-            oprf_seed,
+            oprf_seed: Zeroizing::new(oprf_seed),
             keypair,
             fake_keypair: KeyPair::<CS::KeGroup>::generate_random::<CS::OprfCs, _>(rng),
         }
@@ -190,6 +188,7 @@ impl<CS: CipherSuite, S: SecretKey<CS::KeGroup>> ServerSetup<CS, S> {
     /// Serialization into bytes
     pub fn serialize(&self) -> GenericArray<u8, ServerSetupLen<CS, S>>
     where
+        S: PrivateKeySerialization<CS::KeGroup>,
         // ServerSetup: Hash + KeSk + KeSk
         OutputSize<OprfHash<CS>>: Add<S::Len>,
         Sum<OutputSize<OprfHash<CS>>, S::Len>:
@@ -197,21 +196,26 @@ impl<CS: CipherSuite, S: SecretKey<CS::KeGroup>> ServerSetup<CS, S> {
         ServerSetupLen<CS, S>: ArrayLength<u8>,
     {
         self.oprf_seed
+            .deref()
             .clone()
-            .concat(self.keypair.private().serialize())
+            .concat(S::serialize_key_pair(&self.keypair))
             .concat(self.fake_keypair.private().serialize())
     }
 
     /// Deserialization from bytes
-    pub fn deserialize(input: &[u8]) -> Result<Self, ProtocolError<S::Error>> {
+    pub fn deserialize(input: &[u8]) -> Result<Self, ProtocolError<S::Error>>
+    where
+        S: PrivateKeySerialization<CS::KeGroup>,
+    {
         let seed_len = OutputSize::<OprfHash<CS>>::USIZE;
         let key_len = <CS::KeGroup as KeGroup>::SkLen::USIZE;
-        let checked_slice = check_slice_size(input, seed_len + key_len + key_len, "server_setup")?;
+        let checked_slice = check_slice_size(input, seed_len + key_len + key_len, "server_setup")
+            .map_err(ProtocolError::into_custom)?;
 
         Ok(Self {
-            oprf_seed: GenericArray::clone_from_slice(&checked_slice[..seed_len]),
-            keypair: KeyPair::from_private_key_slice(&checked_slice[seed_len..seed_len + key_len])?,
-            fake_keypair: KeyPair::from_private_key_slice(&checked_slice[seed_len + key_len..])
+            oprf_seed: Zeroizing::new(GenericArray::clone_from_slice(&checked_slice[..seed_len])),
+            keypair: S::deserialize_key_pair(&checked_slice[seed_len..seed_len + key_len])?,
+            fake_keypair: PrivateKey::deserialize_key_pair(&checked_slice[seed_len + key_len..])
                 .map_err(ProtocolError::into_custom)?,
         })
     }
@@ -368,7 +372,7 @@ impl<CS: CipherSuite> ServerRegistration<CS> {
 
     /// From the client's "blinded" password, returns a response to be sent back
     /// to the client, as well as a [`ServerRegistration`]
-    pub fn start<S: SecretKey<CS::KeGroup>>(
+    pub fn start<S: Clone>(
         server_setup: &ServerSetup<CS, S>,
         message: RegistrationRequest<CS>,
         credential_identifier: &[u8],
@@ -395,7 +399,7 @@ impl<CS: CipherSuite> ServerRegistration<CS> {
     }
 
     // Creates a dummy instance used for faking a [CredentialResponse]
-    pub(crate) fn dummy<R: RngCore + CryptoRng, S: SecretKey<CS::KeGroup>>(
+    pub(crate) fn dummy<R: RngCore + CryptoRng, S: Clone>(
         rng: &mut R,
         server_setup: &ServerSetup<CS, S>,
     ) -> Self {
@@ -594,9 +598,10 @@ impl<CS: CipherSuite> ServerLogin<CS> {
         })
     }
 
-    /// From the client's "blinded" password, returns a challenge to be sent
-    /// back to the client, as well as a [`ServerLogin`]
-    pub fn start<R: RngCore + CryptoRng, S: SecretKey<CS::KeGroup>>(
+    /// Create a [`ServerLoginBuilder`] to use with a remote private key.
+    ///
+    /// See [`ServerLogin::start()`] for the regular path.
+    pub fn builder<R: RngCore + CryptoRng, S: Clone>(
         rng: &mut R,
         server_setup: &ServerSetup<CS, S>,
         password_file: Option<ServerRegistration<CS>>,
@@ -606,7 +611,7 @@ impl<CS: CipherSuite> ServerLogin<CS> {
             context,
             identifiers,
         }: ServerLoginStartParameters,
-    ) -> Result<ServerLoginStartResult<CS>, ProtocolError<S::Error>>
+    ) -> Result<ServerLoginBuilder<CS, S>, ProtocolError>
     where
         // MaskedResponse: (Nonce + Hash) + KePk
         NonceLen: Add<OutputSize<OprfHash<CS>>>,
@@ -621,8 +626,7 @@ impl<CS: CipherSuite> ServerLogin<CS> {
 
         let client_s_pk = record.0.client_s_pk.clone();
         let context = context.unwrap_or(&[]);
-        let server_s_sk = server_setup.keypair.private();
-        let server_s_pk = server_s_sk.public_key()?;
+        let server_s_pk = server_setup.keypair.public();
 
         let mut masking_nonce = GenericArray::<_, NonceLen>::default();
         rng.fill_bytes(&mut masking_nonce);
@@ -630,17 +634,15 @@ impl<CS: CipherSuite> ServerLogin<CS> {
         let masked_response = mask_response(
             &record.0.masking_key,
             masking_nonce.as_slice(),
-            &server_s_pk,
+            server_s_pk,
             &record.0.envelope,
-        )
-        .map_err(ProtocolError::into_custom)?;
+        )?;
 
         let (id_u, id_s) = bytestrings_from_identifiers::<CS::KeGroup>(
             identifiers,
             client_s_pk.serialize(),
             server_s_pk.serialize(),
-        )
-        .map_err(ProtocolError::into_custom)?;
+        )?;
 
         let blinded_element =
             OprfGroup::<CS>::serialize_elem(credential_request.blinded_element.value());
@@ -648,32 +650,46 @@ impl<CS: CipherSuite> ServerLogin<CS> {
         let credential_request_bytes =
             CredentialRequest::<CS>::serialize_iter(&blinded_element, &ke1_message);
 
-        let oprf_key = oprf_key_from_seed::<CS>(&server_setup.oprf_seed, credential_identifier)
-            .map_err(ProtocolError::into_custom)?;
-        let server = voprf::OprfServer::new_with_key(&oprf_key)
-            .map_err(|e| ProtocolError::into_custom(e.into()))?;
+        let oprf_key = oprf_key_from_seed::<CS>(&server_setup.oprf_seed, credential_identifier)?;
+        let server = voprf::OprfServer::new_with_key(&oprf_key).map_err(ProtocolError::from)?;
         let evaluation_element = server.blind_evaluate(&credential_request.blinded_element);
 
         let beta = OprfGroup::<CS>::serialize_elem(evaluation_element.value());
         let credential_response_component =
             CredentialResponse::<CS>::serialize_without_ke(&beta, &masking_nonce, &masked_response);
 
-        let result = CS::KeyExchange::generate_ke2::<CS::OprfCs, _, _>(
+        let ke2_builder = CS::KeyExchange::ke2_builder::<CS::OprfCs, _>(
             rng,
             credential_request_bytes,
             credential_response_component,
             credential_request.ke1_message.clone(),
             client_s_pk,
-            server_s_sk.clone(),
             id_u.iter(),
             id_s.iter(),
             context,
         )?;
 
-        let credential_response = CredentialResponse {
+        Ok(ServerLoginBuilder {
+            server_s_sk: server_setup.keypair().private().clone(),
             evaluation_element,
-            masking_nonce,
+            masking_nonce: Zeroizing::new(masking_nonce),
             masked_response,
+            #[cfg(test)]
+            oprf_key: Zeroizing::new(oprf_key),
+            ke2_builder,
+        })
+    }
+
+    pub(crate) fn build<S: Clone>(
+        builder: ServerLoginBuilder<CS, S>,
+        input: <CS::KeyExchange as KeyExchange<OprfHash<CS>, CS::KeGroup>>::KE2BuilderInput,
+    ) -> Result<ServerLoginStartResult<CS>, ProtocolError> {
+        let result = CS::KeyExchange::build_ke2(builder.ke2_builder.clone(), input)?;
+
+        let credential_response = CredentialResponse {
+            evaluation_element: builder.evaluation_element.clone(),
+            masking_nonce: *builder.masking_nonce.deref(),
+            masked_response: builder.masked_response.clone(),
             ke2_message: result.1,
         };
 
@@ -687,8 +703,41 @@ impl<CS: CipherSuite> ServerLogin<CS> {
             #[cfg(test)]
             server_mac_key: result.3,
             #[cfg(test)]
-            oprf_key,
+            oprf_key: builder.oprf_key.deref().clone(),
         })
+    }
+
+    /// From the client's "blinded" password, returns a challenge to be sent
+    /// back to the client, as well as a [`ServerLogin`]
+    pub fn start<R: RngCore + CryptoRng>(
+        rng: &mut R,
+        server_setup: &ServerSetup<CS>,
+        password_file: Option<ServerRegistration<CS>>,
+        credential_request: CredentialRequest<CS>,
+        credential_identifier: &[u8],
+        parameters: ServerLoginStartParameters,
+    ) -> Result<ServerLoginStartResult<CS>, ProtocolError>
+    where
+        // MaskedResponse: (Nonce + Hash) + KePk
+        NonceLen: Add<OutputSize<OprfHash<CS>>>,
+        Sum<NonceLen, OutputSize<OprfHash<CS>>>:
+            ArrayLength<u8> + Add<<CS::KeGroup as KeGroup>::PkLen>,
+        MaskedResponseLen<CS>: ArrayLength<u8>,
+    {
+        let builder = Self::builder(
+            rng,
+            server_setup,
+            password_file,
+            credential_request,
+            credential_identifier,
+            parameters,
+        )?;
+        let input = CS::KeyExchange::generate_ke2_input(
+            &builder.ke2_builder,
+            server_setup.keypair.private(),
+        );
+
+        Self::build(builder, input)
     }
 
     /// From the client's second and final message, check the client's
@@ -942,7 +991,7 @@ fn oprf_key_from_seed<CS: CipherSuite>(
     derive(serde::Deserialize, serde::Serialize),
     serde(bound = "")
 )]
-#[derive_where(Clone)]
+#[derive_where(Clone, ZeroizeOnDrop)]
 #[derive_where(Debug, Eq, Hash, PartialEq)]
 pub(crate) struct MaskedResponse<CS: CipherSuite> {
     pub(crate) nonce: GenericArray<u8, NonceLen>,

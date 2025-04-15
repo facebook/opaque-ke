@@ -14,8 +14,9 @@ use derive_where::derive_where;
 use generic_array::{ArrayLength, GenericArray};
 use rand::{CryptoRng, RngCore};
 
-use crate::errors::{InternalError, ProtocolError};
+use crate::errors::ProtocolError;
 use crate::key_exchange::group::KeGroup;
+use crate::key_exchange::tripledh::DiffieHellman;
 
 /// A Keypair trait with public-private verification
 #[cfg_attr(
@@ -28,12 +29,17 @@ use crate::key_exchange::group::KeGroup;
 )]
 #[derive_where(Clone)]
 #[derive_where(Debug, Eq, Hash, Ord, PartialEq, PartialOrd; KG::Pk, S)]
-pub struct KeyPair<KG: KeGroup, S: SecretKey<KG> = PrivateKey<KG>> {
+pub struct KeyPair<KG: KeGroup, S: Clone = PrivateKey<KG>> {
     pk: PublicKey<KG>,
     sk: S,
 }
 
-impl<KG: KeGroup, S: SecretKey<KG>> KeyPair<KG, S> {
+impl<KG: KeGroup, S: Clone> KeyPair<KG, S> {
+    /// Creates a new [`KeyPair`] from the given keys.
+    pub fn new(sk: S, pk: PublicKey<KG>) -> Self {
+        Self { pk, sk }
+    }
+
     /// The public key component
     pub fn public(&self) -> &PublicKey<KG> {
         &self.pk
@@ -42,20 +48,6 @@ impl<KG: KeGroup, S: SecretKey<KG>> KeyPair<KG, S> {
     /// The private key component
     pub fn private(&self) -> &S {
         &self.sk
-    }
-
-    /// Obtains a [`KeyPair`] from a slice representing the private key
-    pub fn from_private_key_slice(input: &[u8]) -> Result<Self, ProtocolError<S::Error>> {
-        Self::from_private_key(S::deserialize(input)?)
-    }
-
-    /// Obtains a [`KeyPair`] from a private key
-    pub fn from_private_key(private_key: S) -> Result<Self, ProtocolError<S::Error>> {
-        let pk = private_key.public_key()?;
-        Ok(Self {
-            pk,
-            sk: private_key,
-        })
     }
 }
 
@@ -106,50 +98,60 @@ where
 #[derive_where(Debug, Eq, Hash, Ord, PartialEq, PartialOrd; KG::Sk)]
 pub struct PrivateKey<KG: KeGroup>(KG::Sk);
 
-/// A trait specifying the requirements for a private key container
-pub trait SecretKey<KG: KeGroup>: Clone + Sized {
-    /// Custom error type that can be passed down to `InternalError::Custom`
+impl<KG: KeGroup> PrivateKey<KG> {
+    /// Returns public key from private key
+    pub fn public_key(&self) -> PublicKey<KG> {
+        PublicKey(KG::public_key(self.0))
+    }
+
+    pub(crate) fn serialize(&self) -> GenericArray<u8, KG::SkLen> {
+        KG::serialize_sk(self.0)
+    }
+
+    /// Creates a [`PrivateKey`] from the given bytes.
+    pub fn deserialize(input: &[u8]) -> Result<Self, ProtocolError> {
+        KG::deserialize_sk(input).map(Self)
+    }
+}
+
+impl<KG: KeGroup> PrivateKey<KG>
+where
+    KG::Sk: DiffieHellman<KG>,
+{
+    /// Diffie-Hellman key exchange implementation
+    pub(crate) fn ke_diffie_hellman(&self, pk: &PublicKey<KG>) -> GenericArray<u8, KG::PkLen> {
+        self.0.diffie_hellman(pk.0)
+    }
+}
+
+/// A trait to facilitate
+/// [`ServerSetup::de/serialize`](crate::ServerSetup::serialize).
+pub trait PrivateKeySerialization<KG: KeGroup>: Clone {
+    /// Custom error type that can be passed down to `ProtocolError::Custom`
     type Error;
     /// Serialization size in bytes.
     type Len: ArrayLength<u8>;
 
-    /// Diffie-Hellman key exchange implementation
-    fn diffie_hellman(
-        &self,
-        pk: PublicKey<KG>,
-    ) -> Result<GenericArray<u8, KG::PkLen>, InternalError<Self::Error>>;
-
-    /// Returns public key from private key
-    fn public_key(&self) -> Result<PublicKey<KG>, InternalError<Self::Error>>;
-
     /// Serialization into bytes
-    fn serialize(&self) -> GenericArray<u8, Self::Len>;
+    fn serialize_key_pair(key_pair: &KeyPair<KG, Self>) -> GenericArray<u8, Self::Len>;
 
     /// Deserialization from bytes
-    fn deserialize(input: &[u8]) -> Result<Self, InternalError<Self::Error>>;
+    fn deserialize_key_pair(input: &[u8]) -> Result<KeyPair<KG, Self>, ProtocolError<Self::Error>>;
 }
 
-impl<KG: KeGroup> SecretKey<KG> for PrivateKey<KG> {
+impl<KG: KeGroup> PrivateKeySerialization<KG> for PrivateKey<KG> {
     type Error = core::convert::Infallible;
     type Len = KG::SkLen;
 
-    fn diffie_hellman(
-        &self,
-        pk: PublicKey<KG>,
-    ) -> Result<GenericArray<u8, KG::PkLen>, InternalError> {
-        Ok(KG::diffie_hellman(pk.0, self.0))
+    fn serialize_key_pair(key_pair: &KeyPair<KG, Self>) -> GenericArray<u8, Self::Len> {
+        key_pair.private().serialize()
     }
 
-    fn public_key(&self) -> Result<PublicKey<KG>, InternalError> {
-        Ok(PublicKey(KG::public_key(self.0)))
-    }
+    fn deserialize_key_pair(input: &[u8]) -> Result<KeyPair<KG, Self>, ProtocolError> {
+        let sk = PrivateKey::deserialize(input)?;
+        let pk = sk.public_key();
 
-    fn serialize(&self) -> GenericArray<u8, Self::Len> {
-        KG::serialize_sk(self.0)
-    }
-
-    fn deserialize(input: &[u8]) -> Result<Self, InternalError> {
-        KG::deserialize_sk(input).map(Self)
+        Ok(KeyPair::new(sk, pk))
     }
 }
 
@@ -184,13 +186,18 @@ pub struct PublicKey<KG: KeGroup>(KG::Pk);
 
 impl<KG: KeGroup> PublicKey<KG> {
     /// Convert from bytes
-    pub fn deserialize(key_bytes: &[u8]) -> Result<Self, InternalError> {
+    pub fn deserialize(key_bytes: &[u8]) -> Result<Self, ProtocolError> {
         KG::deserialize_pk(key_bytes).map(Self)
     }
 
     /// Convert to bytes
     pub fn serialize(&self) -> GenericArray<u8, KG::PkLen> {
         KG::serialize_pk(self.0)
+    }
+
+    /// Returns the inner [`KeGroup::Pk`].
+    pub fn to_group_type(&self) -> KG::Pk {
+        self.0
     }
 }
 
@@ -223,7 +230,6 @@ mod tests {
     use rand::rngs::OsRng;
 
     use super::*;
-    use crate::errors::*;
     use crate::util;
 
     #[test]
@@ -255,15 +261,15 @@ mod tests {
                     fn pub_from_priv(kp in KeyPair::<$point>::uniform_keypair_strategy::<$point>()) {
                         let pk = kp.public();
                         let sk = kp.private();
-                        prop_assert_eq!(&sk.public_key()?, pk);
+                        prop_assert_eq!(&sk.public_key(), pk);
                     }
 
                     #[test]
                     fn dh(kp1 in KeyPair::<$point>::uniform_keypair_strategy::<$point>(),
                                       kp2 in KeyPair::<$point>::uniform_keypair_strategy::<$point>()) {
 
-                        let dh1 = kp2.private().diffie_hellman(kp1.public().clone())?;
-                        let dh2 = kp1.private().diffie_hellman(kp2.public().clone())?;
+                        let dh1 = kp2.private().ke_diffie_hellman(&kp1.public());
+                        let dh2 = kp1.private().ke_diffie_hellman(kp2.public());
 
                         prop_assert_eq!(dh1, dh2);
                     }
@@ -272,7 +278,7 @@ mod tests {
                     fn private_key_slice(kp in KeyPair::<$point>::uniform_keypair_strategy::<$point>()) {
                         let sk_bytes = kp.private().serialize().to_vec();
 
-                        let kp2 = KeyPair::<$point>::from_private_key_slice(&sk_bytes)?;
+                        let kp2 = PrivateKey::<$point>::deserialize_key_pair(&sk_bytes)?;
                         let kp2_private_bytes = kp2.private().serialize().to_vec();
 
                         prop_assert_eq!(sk_bytes, kp2_private_bytes);
@@ -320,38 +326,15 @@ mod tests {
         #[derive(Clone)]
         struct RemoteKey(PrivateKey<KeCurve>);
 
-        impl SecretKey<KeCurve> for RemoteKey {
-            type Error = core::convert::Infallible;
-            type Len = <KeCurve as KeGroup>::SkLen;
-
-            fn diffie_hellman(
-                &self,
-                pk: PublicKey<KeCurve>,
-            ) -> Result<GenericArray<u8, <KeCurve as KeGroup>::PkLen>, InternalError<Self::Error>>
-            {
-                self.0.diffie_hellman(pk)
-            }
-
-            fn public_key(&self) -> Result<PublicKey<KeCurve>, InternalError<Self::Error>> {
-                self.0.public_key()
-            }
-
-            fn serialize(&self) -> GenericArray<u8, Self::Len> {
-                self.0.serialize()
-            }
-
-            fn deserialize(input: &[u8]) -> Result<Self, InternalError<Self::Error>> {
-                PrivateKey::deserialize(input).map(Self)
-            }
-        }
-
         const PASSWORD: &str = "password";
 
-        let sk = KeCurve::random_sk(&mut OsRng);
-        let sk = RemoteKey(PrivateKey(sk));
-        let keypair = KeyPair::from_private_key(sk).unwrap();
+        let sk = PrivateKey(KeCurve::random_sk(&mut OsRng));
+        let pk = sk.public_key();
+        let sk = RemoteKey(sk);
+        let keypair = KeyPair::new(sk, pk);
 
-        let server_setup = ServerSetup::<Default, RemoteKey>::new_with_key(&mut OsRng, keypair);
+        let server_setup =
+            ServerSetup::<Default, RemoteKey>::new_with_key_pair(&mut OsRng, keypair);
 
         let ClientRegistrationStartResult {
             message,
@@ -373,11 +356,7 @@ mod tests {
             message,
             state: client,
         } = ClientLogin::<Default>::start(&mut OsRng, PASSWORD.as_bytes()).unwrap();
-        let ServerLoginStartResult {
-            message,
-            state: server,
-            ..
-        } = ServerLogin::start(
+        let builder = ServerLogin::builder(
             &mut OsRng,
             &server_setup,
             Some(file),
@@ -386,6 +365,12 @@ mod tests {
             ServerLoginStartParameters::default(),
         )
         .unwrap();
+        let shared_secret = builder.private_key().0.ke_diffie_hellman(builder.data());
+        let ServerLoginStartResult {
+            message,
+            state: server,
+            ..
+        } = builder.build(shared_secret).unwrap();
         let ClientLoginFinishResult { message, .. } = client
             .finish(
                 PASSWORD.as_bytes(),
