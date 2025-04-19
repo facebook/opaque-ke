@@ -15,7 +15,6 @@ use digest::Output;
 use generic_array::sequence::Concat;
 use generic_array::typenum::{Sum, Unsigned};
 use generic_array::{ArrayLength, GenericArray};
-use rand::{CryptoRng, RngCore};
 use subtle::ConstantTimeEq;
 use voprf::Group;
 
@@ -265,17 +264,11 @@ impl<CS: CipherSuite> RegistrationUpload<CS> {
     }
 
     // Creates a dummy instance used for faking a [CredentialResponse]
-    pub(crate) fn dummy<R: RngCore + CryptoRng, S: SecretKey<CS::KeGroup>>(
-        rng: &mut R,
-        server_setup: &ServerSetup<CS, S>,
-    ) -> Self {
-        let mut masking_key = Output::<OprfHash<CS>>::default();
-        rng.fill_bytes(&mut masking_key);
-
+    pub(crate) fn dummy<S: SecretKey<CS::KeGroup>>(server_setup: &ServerSetup<CS, S>) -> Self {
         Self {
             envelope: Envelope::<CS>::dummy(),
-            masking_key,
-            client_s_pk: server_setup.fake_keypair.public().clone(),
+            masking_key: server_setup.dummy_masking_key.clone(),
+            client_s_pk: server_setup.dummy_client_pk.clone(),
         }
     }
 }

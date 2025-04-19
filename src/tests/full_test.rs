@@ -252,7 +252,8 @@ pub struct TestVectorParameters {
     pub server_s_sk: Vec<u8>,
     pub server_e_pk: Vec<u8>,
     pub server_e_sk: Vec<u8>,
-    pub fake_sk: Vec<u8>,
+    pub dummy_client_pk: Vec<u8>,
+    pub dummy_masking_key: Vec<u8>,
     pub credential_identifier: Vec<u8>,
     pub id_u: Vec<u8>,
     pub id_s: Vec<u8>,
@@ -333,7 +334,8 @@ fn populate_test_vectors(values: &Value) -> TestVectorParameters {
         server_s_sk: decode(values, "server_s_sk").unwrap(),
         server_e_pk: decode(values, "server_e_pk").unwrap(),
         server_e_sk: decode(values, "server_e_sk").unwrap(),
-        fake_sk: decode(values, "fake_sk").unwrap(),
+        dummy_client_pk: decode(values, "dummy_client_pk").unwrap(),
+        dummy_masking_key: decode(values, "dummy_masking_key").unwrap(),
         credential_identifier: decode(values, "credential_identifier").unwrap(),
         id_u: decode(values, "id_u").unwrap(),
         id_s: decode(values, "id_s").unwrap(),
@@ -419,7 +421,20 @@ fn stringify_test_vectors(p: &TestVectorParameters) -> String {
         )
         .as_str(),
     );
-    s.push_str(format!("    \"fake_sk\": \"{}\",\n", hex::encode(&p.fake_sk)).as_str());
+    s.push_str(
+        format!(
+            "    \"dummy_client_pk\": \"{}\",\n",
+            hex::encode(&p.dummy_client_pk)
+        )
+        .as_str(),
+    );
+    s.push_str(
+        format!(
+            "    \"dummy_masking_key\": \"{}\",\n",
+            hex::encode(&p.dummy_masking_key)
+        )
+        .as_str(),
+    );
     s.push_str(
         format!(
             "    \"credential_identifier\": \"{}\",\n",
@@ -598,7 +613,11 @@ where
     let server_e_kp = KeyPair::<CS::KeGroup>::generate_random::<CS::OprfCs, _>(&mut rng);
     let client_s_kp = KeyPair::<CS::KeGroup>::generate_random::<CS::OprfCs, _>(&mut rng);
     let client_e_kp = KeyPair::<CS::KeGroup>::generate_random::<CS::OprfCs, _>(&mut rng);
-    let fake_kp = KeyPair::<CS::KeGroup>::generate_random::<CS::OprfCs, _>(&mut rng);
+    let dummy_client_pk = KeyPair::<CS::KeGroup>::generate_random::<CS::OprfCs, _>(&mut rng)
+        .public()
+        .clone();
+    let mut dummy_masking_key = Output::<OprfHash<CS>>::default();
+    rng.fill_bytes(&mut dummy_masking_key);
     let credential_identifier = b"credIdentifier";
     let id_u = b"idU";
     let id_s = b"idS";
@@ -615,12 +634,12 @@ where
     let mut server_nonce = [0u8; NonceLen::USIZE];
     rng.fill_bytes(&mut server_nonce);
 
-    let fake_sk: Vec<u8> = fake_kp.private().serialize().to_vec();
     let server_setup = ServerSetup::<CS>::deserialize(
         &[
             oprf_seed.as_ref(),
             &server_s_kp.private().serialize(),
-            &fake_sk,
+            &dummy_client_pk.serialize(),
+            dummy_masking_key.as_ref(),
         ]
         .concat(),
     )
@@ -742,7 +761,8 @@ where
         server_s_sk: server_s_kp.private().serialize().to_vec(),
         server_e_pk: server_e_kp.public().serialize().to_vec(),
         server_e_sk: server_e_kp.private().serialize().to_vec(),
-        fake_sk,
+        dummy_client_pk: dummy_client_pk.serialize().to_vec(),
+        dummy_masking_key: dummy_masking_key.to_vec(),
         credential_identifier: credential_identifier.to_vec(),
         id_u: id_u.to_vec(),
         id_s: id_s.to_vec(),
@@ -1022,7 +1042,8 @@ fn test_registration_response() -> Result<(), ProtocolError> {
             &[
                 parameters.oprf_seed,
                 parameters.server_s_sk,
-                parameters.fake_sk,
+                parameters.dummy_client_pk,
+                parameters.dummy_masking_key,
             ]
             .concat(),
         )?;
@@ -1191,7 +1212,8 @@ fn test_credential_response() -> Result<(), ProtocolError> {
             &[
                 parameters.oprf_seed,
                 parameters.server_s_sk,
-                parameters.fake_sk,
+                parameters.dummy_client_pk,
+                parameters.dummy_masking_key,
             ]
             .concat(),
         )?;
