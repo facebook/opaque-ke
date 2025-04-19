@@ -1192,7 +1192,7 @@ pub use crate::messages::{
 pub use crate::opaque::{
     ClientLogin, ClientLoginFinishParameters, ClientLoginFinishResult, ClientLoginStartResult,
     ClientRegistration, ClientRegistrationFinishParameters, ClientRegistrationFinishResult,
-    ClientRegistrationStartResult, Identifiers, ServerLogin, ServerLoginFinishResult,
-    ServerLoginStartParameters, ServerLoginStartResult, ServerRegistration, ServerRegistrationLen,
-    ServerRegistrationStartResult, ServerSetup,
+    ClientRegistrationStartResult, Identifiers, KeyMaterialInfo, ServerLogin,
+    ServerLoginFinishResult, ServerLoginStartParameters, ServerLoginStartResult,
+    ServerRegistration, ServerRegistrationLen, ServerRegistrationStartResult, ServerSetup,
 };
