@@ -21,7 +21,8 @@ use subtle::ConstantTimeEq;
 use voprf::Group;
 
 use super::KeGroup;
-use crate::errors::InternalError;
+use crate::errors::{InternalError, ProtocolError};
+use crate::key_exchange::tripledh::DiffieHellman;
 
 /// Implementation for Ristretto255.
 // This is necessary because Rust lacks specialization, otherwise we could
@@ -38,12 +39,12 @@ impl KeGroup for Ristretto255 {
         pk.compress().to_bytes().into()
     }
 
-    fn deserialize_pk(bytes: &[u8]) -> Result<Self::Pk, InternalError> {
+    fn deserialize_pk(bytes: &[u8]) -> Result<Self::Pk, ProtocolError> {
         CompressedRistretto::from_slice(bytes)
-            .map_err(|_| InternalError::PointError)?
+            .map_err(|_| ProtocolError::SerializationError)?
             .decompress()
             .filter(|point| point != &RistrettoPoint::identity())
-            .ok_or(InternalError::PointError)
+            .ok_or(ProtocolError::SerializationError)
     }
 
     fn random_sk<R: RngCore + CryptoRng>(rng: &mut R) -> Self::Sk {
@@ -89,21 +90,17 @@ impl KeGroup for Ristretto255 {
         RISTRETTO_BASEPOINT_POINT * sk
     }
 
-    fn diffie_hellman(pk: Self::Pk, sk: Self::Sk) -> GenericArray<u8, Self::PkLen> {
-        Self::serialize_pk(pk * sk)
-    }
-
     fn serialize_sk(sk: Self::Sk) -> GenericArray<u8, Self::SkLen> {
         sk.to_bytes().into()
     }
 
-    fn deserialize_sk(bytes: &[u8]) -> Result<Self::Sk, InternalError> {
+    fn deserialize_sk(bytes: &[u8]) -> Result<Self::Sk, ProtocolError> {
         bytes
             .try_into()
             .ok()
             .and_then(|bytes| Scalar::from_canonical_bytes(bytes).into())
             .filter(|scalar| scalar != &Scalar::ZERO)
-            .ok_or(InternalError::PointError)
+            .ok_or(ProtocolError::SerializationError)
     }
 }
 
@@ -181,5 +178,11 @@ impl Group for Ristretto255 {
 
     fn deserialize_scalar(scalar_bits: &[u8]) -> voprf::Result<Self::Scalar> {
         <voprf::Ristretto255 as Group>::deserialize_scalar(scalar_bits)
+    }
+}
+
+impl DiffieHellman<Ristretto255> for Scalar {
+    fn diffie_hellman(self, pk: RistrettoPoint) -> GenericArray<u8, U32> {
+        Ristretto255::serialize_pk(pk * self)
     }
 }

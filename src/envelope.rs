@@ -24,7 +24,7 @@ use crate::errors::utils::check_slice_size;
 use crate::errors::{InternalError, ProtocolError};
 use crate::hash::OutputSize;
 use crate::key_exchange::group::KeGroup;
-use crate::keypair::{KeyPair, PublicKey};
+use crate::keypair::{KeyPair, PrivateKey, PrivateKeySerialization, PublicKey};
 use crate::opaque::{bytestrings_from_identifiers, Identifiers};
 use crate::serialization::{Input, MacExt};
 
@@ -303,7 +303,7 @@ fn build_inner_envelope_internal<CS: CipherSuite>(
         .expand(&nonce.concat(STR_PRIVATE_KEY.into()), &mut keypair_seed)
         .map_err(|_| InternalError::HkdfError)?;
     let client_static_keypair =
-        KeyPair::<CS::KeGroup>::from_private_key_slice(&CS::KeGroup::serialize_sk(
+        PrivateKey::<CS::KeGroup>::deserialize_key_pair(&CS::KeGroup::serialize_sk(
             CS::KeGroup::derive_auth_keypair::<CS::OprfCs>(keypair_seed)?,
         ))?;
 
@@ -319,7 +319,7 @@ fn recover_keys_internal<CS: CipherSuite>(
         .expand(&nonce.concat(STR_PRIVATE_KEY.into()), &mut keypair_seed)
         .map_err(|_| InternalError::HkdfError)?;
     let client_static_keypair =
-        KeyPair::<CS::KeGroup>::from_private_key_slice(&CS::KeGroup::serialize_sk(
+        PrivateKey::<CS::KeGroup>::deserialize_key_pair(&CS::KeGroup::serialize_sk(
             CS::KeGroup::derive_auth_keypair::<CS::OprfCs>(keypair_seed)?,
         ))?;
 
