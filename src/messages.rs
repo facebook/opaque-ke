@@ -115,21 +115,21 @@ pub struct CredentialRequest<CS: CipherSuite> {
     feature = "serde",
     derive(serde::Deserialize, serde::Serialize),
     serde(bound(
-        deserialize = "S: serde::Deserialize<'de>, <CS::KeyExchange as KeyExchange<OprfHash<CS>, \
+        deserialize = "SK: serde::Deserialize<'de>, <CS::KeyExchange as KeyExchange<OprfHash<CS>, \
                        CS::KeGroup>>::KE2Builder: serde::Deserialize<'de>",
-        serialize = "S: serde::Serialize, <CS::KeyExchange as KeyExchange<OprfHash<CS>, \
+        serialize = "SK: serde::Serialize, <CS::KeyExchange as KeyExchange<OprfHash<CS>, \
                      CS::KeGroup>>::KE2Builder: serde::Serialize"
     ))
 )]
 #[derive_where(Clone)]
 #[derive_where(
     Debug, Eq, PartialEq;
-    S,
+    SK,
     voprf::EvaluationElement<CS::OprfCs>,
     <CS::KeyExchange as KeyExchange<OprfHash<CS>, CS::KeGroup>>::KE2Builder,
 )]
-pub struct ServerLoginBuilder<CS: CipherSuite, S: Clone> {
-    pub(crate) server_s_sk: S,
+pub struct ServerLoginBuilder<CS: CipherSuite, SK: Clone> {
+    pub(crate) server_s_sk: SK,
     pub(crate) evaluation_element: voprf::EvaluationElement<CS::OprfCs>,
     pub(crate) masking_nonce: Zeroizing<GenericArray<u8, NonceLen>>,
     pub(crate) masked_response: MaskedResponse<CS>,
@@ -138,7 +138,7 @@ pub struct ServerLoginBuilder<CS: CipherSuite, S: Clone> {
     pub(crate) ke2_builder: <CS::KeyExchange as KeyExchange<OprfHash<CS>, CS::KeGroup>>::KE2Builder,
 }
 
-impl<CS: CipherSuite, S: Clone> ServerLoginBuilder<CS, S> {
+impl<CS: CipherSuite, SK: Clone> ServerLoginBuilder<CS, SK> {
     /// The returned data here has to be processed and the result given as an
     /// input to [`ServerLoginBuilder::build()`]. To understand what kind of
     /// output is expected here and how to process it, refer to the
@@ -150,7 +150,7 @@ impl<CS: CipherSuite, S: Clone> ServerLoginBuilder<CS, S> {
     }
 
     /// The handle to the corresponding [`ServerSetup`]s private key.
-    pub fn private_key(&self) -> &S {
+    pub fn private_key(&self) -> &SK {
         &self.server_s_sk
     }
 
@@ -325,9 +325,9 @@ impl<CS: CipherSuite> RegistrationUpload<CS> {
     }
 
     // Creates a dummy instance used for faking a [CredentialResponse]
-    pub(crate) fn dummy<R: RngCore + CryptoRng, S: Clone>(
+    pub(crate) fn dummy<R: RngCore + CryptoRng, SK: Clone, OS: Clone>(
         rng: &mut R,
-        server_setup: &ServerSetup<CS, S>,
+        server_setup: &ServerSetup<CS, SK, OS>,
     ) -> Self {
         let mut masking_key = Output::<OprfHash<CS>>::default();
         rng.fill_bytes(&mut masking_key);

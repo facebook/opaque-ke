@@ -11,7 +11,7 @@
 use core::ops::{Add, Deref};
 
 use derive_where::derive_where;
-use digest::Output;
+use digest::{Output, OutputSizeUser};
 use generic_array::sequence::Concat;
 use generic_array::typenum::{Sum, Unsigned, U2};
 use generic_array::{ArrayLength, GenericArray};
@@ -60,15 +60,19 @@ const STR_OPAQUE_DERIVE_KEY_PAIR: &[u8; 20] = b"OPAQUE-DeriveKeyPair";
     feature = "serde",
     derive(serde::Deserialize, serde::Serialize),
     serde(bound(
-        deserialize = "S: serde::Deserialize<'de>",
-        serialize = "S: serde::Serialize"
+        deserialize = "SK: serde::Deserialize<'de>, OS: serde::Deserialize<'de>",
+        serialize = "SK: serde::Serialize, OS: serde::Serialize"
     ))
 )]
 #[derive_where(Clone)]
-#[derive_where(Debug, Eq, PartialEq; <CS::KeGroup as KeGroup>::Pk, <CS::KeGroup as KeGroup>::Sk, S)]
-pub struct ServerSetup<CS: CipherSuite, S: Clone = PrivateKey<<CS as CipherSuite>::KeGroup>> {
-    oprf_seed: Zeroizing<Output<OprfHash<CS>>>,
-    keypair: KeyPair<CS::KeGroup, S>,
+#[derive_where(Debug, Eq, Hash, Ord, PartialEq, PartialOrd; <CS::KeGroup as KeGroup>::Pk, <CS::KeGroup as KeGroup>::Sk, SK, OS)]
+pub struct ServerSetup<
+    CS: CipherSuite,
+    SK: Clone = PrivateKey<<CS as CipherSuite>::KeGroup>,
+    OS: Clone = Zeroizing<Output<OprfHash<CS>>>,
+> {
+    oprf_seed: OS,
+    keypair: KeyPair<CS::KeGroup, SK>,
     pub(crate) fake_keypair: KeyPair<CS::KeGroup>,
 }
 
@@ -162,10 +166,85 @@ impl<CS: CipherSuite> ServerSetup<CS, PrivateKey<CS::KeGroup>> {
 }
 
 /// Length of [`ServerSetup`] in bytes for serialization.
-pub type ServerSetupLen<CS: CipherSuite, S: PrivateKeySerialization<CS::KeGroup>> =
-    Sum<Sum<OutputSize<OprfHash<CS>>, S::Len>, <CS::KeGroup as KeGroup>::SkLen>;
+pub type ServerSetupLen<
+    CS: CipherSuite,
+    SK: PrivateKeySerialization<CS::KeGroup>,
+    OS: OprfSeedSerialization<OprfHash<CS>, SK::Error>,
+> = Sum<Sum<OS::Len, SK::Len>, <CS::KeGroup as KeGroup>::SkLen>;
 
-impl<CS: CipherSuite, S: Clone> ServerSetup<CS, S> {
+impl<CS: CipherSuite, SK: Clone, OS: Clone> ServerSetup<CS, SK, OS> {
+    /// Create [`ServerSetup`] with the given keypair and OPRF seed.
+    ///
+    /// This function should not be used to restore a previously-existing
+    /// instance of [`ServerSetup`]. Instead, use [`ServerSetup::serialize`] and
+    /// [`ServerSetup::deserialize`] for this purpose.
+    pub fn new_with_key_pair_and_seed<R: CryptoRng + RngCore>(
+        rng: &mut R,
+        keypair: KeyPair<CS::KeGroup, SK>,
+        oprf_seed: OS,
+    ) -> Self {
+        Self {
+            oprf_seed,
+            keypair,
+            fake_keypair: KeyPair::<CS::KeGroup>::generate_random::<CS::OprfCs, _>(rng),
+        }
+    }
+
+    /// The information required to generate the key material for
+    /// [`ServerRegistration::start_with_key_material()`] and
+    /// [`ServerLogin::builder_with_key_material()`].
+    pub fn key_material_info<'ci>(
+        &self,
+        credential_identifier: &'ci [u8],
+    ) -> KeyMaterialInfo<'ci, OS> {
+        KeyMaterialInfo {
+            ikm: self.oprf_seed.clone(),
+            info: [credential_identifier, STR_OPRF_KEY],
+        }
+    }
+
+    /// Serialization into bytes
+    pub fn serialize(&self) -> GenericArray<u8, ServerSetupLen<CS, SK, OS>>
+    where
+        SK: PrivateKeySerialization<CS::KeGroup>,
+        OS: OprfSeedSerialization<OprfHash<CS>, SK::Error>,
+        // ServerSetup: Hash + KeSk + KeSk
+        OS::Len: Add<SK::Len>,
+        Sum<OS::Len, SK::Len>: ArrayLength<u8> + Add<<CS::KeGroup as KeGroup>::SkLen>,
+        ServerSetupLen<CS, SK, OS>: ArrayLength<u8>,
+    {
+        self.oprf_seed
+            .serialize()
+            .concat(SK::serialize_key_pair(&self.keypair))
+            .concat(self.fake_keypair.private().serialize())
+    }
+
+    /// Deserialization from bytes
+    pub fn deserialize(input: &[u8]) -> Result<Self, ProtocolError<SK::Error>>
+    where
+        SK: PrivateKeySerialization<CS::KeGroup>,
+        OS: OprfSeedSerialization<OprfHash<CS>, SK::Error>,
+    {
+        let seed_len = OS::Len::USIZE;
+        let key_len = <CS::KeGroup as KeGroup>::SkLen::USIZE;
+        let checked_slice = check_slice_size(input, seed_len + key_len + key_len, "server_setup")
+            .map_err(ProtocolError::into_custom)?;
+
+        Ok(Self {
+            oprf_seed: OS::deserialize(&checked_slice[..seed_len])?,
+            keypair: SK::deserialize_key_pair(&checked_slice[seed_len..seed_len + key_len])?,
+            fake_keypair: PrivateKey::deserialize_key_pair(&checked_slice[seed_len + key_len..])
+                .map_err(ProtocolError::into_custom)?,
+        })
+    }
+
+    /// Returns the keypair
+    pub fn keypair(&self) -> &KeyPair<CS::KeGroup, SK> {
+        &self.keypair
+    }
+}
+
+impl<CS: CipherSuite, SK: Clone> ServerSetup<CS, SK> {
     /// Create [`ServerSetup`] with the given keypair
     ///
     /// This function should not be used to restore a previously-existing
@@ -173,7 +252,7 @@ impl<CS: CipherSuite, S: Clone> ServerSetup<CS, S> {
     /// [`ServerSetup::deserialize`] for this purpose.
     pub fn new_with_key_pair<R: CryptoRng + RngCore>(
         rng: &mut R,
-        keypair: KeyPair<CS::KeGroup, S>,
+        keypair: KeyPair<CS::KeGroup, SK>,
     ) -> Self {
         let mut oprf_seed = GenericArray::default();
         rng.fill_bytes(&mut oprf_seed);
@@ -184,46 +263,48 @@ impl<CS: CipherSuite, S: Clone> ServerSetup<CS, S> {
             fake_keypair: KeyPair::<CS::KeGroup>::generate_random::<CS::OprfCs, _>(rng),
         }
     }
+}
+
+/// A trait to facilitate
+/// [`ServerSetup::de/serialize`](crate::ServerSetup::serialize).
+pub trait OprfSeedSerialization<H, E>: Sized {
+    /// Serialization size in bytes.
+    type Len: ArrayLength<u8>;
 
     /// Serialization into bytes
-    pub fn serialize(&self) -> GenericArray<u8, ServerSetupLen<CS, S>>
-    where
-        S: PrivateKeySerialization<CS::KeGroup>,
-        // ServerSetup: Hash + KeSk + KeSk
-        OutputSize<OprfHash<CS>>: Add<S::Len>,
-        Sum<OutputSize<OprfHash<CS>>, S::Len>:
-            ArrayLength<u8> + Add<<CS::KeGroup as KeGroup>::SkLen>,
-        ServerSetupLen<CS, S>: ArrayLength<u8>,
-    {
-        self.oprf_seed
-            .deref()
-            .clone()
-            .concat(S::serialize_key_pair(&self.keypair))
-            .concat(self.fake_keypair.private().serialize())
-    }
+    fn serialize(&self) -> GenericArray<u8, Self::Len>;
 
     /// Deserialization from bytes
-    pub fn deserialize(input: &[u8]) -> Result<Self, ProtocolError<S::Error>>
-    where
-        S: PrivateKeySerialization<CS::KeGroup>,
-    {
-        let seed_len = OutputSize::<OprfHash<CS>>::USIZE;
-        let key_len = <CS::KeGroup as KeGroup>::SkLen::USIZE;
-        let checked_slice = check_slice_size(input, seed_len + key_len + key_len, "server_setup")
+    fn deserialize(input: &[u8]) -> Result<Self, ProtocolError<E>>;
+}
+
+impl<H: OutputSizeUser, E> OprfSeedSerialization<H, E> for Zeroizing<Output<H>> {
+    type Len = H::OutputSize;
+
+    fn serialize(&self) -> GenericArray<u8, Self::Len> {
+        self.deref().clone()
+    }
+
+    fn deserialize(input: &[u8]) -> Result<Self, ProtocolError<E>> {
+        check_slice_size(input, H::OutputSize::USIZE, "oprf_seed")
             .map_err(ProtocolError::into_custom)?;
 
-        Ok(Self {
-            oprf_seed: Zeroizing::new(GenericArray::clone_from_slice(&checked_slice[..seed_len])),
-            keypair: S::deserialize_key_pair(&checked_slice[seed_len..seed_len + key_len])?,
-            fake_keypair: PrivateKey::deserialize_key_pair(&checked_slice[seed_len + key_len..])
-                .map_err(ProtocolError::into_custom)?,
-        })
+        Ok(Zeroizing::new(GenericArray::clone_from_slice(input)))
     }
+}
 
-    /// Returns the keypair
-    pub fn keypair(&self) -> &KeyPair<CS::KeGroup, S> {
-        &self.keypair
-    }
+/// The information required to generate the key material for
+/// [`ServerRegistration::start_with_key_material()`] and
+/// [`ServerLogin::builder_with_key_material()`].
+///
+/// Use an HKDF, with the input key material [`ikm`](Self::ikm), expand
+/// operation with [`info`](Self::info) with an output length
+/// of [`CS::OprfCs::ScalarLen`](Group::ScalarLen).
+pub struct KeyMaterialInfo<'ci, OS: Clone> {
+    /// Input key material for the HKDF.
+    pub ikm: OS,
+    /// Info for the HKDF expand operation.
+    pub info: [&'ci [u8]; 2],
 }
 
 // Registration
@@ -370,14 +451,16 @@ impl<CS: CipherSuite> ServerRegistration<CS> {
         Ok(Self(RegistrationUpload::deserialize(input)?))
     }
 
-    /// From the client's "blinded" password, returns a response to be sent back
-    /// to the client, as well as a [`ServerRegistration`]
-    pub fn start<S: Clone>(
-        server_setup: &ServerSetup<CS, S>,
+    /// Create a [`RegistrationResponse`] with a remote OPRF seed. To generate
+    /// the `key_material` see [`ServerSetup::key_material_info()`].
+    ///
+    /// See [`ServerRegistration::start()`] for the regular path.
+    pub fn start_with_key_material<SK: Clone, OS: Clone>(
+        server_setup: &ServerSetup<CS, SK, OS>,
+        key_material: GenericArray<u8, <OprfGroup<CS> as Group>::ScalarLen>,
         message: RegistrationRequest<CS>,
-        credential_identifier: &[u8],
     ) -> Result<ServerRegistrationStartResult<CS>, ProtocolError> {
-        let oprf_key = oprf_key_from_seed::<CS>(&server_setup.oprf_seed, credential_identifier)?;
+        let oprf_key = oprf_key_from_key_material::<CS>(key_material)?;
 
         let server = voprf::OprfServer::new_with_key(&oprf_key)?;
         let evaluation_element = server.blind_evaluate(&message.blinded_element);
@@ -385,11 +468,27 @@ impl<CS: CipherSuite> ServerRegistration<CS> {
         Ok(ServerRegistrationStartResult {
             message: RegistrationResponse {
                 evaluation_element,
-                server_s_pk: server_setup.keypair.public().clone(),
+                server_s_pk: server_setup.keypair().public().clone(),
             },
             #[cfg(test)]
             oprf_key,
         })
+    }
+
+    /// From the client's "blinded" password, returns a response to be sent back
+    /// to the client, as well as a [`ServerRegistration`]
+    pub fn start<SK: Clone>(
+        server_setup: &ServerSetup<CS, SK>,
+        message: RegistrationRequest<CS>,
+        credential_identifier: &[u8],
+    ) -> Result<ServerRegistrationStartResult<CS>, ProtocolError> {
+        let KeyMaterialInfo {
+            ikm: oprf_seed,
+            info,
+        } = server_setup.key_material_info(credential_identifier);
+        let key_material = oprf_key_material::<CS>(&oprf_seed, &info)?;
+
+        Self::start_with_key_material(server_setup, key_material, message)
     }
 
     /// From the client's cryptographic identifiers, fully populates and returns
@@ -399,9 +498,9 @@ impl<CS: CipherSuite> ServerRegistration<CS> {
     }
 
     // Creates a dummy instance used for faking a [CredentialResponse]
-    pub(crate) fn dummy<R: RngCore + CryptoRng, S: Clone>(
+    pub(crate) fn dummy<R: RngCore + CryptoRng, SK: Clone, S: Clone>(
         rng: &mut R,
-        server_setup: &ServerSetup<CS, S>,
+        server_setup: &ServerSetup<CS, SK, S>,
     ) -> Self {
         Self(RegistrationUpload::dummy(rng, server_setup))
     }
@@ -598,20 +697,23 @@ impl<CS: CipherSuite> ServerLogin<CS> {
         })
     }
 
-    /// Create a [`ServerLoginBuilder`] to use with a remote private key.
+    /// Create a [`ServerLoginBuilder`] with a remote OPRF seed and private key.
+    /// To generate the `key_material` see
+    /// [`ServerSetup::key_material_info()`].
     ///
-    /// See [`ServerLogin::start()`] for the regular path.
-    pub fn builder<R: RngCore + CryptoRng, S: Clone>(
+    /// See [`ServerLogin::start()`] for the regular path. Or
+    /// [`ServerLogin::builder()`] with just a remote private key.
+    pub fn builder_with_key_material<R: RngCore + CryptoRng, SK: Clone, OS: Clone>(
         rng: &mut R,
-        server_setup: &ServerSetup<CS, S>,
+        server_setup: &ServerSetup<CS, SK, OS>,
+        key_material: GenericArray<u8, <OprfGroup<CS> as Group>::ScalarLen>,
         password_file: Option<ServerRegistration<CS>>,
         credential_request: CredentialRequest<CS>,
-        credential_identifier: &[u8],
         ServerLoginStartParameters {
             context,
             identifiers,
         }: ServerLoginStartParameters,
-    ) -> Result<ServerLoginBuilder<CS, S>, ProtocolError>
+    ) -> Result<ServerLoginBuilder<CS, SK>, ProtocolError>
     where
         // MaskedResponse: (Nonce + Hash) + KePk
         NonceLen: Add<OutputSize<OprfHash<CS>>>,
@@ -652,7 +754,7 @@ impl<CS: CipherSuite> ServerLogin<CS> {
         let credential_request_bytes =
             CredentialRequest::<CS>::serialize_iter(&blinded_element, &ke1_message);
 
-        let oprf_key = oprf_key_from_seed::<CS>(&server_setup.oprf_seed, credential_identifier)?;
+        let oprf_key = oprf_key_from_key_material::<CS>(key_material)?;
         let server = voprf::OprfServer::new_with_key(&oprf_key).map_err(ProtocolError::from)?;
         let evaluation_element = server.blind_evaluate(&credential_request.blinded_element);
 
@@ -682,8 +784,42 @@ impl<CS: CipherSuite> ServerLogin<CS> {
         })
     }
 
-    pub(crate) fn build<S: Clone>(
-        builder: ServerLoginBuilder<CS, S>,
+    /// Create a [`ServerLoginBuilder`] to use with a remote private key.
+    ///
+    /// See [`ServerLogin::start()`] for the regular path.
+    pub fn builder<R: RngCore + CryptoRng, SK: Clone>(
+        rng: &mut R,
+        server_setup: &ServerSetup<CS, SK>,
+        password_file: Option<ServerRegistration<CS>>,
+        credential_request: CredentialRequest<CS>,
+        credential_identifier: &[u8],
+        params: ServerLoginStartParameters,
+    ) -> Result<ServerLoginBuilder<CS, SK>, ProtocolError>
+    where
+        // MaskedResponse: (Nonce + Hash) + KePk
+        NonceLen: Add<OutputSize<OprfHash<CS>>>,
+        Sum<NonceLen, OutputSize<OprfHash<CS>>>:
+            ArrayLength<u8> + Add<<CS::KeGroup as KeGroup>::PkLen>,
+        MaskedResponseLen<CS>: ArrayLength<u8>,
+    {
+        let KeyMaterialInfo {
+            ikm: oprf_seed,
+            info,
+        } = server_setup.key_material_info(credential_identifier);
+        let key_material = oprf_key_material::<CS>(&oprf_seed, &info)?;
+
+        Self::builder_with_key_material(
+            rng,
+            server_setup,
+            key_material,
+            password_file,
+            credential_request,
+            params,
+        )
+    }
+
+    pub(crate) fn build<SK: Clone>(
+        builder: ServerLoginBuilder<CS, SK>,
         input: <CS::KeyExchange as KeyExchange<OprfHash<CS>, CS::KeGroup>>::KE2BuilderInput,
     ) -> Result<ServerLoginStartResult<CS>, ProtocolError> {
         let result = CS::KeyExchange::build_ke2(builder.ke2_builder.clone(), input)?;
@@ -966,23 +1102,26 @@ fn get_password_derived_key<CS: CipherSuite>(
     Ok(hkdf.finalize())
 }
 
-fn oprf_key_from_seed<CS: CipherSuite>(
+fn oprf_key_material<CS: CipherSuite>(
     oprf_seed: &Output<OprfHash<CS>>,
-    credential_identifier: &[u8],
-) -> Result<GenericArray<u8, <OprfGroup<CS> as Group>::ScalarLen>, ProtocolError> {
+    info: &[&[u8]],
+) -> Result<GenericArray<u8, <OprfGroup<CS> as Group>::ScalarLen>, InternalError> {
     let mut ikm = GenericArray::<_, <OprfGroup<CS> as Group>::ScalarLen>::default();
     Hkdf::<OprfHash<CS>>::from_prk(oprf_seed)
         .ok()
-        .and_then(|hkdf| {
-            hkdf.expand_multi_info(&[credential_identifier, STR_OPRF_KEY], &mut ikm)
-                .ok()
-        })
+        .and_then(|hkdf| hkdf.expand_multi_info(info, &mut ikm).ok())
         .ok_or(InternalError::HkdfError)?;
 
+    Ok(ikm)
+}
+
+fn oprf_key_from_key_material<CS: CipherSuite>(
+    input: GenericArray<u8, <OprfGroup<CS> as Group>::ScalarLen>,
+) -> Result<GenericArray<u8, <OprfGroup<CS> as Group>::ScalarLen>, InternalError> {
     Ok(OprfGroup::<CS>::serialize_scalar(voprf::derive_key::<
         CS::OprfCs,
     >(
-        ikm.as_slice(),
+        input.as_slice(),
         &GenericArray::from(*STR_OPAQUE_DERIVE_KEY_PAIR),
         voprf::Mode::Oprf,
     )?))
