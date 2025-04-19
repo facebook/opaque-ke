@@ -17,7 +17,7 @@ use crate::ciphersuite::{CipherSuite, OprfHash};
 use crate::errors::ProtocolError;
 use crate::hash::{Hash, ProxyHash};
 use crate::key_exchange::group::KeGroup;
-use crate::keypair::{PrivateKey, PublicKey, SecretKey};
+use crate::keypair::{PrivateKey, PublicKey};
 
 pub trait KeyExchange<D: Hash, G: KeGroup>
 where
@@ -28,6 +28,9 @@ where
     type KE1State: Deserialize + Serialize + ZeroizeOnDrop + Clone;
     type KE2State: Deserialize + Serialize + ZeroizeOnDrop + Clone;
     type KE1Message: Deserialize + Serialize + ZeroizeOnDrop + Clone;
+    type KE2Builder: ZeroizeOnDrop + Clone;
+    type KE2BuilderData<'a>;
+    type KE2BuilderInput;
     type KE2Message: Deserialize + Serialize + ZeroizeOnDrop + Clone;
     type KE3Message: Deserialize + Serialize + ZeroizeOnDrop + Clone;
 
@@ -36,25 +39,28 @@ where
     ) -> Result<(Self::KE1State, Self::KE1Message), ProtocolError>;
 
     #[allow(clippy::too_many_arguments)]
-    fn generate_ke2<
-        'a,
-        'b,
-        'c,
-        'd,
-        OprfCs: voprf::CipherSuite,
-        R: RngCore + CryptoRng,
-        S: SecretKey<G>,
-    >(
+    fn ke2_builder<'a, 'b, 'c, 'd, OprfCs: voprf::CipherSuite, R: RngCore + CryptoRng>(
         rng: &mut R,
-        l1_bytes: impl Iterator<Item = &'a [u8]>,
-        l2_bytes: impl Iterator<Item = &'b [u8]>,
+        serialized_credential_request: impl Iterator<Item = &'a [u8]>,
+        serialized_credential_response: impl Iterator<Item = &'b [u8]>,
         ke1_message: Self::KE1Message,
         client_s_pk: PublicKey<G>,
-        server_s_sk: S,
         id_u: impl Iterator<Item = &'c [u8]>,
         id_s: impl Iterator<Item = &'d [u8]>,
         context: &[u8],
-    ) -> Result<GenerateKe2Result<Self, D, G>, ProtocolError<S::Error>>;
+    ) -> Result<Self::KE2Builder, ProtocolError>;
+
+    fn ke2_builder_data(builder: &Self::KE2Builder) -> Self::KE2BuilderData<'_>;
+
+    fn generate_ke2_input(
+        builder: &Self::KE2Builder,
+        server_s_sk: &PrivateKey<G>,
+    ) -> Self::KE2BuilderInput;
+
+    fn build_ke2(
+        builder: Self::KE2Builder,
+        input: Self::KE2BuilderInput,
+    ) -> Result<GenerateKe2Result<Self, D, G>, ProtocolError>;
 
     #[allow(clippy::too_many_arguments)]
     fn generate_ke3<'a, 'b, 'c, 'd>(
