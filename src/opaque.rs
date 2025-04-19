@@ -71,7 +71,8 @@ pub struct ServerSetup<
 > {
     oprf_seed: Output<OprfHash<CS>>,
     keypair: KeyPair<CS::KeGroup, S>,
-    pub(crate) fake_keypair: KeyPair<CS::KeGroup>,
+    pub(crate) dummy_client_pk: PublicKey<CS::KeGroup>,
+    pub(crate) dummy_masking_key: Output<OprfHash<CS>>,
 }
 
 /// The state elements the client holds to register itself
@@ -164,8 +165,10 @@ impl<CS: CipherSuite> ServerSetup<CS, PrivateKey<CS::KeGroup>> {
 }
 
 /// Length of [`ServerSetup`] in bytes for serialization.
-pub type ServerSetupLen<CS: CipherSuite, S: SecretKey<CS::KeGroup>> =
-    Sum<Sum<OutputSize<OprfHash<CS>>, S::Len>, <CS::KeGroup as KeGroup>::SkLen>;
+pub type ServerSetupLen<CS: CipherSuite, S: SecretKey<CS::KeGroup>> = Sum<
+    Sum<Sum<OutputSize<OprfHash<CS>>, S::Len>, <CS::KeGroup as KeGroup>::PkLen>,
+    OutputSize<OprfHash<CS>>,
+>;
 
 impl<CS: CipherSuite, S: SecretKey<CS::KeGroup>> ServerSetup<CS, S> {
     /// Create [`ServerSetup`] with the given keypair
@@ -179,40 +182,57 @@ impl<CS: CipherSuite, S: SecretKey<CS::KeGroup>> ServerSetup<CS, S> {
     ) -> Self {
         let mut oprf_seed = GenericArray::default();
         rng.fill_bytes(&mut oprf_seed);
+        let mut dummy_masking_key = GenericArray::default();
+        rng.fill_bytes(&mut dummy_masking_key);
 
         Self {
             oprf_seed,
             keypair,
-            fake_keypair: KeyPair::<CS::KeGroup>::generate_random::<CS::OprfCs, _>(rng),
+            dummy_client_pk: KeyPair::<CS::KeGroup>::generate_random::<CS::OprfCs, _>(rng)
+                .public()
+                .clone(),
+            dummy_masking_key,
         }
     }
 
     /// Serialization into bytes
     pub fn serialize(&self) -> GenericArray<u8, ServerSetupLen<CS, S>>
     where
-        // ServerSetup: Hash + KeSk + KeSk
+        // ServerSetup: Hash + KeSk + KePk + Hash
         OutputSize<OprfHash<CS>>: Add<S::Len>,
         Sum<OutputSize<OprfHash<CS>>, S::Len>:
-            ArrayLength<u8> + Add<<CS::KeGroup as KeGroup>::SkLen>,
+            ArrayLength<u8> + Add<<CS::KeGroup as KeGroup>::PkLen>,
+        Sum<Sum<OutputSize<OprfHash<CS>>, S::Len>, <CS::KeGroup as KeGroup>::PkLen>:
+            ArrayLength<u8> + Add<OutputSize<OprfHash<CS>>>,
         ServerSetupLen<CS, S>: ArrayLength<u8>,
     {
         self.oprf_seed
             .clone()
             .concat(self.keypair.private().serialize())
-            .concat(self.fake_keypair.private().serialize())
+            .concat(self.dummy_client_pk.serialize())
+            .concat(self.dummy_masking_key.clone())
     }
 
     /// Deserialization from bytes
     pub fn deserialize(input: &[u8]) -> Result<Self, ProtocolError<S::Error>> {
         let seed_len = OutputSize::<OprfHash<CS>>::USIZE;
-        let key_len = <CS::KeGroup as KeGroup>::SkLen::USIZE;
-        let checked_slice = check_slice_size(input, seed_len + key_len + key_len, "server_setup")?;
+        let sk_len = <CS::KeGroup as KeGroup>::SkLen::USIZE;
+        let pk_len = <CS::KeGroup as KeGroup>::PkLen::USIZE;
+        let hash_len = OutputSize::<OprfHash<CS>>::USIZE;
+        let checked_slice =
+            check_slice_size(input, seed_len + sk_len + pk_len + hash_len, "server_setup")?;
 
         Ok(Self {
             oprf_seed: GenericArray::clone_from_slice(&checked_slice[..seed_len]),
-            keypair: KeyPair::from_private_key_slice(&checked_slice[seed_len..seed_len + key_len])?,
-            fake_keypair: KeyPair::from_private_key_slice(&checked_slice[seed_len + key_len..])
-                .map_err(ProtocolError::into_custom)?,
+            keypair: KeyPair::from_private_key_slice(&checked_slice[seed_len..seed_len + sk_len])?,
+            dummy_client_pk: PublicKey::deserialize(
+                &checked_slice[seed_len + sk_len..seed_len + sk_len + pk_len],
+            )
+            .map_err(ProtocolError::from)
+            .map_err(ProtocolError::into_custom)?,
+            dummy_masking_key: GenericArray::clone_from_slice(
+                &checked_slice[seed_len + sk_len + pk_len..],
+            ),
         })
     }
 
@@ -395,11 +415,8 @@ impl<CS: CipherSuite> ServerRegistration<CS> {
     }
 
     // Creates a dummy instance used for faking a [CredentialResponse]
-    pub(crate) fn dummy<R: RngCore + CryptoRng, S: SecretKey<CS::KeGroup>>(
-        rng: &mut R,
-        server_setup: &ServerSetup<CS, S>,
-    ) -> Self {
-        Self(RegistrationUpload::dummy(rng, server_setup))
+    pub(crate) fn dummy<S: SecretKey<CS::KeGroup>>(server_setup: &ServerSetup<CS, S>) -> Self {
+        Self(RegistrationUpload::dummy(server_setup))
     }
 }
 
@@ -616,7 +633,7 @@ impl<CS: CipherSuite> ServerLogin<CS> {
     {
         let record = match password_file {
             Some(x) => x,
-            None => ServerRegistration::dummy(rng, server_setup),
+            None => ServerRegistration::dummy(server_setup),
         };
 
         let client_s_pk = record.0.client_s_pk.clone();
