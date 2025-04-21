@@ -109,14 +109,12 @@ where
     feature = "serde",
     derive(serde::Deserialize, serde::Serialize),
     serde(bound(
-        deserialize = "D: serde::Deserialize<'de>, KeyPair<KG>: serde::Deserialize<'de>, \
-                       PublicKey<KG>: serde::Deserialize<'de>",
-        serialize = "D: serde::Serialize, KeyPair<KG>: serde::Serialize, PublicKey<KG>: \
-                     serde::Serialize",
+        deserialize = "D: serde::Deserialize<'de>,  PublicKey<KG>: serde::Deserialize<'de>",
+        serialize = "D: serde::Serialize,  PublicKey<KG>: serde::Serialize",
     ))
 )]
 #[derive_where(Clone)]
-#[derive_where(Debug, Eq, Hash, PartialEq; D, KeyPair<KG>, PublicKey<KG>)]
+#[derive_where(Debug, Eq, Hash, PartialEq; D, PublicKey<KG>)]
 pub struct Ke2Builder<D: Hash, KG: KeGroup>
 where
     D::Core: ProxyHash,
@@ -412,7 +410,6 @@ fn derive_3dh_keys<D: Hash, KG: KeGroup>(
     hashed_derivation_transcript: &[u8],
 ) -> Result<TripleDhDerivationResult<D>, ProtocolError>
 where
-    KG::Sk: DiffieHellman<KG>,
     D::Core: ProxyHash,
     <D::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
     Le<<D::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
