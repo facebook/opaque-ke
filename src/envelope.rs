@@ -19,11 +19,11 @@ use hmac::{Hmac, Mac};
 use rand::{CryptoRng, RngCore};
 use zeroize::{Zeroize, ZeroizeOnDrop};
 
-use crate::ciphersuite::{CipherSuite, OprfHash};
+use crate::ciphersuite::{CipherSuite, KeGroup, OprfHash};
 use crate::errors::utils::check_slice_size;
 use crate::errors::{InternalError, ProtocolError};
 use crate::hash::OutputSize;
-use crate::key_exchange::group::KeGroup;
+use crate::key_exchange::group::Group;
 use crate::keypair::{KeyPair, PrivateKey, PrivateKeySerialization, PublicKey};
 use crate::opaque::{bytestrings_from_identifiers, Identifiers};
 use crate::serialization::{Input, MacExt};
@@ -82,10 +82,10 @@ pub(crate) struct Envelope<CS: CipherSuite> {
 // which is technically unrelated to the envelope's encrypted and authenticated
 // contents.
 pub(crate) struct OpenedEnvelope<'a, CS: CipherSuite> {
-    pub(crate) client_static_keypair: KeyPair<CS::KeGroup>,
+    pub(crate) client_static_keypair: KeyPair<KeGroup<CS>>,
     pub(crate) export_key: Output<OprfHash<CS>>,
-    pub(crate) id_u: Input<'a, U2, <CS::KeGroup as KeGroup>::PkLen>,
-    pub(crate) id_s: Input<'a, U2, <CS::KeGroup as KeGroup>::PkLen>,
+    pub(crate) id_u: Input<'a, U2, <KeGroup<CS> as Group>::PkLen>,
+    pub(crate) id_s: Input<'a, U2, <KeGroup<CS> as Group>::PkLen>,
 }
 
 pub(crate) struct OpenedInnerEnvelope<CS: CipherSuite> {
@@ -97,11 +97,11 @@ type SealRawResult<CS: CipherSuite> = (Envelope<CS>, Output<OprfHash<CS>>);
 #[cfg(test)]
 type SealRawResult<CS: CipherSuite> = (Envelope<CS>, Output<OprfHash<CS>>, Output<OprfHash<CS>>);
 #[cfg(not(test))]
-type SealResult<CS: CipherSuite> = (Envelope<CS>, PublicKey<CS::KeGroup>, Output<OprfHash<CS>>);
+type SealResult<CS: CipherSuite> = (Envelope<CS>, PublicKey<KeGroup<CS>>, Output<OprfHash<CS>>);
 #[cfg(test)]
 type SealResult<CS: CipherSuite> = (
     Envelope<CS>,
-    PublicKey<CS::KeGroup>,
+    PublicKey<KeGroup<CS>>,
     Output<OprfHash<CS>>,
     Output<OprfHash<CS>>,
 );
@@ -113,7 +113,7 @@ impl<CS: CipherSuite> Envelope<CS> {
     pub(crate) fn seal<R: RngCore + CryptoRng>(
         rng: &mut R,
         randomized_pwd_hasher: Hkdf<OprfHash<CS>>,
-        server_s_pk: &PublicKey<CS::KeGroup>,
+        server_s_pk: &PublicKey<KeGroup<CS>>,
         ids: Identifiers,
     ) -> Result<SealResult<CS>, ProtocolError> {
         let mut nonce = GenericArray::default();
@@ -125,7 +125,7 @@ impl<CS: CipherSuite> Envelope<CS> {
         );
 
         let server_s_pk_bytes = server_s_pk.serialize();
-        let (id_u, id_s) = bytestrings_from_identifiers::<CS::KeGroup>(
+        let (id_u, id_s) = bytestrings_from_identifiers::<KeGroup<CS>>(
             ids,
             client_s_pk.serialize(),
             server_s_pk_bytes.clone(),
@@ -183,7 +183,7 @@ impl<CS: CipherSuite> Envelope<CS> {
     pub(crate) fn open<'a>(
         &self,
         randomized_pwd_hasher: Hkdf<OprfHash<CS>>,
-        server_s_pk: PublicKey<CS::KeGroup>,
+        server_s_pk: PublicKey<KeGroup<CS>>,
         optional_ids: Identifiers<'a>,
     ) -> Result<OpenedEnvelope<'a, CS>, ProtocolError> {
         let client_static_keypair = match self.mode {
@@ -196,7 +196,7 @@ impl<CS: CipherSuite> Envelope<CS> {
         };
 
         let server_s_pk_bytes = server_s_pk.serialize();
-        let (id_u, id_s) = bytestrings_from_identifiers::<CS::KeGroup>(
+        let (id_u, id_s) = bytestrings_from_identifiers::<KeGroup<CS>>(
             optional_ids,
             client_static_keypair.public().serialize(),
             server_s_pk_bytes.clone(),
@@ -297,14 +297,14 @@ impl<CS: CipherSuite> Envelope<CS> {
 fn build_inner_envelope_internal<CS: CipherSuite>(
     randomized_pwd_hasher: Hkdf<OprfHash<CS>>,
     nonce: GenericArray<u8, NonceLen>,
-) -> Result<PublicKey<CS::KeGroup>, ProtocolError> {
-    let mut keypair_seed = GenericArray::<_, <CS::KeGroup as KeGroup>::SkLen>::default();
+) -> Result<PublicKey<KeGroup<CS>>, ProtocolError> {
+    let mut keypair_seed = GenericArray::<_, <KeGroup<CS> as Group>::SkLen>::default();
     randomized_pwd_hasher
         .expand(&nonce.concat(STR_PRIVATE_KEY.into()), &mut keypair_seed)
         .map_err(|_| InternalError::HkdfError)?;
     let client_static_keypair =
-        PrivateKey::<CS::KeGroup>::deserialize_key_pair(&CS::KeGroup::serialize_sk(
-            CS::KeGroup::derive_auth_keypair::<CS::OprfCs>(keypair_seed)?,
+        PrivateKey::<KeGroup<CS>>::deserialize_key_pair(&KeGroup::<CS>::serialize_sk(
+            KeGroup::<CS>::derive_auth_keypair::<CS::OprfCs>(keypair_seed)?,
         ))?;
 
     Ok(client_static_keypair.public().clone())
@@ -313,14 +313,14 @@ fn build_inner_envelope_internal<CS: CipherSuite>(
 fn recover_keys_internal<CS: CipherSuite>(
     randomized_pwd_hasher: Hkdf<OprfHash<CS>>,
     nonce: GenericArray<u8, NonceLen>,
-) -> Result<KeyPair<CS::KeGroup>, ProtocolError> {
-    let mut keypair_seed = GenericArray::<_, <CS::KeGroup as KeGroup>::SkLen>::default();
+) -> Result<KeyPair<KeGroup<CS>>, ProtocolError> {
+    let mut keypair_seed = GenericArray::<_, <KeGroup<CS> as Group>::SkLen>::default();
     randomized_pwd_hasher
         .expand(&nonce.concat(STR_PRIVATE_KEY.into()), &mut keypair_seed)
         .map_err(|_| InternalError::HkdfError)?;
     let client_static_keypair =
-        PrivateKey::<CS::KeGroup>::deserialize_key_pair(&CS::KeGroup::serialize_sk(
-            CS::KeGroup::derive_auth_keypair::<CS::OprfCs>(keypair_seed)?,
+        PrivateKey::<KeGroup<CS>>::deserialize_key_pair(&KeGroup::<CS>::serialize_sk(
+            KeGroup::<CS>::derive_auth_keypair::<CS::OprfCs>(keypair_seed)?,
         ))?;
 
     Ok(client_static_keypair)

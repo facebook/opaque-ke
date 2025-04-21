@@ -19,7 +19,7 @@ use rand::{CryptoRng, RngCore};
 use subtle::ConstantTimeEq;
 use zeroize::Zeroize;
 
-use super::KeGroup;
+use super::Group;
 use crate::errors::{InternalError, ProtocolError};
 use crate::key_exchange::tripledh::DiffieHellman;
 
@@ -27,7 +27,7 @@ use crate::key_exchange::tripledh::DiffieHellman;
 pub struct Curve25519;
 
 /// The implementation of such a subgroup for Curve25519
-impl KeGroup for Curve25519 {
+impl Group for Curve25519 {
     type Pk = MontgomeryPoint;
     type PkLen = U32;
     type Sk = Scalar;

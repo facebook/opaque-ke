@@ -31,13 +31,15 @@ use p256::NistP256;
 use p384::NistP384;
 use p521::NistP521;
 use rand::rngs::OsRng;
+use sha2::{Sha256, Sha384, Sha512};
 use subtle::{Choice, ConditionallySelectable, ConstantTimeEq};
 
-use crate::ciphersuite::{OprfGroup, OprfHash};
+use crate::ciphersuite::{KeGroup, OprfGroup, OprfHash};
 use crate::envelope::NonceLen;
 use crate::hash::OutputSize;
-use crate::key_exchange::group::KeGroup;
-use crate::key_exchange::tripledh::{DiffieHellman, TripleDh};
+use crate::key_exchange::group::Group;
+use crate::key_exchange::traits::{KeyExchange, Serialize};
+use crate::key_exchange::tripledh::TripleDh;
 use crate::keypair::{KeyPair, PublicKey};
 use crate::ksf::Identity;
 use crate::opaque::MaskedResponseLen;
@@ -56,8 +58,7 @@ fn p256() {
 
     impl CipherSuite for Suite {
         type OprfCs = NistP256;
-        type KeGroup = NistP256;
-        type KeyExchange = TripleDh;
+        type KeyExchange = TripleDh<NistP256, Sha256>;
         type Ksf = Identity;
     }
 
@@ -74,8 +75,7 @@ fn p384() {
 
     impl CipherSuite for Suite {
         type OprfCs = NistP384;
-        type KeGroup = NistP384;
-        type KeyExchange = TripleDh;
+        type KeyExchange = TripleDh<NistP384, Sha384>;
         type Ksf = Identity;
     }
 
@@ -92,8 +92,7 @@ fn p521() {
 
     impl CipherSuite for Suite {
         type OprfCs = NistP521;
-        type KeGroup = NistP521;
-        type KeyExchange = TripleDh;
+        type KeyExchange = TripleDh<NistP521, Sha512>;
         type Ksf = Identity;
     }
 
@@ -111,8 +110,7 @@ fn curve25519() {
 
     impl CipherSuite for Suite {
         type OprfCs = Ristretto255;
-        type KeGroup = Curve25519;
-        type KeyExchange = TripleDh;
+        type KeyExchange = TripleDh<Curve25519, Sha512>;
         type Ksf = Identity;
     }
 
@@ -128,41 +126,21 @@ fn curve25519() {
 #[derive(Clone)]
 struct RemoteKey(ObjectHandle);
 
-trait Pkcs11DiffieHellman<KG: KeGroup> {
-    fn pkcs11_diffie_hellman(
+trait Pkcs11KeyExchange<KE: KeyExchange> {
+    fn pkcs11_key_exchange(
         &self,
-        server_pk: &PublicKey<KG>,
-        client_pk: &PublicKey<KG>,
-    ) -> GenericArray<u8, KG::PkLen>;
+        server_pk: &PublicKey<KE::Group>,
+        input: KE::KE2BuilderData<'_>,
+    ) -> KE::KE2BuilderInput;
 }
 
-fn test<CS: CipherSuite<KeyExchange = TripleDh>>(
-    dh_mechanism: Mechanism,
-    oid: ObjectIdentifier,
-    hmac_mechanism: Mechanism,
-) where
-    RemoteKey: Pkcs11DiffieHellman<CS::KeGroup>,
-    <CS::KeGroup as KeGroup>::Sk: DiffieHellman<CS::KeGroup>,
+fn test<CS: CipherSuite>(dh_mechanism: Mechanism, oid: ObjectIdentifier, hmac_mechanism: Mechanism)
+where
+    RemoteKey: Pkcs11KeyExchange<CS::KeyExchange>,
     // MaskedResponse: (Nonce + Hash) + KePk
     NonceLen: Add<OutputSize<OprfHash<CS>>>,
-    Sum<NonceLen, OutputSize<OprfHash<CS>>>: ArrayLength<u8> + Add<<CS::KeGroup as KeGroup>::PkLen>,
+    Sum<NonceLen, OutputSize<OprfHash<CS>>>: ArrayLength<u8> + Add<<KeGroup<CS> as Group>::PkLen>,
     MaskedResponseLen<CS>: ArrayLength<u8>,
-    // Ke1State: KeSk + Nonce
-    <CS::KeGroup as KeGroup>::SkLen: Add<NonceLen>,
-    Sum<<CS::KeGroup as KeGroup>::SkLen, NonceLen>: ArrayLength<u8>,
-    // Ke1Message: Nonce + KePk
-    NonceLen: Add<<CS::KeGroup as KeGroup>::PkLen>,
-    Sum<NonceLen, <CS::KeGroup as KeGroup>::PkLen>: ArrayLength<u8>,
-    // Ke2State: (Hash + Hash) + Hash
-    OutputSize<OprfHash<CS>>: Add<OutputSize<OprfHash<CS>>>,
-    Sum<OutputSize<OprfHash<CS>>, OutputSize<OprfHash<CS>>>:
-        ArrayLength<u8> + Add<OutputSize<OprfHash<CS>>>,
-    Sum<Sum<OutputSize<OprfHash<CS>>, OutputSize<OprfHash<CS>>>, OutputSize<OprfHash<CS>>>:
-        ArrayLength<u8>,
-    // Ke2Message: (Nonce + KePk) + Hash
-    NonceLen: Add<<CS::KeGroup as KeGroup>::PkLen>,
-    Sum<NonceLen, <CS::KeGroup as KeGroup>::PkLen>: ArrayLength<u8> + Add<OutputSize<OprfHash<CS>>>,
-    Sum<Sum<NonceLen, <CS::KeGroup as KeGroup>::PkLen>, OutputSize<OprfHash<CS>>>: ArrayLength<u8>,
 {
     let (remote_key, pk) = pkcs11_generate_key_pair(dh_mechanism, oid);
 
@@ -217,7 +195,7 @@ fn test<CS: CipherSuite<KeyExchange = TripleDh>>(
     .unwrap();
     let shared_secret = builder
         .private_key()
-        .pkcs11_diffie_hellman(server_setup.keypair().public(), builder.data());
+        .pkcs11_key_exchange(server_setup.keypair().public(), builder.data());
 
     let ServerLoginStartResult {
         message,
@@ -263,7 +241,7 @@ static SESSION: LazyLock<Mutex<Session>> = LazyLock::new(|| {
     Mutex::new(session)
 });
 
-fn pkcs11_generate_key_pair<KG: KeGroup>(
+fn pkcs11_generate_key_pair<KG: Group>(
     mechanism: Mechanism,
     oid: ObjectIdentifier,
 ) -> (ObjectHandle, PublicKey<KG>) {
@@ -342,43 +320,43 @@ fn pkcs11_hkdf<CS: CipherSuite>(
     okm
 }
 
-impl Pkcs11DiffieHellman<NistP256> for RemoteKey {
-    fn pkcs11_diffie_hellman(
+impl Pkcs11KeyExchange<TripleDh<NistP256, Sha256>> for RemoteKey {
+    fn pkcs11_key_exchange(
         &self,
         server_pk: &PublicKey<NistP256>,
         client_pk: &PublicKey<NistP256>,
-    ) -> GenericArray<u8, <NistP256 as KeGroup>::PkLen> {
+    ) -> GenericArray<u8, <NistP256 as Group>::PkLen> {
         ec_pkcs_11_derive_secret::<NistP256>(self.0, server_pk, client_pk)
     }
 }
 
-impl Pkcs11DiffieHellman<NistP384> for RemoteKey {
-    fn pkcs11_diffie_hellman(
+impl Pkcs11KeyExchange<TripleDh<NistP384, Sha384>> for RemoteKey {
+    fn pkcs11_key_exchange(
         &self,
         server_pk: &PublicKey<NistP384>,
         client_pk: &PublicKey<NistP384>,
-    ) -> GenericArray<u8, <NistP384 as KeGroup>::PkLen> {
+    ) -> GenericArray<u8, <NistP384 as Group>::PkLen> {
         ec_pkcs_11_derive_secret::<NistP384>(self.0, server_pk, client_pk)
     }
 }
 
-impl Pkcs11DiffieHellman<NistP521> for RemoteKey {
-    fn pkcs11_diffie_hellman(
+impl Pkcs11KeyExchange<TripleDh<NistP521, Sha512>> for RemoteKey {
+    fn pkcs11_key_exchange(
         &self,
         server_pk: &PublicKey<NistP521>,
         client_pk: &PublicKey<NistP521>,
-    ) -> GenericArray<u8, <NistP521 as KeGroup>::PkLen> {
+    ) -> GenericArray<u8, <NistP521 as Group>::PkLen> {
         ec_pkcs_11_derive_secret::<NistP521>(self.0, server_pk, client_pk)
     }
 }
 
 #[cfg(all(feature = "curve25519", feature = "ristretto255"))]
-impl Pkcs11DiffieHellman<Curve25519> for RemoteKey {
-    fn pkcs11_diffie_hellman(
+impl Pkcs11KeyExchange<TripleDh<Curve25519, Sha512>> for RemoteKey {
+    fn pkcs11_key_exchange(
         &self,
         _: &PublicKey<Curve25519>,
         pk: &PublicKey<Curve25519>,
-    ) -> GenericArray<u8, <Curve25519 as KeGroup>::PkLen> {
+    ) -> GenericArray<u8, <Curve25519 as Group>::PkLen> {
         let shared_secret = pkcs11_derive_secret(self.0, &pk.serialize());
 
         GenericArray::clone_from_slice(&shared_secret)
@@ -417,9 +395,9 @@ fn ec_pkcs_11_derive_secret<KG>(
     server_sk: ObjectHandle,
     server_pk: &PublicKey<KG>,
     client_pk: &PublicKey<KG>,
-) -> GenericArray<u8, <KG as KeGroup>::PkLen>
+) -> GenericArray<u8, <KG as Group>::PkLen>
 where
-    KG: KeGroup<Pk = ProjectivePoint<KG>> + CurveArithmetic,
+    KG: Group<Pk = ProjectivePoint<KG>> + CurveArithmetic,
     AffinePoint<KG>: DecompressPoint<KG> + ToEncodedPoint<KG>,
     FieldBytesSize<KG>: ModulusSize,
 {

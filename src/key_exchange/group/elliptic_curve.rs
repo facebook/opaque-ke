@@ -12,17 +12,17 @@ use elliptic_curve::group::cofactor::CofactorGroup;
 use elliptic_curve::hash2curve::{ExpandMsgXmd, FromOkm, GroupDigest};
 use elliptic_curve::sec1::{FromEncodedPoint, ModulusSize, ToEncodedPoint};
 use elliptic_curve::{
-    AffinePoint, Field, FieldBytesSize, Group, ProjectivePoint, PublicKey, Scalar, SecretKey,
+    AffinePoint, Field, FieldBytesSize, Group as _, ProjectivePoint, PublicKey, Scalar, SecretKey,
 };
 use generic_array::typenum::{IsLess, IsLessOrEqual, U256};
 use generic_array::GenericArray;
 use rand::{CryptoRng, RngCore};
 
-use super::KeGroup;
+use super::Group;
 use crate::errors::{InternalError, ProtocolError};
 use crate::key_exchange::tripledh::DiffieHellman;
 
-impl<G> KeGroup for G
+impl<G> Group for G
 where
     G: GroupDigest,
     FieldBytesSize<Self>: ModulusSize,

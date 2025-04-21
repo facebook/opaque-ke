@@ -14,7 +14,6 @@ use digest::OutputSizeUser;
 use generic_array::typenum::{IsLess, IsLessOrEqual, Le, NonZero, U256};
 
 use crate::hash::{Hash, ProxyHash};
-use crate::key_exchange::group::KeGroup;
 use crate::key_exchange::traits::KeyExchange;
 use crate::ksf::Ksf;
 
@@ -35,13 +34,15 @@ where
 {
     /// A VOPRF ciphersuite, see [`voprf::CipherSuite`].
     type OprfCs: voprf::CipherSuite;
-    /// A `Group` used for the `KeyExchange`.
-    type KeGroup: 'static + KeGroup;
     /// A key exchange protocol
-    type KeyExchange: KeyExchange<OprfHash<Self>, Self::KeGroup>;
+    type KeyExchange: KeyExchange;
     /// A key stretching function, typically used for password hashing
     type Ksf: Ksf;
 }
 
 pub(crate) type OprfGroup<CS: CipherSuite> = <CS::OprfCs as voprf::CipherSuite>::Group;
 pub(crate) type OprfHash<CS: CipherSuite> = <CS::OprfCs as voprf::CipherSuite>::Hash;
+/// Type alias for the [`KeyExchange`](CipherSuite::KeyExchange)
+/// [`Group`](crate::key_exchange::group::Group).
+pub type KeGroup<CS: CipherSuite> = <CS::KeyExchange as KeyExchange>::Group;
+pub(crate) type KeHash<CS: CipherSuite> = <CS::KeyExchange as KeyExchange>::Hash;

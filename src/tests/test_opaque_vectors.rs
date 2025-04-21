@@ -16,14 +16,15 @@ use generic_array::{ArrayLength, GenericArray};
 use rand::rngs::OsRng;
 use rand::RngCore;
 use serde_json::Value;
-use voprf::Group;
 
-use crate::ciphersuite::{CipherSuite, OprfGroup, OprfHash};
+use crate::ciphersuite::{CipherSuite, KeGroup, OprfGroup, OprfHash};
 use crate::envelope::EnvelopeLen;
 use crate::errors::*;
 use crate::hash::OutputSize;
-use crate::key_exchange::group::KeGroup;
-use crate::key_exchange::traits::{Ke1MessageLen, Ke2MessageLen};
+use crate::key_exchange::group::Group;
+use crate::key_exchange::traits::{
+    Deserialize, Ke1MessageLen, Ke2MessageLen, KeyExchange, Serialize,
+};
 use crate::key_exchange::tripledh::{NonceLen, TripleDh};
 use crate::ksf::Identity;
 use crate::messages::{
@@ -99,7 +100,7 @@ fn populate_test_vectors<CS: CipherSuite>(values: &Value) -> OpaqueTestVectorPar
         dummy_private_key: {
             match decode(values, "client_private_key") {
                 Some(value) => value,
-                None => CS::KeGroup::serialize_sk(CS::KeGroup::random_sk(&mut OsRng)).to_vec(),
+                None => KeGroup::<CS>::serialize_sk(KeGroup::<CS>::random_sk(&mut OsRng)).to_vec(),
             }
         },
         dummy_masking_key: {
@@ -153,8 +154,8 @@ where
     NonceLen: Add<OutputSize<OprfHash<CS>>>,
     EnvelopeLen<CS>: ArrayLength<u8>,
     // RegistrationUpload: (KePk + Hash) + Envelope
-    <CS::KeGroup as KeGroup>::PkLen: Add<OutputSize<OprfHash<CS>>>,
-    Sum<<CS::KeGroup as KeGroup>::PkLen, OutputSize<OprfHash<CS>>>:
+    <KeGroup<CS> as Group>::PkLen: Add<OutputSize<OprfHash<CS>>>,
+    Sum<<KeGroup<CS> as Group>::PkLen, OutputSize<OprfHash<CS>>>:
         ArrayLength<u8> + Add<EnvelopeLen<CS>>,
     RegistrationUploadLen<CS>: ArrayLength<u8>,
     // ServerRegistration = RegistrationUpload
@@ -194,8 +195,7 @@ fn tests() -> Result<(), ProtocolError> {
         struct Ristretto255Sha512NoKsf;
         impl CipherSuite for Ristretto255Sha512NoKsf {
             type OprfCs = crate::Ristretto255;
-            type KeGroup = crate::Ristretto255;
-            type KeyExchange = TripleDh;
+            type KeyExchange = TripleDh<crate::Ristretto255, sha2::Sha512>;
             type Ksf = Identity;
         }
 
@@ -233,8 +233,7 @@ fn tests() -> Result<(), ProtocolError> {
         struct Ristretto255Sha512Curve25519NoKsf;
         impl CipherSuite for Ristretto255Sha512Curve25519NoKsf {
             type OprfCs = crate::Ristretto255;
-            type KeGroup = crate::Curve25519;
-            type KeyExchange = TripleDh;
+            type KeyExchange = TripleDh<crate::Curve25519, sha2::Sha512>;
             type Ksf = Identity;
         }
 
@@ -270,8 +269,7 @@ fn tests() -> Result<(), ProtocolError> {
     struct P256Sha256NoKsf;
     impl CipherSuite for P256Sha256NoKsf {
         type OprfCs = p256::NistP256;
-        type KeGroup = p256::NistP256;
-        type KeyExchange = TripleDh;
+        type KeyExchange = TripleDh<p256::NistP256, sha2::Sha256>;
         type Ksf = Identity;
     }
 
@@ -325,7 +323,7 @@ fn test_registration_response<CS: CipherSuite>(
 ) -> Result<(), ProtocolError>
 where
     // RegistrationResponse: KgPk + KePk
-    <OprfGroup<CS> as Group>::ElemLen: Add<<CS::KeGroup as KeGroup>::PkLen>,
+    <OprfGroup<CS> as voprf::Group>::ElemLen: Add<<KeGroup<CS> as Group>::PkLen>,
     RegistrationResponseLen<CS>: ArrayLength<u8>,
 {
     for parameters in tvs {
@@ -366,8 +364,8 @@ where
     NonceLen: Add<OutputSize<OprfHash<CS>>>,
     EnvelopeLen<CS>: ArrayLength<u8>,
     // RegistrationUpload: (KePk + Hash) + Envelope
-    <CS::KeGroup as KeGroup>::PkLen: Add<OutputSize<OprfHash<CS>>>,
-    Sum<<CS::KeGroup as KeGroup>::PkLen, OutputSize<OprfHash<CS>>>:
+    <KeGroup<CS> as Group>::PkLen: Add<OutputSize<OprfHash<CS>>>,
+    Sum<<KeGroup<CS> as Group>::PkLen, OutputSize<OprfHash<CS>>>:
         ArrayLength<u8> + Add<EnvelopeLen<CS>>,
     RegistrationUploadLen<CS>: ArrayLength<u8>,
 {
@@ -413,7 +411,8 @@ where
 fn test_ke1<CS: CipherSuite>(tvs: &[OpaqueTestVectorParameters]) -> Result<(), ProtocolError>
 where
     // CredentialRequest: KgPk + Ke1Message
-    <OprfGroup<CS> as Group>::ElemLen: Add<Ke1MessageLen<CS>>,
+    <CS::KeyExchange as KeyExchange>::KE1Message: Serialize,
+    <OprfGroup<CS> as voprf::Group>::ElemLen: Add<Ke1MessageLen<CS>>,
     CredentialRequestLen<CS>: ArrayLength<u8>,
 {
     for parameters in tvs {
@@ -437,28 +436,31 @@ where
 
 fn test_ke2<CS: CipherSuite>(tvs: &[OpaqueTestVectorParameters]) -> Result<(), ProtocolError>
 where
+    <CS::KeyExchange as KeyExchange>::KE1Message: Deserialize,
     // Envelope: Nonce + Hash
     NonceLen: Add<OutputSize<OprfHash<CS>>>,
     EnvelopeLen<CS>: ArrayLength<u8>,
     // RegistrationUpload: (KePk + Hash) + Envelope
-    <CS::KeGroup as KeGroup>::PkLen: Add<OutputSize<OprfHash<CS>>>,
-    Sum<<CS::KeGroup as KeGroup>::PkLen, OutputSize<OprfHash<CS>>>:
+    <KeGroup<CS> as Group>::PkLen: Add<OutputSize<OprfHash<CS>>>,
+    Sum<<KeGroup<CS> as Group>::PkLen, OutputSize<OprfHash<CS>>>:
         ArrayLength<u8> + Add<EnvelopeLen<CS>>,
     RegistrationUploadLen<CS>: ArrayLength<u8>,
     // ServerRegistration = RegistrationUpload
     // MaskedResponse: (Nonce + Hash) + KePk
     NonceLen: Add<OutputSize<OprfHash<CS>>>,
-    Sum<NonceLen, OutputSize<OprfHash<CS>>>: ArrayLength<u8> + Add<<CS::KeGroup as KeGroup>::PkLen>,
+    Sum<NonceLen, OutputSize<OprfHash<CS>>>: ArrayLength<u8> + Add<<KeGroup<CS> as Group>::PkLen>,
     MaskedResponseLen<CS>: ArrayLength<u8>,
     // CredentialResponseWithoutKeLen: (KgPk + Nonce) + MaskedResponse
-    <OprfGroup<CS> as Group>::ElemLen: Add<NonceLen>,
-    Sum<<OprfGroup<CS> as Group>::ElemLen, NonceLen>: ArrayLength<u8> + Add<MaskedResponseLen<CS>>,
+    <OprfGroup<CS> as voprf::Group>::ElemLen: Add<NonceLen>,
+    Sum<<OprfGroup<CS> as voprf::Group>::ElemLen, NonceLen>:
+        ArrayLength<u8> + Add<MaskedResponseLen<CS>>,
     CredentialResponseWithoutKeLen<CS>: ArrayLength<u8>,
     // MaskedResponse: (Nonce + Hash) + KePk
     NonceLen: Add<OutputSize<OprfHash<CS>>>,
-    Sum<NonceLen, OutputSize<OprfHash<CS>>>: ArrayLength<u8> + Add<<CS::KeGroup as KeGroup>::PkLen>,
+    Sum<NonceLen, OutputSize<OprfHash<CS>>>: ArrayLength<u8> + Add<<KeGroup<CS> as Group>::PkLen>,
     MaskedResponseLen<CS>: ArrayLength<u8>,
     // CredentialResponse: CredentialResponseWithoutKeLen + Ke2Message
+    <CS::KeyExchange as KeyExchange>::KE2Message: Serialize,
     CredentialResponseWithoutKeLen<CS>: Add<Ke2MessageLen<CS>>,
     CredentialResponseLen<CS>: ArrayLength<u8>,
 {
@@ -520,9 +522,11 @@ where
 
 fn test_ke3<CS: CipherSuite>(tvs: &[OpaqueTestVectorParameters]) -> Result<(), ProtocolError>
 where
+    <CS::KeyExchange as KeyExchange>::KE2Message: Deserialize + Serialize,
+    <CS::KeyExchange as KeyExchange>::KE3Message: Serialize,
     // MaskedResponse: (Nonce + Hash) + KePk
     NonceLen: Add<OutputSize<OprfHash<CS>>>,
-    Sum<NonceLen, OutputSize<OprfHash<CS>>>: ArrayLength<u8> + Add<<CS::KeGroup as KeGroup>::PkLen>,
+    Sum<NonceLen, OutputSize<OprfHash<CS>>>: ArrayLength<u8> + Add<<KeGroup<CS> as Group>::PkLen>,
     MaskedResponseLen<CS>: ArrayLength<u8>,
 {
     for parameters in tvs {
@@ -577,18 +581,20 @@ fn test_server_login_finish<CS: CipherSuite>(
     tvs: &[OpaqueTestVectorParameters],
 ) -> Result<(), ProtocolError>
 where
+    <CS::KeyExchange as KeyExchange>::KE1Message: Deserialize,
+    <CS::KeyExchange as KeyExchange>::KE3Message: Deserialize,
     // Envelope: Nonce + Hash
     NonceLen: Add<OutputSize<OprfHash<CS>>>,
     EnvelopeLen<CS>: ArrayLength<u8>,
     // RegistrationUpload: (KePk + Hash) + Envelope
-    <CS::KeGroup as KeGroup>::PkLen: Add<OutputSize<OprfHash<CS>>>,
-    Sum<<CS::KeGroup as KeGroup>::PkLen, OutputSize<OprfHash<CS>>>:
+    <KeGroup<CS> as Group>::PkLen: Add<OutputSize<OprfHash<CS>>>,
+    Sum<<KeGroup<CS> as Group>::PkLen, OutputSize<OprfHash<CS>>>:
         ArrayLength<u8> + Add<EnvelopeLen<CS>>,
     RegistrationUploadLen<CS>: ArrayLength<u8>,
     // ServerRegistration = RegistrationUpload
     // MaskedResponse: (Nonce + Hash) + KePk
     NonceLen: Add<OutputSize<OprfHash<CS>>>,
-    Sum<NonceLen, OutputSize<OprfHash<CS>>>: ArrayLength<u8> + Add<<CS::KeGroup as KeGroup>::PkLen>,
+    Sum<NonceLen, OutputSize<OprfHash<CS>>>: ArrayLength<u8> + Add<<KeGroup<CS> as Group>::PkLen>,
     MaskedResponseLen<CS>: ArrayLength<u8>,
 {
     for parameters in tvs {
@@ -644,15 +650,18 @@ fn test_fake_vectors<CS: CipherSuite>(
     tvs: &[OpaqueTestVectorParameters],
 ) -> Result<(), ProtocolError>
 where
+    <CS::KeyExchange as KeyExchange>::KE1Message: Deserialize,
     // MaskedResponse: (Nonce + Hash) + KePk
     NonceLen: Add<OutputSize<OprfHash<CS>>>,
-    Sum<NonceLen, OutputSize<OprfHash<CS>>>: ArrayLength<u8> + Add<<CS::KeGroup as KeGroup>::PkLen>,
+    Sum<NonceLen, OutputSize<OprfHash<CS>>>: ArrayLength<u8> + Add<<KeGroup<CS> as Group>::PkLen>,
     MaskedResponseLen<CS>: ArrayLength<u8>,
     // CredentialResponseWithoutKeLen: (KgPk + Nonce) + MaskedResponse
-    <OprfGroup<CS> as Group>::ElemLen: Add<NonceLen>,
-    Sum<<OprfGroup<CS> as Group>::ElemLen, NonceLen>: ArrayLength<u8> + Add<MaskedResponseLen<CS>>,
+    <OprfGroup<CS> as voprf::Group>::ElemLen: Add<NonceLen>,
+    Sum<<OprfGroup<CS> as voprf::Group>::ElemLen, NonceLen>:
+        ArrayLength<u8> + Add<MaskedResponseLen<CS>>,
     CredentialResponseWithoutKeLen<CS>: ArrayLength<u8>,
     // CredentialResponse: CredentialResponseWithoutKeLen + Ke2Message
+    <CS::KeyExchange as KeyExchange>::KE2Message: Serialize,
     CredentialResponseWithoutKeLen<CS>: Add<Ke2MessageLen<CS>>,
     CredentialResponseLen<CS>: ArrayLength<u8>,
 {

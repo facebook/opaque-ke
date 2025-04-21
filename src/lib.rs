@@ -35,8 +35,7 @@
 //! struct Default;
 //! impl CipherSuite for Default {
 //!     type OprfCs = opaque_ke::Ristretto255;
-//!     type KeGroup = opaque_ke::Ristretto255;
-//!     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDh;
+//!     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDh<opaque_ke::Ristretto255, sha2::Sha256>;
 //!     type Ksf = opaque_ke::ksf::Identity;
 //! }
 //! ```
@@ -60,15 +59,13 @@
 //! # #[cfg(feature = "ristretto255")]
 //! # impl CipherSuite for Default {
 //! #     type OprfCs = opaque_ke::Ristretto255;
-//! #     type KeGroup = opaque_ke::Ristretto255;
-//! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDh;
+//! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDh<opaque_ke::Ristretto255, sha2::Sha512>;
 //! #     type Ksf = opaque_ke::ksf::Identity;
 //! # }
 //! # #[cfg(not(feature = "ristretto255"))]
 //! # impl CipherSuite for Default {
 //! #     type OprfCs = p256::NistP256;
-//! #     type KeGroup = p256::NistP256;
-//! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDh;
+//! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDh<p256::NistP256, sha2::Sha256>;
 //! #     type Ksf = opaque_ke::ksf::Identity;
 //! # }
 //! use rand::rngs::OsRng;
@@ -117,15 +114,13 @@
 //! # #[cfg(feature = "ristretto255")]
 //! # impl CipherSuite for Default {
 //! #     type OprfCs = opaque_ke::Ristretto255;
-//! #     type KeGroup = opaque_ke::Ristretto255;
-//! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDh;
+//! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDh<opaque_ke::Ristretto255, sha2::Sha512>;
 //! #     type Ksf = opaque_ke::ksf::Identity;
 //! # }
 //! # #[cfg(not(feature = "ristretto255"))]
 //! # impl CipherSuite for Default {
 //! #     type OprfCs = p256::NistP256;
-//! #     type KeGroup = p256::NistP256;
-//! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDh;
+//! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDh<p256::NistP256, sha2::Sha256>;
 //! #     type Ksf = opaque_ke::ksf::Identity;
 //! # }
 //! use opaque_ke::ClientRegistration;
@@ -156,15 +151,13 @@
 //! # #[cfg(feature = "ristretto255")]
 //! # impl CipherSuite for Default {
 //! #     type OprfCs = opaque_ke::Ristretto255;
-//! #     type KeGroup = opaque_ke::Ristretto255;
-//! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDh;
+//! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDh<opaque_ke::Ristretto255, sha2::Sha512>;
 //! #     type Ksf = opaque_ke::ksf::Identity;
 //! # }
 //! # #[cfg(not(feature = "ristretto255"))]
 //! # impl CipherSuite for Default {
 //! #     type OprfCs = p256::NistP256;
-//! #     type KeGroup = p256::NistP256;
-//! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDh;
+//! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDh<p256::NistP256, sha2::Sha256>;
 //! #     type Ksf = opaque_ke::ksf::Identity;
 //! # }
 //! # use rand::{rngs::OsRng, RngCore};
@@ -204,15 +197,13 @@
 //! # #[cfg(feature = "ristretto255")]
 //! # impl CipherSuite for Default {
 //! #     type OprfCs = opaque_ke::Ristretto255;
-//! #     type KeGroup = opaque_ke::Ristretto255;
-//! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDh;
+//! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDh<opaque_ke::Ristretto255, sha2::Sha512>;
 //! #     type Ksf = opaque_ke::ksf::Identity;
 //! # }
 //! # #[cfg(not(feature = "ristretto255"))]
 //! # impl CipherSuite for Default {
 //! #     type OprfCs = p256::NistP256;
-//! #     type KeGroup = p256::NistP256;
-//! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDh;
+//! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDh<p256::NistP256, sha2::Sha256>;
 //! #     type Ksf = opaque_ke::ksf::Identity;
 //! # }
 //! # use rand::{rngs::OsRng, RngCore};
@@ -252,15 +243,13 @@
 //! # #[cfg(feature = "ristretto255")]
 //! # impl CipherSuite for Default {
 //! #     type OprfCs = opaque_ke::Ristretto255;
-//! #     type KeGroup = opaque_ke::Ristretto255;
-//! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDh;
+//! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDh<opaque_ke::Ristretto255, sha2::Sha512>;
 //! #     type Ksf = opaque_ke::ksf::Identity;
 //! # }
 //! # #[cfg(not(feature = "ristretto255"))]
 //! # impl CipherSuite for Default {
 //! #     type OprfCs = p256::NistP256;
-//! #     type KeGroup = p256::NistP256;
-//! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDh;
+//! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDh<p256::NistP256, sha2::Sha256>;
 //! #     type Ksf = opaque_ke::ksf::Identity;
 //! # }
 //! # use rand::{rngs::OsRng, RngCore};
@@ -305,15 +294,13 @@
 //! # #[cfg(feature = "ristretto255")]
 //! # impl CipherSuite for Default {
 //! #     type OprfCs = opaque_ke::Ristretto255;
-//! #     type KeGroup = opaque_ke::Ristretto255;
-//! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDh;
+//! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDh<opaque_ke::Ristretto255, sha2::Sha512>;
 //! #     type Ksf = opaque_ke::ksf::Identity;
 //! # }
 //! # #[cfg(not(feature = "ristretto255"))]
 //! # impl CipherSuite for Default {
 //! #     type OprfCs = p256::NistP256;
-//! #     type KeGroup = p256::NistP256;
-//! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDh;
+//! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDh<p256::NistP256, sha2::Sha256>;
 //! #     type Ksf = opaque_ke::ksf::Identity;
 //! # }
 //! # use rand::{rngs::OsRng, RngCore};
@@ -342,15 +329,13 @@
 //! # #[cfg(feature = "ristretto255")]
 //! # impl CipherSuite for Default {
 //! #     type OprfCs = opaque_ke::Ristretto255;
-//! #     type KeGroup = opaque_ke::Ristretto255;
-//! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDh;
+//! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDh<opaque_ke::Ristretto255, sha2::Sha512>;
 //! #     type Ksf = opaque_ke::ksf::Identity;
 //! # }
 //! # #[cfg(not(feature = "ristretto255"))]
 //! # impl CipherSuite for Default {
 //! #     type OprfCs = p256::NistP256;
-//! #     type KeGroup = p256::NistP256;
-//! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDh;
+//! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDh<p256::NistP256, sha2::Sha256>;
 //! #     type Ksf = opaque_ke::ksf::Identity;
 //! # }
 //! # use rand::{rngs::OsRng, RngCore};
@@ -413,15 +398,13 @@
 //! # #[cfg(feature = "ristretto255")]
 //! # impl CipherSuite for Default {
 //! #     type OprfCs = opaque_ke::Ristretto255;
-//! #     type KeGroup = opaque_ke::Ristretto255;
-//! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDh;
+//! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDh<opaque_ke::Ristretto255, sha2::Sha512>;
 //! #     type Ksf = opaque_ke::ksf::Identity;
 //! # }
 //! # #[cfg(not(feature = "ristretto255"))]
 //! # impl CipherSuite for Default {
 //! #     type OprfCs = p256::NistP256;
-//! #     type KeGroup = p256::NistP256;
-//! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDh;
+//! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDh<p256::NistP256, sha2::Sha256>;
 //! #     type Ksf = opaque_ke::ksf::Identity;
 //! # }
 //! # use rand::{rngs::OsRng, RngCore};
@@ -469,15 +452,13 @@
 //! # #[cfg(feature = "ristretto255")]
 //! # impl CipherSuite for Default {
 //! #     type OprfCs = opaque_ke::Ristretto255;
-//! #     type KeGroup = opaque_ke::Ristretto255;
-//! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDh;
+//! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDh<opaque_ke::Ristretto255, sha2::Sha512>;
 //! #     type Ksf = opaque_ke::ksf::Identity;
 //! # }
 //! # #[cfg(not(feature = "ristretto255"))]
 //! # impl CipherSuite for Default {
 //! #     type OprfCs = p256::NistP256;
-//! #     type KeGroup = p256::NistP256;
-//! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDh;
+//! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDh<p256::NistP256, sha2::Sha256>;
 //! #     type Ksf = opaque_ke::ksf::Identity;
 //! # }
 //! # use rand::{rngs::OsRng, RngCore};
@@ -566,15 +547,13 @@
 //! # #[cfg(feature = "ristretto255")]
 //! # impl CipherSuite for Default {
 //! #     type OprfCs = opaque_ke::Ristretto255;
-//! #     type KeGroup = opaque_ke::Ristretto255;
-//! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDh;
+//! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDh<opaque_ke::Ristretto255, sha2::Sha512>;
 //! #     type Ksf = opaque_ke::ksf::Identity;
 //! # }
 //! # #[cfg(not(feature = "ristretto255"))]
 //! # impl CipherSuite for Default {
 //! #     type OprfCs = p256::NistP256;
-//! #     type KeGroup = p256::NistP256;
-//! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDh;
+//! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDh<p256::NistP256, sha2::Sha256>;
 //! #     type Ksf = opaque_ke::ksf::Identity;
 //! # }
 //! # use rand::{rngs::OsRng, RngCore};
@@ -664,15 +643,13 @@
 //! # #[cfg(feature = "ristretto255")]
 //! # impl CipherSuite for Default {
 //! #     type OprfCs = opaque_ke::Ristretto255;
-//! #     type KeGroup = opaque_ke::Ristretto255;
-//! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDh;
+//! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDh<opaque_ke::Ristretto255, sha2::Sha512>;
 //! #     type Ksf = opaque_ke::ksf::Identity;
 //! # }
 //! # #[cfg(not(feature = "ristretto255"))]
 //! # impl CipherSuite for Default {
 //! #     type OprfCs = p256::NistP256;
-//! #     type KeGroup = p256::NistP256;
-//! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDh;
+//! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDh<p256::NistP256, sha2::Sha256>;
 //! #     type Ksf = opaque_ke::ksf::Identity;
 //! # }
 //! # use rand::{rngs::OsRng, RngCore};
@@ -745,15 +722,13 @@
 //! # #[cfg(feature = "ristretto255")]
 //! # impl CipherSuite for Default {
 //! #     type OprfCs = opaque_ke::Ristretto255;
-//! #     type KeGroup = opaque_ke::Ristretto255;
-//! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDh;
+//! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDh<opaque_ke::Ristretto255, sha2::Sha512>;
 //! #     type Ksf = opaque_ke::ksf::Identity;
 //! # }
 //! # #[cfg(not(feature = "ristretto255"))]
 //! # impl CipherSuite for Default {
 //! #     type OprfCs = p256::NistP256;
-//! #     type KeGroup = p256::NistP256;
-//! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDh;
+//! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDh<p256::NistP256, sha2::Sha256>;
 //! #     type Ksf = opaque_ke::ksf::Identity;
 //! # }
 //! # use rand::{rngs::OsRng, RngCore};
@@ -793,15 +768,13 @@
 //! # #[cfg(feature = "ristretto255")]
 //! # impl CipherSuite for Default {
 //! #     type OprfCs = opaque_ke::Ristretto255;
-//! #     type KeGroup = opaque_ke::Ristretto255;
-//! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDh;
+//! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDh<opaque_ke::Ristretto255, sha2::Sha512>;
 //! #     type Ksf = opaque_ke::ksf::Identity;
 //! # }
 //! # #[cfg(not(feature = "ristretto255"))]
 //! # impl CipherSuite for Default {
 //! #     type OprfCs = p256::NistP256;
-//! #     type KeGroup = p256::NistP256;
-//! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDh;
+//! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDh<p256::NistP256, sha2::Sha256>;
 //! #     type Ksf = opaque_ke::ksf::Identity;
 //! # }
 //! # use rand::{rngs::OsRng, RngCore};
@@ -852,15 +825,13 @@
 //! # #[cfg(feature = "ristretto255")]
 //! # impl CipherSuite for Default {
 //! #     type OprfCs = opaque_ke::Ristretto255;
-//! #     type KeGroup = opaque_ke::Ristretto255;
-//! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDh;
+//! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDh<opaque_ke::Ristretto255, sha2::Sha512>;
 //! #     type Ksf = opaque_ke::ksf::Identity;
 //! # }
 //! # #[cfg(not(feature = "ristretto255"))]
 //! # impl CipherSuite for Default {
 //! #     type OprfCs = p256::NistP256;
-//! #     type KeGroup = p256::NistP256;
-//! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDh;
+//! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDh<p256::NistP256, sha2::Sha256>;
 //! #     type Ksf = opaque_ke::ksf::Identity;
 //! # }
 //! # use rand::{rngs::OsRng, RngCore};
@@ -940,54 +911,51 @@
 //! exposing the bytes of the private key to this library.
 //! ```
 //! # use generic_array::{GenericArray, typenum::U0};
-//! # use opaque_ke::{CipherSuite, ClientLogin, ClientRegistration, ClientRegistrationFinishParameters, ServerRegistration, errors::ProtocolError, keypair::PrivateKey, key_exchange::{group::KeGroup as OKeGroup, tripledh::DiffieHellman}};
+//! # use opaque_ke::{CipherSuite, ClientLogin, ClientRegistration, ClientRegistrationFinishParameters, ServerRegistration, ciphersuite::KeGroup, errors::ProtocolError, keypair::PrivateKey, key_exchange::{group::Group, tripledh::DiffieHellman}};
 //! # use rand::rngs::OsRng;
 //! # struct Default;
 //! # #[cfg(feature = "ristretto255")]
 //! # impl CipherSuite for Default {
 //! #     type OprfCs = opaque_ke::Ristretto255;
-//! #     type KeGroup = opaque_ke::Ristretto255;
-//! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDh;
+//! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDh<opaque_ke::Ristretto255, sha2::Sha512>;
 //! #     type Ksf = opaque_ke::ksf::Identity;
 //! # }
 //! # #[cfg(not(feature = "ristretto255"))]
 //! # impl CipherSuite for Default {
 //! #     type OprfCs = p256::NistP256;
-//! #     type KeGroup = p256::NistP256;
-//! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDh;
+//! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDh<p256::NistP256, sha2::Sha256>;
 //! #     type Ksf = opaque_ke::ksf::Identity;
 //! # }
-//! # type KeGroup = <Default as CipherSuite>::KeGroup;
 //! # #[derive(Debug, thiserror::Error)]
 //! # #[error("test error")]
 //! # struct YourRemoteKeyError;
 //! # #[derive(Clone)]
-//! # struct YourRemoteKey(<KeGroup as OKeGroup>::Sk);
+//! # struct YourRemoteKey(<KeGroup<Default> as Group>::Sk);
 //! # impl YourRemoteKey {
-//! #     fn diffie_hellman(&self, pk: &PublicKey<KeGroup>) -> Result<GenericArray<u8, <KeGroup as OKeGroup>::PkLen>, YourRemoteKeyError> {
-//! #         Ok(<<KeGroup as OKeGroup>::Sk as DiffieHellman<KeGroup>>::diffie_hellman(self.0, KeGroup::deserialize_pk(&pk.serialize()).unwrap()))
+//! #     fn diffie_hellman(&self, pk: &PublicKey<KeGroup<Default>>) -> Result<GenericArray<u8, <KeGroup<Default> as Group>::PkLen>, YourRemoteKeyError> {
+//! #         Ok(<<KeGroup<Default> as Group>::Sk as DiffieHellman<KeGroup<Default>>>::diffie_hellman(self.0, KeGroup::<Default>::deserialize_pk(&pk.serialize()).unwrap()))
 //! #     }
 //! # }
 //! use opaque_ke::{ServerLogin, ServerLoginStartParameters, ServerSetup};
 //! use opaque_ke::keypair::{KeyPair, PrivateKeySerialization, PublicKey};
 //!
 //! // Implement if you intend to use `ServerSetup::de/serialize` instead of `serde`.
-//! impl PrivateKeySerialization<KeGroup> for YourRemoteKey {
+//! impl PrivateKeySerialization<KeGroup<Default>> for YourRemoteKey {
 //!     type Error = YourRemoteKeyError;
 //!     type Len = U0;
 //!
-//!     fn serialize_key_pair(_: &KeyPair<KeGroup, Self>) -> GenericArray<u8, Self::Len> {
+//!     fn serialize_key_pair(_: &KeyPair<KeGroup<Default>, Self>) -> GenericArray<u8, Self::Len> {
 //!         unimplemented!()
 //!     }
 //!
-//!     fn deserialize_key_pair(input: &[u8]) -> Result<KeyPair<KeGroup, Self>, ProtocolError<Self::Error>> {
+//!     fn deserialize_key_pair(input: &[u8]) -> Result<KeyPair<KeGroup<Default>, Self>, ProtocolError<Self::Error>> {
 //!         unimplemented!()
 //!     }
 //! }
 //!
-//! # let sk = KeGroup::random_sk(&mut OsRng);
-//! # let pk = KeGroup::public_key(sk);
-//! # let pk = KeGroup::serialize_pk(pk);
+//! # let sk = KeGroup::<Default>::random_sk(&mut OsRng);
+//! # let pk = KeGroup::<Default>::public_key(sk);
+//! # let pk = KeGroup::<Default>::serialize_pk(pk);
 //! # let public_key = PublicKey::deserialize(&pk).unwrap();
 //! # let remote_key = YourRemoteKey(sk);
 //! # let mut server_rng = OsRng;
@@ -1064,15 +1032,13 @@
 //! # #[cfg(feature = "ristretto255")]
 //! # impl CipherSuite for DefaultCipherSuite {
 //! #     type OprfCs = opaque_ke::Ristretto255;
-//! #     type KeGroup = opaque_ke::Ristretto255;
-//! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDh;
+//! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDh<opaque_ke::Ristretto255, sha2::Sha512>;
 //! #     type Ksf = argon2::Argon2<'static>;
 //! # }
 //! # #[cfg(not(feature = "ristretto255"))]
 //! # impl CipherSuite for DefaultCipherSuite {
 //! #     type OprfCs = p256::NistP256;
-//! #     type KeGroup = p256::NistP256;
-//! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDh;
+//! #     type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDh<p256::NistP256, sha2::Sha256>;
 //! #     type Ksf = argon2::Argon2<'static>;
 //! # }
 //! #

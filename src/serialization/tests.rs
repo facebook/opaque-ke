@@ -17,13 +17,13 @@ use proptest::collection::vec;
 use proptest::prelude::*;
 use rand::rngs::OsRng;
 use rand::RngCore;
-use voprf::Group;
+use voprf::Group as _;
 
-use crate::ciphersuite::{CipherSuite, OprfGroup, OprfHash};
+use crate::ciphersuite::{CipherSuite, KeGroup, OprfGroup, OprfHash};
 use crate::envelope::{Envelope, EnvelopeLen, InnerEnvelopeMode};
 use crate::errors::*;
 use crate::hash::OutputSize;
-use crate::key_exchange::group::KeGroup;
+use crate::key_exchange::group::Group;
 use crate::key_exchange::traits::{
     Deserialize, Ke1MessageLen, Ke1StateLen, Ke2MessageLen, KeyExchange, Serialize,
 };
@@ -40,8 +40,7 @@ struct Ristretto255;
 #[cfg(feature = "ristretto255")]
 impl CipherSuite for Ristretto255 {
     type OprfCs = crate::Ristretto255;
-    type KeGroup = crate::Ristretto255;
-    type KeyExchange = TripleDh;
+    type KeyExchange = TripleDh<crate::Ristretto255, sha2::Sha512>;
     type Ksf = crate::ksf::Identity;
 }
 
@@ -49,8 +48,7 @@ struct P256;
 
 impl CipherSuite for P256 {
     type OprfCs = ::p256::NistP256;
-    type KeGroup = ::p256::NistP256;
-    type KeyExchange = TripleDh;
+    type KeyExchange = TripleDh<::p256::NistP256, sha2::Sha256>;
     type Ksf = crate::ksf::Identity;
 }
 
@@ -58,8 +56,7 @@ struct P384;
 
 impl CipherSuite for P384 {
     type OprfCs = ::p384::NistP384;
-    type KeGroup = ::p384::NistP384;
-    type KeyExchange = TripleDh;
+    type KeyExchange = TripleDh<::p384::NistP384, sha2::Sha384>;
     type Ksf = crate::ksf::Identity;
 }
 
@@ -67,15 +64,14 @@ struct P521;
 
 impl CipherSuite for P521 {
     type OprfCs = ::p521::NistP521;
-    type KeGroup = ::p521::NistP521;
-    type KeyExchange = TripleDh;
+    type KeyExchange = TripleDh<::p521::NistP521, sha2::Sha512>;
     type Ksf = crate::ksf::Identity;
 }
 
-fn random_point<CS: CipherSuite>() -> <CS::KeGroup as KeGroup>::Pk {
+fn random_point<CS: CipherSuite>() -> <KeGroup<CS> as Group>::Pk {
     let mut rng = OsRng;
-    let sk = CS::KeGroup::random_sk(&mut rng);
-    CS::KeGroup::public_key(sk)
+    let sk = KeGroup::<CS>::random_sk(&mut rng);
+    KeGroup::<CS>::public_key(sk)
 }
 
 #[test]
@@ -83,7 +79,7 @@ fn client_registration_roundtrip() -> Result<(), ProtocolError> {
     fn inner<CS: CipherSuite>() -> Result<(), ProtocolError>
     where
         // ClientRegistration: KgSk + KgPk
-        <OprfGroup<CS> as Group>::ScalarLen: Add<<OprfGroup<CS> as Group>::ElemLen>,
+        <OprfGroup<CS> as voprf::Group>::ScalarLen: Add<<OprfGroup<CS> as voprf::Group>::ElemLen>,
         ClientRegistrationLen<CS>: ArrayLength<u8>,
     {
         let pw = b"hunter2";
@@ -122,8 +118,8 @@ fn server_registration_roundtrip() -> Result<(), ProtocolError> {
         NonceLen: Add<OutputSize<OprfHash<CS>>>,
         EnvelopeLen<CS>: ArrayLength<u8>,
         // RegistrationUpload: (KePk + Hash) + Envelope
-        <CS::KeGroup as KeGroup>::PkLen: Add<OutputSize<OprfHash<CS>>>,
-        Sum<<CS::KeGroup as KeGroup>::PkLen, OutputSize<OprfHash<CS>>>:
+        <KeGroup<CS> as Group>::PkLen: Add<OutputSize<OprfHash<CS>>>,
+        Sum<<KeGroup<CS> as Group>::PkLen, OutputSize<OprfHash<CS>>>:
             ArrayLength<u8> + Add<EnvelopeLen<CS>>,
         RegistrationUploadLen<CS>: ArrayLength<u8>,
         // ServerRegistration = RegistrationUpload
@@ -142,7 +138,7 @@ fn server_registration_roundtrip() -> Result<(), ProtocolError> {
         // length-MAC_SIZE hmac
         mock_envelope_bytes.extend_from_slice(&Output::<OprfHash<CS>>::default());
 
-        let mock_client_kp = KeyPair::<CS::KeGroup>::generate_random::<CS::OprfCs, _>(&mut rng);
+        let mock_client_kp = KeyPair::<KeGroup<CS>>::generate_random::<CS::OprfCs, _>(&mut rng);
         // serialization order: oprf_key, public key, envelope
         let mut bytes = Vec::<u8>::new();
         bytes.extend_from_slice(&mock_client_kp.public().serialize());
@@ -167,7 +163,7 @@ fn server_registration_roundtrip() -> Result<(), ProtocolError> {
 fn registration_request_roundtrip() -> Result<(), ProtocolError> {
     fn inner<CS: CipherSuite>() -> Result<(), ProtocolError> {
         let pt = random_point::<CS>();
-        let pt_bytes = CS::KeGroup::serialize_pk(pt);
+        let pt_bytes = KeGroup::<CS>::serialize_pk(pt);
 
         let mut input = Vec::new();
         input.extend_from_slice(&pt_bytes);
@@ -204,13 +200,13 @@ fn registration_response_roundtrip() -> Result<(), ProtocolError> {
     fn inner<CS: CipherSuite>() -> Result<(), ProtocolError>
     where
         // RegistrationResponse: KgPk + KePk
-        <OprfGroup<CS> as Group>::ElemLen: Add<<CS::KeGroup as KeGroup>::PkLen>,
+        <OprfGroup<CS> as voprf::Group>::ElemLen: Add<<KeGroup<CS> as Group>::PkLen>,
         RegistrationResponseLen<CS>: ArrayLength<u8>,
     {
         let pt = random_point::<CS>();
-        let beta_bytes = CS::KeGroup::serialize_pk(pt);
+        let beta_bytes = KeGroup::<CS>::serialize_pk(pt);
         let mut rng = OsRng;
-        let skp = KeyPair::<CS::KeGroup>::generate_random::<CS::OprfCs, _>(&mut rng);
+        let skp = KeyPair::<KeGroup<CS>>::generate_random::<CS::OprfCs, _>(&mut rng);
         let pubkey_bytes = skp.public().serialize();
 
         let mut input = Vec::new();
@@ -254,13 +250,13 @@ fn registration_upload_roundtrip() -> Result<(), ProtocolError> {
         NonceLen: Add<OutputSize<OprfHash<CS>>>,
         EnvelopeLen<CS>: ArrayLength<u8>,
         // RegistrationUpload: (KePk + Hash) + Envelope
-        <CS::KeGroup as KeGroup>::PkLen: Add<OutputSize<OprfHash<CS>>>,
-        Sum<<CS::KeGroup as KeGroup>::PkLen, OutputSize<OprfHash<CS>>>:
+        <KeGroup<CS> as Group>::PkLen: Add<OutputSize<OprfHash<CS>>>,
+        Sum<<KeGroup<CS> as Group>::PkLen, OutputSize<OprfHash<CS>>>:
             ArrayLength<u8> + Add<EnvelopeLen<CS>>,
         RegistrationUploadLen<CS>: ArrayLength<u8>,
     {
         let mut rng = OsRng;
-        let skp = KeyPair::<CS::KeGroup>::generate_random::<CS::OprfCs, _>(&mut rng);
+        let skp = KeyPair::<KeGroup<CS>>::generate_random::<CS::OprfCs, _>(&mut rng);
         let pubkey_bytes = skp.public().serialize();
 
         let mut key = [0u8; 32];
@@ -307,15 +303,16 @@ fn registration_upload_roundtrip() -> Result<(), ProtocolError> {
 fn credential_request_roundtrip() -> Result<(), ProtocolError> {
     fn inner<CS: CipherSuite>() -> Result<(), ProtocolError>
     where
+        <CS::KeyExchange as KeyExchange>::KE1Message: Deserialize + Serialize,
         // CredentialRequest: KgPk + Ke1Message
-        <OprfGroup<CS> as Group>::ElemLen: Add<Ke1MessageLen<CS>>,
+        <OprfGroup<CS> as voprf::Group>::ElemLen: Add<Ke1MessageLen<CS>>,
         CredentialRequestLen<CS>: ArrayLength<u8>,
     {
         let mut rng = OsRng;
         let alpha = random_point::<CS>();
-        let alpha_bytes = CS::KeGroup::serialize_pk(alpha);
+        let alpha_bytes = KeGroup::<CS>::serialize_pk(alpha);
 
-        let client_e_kp = KeyPair::<CS::KeGroup>::generate_random::<CS::OprfCs, _>(&mut rng);
+        let client_e_kp = KeyPair::<KeGroup<CS>>::generate_random::<CS::OprfCs, _>(&mut rng);
         let mut client_nonce = [0u8; NonceLen::USIZE];
         rng.fill_bytes(&mut client_nonce);
 
@@ -360,22 +357,24 @@ fn credential_request_roundtrip() -> Result<(), ProtocolError> {
 fn credential_response_roundtrip() -> Result<(), ProtocolError> {
     fn inner<CS: CipherSuite>() -> Result<(), ProtocolError>
     where
+        <CS::KeyExchange as KeyExchange>::KE2Message: Deserialize,
         // CredentialResponseWithoutKeLen: (KgPk + Nonce) + MaskedResponse
-        <OprfGroup<CS> as Group>::ElemLen: Add<NonceLen>,
-        Sum<<OprfGroup<CS> as Group>::ElemLen, NonceLen>:
+        <OprfGroup<CS> as voprf::Group>::ElemLen: Add<NonceLen>,
+        Sum<<OprfGroup<CS> as voprf::Group>::ElemLen, NonceLen>:
             ArrayLength<u8> + Add<MaskedResponseLen<CS>>,
         CredentialResponseWithoutKeLen<CS>: ArrayLength<u8>,
         // MaskedResponse: (Nonce + Hash) + KePk
         NonceLen: Add<OutputSize<OprfHash<CS>>>,
         Sum<NonceLen, OutputSize<OprfHash<CS>>>:
-            ArrayLength<u8> + Add<<CS::KeGroup as KeGroup>::PkLen>,
+            ArrayLength<u8> + Add<<KeGroup<CS> as Group>::PkLen>,
         MaskedResponseLen<CS>: ArrayLength<u8>,
         // CredentialResponse: CredentialResponseWithoutKeLen + Ke2Message
+        <CS::KeyExchange as KeyExchange>::KE2Message: Serialize,
         CredentialResponseWithoutKeLen<CS>: Add<Ke2MessageLen<CS>>,
         CredentialResponseLen<CS>: ArrayLength<u8>,
     {
         let pt = random_point::<CS>();
-        let pt_bytes = CS::KeGroup::serialize_pk(pt);
+        let pt_bytes = KeGroup::<CS>::serialize_pk(pt);
 
         let mut rng = OsRng;
 
@@ -383,10 +382,10 @@ fn credential_response_roundtrip() -> Result<(), ProtocolError> {
         rng.fill_bytes(&mut masking_nonce);
 
         let mut masked_response =
-            vec![0u8; <OprfGroup<CS> as Group>::ElemLen::USIZE + Envelope::<CS>::len()];
+            vec![0u8; <OprfGroup<CS> as voprf::Group>::ElemLen::USIZE + Envelope::<CS>::len()];
         rng.fill_bytes(&mut masked_response);
 
-        let server_e_kp = KeyPair::<CS::KeGroup>::generate_random::<CS::OprfCs, _>(&mut rng);
+        let server_e_kp = KeyPair::<KeGroup<CS>>::generate_random::<CS::OprfCs, _>(&mut rng);
         let mut mac = Output::<OprfHash<CS>>::default();
         rng.fill_bytes(&mut mac);
         let mut server_nonce = [0u8; NonceLen::USIZE];
@@ -442,7 +441,10 @@ fn credential_response_roundtrip() -> Result<(), ProtocolError> {
 
 #[test]
 fn credential_finalization_roundtrip() -> Result<(), ProtocolError> {
-    fn inner<CS: CipherSuite>() -> Result<(), ProtocolError> {
+    fn inner<CS: CipherSuite>() -> Result<(), ProtocolError>
+    where
+        <CS::KeyExchange as KeyExchange>::KE3Message: Deserialize + Serialize,
+    {
         let mut rng = OsRng;
         let mut mac = Output::<OprfHash<CS>>::default();
         rng.fill_bytes(&mut mac);
@@ -469,19 +471,23 @@ fn credential_finalization_roundtrip() -> Result<(), ProtocolError> {
 fn client_login_roundtrip() -> Result<(), ProtocolError> {
     fn inner<CS: CipherSuite>() -> Result<(), ProtocolError>
     where
+        <CS::KeyExchange as KeyExchange>::KE1Message: Deserialize,
+        <CS::KeyExchange as KeyExchange>::KE1State: Deserialize,
         // CredentialRequest: KgPk + Ke1Message
-        <OprfGroup<CS> as Group>::ElemLen: Add<Ke1MessageLen<CS>>,
+        <CS::KeyExchange as KeyExchange>::KE1Message: Serialize,
+        <OprfGroup<CS> as voprf::Group>::ElemLen: Add<Ke1MessageLen<CS>>,
         CredentialRequestLen<CS>: ArrayLength<u8>,
         // ClientLogin: KgSk + CredentialRequest + Ke1State
-        <OprfGroup<CS> as Group>::ScalarLen: Add<CredentialRequestLen<CS>>,
-        Sum<<OprfGroup<CS> as Group>::ScalarLen, CredentialRequestLen<CS>>:
+        <OprfGroup<CS> as voprf::Group>::ScalarLen: Add<CredentialRequestLen<CS>>,
+        <CS::KeyExchange as KeyExchange>::KE1State: Serialize,
+        Sum<<OprfGroup<CS> as voprf::Group>::ScalarLen, CredentialRequestLen<CS>>:
             ArrayLength<u8> + Add<Ke1StateLen<CS>>,
         ClientLoginLen<CS>: ArrayLength<u8>,
     {
         let pw = b"hunter2";
         let mut rng = OsRng;
 
-        let client_e_kp = KeyPair::<CS::KeGroup>::generate_random::<CS::OprfCs, _>(&mut rng);
+        let client_e_kp = KeyPair::<KeGroup<CS>>::generate_random::<CS::OprfCs, _>(&mut rng);
         let mut client_nonce = [0; NonceLen::USIZE];
         rng.fill_bytes(&mut client_nonce);
 
@@ -495,14 +501,13 @@ fn client_login_roundtrip() -> Result<(), ProtocolError> {
 
         let credential_request = CredentialRequest::<CS> {
             blinded_element: blind_result.message,
-            ke1_message:
-                <CS::KeyExchange as KeyExchange<OprfHash<CS>, CS::KeGroup>>::KE1Message::deserialize(
-                    &[
-                        client_nonce.as_ref(),
-                        client_e_kp.public().serialize().as_ref(),
-                    ]
-                    .concat(),
-                )?,
+            ke1_message: <CS::KeyExchange as KeyExchange>::KE1Message::deserialize(
+                &[
+                    client_nonce.as_ref(),
+                    client_e_kp.public().serialize().as_ref(),
+                ]
+                .concat(),
+            )?,
         };
 
         let bytes: Vec<u8> = blind_result
@@ -530,10 +535,13 @@ fn client_login_roundtrip() -> Result<(), ProtocolError> {
 
 #[test]
 fn ke1_message_roundtrip() -> Result<(), ProtocolError> {
-    fn inner<CS: CipherSuite>() -> Result<(), ProtocolError> {
+    fn inner<CS: CipherSuite>() -> Result<(), ProtocolError>
+    where
+        <CS::KeyExchange as KeyExchange>::KE1Message: Deserialize + Serialize,
+    {
         let mut rng = OsRng;
 
-        let client_e_kp = KeyPair::<CS::KeGroup>::generate_random::<CS::OprfCs, _>(&mut rng);
+        let client_e_kp = KeyPair::<KeGroup<CS>>::generate_random::<CS::OprfCs, _>(&mut rng);
         let mut client_nonce = vec![0u8; NonceLen::USIZE];
         rng.fill_bytes(&mut client_nonce);
 
@@ -542,10 +550,7 @@ fn ke1_message_roundtrip() -> Result<(), ProtocolError> {
             client_e_kp.public().serialize().as_ref(),
         ]
         .concat();
-        let reg =
-            <CS::KeyExchange as KeyExchange<OprfHash<CS>, CS::KeGroup>>::KE1Message::deserialize(
-                &ke1m,
-            )?;
+        let reg = <CS::KeyExchange as KeyExchange>::KE1Message::deserialize(&ke1m)?;
         let reg_bytes = reg.serialize();
         assert_eq!(*reg_bytes, ke1m);
 
@@ -563,10 +568,13 @@ fn ke1_message_roundtrip() -> Result<(), ProtocolError> {
 
 #[test]
 fn ke2_message_roundtrip() -> Result<(), ProtocolError> {
-    fn inner<CS: CipherSuite>() -> Result<(), ProtocolError> {
+    fn inner<CS: CipherSuite>() -> Result<(), ProtocolError>
+    where
+        <CS::KeyExchange as KeyExchange>::KE2Message: Deserialize + Serialize,
+    {
         let mut rng = OsRng;
 
-        let server_e_kp = KeyPair::<CS::KeGroup>::generate_random::<CS::OprfCs, _>(&mut rng);
+        let server_e_kp = KeyPair::<KeGroup<CS>>::generate_random::<CS::OprfCs, _>(&mut rng);
         let mut mac = Output::<OprfHash<CS>>::default();
         rng.fill_bytes(&mut mac);
         let mut server_nonce = vec![0u8; NonceLen::USIZE];
@@ -579,10 +587,7 @@ fn ke2_message_roundtrip() -> Result<(), ProtocolError> {
         ]
         .concat();
 
-        let reg =
-            <CS::KeyExchange as KeyExchange<OprfHash<CS>, CS::KeGroup>>::KE2Message::deserialize(
-                &ke2m,
-            )?;
+        let reg = <CS::KeyExchange as KeyExchange>::KE2Message::deserialize(&ke2m)?;
         let reg_bytes = reg.serialize();
         assert_eq!(*reg_bytes, ke2m);
 
@@ -600,17 +605,17 @@ fn ke2_message_roundtrip() -> Result<(), ProtocolError> {
 
 #[test]
 fn ke3_message_roundtrip() -> Result<(), ProtocolError> {
-    fn inner<CS: CipherSuite>() -> Result<(), ProtocolError> {
+    fn inner<CS: CipherSuite>() -> Result<(), ProtocolError>
+    where
+        <CS::KeyExchange as KeyExchange>::KE3Message: Deserialize + Serialize,
+    {
         let mut rng = OsRng;
         let mut mac = Output::<OprfHash<CS>>::default();
         rng.fill_bytes(&mut mac);
 
         let ke3m: Vec<u8> = [mac].concat();
 
-        let reg =
-            <CS::KeyExchange as KeyExchange<OprfHash<CS>, CS::KeGroup>>::KE3Message::deserialize(
-                &ke3m,
-            )?;
+        let reg = <CS::KeyExchange as KeyExchange>::KE3Message::deserialize(&ke3m)?;
         let reg_bytes = reg.serialize();
         assert_eq!(*reg_bytes, ke3m);
 

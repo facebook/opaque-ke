@@ -15,7 +15,7 @@ use generic_array::{ArrayLength, GenericArray};
 use rand::{CryptoRng, RngCore};
 
 use crate::errors::ProtocolError;
-use crate::key_exchange::group::KeGroup;
+use crate::key_exchange::group::Group;
 use crate::key_exchange::tripledh::DiffieHellman;
 
 /// A Keypair trait with public-private verification
@@ -29,12 +29,12 @@ use crate::key_exchange::tripledh::DiffieHellman;
 )]
 #[derive_where(Clone)]
 #[derive_where(Debug, Eq, Hash, Ord, PartialEq, PartialOrd; KG::Pk, SK)]
-pub struct KeyPair<KG: KeGroup, SK: Clone = PrivateKey<KG>> {
+pub struct KeyPair<KG: Group, SK: Clone = PrivateKey<KG>> {
     pk: PublicKey<KG>,
     sk: SK,
 }
 
-impl<KG: KeGroup, SK: Clone> KeyPair<KG, SK> {
+impl<KG: Group, SK: Clone> KeyPair<KG, SK> {
     /// Creates a new [`KeyPair`] from the given keys.
     pub fn new(sk: SK, pk: PublicKey<KG>) -> Self {
         Self { pk, sk }
@@ -51,12 +51,12 @@ impl<KG: KeGroup, SK: Clone> KeyPair<KG, SK> {
     }
 }
 
-impl<KG: KeGroup> KeyPair<KG> {
+impl<KG: Group> KeyPair<KG> {
     /// Generating a random key pair given a cryptographic rng
     pub(crate) fn generate_random<CS: voprf::CipherSuite, R: RngCore + CryptoRng>(
         rng: &mut R,
     ) -> Self {
-        let mut scalar_bytes = GenericArray::<_, <KG as KeGroup>::SkLen>::default();
+        let mut scalar_bytes = GenericArray::<_, <KG as Group>::SkLen>::default();
         rng.fill_bytes(&mut scalar_bytes);
         let sk = KG::derive_auth_keypair::<CS>(scalar_bytes).unwrap();
         let pk = KG::public_key(sk);
@@ -68,7 +68,7 @@ impl<KG: KeGroup> KeyPair<KG> {
 }
 
 #[cfg(test)]
-impl<KG: KeGroup> KeyPair<KG>
+impl<KG: Group> KeyPair<KG>
 where
     KG::Pk: std::fmt::Debug,
     KG::Sk: std::fmt::Debug,
@@ -96,9 +96,9 @@ where
 /// Wrapper around a Key to enforce that it's a private one.
 #[derive_where(Clone, ZeroizeOnDrop)]
 #[derive_where(Debug, Eq, Hash, Ord, PartialEq, PartialOrd; KG::Sk)]
-pub struct PrivateKey<KG: KeGroup>(KG::Sk);
+pub struct PrivateKey<KG: Group>(KG::Sk);
 
-impl<KG: KeGroup> PrivateKey<KG> {
+impl<KG: Group> PrivateKey<KG> {
     /// Returns public key from private key
     pub fn public_key(&self) -> PublicKey<KG> {
         PublicKey(KG::public_key(self.0))
@@ -114,7 +114,7 @@ impl<KG: KeGroup> PrivateKey<KG> {
     }
 }
 
-impl<KG: KeGroup> PrivateKey<KG>
+impl<KG: Group> PrivateKey<KG>
 where
     KG::Sk: DiffieHellman<KG>,
 {
@@ -126,7 +126,7 @@ where
 
 /// A trait to facilitate
 /// [`ServerSetup::de/serialize`](crate::ServerSetup::serialize).
-pub trait PrivateKeySerialization<KG: KeGroup>: Clone {
+pub trait PrivateKeySerialization<KG: Group>: Clone {
     /// Custom error type that can be passed down to `ProtocolError::Custom`
     type Error;
     /// Serialization size in bytes.
@@ -139,7 +139,7 @@ pub trait PrivateKeySerialization<KG: KeGroup>: Clone {
     fn deserialize_key_pair(input: &[u8]) -> Result<KeyPair<KG, Self>, ProtocolError<Self::Error>>;
 }
 
-impl<KG: KeGroup> PrivateKeySerialization<KG> for PrivateKey<KG> {
+impl<KG: Group> PrivateKeySerialization<KG> for PrivateKey<KG> {
     type Error = core::convert::Infallible;
     type Len = KG::SkLen;
 
@@ -156,7 +156,7 @@ impl<KG: KeGroup> PrivateKeySerialization<KG> for PrivateKey<KG> {
 }
 
 #[cfg(feature = "serde")]
-impl<'de, KG: KeGroup> serde::Deserialize<'de> for PrivateKey<KG> {
+impl<'de, KG: Group> serde::Deserialize<'de> for PrivateKey<KG> {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: serde::Deserializer<'de>,
@@ -170,7 +170,7 @@ impl<'de, KG: KeGroup> serde::Deserialize<'de> for PrivateKey<KG> {
 }
 
 #[cfg(feature = "serde")]
-impl<KG: KeGroup> serde::Serialize for PrivateKey<KG> {
+impl<KG: Group> serde::Serialize for PrivateKey<KG> {
     fn serialize<SK>(&self, serializer: SK) -> Result<SK::Ok, SK::Error>
     where
         SK: serde::Serializer,
@@ -182,9 +182,9 @@ impl<KG: KeGroup> serde::Serialize for PrivateKey<KG> {
 /// Wrapper around a Key to enforce that it's a public one.
 #[derive_where(Clone, ZeroizeOnDrop)]
 #[derive_where(Debug, Eq, Hash, Ord, PartialEq, PartialOrd; KG::Pk)]
-pub struct PublicKey<KG: KeGroup>(KG::Pk);
+pub struct PublicKey<KG: Group>(KG::Pk);
 
-impl<KG: KeGroup> PublicKey<KG> {
+impl<KG: Group> PublicKey<KG> {
     /// Convert from bytes
     pub fn deserialize(key_bytes: &[u8]) -> Result<Self, ProtocolError> {
         KG::deserialize_pk(key_bytes).map(Self)
@@ -195,14 +195,14 @@ impl<KG: KeGroup> PublicKey<KG> {
         KG::serialize_pk(self.0)
     }
 
-    /// Returns the inner [`KeGroup::Pk`].
+    /// Returns the inner [`Group::Pk`].
     pub fn to_group_type(&self) -> KG::Pk {
         self.0
     }
 }
 
 #[cfg(feature = "serde")]
-impl<'de, KG: KeGroup> serde::Deserialize<'de> for PublicKey<KG> {
+impl<'de, KG: Group> serde::Deserialize<'de> for PublicKey<KG> {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: serde::Deserializer<'de>,
@@ -216,7 +216,7 @@ impl<'de, KG: KeGroup> serde::Deserialize<'de> for PublicKey<KG> {
 }
 
 #[cfg(feature = "serde")]
-impl<KG: KeGroup> serde::Serialize for PublicKey<KG> {
+impl<KG: Group> serde::Serialize for PublicKey<KG> {
     fn serialize<SK>(&self, serializer: SK) -> Result<SK::Ok, SK::Error>
     where
         SK: serde::Serializer,
@@ -230,11 +230,12 @@ mod tests {
     use rand::rngs::OsRng;
 
     use super::*;
+    use crate::ciphersuite::KeGroup;
     use crate::util;
 
     #[test]
     fn test_zeroize_key() {
-        fn inner<G: KeGroup>() {
+        fn inner<G: Group>() {
             let mut rng = OsRng;
             let mut key = PrivateKey::<G>(G::random_sk(&mut rng));
             util::test_zeroize_on_drop(&mut key);
@@ -314,21 +315,20 @@ mod tests {
             #[cfg(not(feature = "ristretto255"))]
             type OprfCs = ::p256::NistP256;
             #[cfg(feature = "ristretto255")]
-            type KeGroup = crate::Ristretto255;
+            type KeyExchange =
+                crate::key_exchange::tripledh::TripleDh<crate::Ristretto255, sha2::Sha512>;
             #[cfg(not(feature = "ristretto255"))]
-            type KeGroup = ::p256::NistP256;
-            type KeyExchange = crate::key_exchange::tripledh::TripleDh;
+            type KeyExchange =
+                crate::key_exchange::tripledh::TripleDh<::p256::NistP256, sha2::Sha256>;
             type Ksf = crate::ksf::Identity;
         }
 
-        type KeCurve = <Default as CipherSuite>::KeGroup;
-
         #[derive(Clone)]
-        struct RemoteKey(PrivateKey<KeCurve>);
+        struct RemoteKey(PrivateKey<KeGroup<Default>>);
 
         const PASSWORD: &str = "password";
 
-        let sk = PrivateKey(KeCurve::random_sk(&mut OsRng));
+        let sk = PrivateKey(KeGroup::<Default>::random_sk(&mut OsRng));
         let pk = sk.public_key();
         let sk = RemoteKey(sk);
         let keypair = KeyPair::new(sk, pk);

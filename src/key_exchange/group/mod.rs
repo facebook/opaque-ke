@@ -6,7 +6,7 @@
 // of this source tree. You may select, at your option, one of the above-listed
 // licenses.
 
-//! Includes the [`KeGroup`] trait and definitions for the key exchange groups
+//! Includes the [`Group`] trait and definitions for the key exchange groups
 
 #[cfg(feature = "curve25519")]
 pub mod curve25519;
@@ -27,7 +27,7 @@ use crate::errors::{InternalError, ProtocolError};
 const STR_OPAQUE_DERIVE_AUTH_KEY_PAIR: [u8; 33] = *b"OPAQUE-DeriveDiffieHellmanKeyPair";
 
 /// A group representation for use in the key exchange
-pub trait KeGroup {
+pub trait Group {
     /// Public key
     type Pk: Copy + Zeroize;
     /// Length of the public key
@@ -60,7 +60,7 @@ pub trait KeGroup {
     /// <https://www.ietf.org/archive/id/draft-irtf-cfrg-opaque-08.html#section-6.4.2>
     ///
     /// Note that we cannot call the voprf crate directly since we need to
-    /// ensure that the [`KeGroup`] is used for the
+    /// ensure that the [`Group`] is used for the
     /// [`hash_to_scalar`](Self::hash_to_scalar) operation (as opposed to
     /// the [`OprfGroup`](voprf::Group)).
     fn derive_auth_keypair<CS: voprf::CipherSuite>(

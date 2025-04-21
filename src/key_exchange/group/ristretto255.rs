@@ -18,9 +18,8 @@ use generic_array::typenum::{IsLess, IsLessOrEqual, U256, U32};
 use generic_array::GenericArray;
 use rand::{CryptoRng, RngCore};
 use subtle::ConstantTimeEq;
-use voprf::Group;
 
-use super::KeGroup;
+use super::Group;
 use crate::errors::{InternalError, ProtocolError};
 use crate::key_exchange::tripledh::DiffieHellman;
 
@@ -29,7 +28,7 @@ use crate::key_exchange::tripledh::DiffieHellman;
 // implement `KeGroup` for `voprf::Ristretto255`.
 pub struct Ristretto255;
 
-impl KeGroup for Ristretto255 {
+impl Group for Ristretto255 {
     type Pk = RistrettoPoint;
     type PkLen = U32;
     type Sk = Scalar;
@@ -78,7 +77,7 @@ impl KeGroup for Ristretto255 {
         H: BlockSizeUser + Default + FixedOutput + HashMarker,
         H::OutputSize: IsLess<U256> + IsLessOrEqual<H::BlockSize>,
     {
-        <voprf::Ristretto255 as Group>::hash_to_scalar::<H>(input, dst)
+        <voprf::Ristretto255 as voprf::Group>::hash_to_scalar::<H>(input, dst)
             .map_err(InternalError::OprfInternalError)
     }
 
@@ -113,14 +112,14 @@ impl voprf::CipherSuite for Ristretto255 {
     type Hash = <voprf::Ristretto255 as voprf::CipherSuite>::Hash;
 }
 
-impl Group for Ristretto255 {
-    type Elem = <voprf::Ristretto255 as Group>::Elem;
+impl voprf::Group for Ristretto255 {
+    type Elem = <voprf::Ristretto255 as voprf::Group>::Elem;
 
-    type ElemLen = <voprf::Ristretto255 as Group>::ElemLen;
+    type ElemLen = <voprf::Ristretto255 as voprf::Group>::ElemLen;
 
-    type Scalar = <voprf::Ristretto255 as Group>::Scalar;
+    type Scalar = <voprf::Ristretto255 as voprf::Group>::Scalar;
 
-    type ScalarLen = <voprf::Ristretto255 as Group>::ScalarLen;
+    type ScalarLen = <voprf::Ristretto255 as voprf::Group>::ScalarLen;
 
     fn hash_to_curve<H>(
         input: &[&[u8]],
@@ -130,7 +129,7 @@ impl Group for Ristretto255 {
         H: BlockSizeUser + Default + FixedOutput + HashMarker,
         H::OutputSize: IsLess<U256> + IsLessOrEqual<H::BlockSize>,
     {
-        <voprf::Ristretto255 as Group>::hash_to_curve::<H>(input, dst)
+        <voprf::Ristretto255 as voprf::Group>::hash_to_curve::<H>(input, dst)
     }
 
     fn hash_to_scalar<H>(
@@ -141,43 +140,43 @@ impl Group for Ristretto255 {
         H: BlockSizeUser + Default + FixedOutput + HashMarker,
         H::OutputSize: IsLess<U256> + IsLessOrEqual<H::BlockSize>,
     {
-        <voprf::Ristretto255 as Group>::hash_to_scalar::<H>(input, dst)
+        <voprf::Ristretto255 as voprf::Group>::hash_to_scalar::<H>(input, dst)
     }
 
     fn base_elem() -> Self::Elem {
-        <voprf::Ristretto255 as Group>::base_elem()
+        <voprf::Ristretto255 as voprf::Group>::base_elem()
     }
 
     fn identity_elem() -> Self::Elem {
-        <voprf::Ristretto255 as Group>::identity_elem()
+        <voprf::Ristretto255 as voprf::Group>::identity_elem()
     }
 
     fn serialize_elem(elem: Self::Elem) -> GenericArray<u8, Self::ElemLen> {
-        <voprf::Ristretto255 as Group>::serialize_elem(elem)
+        <voprf::Ristretto255 as voprf::Group>::serialize_elem(elem)
     }
 
     fn deserialize_elem(element_bits: &[u8]) -> voprf::Result<Self::Elem> {
-        <voprf::Ristretto255 as Group>::deserialize_elem(element_bits)
+        <voprf::Ristretto255 as voprf::Group>::deserialize_elem(element_bits)
     }
 
     fn random_scalar<R: RngCore + CryptoRng>(rng: &mut R) -> Self::Scalar {
-        <voprf::Ristretto255 as Group>::random_scalar(rng)
+        <voprf::Ristretto255 as voprf::Group>::random_scalar(rng)
     }
 
     fn invert_scalar(scalar: Self::Scalar) -> Self::Scalar {
-        <voprf::Ristretto255 as Group>::invert_scalar(scalar)
+        <voprf::Ristretto255 as voprf::Group>::invert_scalar(scalar)
     }
 
     fn is_zero_scalar(scalar: Self::Scalar) -> subtle::Choice {
-        <voprf::Ristretto255 as Group>::is_zero_scalar(scalar)
+        <voprf::Ristretto255 as voprf::Group>::is_zero_scalar(scalar)
     }
 
     fn serialize_scalar(scalar: Self::Scalar) -> GenericArray<u8, Self::ScalarLen> {
-        <voprf::Ristretto255 as Group>::serialize_scalar(scalar)
+        <voprf::Ristretto255 as voprf::Group>::serialize_scalar(scalar)
     }
 
     fn deserialize_scalar(scalar_bits: &[u8]) -> voprf::Result<Self::Scalar> {
-        <voprf::Ristretto255 as Group>::deserialize_scalar(scalar_bits)
+        <voprf::Ristretto255 as voprf::Group>::deserialize_scalar(scalar_bits)
     }
 }
 

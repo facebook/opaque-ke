@@ -8,6 +8,14 @@
 
 //! Utility functions.
 
+pub(crate) trait AsIterator {
+    type Item<'a>
+    where
+        Self: 'a;
+
+    fn as_iter(&self) -> impl Iterator<Item = Self::Item<'_>>;
+}
+
 #[cfg(test)]
 pub(crate) fn test_zeroize_on_drop<T: Sized>(value: &mut T) {
     drop_manually(value);
