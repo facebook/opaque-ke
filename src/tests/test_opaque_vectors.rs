@@ -477,7 +477,8 @@ where
 
         let mut server_keyshare_seed_and_nonce_rng = CycleRng::new(
             [
-                parameters.masking_nonce.as_slice(),
+                parameters.dummy_masking_key.as_slice(),
+                &parameters.masking_nonce,
                 &parameters.server_keyshare_seed,
                 &parameters.server_nonce,
             ]
@@ -605,7 +606,8 @@ where
 
         let mut server_keyshare_seed_and_nonce_rng = CycleRng::new(
             [
-                parameters.masking_nonce.as_slice(),
+                parameters.dummy_masking_key.as_slice(),
+                &parameters.masking_nonce,
                 &parameters.server_keyshare_seed,
                 &parameters.server_nonce,
             ]
