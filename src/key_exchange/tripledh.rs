@@ -19,6 +19,7 @@ use generic_array::{ArrayLength, GenericArray};
 use hkdf::{Hkdf, HkdfExtract};
 use hmac::{Hmac, Mac};
 use rand::{CryptoRng, RngCore};
+use zeroize::{Zeroize, ZeroizeOnDrop};
 
 use crate::errors::utils::{check_slice_size, check_slice_size_atleast};
 use crate::errors::{InternalError, ProtocolError};
@@ -27,7 +28,7 @@ use crate::key_exchange::group::KeGroup;
 use crate::key_exchange::traits::{
     Deserialize, GenerateKe2Result, GenerateKe3Result, KeyExchange, Serialize,
 };
-use crate::keypair::{KeyPair, PrivateKey, PublicKey, SecretKey};
+use crate::keypair::{KeyPair, PrivateKey, PublicKey};
 use crate::serialization::{Input, UpdateExt};
 
 ///////////////
@@ -49,6 +50,14 @@ static STR_OPAQUE: &[u8] = b"OPAQUE-";
 ////////////////////////////
 
 /// The Triple Diffie-Hellman key exchange implementation
+///
+/// # Remote Key
+///
+/// [`ServerLoginBuilder::data()`](crate::ServerLoginBuilder::data()) will
+/// return the client's ephemeral public key.
+/// [`ServerLoginBuilder::build()`](crate::ServerLoginBuilder::build()) expects
+/// a shared secret computed through Diffie-Hellman from the server's private
+/// key and the given public key.
 pub struct TripleDh;
 
 /// The client state produced after the first key exchange message
@@ -95,6 +104,31 @@ where
     session_key: Output<D>,
 }
 
+/// Builder for the second key exchange message
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Deserialize, serde::Serialize),
+    serde(bound(
+        deserialize = "D: serde::Deserialize<'de>,  PublicKey<KG>: serde::Deserialize<'de>",
+        serialize = "D: serde::Serialize,  PublicKey<KG>: serde::Serialize",
+    ))
+)]
+#[derive_where(Clone)]
+#[derive_where(Debug, Eq, Hash, PartialEq; D, PublicKey<KG>)]
+pub struct Ke2Builder<D: Hash, KG: KeGroup>
+where
+    D::Core: ProxyHash,
+    <D::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
+    Le<<D::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
+{
+    server_nonce: GenericArray<u8, NonceLen>,
+    transcript_hasher: D,
+    client_e_pk: PublicKey<KG>,
+    server_e_pk: PublicKey<KG>,
+    shared_secret_1: GenericArray<u8, KG::PkLen>,
+    shared_secret_3: GenericArray<u8, KG::PkLen>,
+}
+
 /// The second key exchange message
 #[cfg_attr(
     feature = "serde",
@@ -130,13 +164,20 @@ where
     mac: Output<D>,
 }
 
+/// Trait required by [`KeGroup::Sk`] to be compatible with [`TripleDh`].
+pub trait DiffieHellman<KG: KeGroup> {
+    /// Diffie-Hellman key exchange.
+    fn diffie_hellman(self, pk: KG::Pk) -> GenericArray<u8, KG::PkLen>;
+}
+
 ////////////////////////////////
 // High-level Implementations //
 // ========================== //
 ////////////////////////////////
 
-impl<D: Hash, KG: KeGroup> KeyExchange<D, KG> for TripleDh
+impl<D: Hash, KG: KeGroup + 'static> KeyExchange<D, KG> for TripleDh
 where
+    KG::Sk: DiffieHellman<KG>,
     D::Core: ProxyHash,
     <D::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
     Le<<D::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
@@ -158,6 +199,9 @@ where
     type KE1State = Ke1State<KG>;
     type KE2State = Ke2State<D>;
     type KE1Message = Ke1Message<KG>;
+    type KE2Builder = Ke2Builder<D, KG>;
+    type KE2BuilderData<'a> = &'a PublicKey<KG>;
+    type KE2BuilderInput = GenericArray<u8, KG::PkLen>;
     type KE2Message = Ke2Message<D, KG>;
     type KE3Message = Ke3Message<D>;
 
@@ -181,71 +225,82 @@ where
         ))
     }
 
-    #[allow(clippy::type_complexity)]
-    fn generate_ke2<
-        'a,
-        'b,
-        'c,
-        'd,
-        OprfCs: voprf::CipherSuite,
-        R: RngCore + CryptoRng,
-        S: SecretKey<KG>,
-    >(
+    fn ke2_builder<'a, 'b, 'c, 'd, OprfCs: voprf::CipherSuite, R: RngCore + CryptoRng>(
         rng: &mut R,
         serialized_credential_request: impl Iterator<Item = &'a [u8]>,
-        l2_bytes: impl Iterator<Item = &'b [u8]>,
+        serialized_credential_response: impl Iterator<Item = &'b [u8]>,
         ke1_message: Self::KE1Message,
         client_s_pk: PublicKey<KG>,
-        server_s_sk: S,
         id_u: impl Iterator<Item = &'c [u8]>,
         id_s: impl Iterator<Item = &'d [u8]>,
         context: &[u8],
-    ) -> Result<GenerateKe2Result<Self, D, KG>, ProtocolError<S::Error>> {
-        let server_e_kp = KeyPair::<KG>::generate_random::<OprfCs, _>(rng);
+    ) -> Result<Self::KE2Builder, ProtocolError> {
+        let server_e = KeyPair::<KG>::generate_random::<OprfCs, _>(rng);
         let server_nonce = generate_nonce::<R>(rng);
 
-        let mut transcript_hasher = D::new()
+        let transcript_hasher = D::new()
             .chain(STR_CONTEXT)
-            .chain_iter(
-                Input::<U2>::from(context)
-                    .map_err(ProtocolError::into_custom)?
-                    .iter(),
-            )
+            .chain_iter(Input::<U2>::from(context)?.iter())
             .chain_iter(id_u.into_iter())
             .chain_iter(serialized_credential_request)
             .chain_iter(id_s.into_iter())
-            .chain_iter(l2_bytes)
+            .chain_iter(serialized_credential_response)
             .chain(server_nonce)
-            .chain(server_e_kp.public().serialize());
+            .chain(server_e.public().serialize());
 
-        let result = derive_3dh_keys::<D, KG, S>(
-            TripleDhComponents {
-                pk1: ke1_message.client_e_pk.clone(),
-                sk1: server_e_kp.private().clone(),
-                pk2: ke1_message.client_e_pk.clone(),
-                sk2: server_s_sk,
-                pk3: client_s_pk,
-                sk3: server_e_kp.private().clone(),
-            },
-            &transcript_hasher.clone().finalize(),
+        let shared_secret_1 = server_e
+            .private()
+            .ke_diffie_hellman(&ke1_message.client_e_pk);
+        let shared_secret_3 = server_e.private().ke_diffie_hellman(&client_s_pk);
+
+        Ok(Ke2Builder {
+            server_nonce,
+            transcript_hasher,
+            client_e_pk: ke1_message.client_e_pk.clone(),
+            server_e_pk: server_e.public().clone(),
+            shared_secret_1,
+            shared_secret_3,
+        })
+    }
+
+    fn ke2_builder_data(builder: &Self::KE2Builder) -> Self::KE2BuilderData<'_> {
+        &builder.client_e_pk
+    }
+
+    fn generate_ke2_input(
+        builder: &Self::KE2Builder,
+        server_s_sk: &PrivateKey<KG>,
+    ) -> Self::KE2BuilderInput {
+        server_s_sk.ke_diffie_hellman(&builder.client_e_pk)
+    }
+
+    fn build_ke2(
+        mut builder: Self::KE2Builder,
+        shared_secret_2: Self::KE2BuilderInput,
+    ) -> Result<GenerateKe2Result<Self, D, KG>, ProtocolError> {
+        let result = derive_3dh_keys::<D, KG>(
+            builder.shared_secret_1.clone(),
+            shared_secret_2,
+            builder.shared_secret_3.clone(),
+            &builder.transcript_hasher.clone().finalize(),
         )?;
 
         let mut mac_hasher =
             Hmac::<D>::new_from_slice(&result.1).map_err(|_| InternalError::HmacError)?;
-        mac_hasher.update(&transcript_hasher.clone().finalize());
+        mac_hasher.update(&builder.transcript_hasher.clone().finalize());
         let mac = mac_hasher.finalize().into_bytes();
 
-        Digest::update(&mut transcript_hasher, &mac);
+        Digest::update(&mut builder.transcript_hasher, &mac);
 
         Ok((
             Ke2State {
                 km3: result.2,
-                hashed_transcript: transcript_hasher.finalize(),
+                hashed_transcript: builder.transcript_hasher.clone().finalize(),
                 session_key: result.0,
             },
             Ke2Message {
-                server_nonce,
-                server_e_pk: server_e_kp.public().clone(),
+                server_nonce: builder.server_nonce,
+                server_e_pk: builder.server_e_pk.clone(),
                 mac,
             },
             #[cfg(test)]
@@ -276,15 +331,12 @@ where
             .chain_iter(l2_component)
             .chain(ke2_message.to_bytes_without_mac());
 
-        let result = derive_3dh_keys::<D, KG, PrivateKey<KG>>(
-            TripleDhComponents {
-                pk1: ke2_message.server_e_pk.clone(),
-                sk1: ke1_state.client_e_sk.clone(),
-                pk2: server_s_pk,
-                sk2: ke1_state.client_e_sk.clone(),
-                pk3: ke2_message.server_e_pk.clone(),
-                sk3: client_s_sk,
-            },
+        let result = derive_3dh_keys::<D, KG>(
+            ke1_state
+                .client_e_sk
+                .ke_diffie_hellman(&ke2_message.server_e_pk),
+            ke1_state.client_e_sk.ke_diffie_hellman(&server_s_pk),
+            client_s_sk.ke_diffie_hellman(&ke2_message.server_e_pk),
             &transcript_hasher.clone().finalize(),
         )?;
 
@@ -335,16 +387,6 @@ where
 //==================== //
 /////////////////////////
 
-// The triple of public and private components used in the 3DH computation
-struct TripleDhComponents<KG: KeGroup, S: SecretKey<KG>> {
-    pk1: PublicKey<KG>,
-    sk1: PrivateKey<KG>,
-    pk2: PublicKey<KG>,
-    sk2: S,
-    pk3: PublicKey<KG>,
-    sk3: PrivateKey<KG>,
-}
-
 // Consists of a session key, followed by two mac keys: (session_key, km2, km3)
 #[cfg(not(test))]
 type TripleDhDerivationResult<D> = (Output<D>, Output<D>, Output<D>);
@@ -361,10 +403,12 @@ type TripleDhDerivationResult<D> = (Output<D>, Output<D>, Output<D>, Output<D>);
 // Internal function which takes the public and private components of the client
 // and server keypairs, along with some auxiliary metadata, to produce the
 // session key and two MAC keys
-fn derive_3dh_keys<D: Hash, KG: KeGroup, S: SecretKey<KG>>(
-    dh: TripleDhComponents<KG, S>,
+fn derive_3dh_keys<D: Hash, KG: KeGroup>(
+    shared_secret_1: GenericArray<u8, KG::PkLen>,
+    shared_secret_2: GenericArray<u8, KG::PkLen>,
+    shared_secret_3: GenericArray<u8, KG::PkLen>,
     hashed_derivation_transcript: &[u8],
-) -> Result<TripleDhDerivationResult<D>, ProtocolError<S::Error>>
+) -> Result<TripleDhDerivationResult<D>, ProtocolError>
 where
     D::Core: ProxyHash,
     <D::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
@@ -372,36 +416,24 @@ where
 {
     let mut hkdf = HkdfExtract::<D>::new(None);
 
-    hkdf.input_ikm(
-        &dh.sk1
-            .diffie_hellman(dh.pk1)
-            .map_err(InternalError::into_custom)?,
-    );
-    hkdf.input_ikm(&dh.sk2.diffie_hellman(dh.pk2)?);
-    hkdf.input_ikm(
-        &dh.sk3
-            .diffie_hellman(dh.pk3)
-            .map_err(InternalError::into_custom)?,
-    );
+    hkdf.input_ikm(&shared_secret_1);
+    hkdf.input_ikm(&shared_secret_2);
+    hkdf.input_ikm(&shared_secret_3);
 
     let (_, extracted_ikm) = hkdf.finalize();
     let handshake_secret = derive_secrets::<D>(
         &extracted_ikm,
         STR_HANDSHAKE_SECRET,
         hashed_derivation_transcript,
-    )
-    .map_err(ProtocolError::into_custom)?;
+    )?;
     let session_key = derive_secrets::<D>(
         &extracted_ikm,
         STR_SESSION_KEY,
         hashed_derivation_transcript,
-    )
-    .map_err(ProtocolError::into_custom)?;
+    )?;
 
-    let km2 = hkdf_expand_label::<D>(&handshake_secret, STR_SERVER_MAC, b"")
-        .map_err(ProtocolError::into_custom)?;
-    let km3 = hkdf_expand_label::<D>(&handshake_secret, STR_CLIENT_MAC, b"")
-        .map_err(ProtocolError::into_custom)?;
+    let km2 = hkdf_expand_label::<D>(&handshake_secret, STR_SERVER_MAC, b"")?;
+    let km3 = hkdf_expand_label::<D>(&handshake_secret, STR_CLIENT_MAC, b"")?;
 
     Ok((
         session_key,
@@ -577,6 +609,32 @@ where
             .concat(self.hashed_transcript.clone())
             .concat(self.session_key.clone())
     }
+}
+
+impl<KG: KeGroup, D: Hash> Drop for Ke2Builder<D, KG>
+where
+    D::Core: ProxyHash,
+    <D::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
+    Le<<D::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
+{
+    fn drop(&mut self) {
+        struct AssertZeroizeOnDrop<'a, T: ZeroizeOnDrop>(#[allow(unused)] &'a T);
+
+        self.server_nonce.zeroize();
+        self.transcript_hasher.reset();
+        let _ = AssertZeroizeOnDrop(&self.client_e_pk);
+        let _ = AssertZeroizeOnDrop(&self.server_e_pk);
+        self.shared_secret_1.zeroize();
+        self.shared_secret_3.zeroize();
+    }
+}
+
+impl<KG: KeGroup, D: Hash> ZeroizeOnDrop for Ke2Builder<D, KG>
+where
+    D::Core: ProxyHash,
+    <D::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
+    Le<<D::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
+{
 }
 
 impl<KG: KeGroup, D: Hash> Deserialize for Ke2Message<D, KG>

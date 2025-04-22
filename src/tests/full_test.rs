@@ -27,8 +27,7 @@ use crate::errors::*;
 use crate::hash::OutputSize;
 use crate::key_exchange::group::KeGroup;
 use crate::key_exchange::traits::{Ke1MessageLen, Ke1StateLen, Ke2MessageLen};
-use crate::key_exchange::tripledh::{NonceLen, TripleDh};
-use crate::keypair::SecretKey;
+use crate::key_exchange::tripledh::{DiffieHellman, NonceLen, TripleDh};
 use crate::ksf::Identity;
 use crate::messages::{
     CredentialRequestLen, CredentialResponseLen, CredentialResponseWithoutKeLen,
@@ -1497,6 +1496,7 @@ fn test_zeroize_client_login_start() -> Result<(), ProtocolError> {
         _test_vector: &str,
     ) -> Result<(), ProtocolError>
     where
+        <CS::KeGroup as KeGroup>::Sk: DiffieHellman<CS::KeGroup>,
         // CredentialRequest: KgPk + Ke1Message
         <OprfGroup<CS> as Group>::ElemLen: Add<Sum<NonceLen, <CS::KeGroup as KeGroup>::PkLen>>,
         CredentialRequestLen<CS>: ArrayLength<u8>,
@@ -1595,6 +1595,7 @@ fn test_zeroize_client_login_finish() -> Result<(), ProtocolError> {
         _test_vector: &str,
     ) -> Result<(), ProtocolError>
     where
+        <CS::KeGroup as KeGroup>::Sk: DiffieHellman<CS::KeGroup>,
         // MaskedResponse: (Nonce + Hash) + KePk
         NonceLen: Add<OutputSize<OprfHash<CS>>>,
         Sum<NonceLen, OutputSize<OprfHash<CS>>>:
