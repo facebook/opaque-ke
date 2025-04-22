@@ -24,10 +24,12 @@ use crate::envelope::{Envelope, EnvelopeLen, InnerEnvelopeMode};
 use crate::errors::*;
 use crate::hash::OutputSize;
 use crate::key_exchange::group::Group;
+use crate::key_exchange::shared::NonceLen;
+use crate::key_exchange::sigma_i::SigmaI;
 use crate::key_exchange::traits::{
     Deserialize, Ke1MessageLen, Ke1StateLen, Ke2MessageLen, KeyExchange, Serialize,
 };
-use crate::key_exchange::tripledh::{NonceLen, TripleDh};
+use crate::key_exchange::tripledh::TripleDh;
 use crate::keypair::KeyPair;
 use crate::messages::CredentialResponseWithoutKeLen;
 use crate::opaque::{ClientLoginLen, ClientRegistrationLen, MaskedResponseLen};
@@ -35,36 +37,56 @@ use crate::serialization::{i2osp, os2ip};
 use crate::*;
 
 #[cfg(feature = "ristretto255")]
-struct Ristretto255;
+struct TripleDhRistretto255;
 
 #[cfg(feature = "ristretto255")]
-impl CipherSuite for Ristretto255 {
+impl CipherSuite for TripleDhRistretto255 {
     type OprfCs = crate::Ristretto255;
     type KeyExchange = TripleDh<crate::Ristretto255, sha2::Sha512>;
     type Ksf = crate::ksf::Identity;
 }
 
-struct P256;
+struct TripleDhP256;
 
-impl CipherSuite for P256 {
+impl CipherSuite for TripleDhP256 {
     type OprfCs = ::p256::NistP256;
     type KeyExchange = TripleDh<::p256::NistP256, sha2::Sha256>;
     type Ksf = crate::ksf::Identity;
 }
 
-struct P384;
+struct TripleDhP384;
 
-impl CipherSuite for P384 {
+impl CipherSuite for TripleDhP384 {
     type OprfCs = ::p384::NistP384;
     type KeyExchange = TripleDh<::p384::NistP384, sha2::Sha384>;
     type Ksf = crate::ksf::Identity;
 }
 
-struct P521;
+struct TripleDhP521;
 
-impl CipherSuite for P521 {
+impl CipherSuite for TripleDhP521 {
     type OprfCs = ::p521::NistP521;
     type KeyExchange = TripleDh<::p521::NistP521, sha2::Sha512>;
+    type Ksf = crate::ksf::Identity;
+}
+
+#[cfg(feature = "ecdsa")]
+struct SigmaIP256;
+
+#[cfg(feature = "ecdsa")]
+impl CipherSuite for SigmaIP256 {
+    type OprfCs = ::p256::NistP256;
+    type KeyExchange = SigmaI<::p256::NistP256, ::p256::NistP256, sha2::Sha256>;
+    type Ksf = crate::ksf::Identity;
+}
+
+#[cfg(feature = "ecdsa")]
+struct SigmaIP384;
+
+#[cfg(feature = "ecdsa")]
+impl CipherSuite for SigmaIP384 {
+    type OprfCs = ::p384::NistP384;
+    type KeyExchange = SigmaI<::p384::NistP384, ::p384::NistP384, sha2::Sha384>;
     type Ksf = crate::ksf::Identity;
 }
 
@@ -102,10 +124,14 @@ fn client_registration_roundtrip() -> Result<(), ProtocolError> {
     }
 
     #[cfg(feature = "ristretto255")]
-    inner::<Ristretto255>()?;
-    inner::<P256>()?;
-    inner::<P384>()?;
-    inner::<P521>()?;
+    inner::<TripleDhRistretto255>()?;
+    inner::<TripleDhP256>()?;
+    inner::<TripleDhP384>()?;
+    inner::<TripleDhP521>()?;
+    #[cfg(feature = "ecdsa")]
+    inner::<SigmaIP256>()?;
+    #[cfg(feature = "ecdsa")]
+    inner::<SigmaIP384>()?;
 
     Ok(())
 }
@@ -151,10 +177,14 @@ fn server_registration_roundtrip() -> Result<(), ProtocolError> {
     }
 
     #[cfg(feature = "ristretto255")]
-    inner::<Ristretto255>()?;
-    inner::<P256>()?;
-    inner::<P384>()?;
-    inner::<P521>()?;
+    inner::<TripleDhRistretto255>()?;
+    inner::<TripleDhP256>()?;
+    inner::<TripleDhP384>()?;
+    inner::<TripleDhP521>()?;
+    #[cfg(feature = "ecdsa")]
+    inner::<SigmaIP256>()?;
+    #[cfg(feature = "ecdsa")]
+    inner::<SigmaIP384>()?;
 
     Ok(())
 }
@@ -187,10 +217,14 @@ fn registration_request_roundtrip() -> Result<(), ProtocolError> {
     }
 
     #[cfg(feature = "ristretto255")]
-    inner::<Ristretto255>()?;
-    inner::<P256>()?;
-    inner::<P384>()?;
-    inner::<P521>()?;
+    inner::<TripleDhRistretto255>()?;
+    inner::<TripleDhP256>()?;
+    inner::<TripleDhP384>()?;
+    inner::<TripleDhP521>()?;
+    #[cfg(feature = "ecdsa")]
+    inner::<SigmaIP256>()?;
+    #[cfg(feature = "ecdsa")]
+    inner::<SigmaIP384>()?;
 
     Ok(())
 }
@@ -234,10 +268,14 @@ fn registration_response_roundtrip() -> Result<(), ProtocolError> {
     }
 
     #[cfg(feature = "ristretto255")]
-    inner::<Ristretto255>()?;
-    inner::<P256>()?;
-    inner::<P384>()?;
-    inner::<P521>()?;
+    inner::<TripleDhRistretto255>()?;
+    inner::<TripleDhP256>()?;
+    inner::<TripleDhP384>()?;
+    inner::<TripleDhP521>()?;
+    #[cfg(feature = "ecdsa")]
+    inner::<SigmaIP256>()?;
+    #[cfg(feature = "ecdsa")]
+    inner::<SigmaIP384>()?;
 
     Ok(())
 }
@@ -291,10 +329,14 @@ fn registration_upload_roundtrip() -> Result<(), ProtocolError> {
     }
 
     #[cfg(feature = "ristretto255")]
-    inner::<Ristretto255>()?;
-    inner::<P256>()?;
-    inner::<P384>()?;
-    inner::<P521>()?;
+    inner::<TripleDhRistretto255>()?;
+    inner::<TripleDhP256>()?;
+    inner::<TripleDhP384>()?;
+    inner::<TripleDhP521>()?;
+    #[cfg(feature = "ecdsa")]
+    inner::<SigmaIP256>()?;
+    #[cfg(feature = "ecdsa")]
+    inner::<SigmaIP384>()?;
 
     Ok(())
 }
@@ -345,16 +387,20 @@ fn credential_request_roundtrip() -> Result<(), ProtocolError> {
     }
 
     #[cfg(feature = "ristretto255")]
-    inner::<Ristretto255>()?;
-    inner::<P256>()?;
-    inner::<P384>()?;
-    inner::<P521>()?;
+    inner::<TripleDhRistretto255>()?;
+    inner::<TripleDhP256>()?;
+    inner::<TripleDhP384>()?;
+    inner::<TripleDhP521>()?;
+    #[cfg(feature = "ecdsa")]
+    inner::<SigmaIP256>()?;
+    #[cfg(feature = "ecdsa")]
+    inner::<SigmaIP384>()?;
 
     Ok(())
 }
 
 #[test]
-fn credential_response_roundtrip() -> Result<(), ProtocolError> {
+fn triple_dh_credential_response_roundtrip() -> Result<(), ProtocolError> {
     fn inner<CS: CipherSuite>() -> Result<(), ProtocolError>
     where
         <CS::KeyExchange as KeyExchange>::KE2Message: Deserialize,
@@ -431,16 +477,104 @@ fn credential_response_roundtrip() -> Result<(), ProtocolError> {
     }
 
     #[cfg(feature = "ristretto255")]
-    inner::<Ristretto255>()?;
-    inner::<P256>()?;
-    inner::<P384>()?;
-    inner::<P521>()?;
+    inner::<TripleDhRistretto255>()?;
+    inner::<TripleDhP256>()?;
+    inner::<TripleDhP384>()?;
+    inner::<TripleDhP521>()?;
 
     Ok(())
 }
 
 #[test]
-fn credential_finalization_roundtrip() -> Result<(), ProtocolError> {
+#[cfg(feature = "ecdsa")]
+fn sigma_i_credential_response_roundtrip() -> Result<(), ProtocolError> {
+    fn inner<CS: CipherSuite>() -> Result<(), ProtocolError>
+    where
+        <CS::KeyExchange as KeyExchange>::KE2Message: Deserialize,
+        // CredentialResponseWithoutKeLen: (KgPk + Nonce) + MaskedResponse
+        <OprfGroup<CS> as voprf::Group>::ElemLen: Add<NonceLen>,
+        Sum<<OprfGroup<CS> as voprf::Group>::ElemLen, NonceLen>:
+            ArrayLength<u8> + Add<MaskedResponseLen<CS>>,
+        CredentialResponseWithoutKeLen<CS>: ArrayLength<u8>,
+        // MaskedResponse: (Nonce + Hash) + KePk
+        NonceLen: Add<OutputSize<OprfHash<CS>>>,
+        Sum<NonceLen, OutputSize<OprfHash<CS>>>:
+            ArrayLength<u8> + Add<<KeGroup<CS> as Group>::PkLen>,
+        MaskedResponseLen<CS>: ArrayLength<u8>,
+        // CredentialResponse: CredentialResponseWithoutKeLen + Ke2Message
+        <CS::KeyExchange as KeyExchange>::KE2Message: Serialize,
+        CredentialResponseWithoutKeLen<CS>: Add<Ke2MessageLen<CS>>,
+        CredentialResponseLen<CS>: ArrayLength<u8>,
+    {
+        let pt = random_point::<CS>();
+        let pt_bytes = KeGroup::<CS>::serialize_pk(pt);
+
+        let mut rng = OsRng;
+
+        let mut masking_nonce = [0u8; 32];
+        rng.fill_bytes(&mut masking_nonce);
+
+        let mut masked_response =
+            vec![0u8; <OprfGroup<CS> as voprf::Group>::ElemLen::USIZE + Envelope::<CS>::len()];
+        rng.fill_bytes(&mut masked_response);
+
+        let server_e_kp = KeyPair::<KeGroup<CS>>::derive_random(&mut rng);
+        let r = KeGroup::<CS>::serialize_sk(KeGroup::<CS>::random_sk(&mut rng));
+        let s = KeGroup::<CS>::serialize_sk(KeGroup::<CS>::random_sk(&mut rng));
+        let mut mac = Output::<OprfHash<CS>>::default();
+        rng.fill_bytes(&mut mac);
+        let mut server_nonce = [0u8; NonceLen::USIZE];
+        rng.fill_bytes(&mut server_nonce);
+
+        let ke2m: Vec<u8> = [
+            server_nonce.as_ref(),
+            server_e_kp.public().serialize().as_ref(),
+            &r,
+            &s,
+            &mac,
+        ]
+        .concat();
+
+        let mut input = Vec::new();
+        input.extend_from_slice(&pt_bytes);
+        input.extend_from_slice(&masking_nonce);
+        input.extend_from_slice(&masked_response);
+        input.extend_from_slice(&ke2m);
+
+        let l2 = CredentialResponse::<CS>::deserialize(&input)?;
+        let l2_bytes = l2.serialize();
+        assert_eq!(input, *l2_bytes);
+
+        // Assert that identity group element is rejected
+        let identity = OprfGroup::<CS>::identity_elem();
+        let identity_bytes = OprfGroup::<CS>::serialize_elem(identity).to_vec();
+
+        assert!(matches!(
+            CredentialResponse::<CS>::deserialize(
+                &[
+                    identity_bytes,
+                    masking_nonce.to_vec(),
+                    masked_response,
+                    ke2m.to_vec()
+                ]
+                .concat()
+            ),
+            Err(ProtocolError::LibraryError(InternalError::OprfError(
+                voprf::Error::Deserialization,
+            )))
+        ));
+
+        Ok(())
+    }
+
+    inner::<SigmaIP256>()?;
+    inner::<SigmaIP384>()?;
+
+    Ok(())
+}
+
+#[test]
+fn triple_dh_credential_finalization_roundtrip() -> Result<(), ProtocolError> {
     fn inner<CS: CipherSuite>() -> Result<(), ProtocolError>
     where
         <CS::KeyExchange as KeyExchange>::KE3Message: Deserialize + Serialize,
@@ -459,10 +593,43 @@ fn credential_finalization_roundtrip() -> Result<(), ProtocolError> {
     }
 
     #[cfg(feature = "ristretto255")]
-    inner::<Ristretto255>()?;
-    inner::<P256>()?;
-    inner::<P384>()?;
-    inner::<P521>()?;
+    inner::<TripleDhRistretto255>()?;
+    inner::<TripleDhP256>()?;
+    inner::<TripleDhP384>()?;
+    inner::<TripleDhP521>()?;
+
+    Ok(())
+}
+
+#[test]
+#[cfg(feature = "ecdsa")]
+fn sigma_i_credential_finalization_roundtrip() -> Result<(), ProtocolError> {
+    fn inner<CS: CipherSuite>() -> Result<(), ProtocolError>
+    where
+        <CS::KeyExchange as KeyExchange>::KE3Message: Deserialize + Serialize,
+    {
+        let mut rng = OsRng;
+
+        let r = KeGroup::<CS>::serialize_sk(KeGroup::<CS>::random_sk(&mut rng));
+        let s = KeGroup::<CS>::serialize_sk(KeGroup::<CS>::random_sk(&mut rng));
+
+        let mut mac = Output::<OprfHash<CS>>::default();
+        rng.fill_bytes(&mut mac);
+
+        let mut input = Vec::new();
+        input.extend_from_slice(&r);
+        input.extend_from_slice(&s);
+        input.extend_from_slice(&mac);
+
+        let l3 = CredentialFinalization::<CS>::deserialize(&input)?;
+        let l3_bytes = l3.serialize();
+        assert_eq!(input.as_slice(), l3_bytes.as_slice());
+
+        Ok(())
+    }
+
+    inner::<SigmaIP256>()?;
+    inner::<SigmaIP384>()?;
 
     Ok(())
 }
@@ -525,10 +692,14 @@ fn client_login_roundtrip() -> Result<(), ProtocolError> {
     }
 
     #[cfg(feature = "ristretto255")]
-    inner::<Ristretto255>()?;
-    inner::<P256>()?;
-    inner::<P384>()?;
-    inner::<P521>()?;
+    inner::<TripleDhRistretto255>()?;
+    inner::<TripleDhP256>()?;
+    inner::<TripleDhP384>()?;
+    inner::<TripleDhP521>()?;
+    #[cfg(feature = "ecdsa")]
+    inner::<SigmaIP256>()?;
+    #[cfg(feature = "ecdsa")]
+    inner::<SigmaIP384>()?;
 
     Ok(())
 }
@@ -558,16 +729,20 @@ fn ke1_message_roundtrip() -> Result<(), ProtocolError> {
     }
 
     #[cfg(feature = "ristretto255")]
-    inner::<Ristretto255>()?;
-    inner::<P256>()?;
-    inner::<P384>()?;
-    inner::<P521>()?;
+    inner::<TripleDhRistretto255>()?;
+    inner::<TripleDhP256>()?;
+    inner::<TripleDhP384>()?;
+    inner::<TripleDhP521>()?;
+    #[cfg(feature = "ecdsa")]
+    inner::<SigmaIP256>()?;
+    #[cfg(feature = "ecdsa")]
+    inner::<SigmaIP384>()?;
 
     Ok(())
 }
 
 #[test]
-fn ke2_message_roundtrip() -> Result<(), ProtocolError> {
+fn triple_dh_ke2_message_roundtrip() -> Result<(), ProtocolError> {
     fn inner<CS: CipherSuite>() -> Result<(), ProtocolError>
     where
         <CS::KeyExchange as KeyExchange>::KE2Message: Deserialize + Serialize,
@@ -595,16 +770,55 @@ fn ke2_message_roundtrip() -> Result<(), ProtocolError> {
     }
 
     #[cfg(feature = "ristretto255")]
-    inner::<Ristretto255>()?;
-    inner::<P256>()?;
-    inner::<P384>()?;
-    inner::<P521>()?;
+    inner::<TripleDhRistretto255>()?;
+    inner::<TripleDhP256>()?;
+    inner::<TripleDhP384>()?;
+    inner::<TripleDhP521>()?;
 
     Ok(())
 }
 
 #[test]
-fn ke3_message_roundtrip() -> Result<(), ProtocolError> {
+#[cfg(feature = "ecdsa")]
+fn sigma_i_ke2_message_roundtrip() -> Result<(), ProtocolError> {
+    fn inner<CS: CipherSuite>() -> Result<(), ProtocolError>
+    where
+        <CS::KeyExchange as KeyExchange>::KE2Message: Deserialize + Serialize,
+    {
+        let mut rng = OsRng;
+
+        let server_e_kp = KeyPair::<KeGroup<CS>>::derive_random(&mut rng);
+        let mut mac = Output::<OprfHash<CS>>::default();
+        rng.fill_bytes(&mut mac);
+        let mut server_nonce = vec![0u8; NonceLen::USIZE];
+        rng.fill_bytes(&mut server_nonce);
+        let r = KeGroup::<CS>::serialize_sk(KeGroup::<CS>::random_sk(&mut rng));
+        let s = KeGroup::<CS>::serialize_sk(KeGroup::<CS>::random_sk(&mut rng));
+
+        let ke2m: Vec<u8> = [
+            server_nonce.as_slice(),
+            server_e_kp.public().serialize().as_ref(),
+            &r,
+            &s,
+            &mac,
+        ]
+        .concat();
+
+        let reg = <CS::KeyExchange as KeyExchange>::KE2Message::deserialize(&ke2m)?;
+        let reg_bytes = reg.serialize();
+        assert_eq!(*reg_bytes, ke2m);
+
+        Ok(())
+    }
+
+    inner::<SigmaIP256>()?;
+    inner::<SigmaIP384>()?;
+
+    Ok(())
+}
+
+#[test]
+fn triple_dh_ke3_message_roundtrip() -> Result<(), ProtocolError> {
     fn inner<CS: CipherSuite>() -> Result<(), ProtocolError>
     where
         <CS::KeyExchange as KeyExchange>::KE3Message: Deserialize + Serialize,
@@ -623,10 +837,38 @@ fn ke3_message_roundtrip() -> Result<(), ProtocolError> {
     }
 
     #[cfg(feature = "ristretto255")]
-    inner::<Ristretto255>()?;
-    inner::<P256>()?;
-    inner::<P384>()?;
-    inner::<P521>()?;
+    inner::<TripleDhRistretto255>()?;
+    inner::<TripleDhP256>()?;
+    inner::<TripleDhP384>()?;
+    inner::<TripleDhP521>()?;
+
+    Ok(())
+}
+
+#[test]
+#[cfg(feature = "ecdsa")]
+fn sigma_i_ke3_message_roundtrip() -> Result<(), ProtocolError> {
+    fn inner<CS: CipherSuite>() -> Result<(), ProtocolError>
+    where
+        <CS::KeyExchange as KeyExchange>::KE3Message: Deserialize + Serialize,
+    {
+        let mut rng = OsRng;
+        let r = KeGroup::<CS>::serialize_sk(KeGroup::<CS>::random_sk(&mut rng));
+        let s = KeGroup::<CS>::serialize_sk(KeGroup::<CS>::random_sk(&mut rng));
+        let mut mac = Output::<OprfHash<CS>>::default();
+        rng.fill_bytes(&mut mac);
+
+        let ke3m: Vec<u8> = [mac.as_slice(), &r, &s].concat();
+
+        let reg = <CS::KeyExchange as KeyExchange>::KE3Message::deserialize(&ke3m)?;
+        let reg_bytes = reg.serialize();
+        assert_eq!(*reg_bytes, ke3m);
+
+        Ok(())
+    }
+
+    inner::<SigmaIP256>()?;
+    inner::<SigmaIP384>()?;
 
     Ok(())
 }
@@ -715,7 +957,11 @@ macro_rules! test {
 }
 
 #[cfg(feature = "ristretto255")]
-test!(ristretto255, Ristretto255);
-test!(p256, P256);
-test!(p384, P384);
-test!(p521, P521);
+test!(triple_dh_ristretto255, TripleDhRistretto255);
+test!(triple_dh_p256, TripleDhP256);
+test!(triple_dh_p384, TripleDhP384);
+test!(triple_dh_p521, TripleDhP521);
+#[cfg(feature = "ecdsa")]
+test!(sigma_i_p256, SigmaIP256);
+#[cfg(feature = "ecdsa")]
+test!(sigma_i_p384, SigmaIP384);

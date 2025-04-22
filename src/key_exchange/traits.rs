@@ -45,19 +45,20 @@ where
     #[allow(clippy::too_many_arguments)]
     fn ke2_builder<'a, 'b, 'c, 'd, R: RngCore + CryptoRng>(
         rng: &mut R,
-        serialized_credential_request: impl Iterator<Item = &'a [u8]>,
-        serialized_credential_response: impl Iterator<Item = &'b [u8]>,
+        serialized_credential_request: impl Clone + Iterator<Item = &'a [u8]>,
+        serialized_credential_response: impl Clone + Iterator<Item = &'b [u8]>,
         ke1_message: Self::KE1Message,
         client_s_pk: PublicKey<Self::Group>,
-        id_u: impl Iterator<Item = &'c [u8]>,
-        id_s: impl Iterator<Item = &'d [u8]>,
+        id_u: impl Clone + Iterator<Item = &'c [u8]>,
+        id_s: impl Clone + Iterator<Item = &'d [u8]>,
         context: &[u8],
     ) -> Result<Self::KE2Builder, ProtocolError>;
 
     fn ke2_builder_data(builder: &Self::KE2Builder) -> Self::KE2BuilderData<'_>;
 
-    fn generate_ke2_input(
+    fn generate_ke2_input<R: CryptoRng + RngCore>(
         builder: &Self::KE2Builder,
+        rng: &mut R,
         server_s_sk: &PrivateKey<Self::Group>,
     ) -> Self::KE2BuilderInput;
 
@@ -67,15 +68,16 @@ where
     ) -> Result<GenerateKe2Result<Self>, ProtocolError>;
 
     #[allow(clippy::too_many_arguments)]
-    fn generate_ke3<'a, 'b, 'c, 'd>(
-        l2_component: impl Iterator<Item = &'a [u8]>,
+    fn generate_ke3<'a, 'b, 'c, 'd, R: CryptoRng + RngCore>(
+        rng: &mut R,
+        serialized_credential_response: impl Clone + Iterator<Item = &'a [u8]>,
         ke2_message: Self::KE2Message,
         ke1_state: &Self::KE1State,
-        serialized_credential_request: impl Iterator<Item = &'b [u8]>,
+        serialized_credential_request: impl Clone + Iterator<Item = &'b [u8]>,
         server_s_pk: PublicKey<Self::Group>,
         client_s_sk: PrivateKey<Self::Group>,
-        id_u: impl Iterator<Item = &'c [u8]>,
-        id_s: impl Iterator<Item = &'d [u8]>,
+        id_u: impl Clone + Iterator<Item = &'c [u8]>,
+        id_s: impl Clone + Iterator<Item = &'d [u8]>,
         context: &[u8],
     ) -> Result<GenerateKe3Result<Self>, ProtocolError>;
 

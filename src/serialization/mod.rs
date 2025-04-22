@@ -88,7 +88,7 @@ impl<'a, L1: ArrayLength<u8>, L2: ArrayLength<u8>, L3: ArrayLength<u8>> Input<'a
         })
     }
 
-    pub(crate) fn iter(&self) -> impl Iterator<Item = &[u8]> {
+    pub(crate) fn iter(&self) -> impl Clone + Iterator<Item = &[u8]> {
         // Some magic to make it output the same type in all branches.
         [self.octet.as_slice()]
             .into_iter()

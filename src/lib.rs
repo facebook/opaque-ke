@@ -429,6 +429,7 @@
 //! # let server_login_start_result =
 //! #     ServerLogin::start(&mut server_rng, &server_setup, Some(password_file), client_login_start_result.message, b"alice@example.com", ServerLoginStartParameters::default())?;
 //! let client_login_finish_result = client_login_start_result.state.finish(
+//!     &mut client_rng,
 //!     b"password",
 //!     server_login_start_result.message,
 //!     ClientLoginFinishParameters::default(),
@@ -483,6 +484,7 @@
 //! # let server_login_start_result =
 //! #     ServerLogin::start(&mut server_rng, &server_setup, Some(password_file), client_login_start_result.message, b"alice@example.com", ServerLoginStartParameters::default())?;
 //! # let client_login_finish_result = client_login_start_result.state.finish(
+//! #   &mut client_rng,
 //! #   b"password",
 //! #   server_login_start_result.message,
 //! #   ClientLoginFinishParameters::default(),
@@ -587,6 +589,7 @@
 //!
 //! // And then later, during login...
 //! let client_login_finish_result = client_login_start_result.state.finish(
+//!     &mut client_rng,
 //!     b"password",
 //!     server_login_start_result.message,
 //!     ClientLoginFinishParameters::default(),
@@ -682,6 +685,7 @@
 //!
 //! // And then later, during login...
 //! let client_login_finish_result = client_login_start_result.state.finish(
+//!     &mut client_rng,
 //!     b"password",
 //!     server_login_start_result.message,
 //!     ClientLoginFinishParameters::default(),
@@ -856,6 +860,7 @@
 //! # let server_login_start_result =
 //! #     ServerLogin::start(&mut server_rng, &server_setup, Some(password_file), client_login_start_result.message, b"alice@example.com", ServerLoginStartParameters { context: None, identifiers: Identifiers { client: Some(b"Alice_the_Cryptographer"), server: Some(b"Facebook") } })?;
 //! let client_login_finish_result = client_login_start_result.state.finish(
+//!     &mut client_rng,
 //!     b"password",
 //!     server_login_start_result.message,
 //!     ClientLoginFinishParameters::new(
@@ -1103,15 +1108,11 @@
 //! - The `curve25519` feature enables Curve25519 as a `KeGroup`. To select a
 //!   specific backend see the [curve25519-dalek] documentation.
 //!
-//! - The `p256` feature enables the use of [`p256::NistP256`] as a `KeGroup`
-//!   and a `OprfCs` for `CipherSuite`.
-//!
-//! - The `bench` feature is used only for running performance benchmarks for
-//!   this implementation.
+//! - The `ecdsa` feature enables using [`elliptic_curve`]s for
+//!   [`SigmaI`](crate::key_exchange::sigma_i::SigmaI)s signature algorithm.
 //!
 //! [curve25519-dalek]:
 //!     (https://docs.rs/curve25519-dalek/4.0.0-pre.5/curve25519_dalek/index.html#backends)
-//! [`p256::NistP256`]: https://docs.rs/p256/latest/p256/struct.NistP256.html
 
 #![no_std]
 #![cfg_attr(docsrs, feature(doc_auto_cfg))]

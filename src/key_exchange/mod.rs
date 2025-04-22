@@ -10,5 +10,7 @@
 //! OPAQUE
 
 pub mod group;
+pub(crate) mod shared;
+pub mod sigma_i;
 pub(crate) mod traits;
 pub mod tripledh;

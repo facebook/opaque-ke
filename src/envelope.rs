@@ -331,3 +331,24 @@ fn construct_aad<'a>(
 ) -> impl Iterator<Item = &'a [u8]> {
     [server_s_pk].into_iter().chain(id_s).chain(id_u)
 }
+
+//////////////////////////
+// Test Implementations //
+//===================== //
+//////////////////////////
+
+#[cfg(test)]
+use crate::util::AssertZeroized;
+
+#[cfg(test)]
+impl<CS: CipherSuite> AssertZeroized for Envelope<CS> {
+    fn assert_zeroized(&self) {
+        let Self { mode, nonce, hmac } = self;
+
+        assert_eq!(mode, &InnerEnvelopeMode::Zero);
+
+        for byte in nonce.iter().chain(hmac) {
+            assert_eq!(byte, &0);
+        }
+    }
+}

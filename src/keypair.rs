@@ -16,6 +16,7 @@ use rand::{CryptoRng, RngCore};
 
 use crate::errors::ProtocolError;
 use crate::key_exchange::group::Group;
+use crate::key_exchange::sigma_i::{SharedSecret, Sign, Verify};
 use crate::key_exchange::tripledh::DiffieHellman;
 
 /// A Keypair trait with public-private verification
@@ -28,7 +29,9 @@ use crate::key_exchange::tripledh::DiffieHellman;
     ))
 )]
 #[derive_where(Clone)]
-#[derive_where(Debug, Eq, Hash, Ord, PartialEq, PartialOrd; KG::Pk, SK)]
+#[derive_where(Eq, Hash, Ord, PartialEq, PartialOrd; KG::Pk, SK)]
+#[cfg_attr(not(test), derive_where(Debug; KG::Pk, SK))]
+#[cfg_attr(test, derive_where(Debug), derive_where(skip_inner(Debug)))]
 pub struct KeyPair<KG: Group, SK: Clone = PrivateKey<KG>> {
     pk: PublicKey<KG>,
     sk: SK,
@@ -74,31 +77,6 @@ impl<KG: Group> KeyPair<KG> {
     }
 }
 
-#[cfg(test)]
-impl<KG: Group> KeyPair<KG>
-where
-    KG::Pk: std::fmt::Debug,
-    KG::Sk: std::fmt::Debug,
-{
-    /// Test-only strategy returning a proptest Strategy based on
-    /// [`Self::derive_random`]
-    fn uniform_keypair_strategy() -> proptest::prelude::BoxedStrategy<Self> {
-        use proptest::prelude::*;
-        use rand::rngs::StdRng;
-        use rand::SeedableRng;
-
-        // The no_shrink is because keypairs should be fixed -- shrinking would cause a
-        // different keypair to be generated, which appears to not be very useful.
-        any::<[u8; 32]>()
-            .prop_filter_map("valid random keypair", |seed| {
-                let mut rng = StdRng::from_seed(seed);
-                Some(Self::derive_random(&mut rng))
-            })
-            .no_shrink()
-            .boxed()
-    }
-}
-
 /// Wrapper around a Key to enforce that it's a private one.
 #[derive_where(Clone, ZeroizeOnDrop)]
 #[derive_where(Debug, Eq, Hash, Ord, PartialEq, PartialOrd; KG::Sk)]
@@ -127,6 +105,33 @@ where
     /// Diffie-Hellman key exchange implementation
     pub(crate) fn ke_diffie_hellman(&self, pk: &PublicKey<KG>) -> GenericArray<u8, KG::PkLen> {
         self.0.diffie_hellman(pk.0)
+    }
+}
+
+impl<KG: Group> PrivateKey<KG>
+where
+    KG::Sk: SharedSecret<KG>,
+{
+    /// Key-exchange implementation
+    pub(crate) fn ke_shared_secret(
+        &self,
+        pk: &PublicKey<KG>,
+    ) -> GenericArray<u8, <KG::Sk as SharedSecret<KG>>::Len> {
+        self.0.shared_secret(pk.0)
+    }
+}
+
+impl<KG: Group> PrivateKey<KG>
+where
+    KG::Sk: Sign,
+{
+    /// Private-key signing implementation
+    pub(crate) fn ke_sign<R: CryptoRng + RngCore>(
+        &self,
+        rng: &mut R,
+        message: &[u8],
+    ) -> <KG::Sk as Sign>::Signature {
+        self.0.sign(rng, message)
     }
 }
 
@@ -207,6 +212,21 @@ impl<KG: Group> PublicKey<KG> {
     }
 }
 
+impl<KG: Group> PublicKey<KG>
+where
+    KG::Sk: Sign,
+    KG::Pk: Verify<KG>,
+{
+    /// Public-key verifying implementation
+    pub(crate) fn ke_verify(
+        &self,
+        message: &[u8],
+        signature: &<KG::Sk as Sign>::Signature,
+    ) -> Result<(), ProtocolError> {
+        self.0.verify(message, signature)
+    }
+}
+
 #[cfg(feature = "serde")]
 impl<'de, KG: Group> serde::Deserialize<'de> for PublicKey<KG> {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
@@ -231,20 +251,75 @@ impl<KG: Group> serde::Serialize for PublicKey<KG> {
     }
 }
 
+//////////////////////////
+// Test Implementations //
+//===================== //
+//////////////////////////
+
+#[cfg(test)]
+use crate::util::AssertZeroized;
+
+#[cfg(test)]
+impl<KG: Group> KeyPair<KG> {
+    /// Test-only strategy returning a proptest Strategy based on
+    /// [`Self::derive_random`]
+    fn uniform_keypair_strategy() -> proptest::prelude::BoxedStrategy<Self> {
+        use proptest::prelude::*;
+        use rand::rngs::StdRng;
+        use rand::SeedableRng;
+
+        // The no_shrink is because keypairs should be fixed -- shrinking would cause a
+        // different keypair to be generated, which appears to not be very useful.
+        any::<[u8; 32]>()
+            .prop_filter_map("valid random keypair", |seed| {
+                let mut rng = StdRng::from_seed(seed);
+                Some(Self::derive_random(&mut rng))
+            })
+            .no_shrink()
+            .boxed()
+    }
+}
+
+#[cfg(test)]
+impl<KG: Group> AssertZeroized for PublicKey<KG>
+where
+    KG::Pk: AssertZeroized,
+{
+    fn assert_zeroized(&self) {
+        self.0.assert_zeroized();
+    }
+}
+
+#[cfg(test)]
+impl<KG: Group> AssertZeroized for PrivateKey<KG>
+where
+    KG::Sk: AssertZeroized,
+{
+    fn assert_zeroized(&self) {
+        self.0.assert_zeroized();
+    }
+}
+
 #[cfg(test)]
 mod tests {
+    use core::ptr;
+
     use rand::rngs::OsRng;
 
     use super::*;
     use crate::ciphersuite::KeGroup;
-    use crate::util;
+    use crate::util::AssertZeroized;
 
     #[test]
     fn test_zeroize_key() {
-        fn inner<G: Group>() {
+        fn inner<G: Group>()
+        where
+            G::Sk: AssertZeroized,
+        {
             let mut rng = OsRng;
             let mut key = PrivateKey::<G>(G::random_sk(&mut rng));
-            util::test_zeroize_on_drop(&mut key);
+            unsafe { ptr::drop_in_place(&mut key) };
+            key.0.assert_zeroized();
         }
 
         #[cfg(feature = "ristretto255")]
@@ -379,6 +454,7 @@ mod tests {
         } = builder.build(shared_secret).unwrap();
         let ClientLoginFinishResult { message, .. } = client
             .finish(
+                &mut OsRng,
                 PASSWORD.as_bytes(),
                 message,
                 ClientLoginFinishParameters::default(),

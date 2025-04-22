@@ -22,10 +22,11 @@ use crate::envelope::EnvelopeLen;
 use crate::errors::*;
 use crate::hash::OutputSize;
 use crate::key_exchange::group::Group;
+use crate::key_exchange::shared::NonceLen;
 use crate::key_exchange::traits::{
     Deserialize, Ke1MessageLen, Ke2MessageLen, KeyExchange, Serialize,
 };
-use crate::key_exchange::tripledh::{NonceLen, TripleDh};
+use crate::key_exchange::tripledh::TripleDh;
 use crate::ksf::Identity;
 use crate::messages::{
     CredentialRequestLen, CredentialResponseLen, CredentialResponseWithoutKeLen,
@@ -541,6 +542,7 @@ where
             ClientLogin::<CS>::start(&mut client_login_start_rng, &parameters.password)?;
 
         let client_login_finish_result = client_login_start_result.state.finish(
+            &mut OsRng,
             &parameters.password,
             CredentialResponse::<CS>::deserialize(&parameters.KE2)?,
             ClientLoginFinishParameters::new(

@@ -13,24 +13,25 @@ use std::string::String;
 use std::vec::Vec;
 use std::{format, println, ptr, vec};
 
-use digest::core_api::BlockSizeUser;
 use digest::Output;
-use generic_array::typenum::{IsLess, Le, NonZero, Sum, Unsigned, U256};
-use generic_array::ArrayLength;
+use generic_array::typenum::{Sum, Unsigned};
+use generic_array::{ArrayLength, GenericArray};
 use rand::rngs::OsRng;
 use serde_json::Value;
 use subtle::ConstantTimeEq;
 use voprf::Group as _;
 
-use crate::ciphersuite::{CipherSuite, KeGroup, KeHash, OprfGroup, OprfHash};
+use crate::ciphersuite::{CipherSuite, KeGroup, OprfGroup, OprfHash};
 use crate::envelope::EnvelopeLen;
 use crate::errors::*;
-use crate::hash::{Hash, OutputSize, ProxyHash};
+use crate::hash::OutputSize;
 use crate::key_exchange::group::Group;
+use crate::key_exchange::shared::NonceLen;
+use crate::key_exchange::sigma_i::SigmaI;
 use crate::key_exchange::traits::{
     Deserialize, Ke1MessageLen, Ke1StateLen, Ke2MessageLen, KeyExchange, Serialize,
 };
-use crate::key_exchange::tripledh::{DiffieHellman, NonceLen, TripleDh};
+use crate::key_exchange::tripledh::TripleDh;
 use crate::ksf::Identity;
 use crate::messages::{
     CredentialRequestLen, CredentialResponseLen, CredentialResponseWithoutKeLen,
@@ -38,192 +39,153 @@ use crate::messages::{
 };
 use crate::opaque::*;
 use crate::tests::mock_rng::CycleRng;
+use crate::util::AssertZeroized;
 use crate::*;
 
 // Tests
 // =====
 
-#[cfg(feature = "ristretto255")]
-struct Ristretto255;
+macro_rules! ciphersuite_types {
+    ($(#[$attr:meta])* $name:ident, $oprf:ty, $ke:ty, $par:tt) => {
+        $(#[$attr])*
+        struct $name;
 
-#[cfg(feature = "ristretto255")]
-impl CipherSuite for Ristretto255 {
-    type OprfCs = crate::Ristretto255;
-    type KeyExchange = TripleDh<crate::Ristretto255, sha2::Sha512>;
-    type Ksf = Identity;
+        $(#[$attr])*
+        impl CipherSuite for $name {
+            type OprfCs = $oprf;
+            type KeyExchange = $ke;
+            type Ksf = Identity;
+        }
+    };
 }
 
-#[cfg(feature = "ristretto255")]
-struct Ristretto255P256;
-
-#[cfg(feature = "ristretto255")]
-impl CipherSuite for Ristretto255P256 {
-    type OprfCs = p256::NistP256;
-    type KeyExchange = TripleDh<crate::Ristretto255, sha2::Sha256>;
-    type Ksf = Identity;
+macro_rules! generate {
+    ($(#[$attr:meta])* $name:ident, $oprf:ty, $ke:ty, ($output:ident)) => {
+        paste::paste! {
+            $(#[$attr])*
+            {
+                let parameters = generate_parameters::<$name>()?;
+                $(
+                    $output.push_str(&format!("#[{}]\n", stringify!($attr)));
+                )*
+                $output.push_str(&format!(
+                    "pub static {}: &str = r#\"\n{}\"#;\n",
+                    stringify!([<TEST_VECTOR_ $name:snake:upper>]),
+                    stringify_test_vectors(&parameters)
+                ));
+            }
+        }
+    };
 }
 
-#[cfg(feature = "ristretto255")]
-struct Ristretto255P384;
-
-#[cfg(feature = "ristretto255")]
-impl CipherSuite for Ristretto255P384 {
-    type OprfCs = p384::NistP384;
-    type KeyExchange = TripleDh<crate::Ristretto255, sha2::Sha256>;
-    type Ksf = Identity;
+macro_rules! run_all {
+    ($(#[$attr:meta])* $name:ident, $oprf:ty, $ke:ty, ($fn:ident $(, $par:expr)*)) => {
+        paste::paste! {
+            $(#[$attr])*
+            $fn::<$name>(super::full_test_vectors::[<TEST_VECTOR_ $name:snake:upper>] $(, $par)*)?;
+        }
+    };
 }
 
-#[cfg(feature = "ristretto255")]
-struct Ristretto255P521;
-
-#[cfg(feature = "ristretto255")]
-impl CipherSuite for Ristretto255P521 {
-    type OprfCs = p521::NistP521;
-    type KeyExchange = TripleDh<crate::Ristretto255, sha2::Sha512>;
-    type Ksf = Identity;
+macro_rules! oprf_ciphersuites {
+    ($macro:ident!$par:tt => [$($(#[$ke_attr:meta])* [$ke_name:ident, $ke:ty$(,)?]),+$(,)?]) => {
+        $(
+            oprf_ciphersuites!(
+                $macro!$par =>
+                $(#[$ke_attr])* [$ke_name, $ke],
+                [
+                    #[cfg(feature = "ristretto255")] [
+                        Ristretto255, crate::Ristretto255,
+                    ],
+                    [P256, p256::NistP256],
+                    [P384, p384::NistP384],
+                    [P521, p521::NistP521],
+                ],
+            );
+        )+
+    };
+    (
+        $macro:ident!$par:tt =>
+        #[$ke_attr_1:meta] #[$ke_attr_2:meta] [$ke_name:ident, $ke:ty],
+        [$($(#[$oprf_attr:meta])? [$oprf_name:ident, $oprf:ty$(,)?]),+$(,)?],
+    ) => {
+        paste::paste! {
+            $($macro!(#[$ke_attr_1] #[$ke_attr_2] $(#[$oprf_attr])? [<$oprf_name $ke_name>], $oprf, $ke, $par);)+
+        }
+    };
+    (
+        $macro:ident!$par:tt =>
+        #[$ke_attr:meta] [$ke_name:ident, $ke:ty],
+        [$($(#[$oprf_attr:meta])? [$oprf_name:ident, $oprf:ty$(,)?]),+$(,)?],
+    ) => {
+        paste::paste! {
+            $($macro!(#[$ke_attr] $(#[$oprf_attr])? [<$oprf_name $ke_name>], $oprf, $ke, $par);)+
+        }
+    };
+    (
+        $macro:ident!$par:tt =>
+        [$ke_name:ident, $ke:ty],
+        [$($(#[$oprf_attr:meta])? [$oprf_name:ident, $oprf:ty$(,)?]),+$(,)?],
+    ) => {
+        paste::paste! {
+            $($macro!($(#[$oprf_attr])? [<$oprf_name $ke_name>], $oprf, $ke, $par);)+
+        }
+    }
 }
 
-struct P256;
-
-impl CipherSuite for P256 {
-    type OprfCs = p256::NistP256;
-    type KeyExchange = TripleDh<p256::NistP256, sha2::Sha256>;
-    type Ksf = Identity;
+macro_rules! triple_dh_ciphersuites {
+    ($macro:ident!$par:tt) => {
+        oprf_ciphersuites!(
+            $macro!$par => [
+                #[cfg(feature = "ristretto255")] [
+                    TripleDhRistretto255, TripleDh<crate::Ristretto255, sha2::Sha512>,
+                ],
+                [TripleDhP256, TripleDh<p256::NistP256, sha2::Sha256>],
+                [TripleDhP384, TripleDh<p384::NistP384, sha2::Sha384>],
+                [TripleDhP521, TripleDh<p521::NistP521, sha2::Sha512>],
+                #[cfg(feature = "curve25519")] [
+                    TripleDhCurve25519, TripleDh<crate::Curve25519, sha2::Sha512>,
+                ],
+            ]
+        );
+    };
 }
 
-struct P256P384;
-
-impl CipherSuite for P256P384 {
-    type OprfCs = p384::NistP384;
-    type KeyExchange = TripleDh<p256::NistP256, sha2::Sha256>;
-    type Ksf = Identity;
+macro_rules! sigma_i_ciphersuites {
+    ($macro:ident!$par:tt) => {
+        sigma_i_ciphersuites!(
+            $macro!$par => [
+                #[cfg(feature = "ecdsa")] [P256, p256::NistP256],
+                #[cfg(feature = "ecdsa")] [P384, p384::NistP384],
+            ],
+        );
+    };
+    (
+        $macro:ident!$par:tt =>
+        [$($(#[$sig_attr:meta])? [$sig_name:ident, $sig:ty]),+$(,)?],
+    ) => {
+        paste::paste! {
+            $(
+                oprf_ciphersuites!(
+                    $macro!$par => [
+                        $(#[$sig_attr])? #[cfg(feature = "ristretto255")] [
+                            [<SigmaI $sig_name Ristretto255>], SigmaI<$sig, crate::Ristretto255, sha2::Sha512>,
+                        ],
+                        $(#[$sig_attr])? [[<SigmaI $sig_name P256>], SigmaI<$sig, p256::NistP256, sha2::Sha256>],
+                        $(#[$sig_attr])? [[<SigmaI $sig_name P384>], SigmaI<$sig, p384::NistP384, sha2::Sha384>],
+                        $(#[$sig_attr])? [[<SigmaI $sig_name P521>], SigmaI<$sig, p521::NistP521, sha2::Sha512>],
+                        $(#[$sig_attr])? #[cfg(feature = "curve25519")] [
+                            [<SigmaI $sig_name Curve25519>], SigmaI<$sig, crate::Curve25519, sha2::Sha512>,
+                        ],
+                    ]
+                );
+            )+
+        }
+    };
 }
 
-struct P256P521;
-
-impl CipherSuite for P256P521 {
-    type OprfCs = p521::NistP521;
-    type KeyExchange = TripleDh<p256::NistP256, sha2::Sha256>;
-    type Ksf = Identity;
-}
-
-#[cfg(feature = "ristretto255")]
-struct P256Ristretto255;
-
-#[cfg(feature = "ristretto255")]
-impl CipherSuite for P256Ristretto255 {
-    type OprfCs = crate::Ristretto255;
-    type KeyExchange = TripleDh<p256::NistP256, sha2::Sha256>;
-    type Ksf = Identity;
-}
-
-struct P384;
-
-impl CipherSuite for P384 {
-    type OprfCs = p384::NistP384;
-    type KeyExchange = TripleDh<p384::NistP384, sha2::Sha384>;
-    type Ksf = Identity;
-}
-
-struct P384P256;
-
-impl CipherSuite for P384P256 {
-    type OprfCs = p256::NistP256;
-    type KeyExchange = TripleDh<p384::NistP384, sha2::Sha384>;
-    type Ksf = Identity;
-}
-
-struct P384P521;
-
-impl CipherSuite for P384P521 {
-    type OprfCs = p521::NistP521;
-    type KeyExchange = TripleDh<p384::NistP384, sha2::Sha384>;
-    type Ksf = Identity;
-}
-
-#[cfg(feature = "ristretto255")]
-struct P384Ristretto255;
-
-#[cfg(feature = "ristretto255")]
-impl CipherSuite for P384Ristretto255 {
-    type OprfCs = crate::Ristretto255;
-    type KeyExchange = TripleDh<p384::NistP384, sha2::Sha384>;
-    type Ksf = Identity;
-}
-
-struct P521;
-
-impl CipherSuite for P521 {
-    type OprfCs = p521::NistP521;
-    type KeyExchange = TripleDh<p521::NistP521, sha2::Sha512>;
-    type Ksf = Identity;
-}
-
-struct P521P256;
-
-impl CipherSuite for P521P256 {
-    type OprfCs = p256::NistP256;
-    type KeyExchange = TripleDh<p521::NistP521, sha2::Sha512>;
-    type Ksf = Identity;
-}
-
-struct P521P384;
-
-impl CipherSuite for P521P384 {
-    type OprfCs = p384::NistP384;
-    type KeyExchange = TripleDh<p521::NistP521, sha2::Sha512>;
-    type Ksf = Identity;
-}
-
-#[cfg(feature = "ristretto255")]
-struct P521Ristretto255;
-
-#[cfg(feature = "ristretto255")]
-impl CipherSuite for P521Ristretto255 {
-    type OprfCs = crate::Ristretto255;
-    type KeyExchange = TripleDh<p521::NistP521, sha2::Sha512>;
-    type Ksf = Identity;
-}
-
-#[cfg(all(feature = "curve25519", feature = "ristretto255"))]
-struct Curve25519Ristretto255;
-
-#[cfg(all(feature = "curve25519", feature = "ristretto255"))]
-impl CipherSuite for Curve25519Ristretto255 {
-    type OprfCs = crate::Ristretto255;
-    type KeyExchange = TripleDh<crate::Curve25519, sha2::Sha512>;
-    type Ksf = Identity;
-}
-
-#[cfg(feature = "curve25519")]
-struct Curve25519P256;
-
-#[cfg(feature = "curve25519")]
-impl CipherSuite for Curve25519P256 {
-    type OprfCs = p256::NistP256;
-    type KeyExchange = TripleDh<crate::Curve25519, sha2::Sha512>;
-    type Ksf = Identity;
-}
-
-#[cfg(feature = "curve25519")]
-struct Curve25519P384;
-
-#[cfg(feature = "curve25519")]
-impl CipherSuite for Curve25519P384 {
-    type OprfCs = p384::NistP384;
-    type KeyExchange = TripleDh<crate::Curve25519, sha2::Sha512>;
-    type Ksf = Identity;
-}
-
-#[cfg(feature = "curve25519")]
-struct Curve25519P521;
-
-#[cfg(feature = "curve25519")]
-impl CipherSuite for Curve25519P521 {
-    type OprfCs = p521::NistP521;
-    type KeyExchange = TripleDh<crate::Curve25519, sha2::Sha512>;
-    type Ksf = Identity;
-}
+triple_dh_ciphersuites!(ciphersuite_types!());
+sigma_i_ciphersuites!(ciphersuite_types!());
 
 pub struct TestVectorParameters {
     pub client_s_pk: Vec<u8>,
@@ -246,6 +208,8 @@ pub struct TestVectorParameters {
     pub envelope_nonce: Vec<u8>,
     pub client_nonce: Vec<u8>,
     pub server_nonce: Vec<u8>,
+    pub server_sig_rng: Vec<u8>,
+    pub client_sig_rng: Vec<u8>,
     pub context: Vec<u8>,
     pub registration_request: Vec<u8>,
     pub registration_response: Vec<u8>,
@@ -263,44 +227,6 @@ pub struct TestVectorParameters {
 
 static STR_PASSWORD: &str = "password";
 static STR_CREDENTIAL_IDENTIFIER: &str = "credential_identifier";
-
-macro_rules! run_all {
-    ($name:ident $(, $par:expr)*) => {
-        use super::full_test_vectors;
-
-        #[cfg(feature = "ristretto255")]
-        $name::<Ristretto255, KeGroup<Ristretto255>, KeHash<Ristretto255>>(full_test_vectors::TEST_VECTOR_RISTRETTO255 $(, $par)*)?;
-        #[cfg(feature = "ristretto255")]
-        $name::<Ristretto255P256, KeGroup<Ristretto255P256>, KeHash<Ristretto255P256>>(full_test_vectors::TEST_VECTOR_RISTRETTO255_P256 $(, $par)*)?;
-        #[cfg(feature = "ristretto255")]
-        $name::<Ristretto255P384, KeGroup<Ristretto255P384>, KeHash<Ristretto255P384>>(full_test_vectors::TEST_VECTOR_RISTRETTO255_P384 $(, $par)*)?;
-        #[cfg(feature = "ristretto255")]
-        $name::<Ristretto255P521, KeGroup<Ristretto255P521>, KeHash<Ristretto255P521>>(full_test_vectors::TEST_VECTOR_RISTRETTO255_P521 $(, $par)*)?;
-        $name::<P256, KeGroup<P256>, KeHash<P256>>(full_test_vectors::TEST_VECTOR_P256 $(, $par)*)?;
-        $name::<P256P384, KeGroup<P256P384>, KeHash<P256P384>>(full_test_vectors::TEST_VECTOR_P256_P384 $(, $par)*)?;
-        $name::<P256P521, KeGroup<P256P521>, KeHash<P256P521>>(full_test_vectors::TEST_VECTOR_P256_P521 $(, $par)*)?;
-        #[cfg(feature = "ristretto255")]
-        $name::<P256Ristretto255, KeGroup<P256Ristretto255>, KeHash<P256Ristretto255>>(full_test_vectors::TEST_VECTOR_P256_RISTRETTO255 $(, $par)*)?;
-        $name::<P384, KeGroup<P384>, KeHash<P384>>(full_test_vectors::TEST_VECTOR_P384 $(, $par)*)?;
-        $name::<P384P256, KeGroup<P384P256>, KeHash<P384P256>>(full_test_vectors::TEST_VECTOR_P384_P256 $(, $par)*)?;
-        $name::<P384P521, KeGroup<P384P521>, KeHash<P384P521>>(full_test_vectors::TEST_VECTOR_P384_P521 $(, $par)*)?;
-        #[cfg(feature = "ristretto255")]
-        $name::<P384Ristretto255, KeGroup<P384Ristretto255>, KeHash<P384Ristretto255>>(full_test_vectors::TEST_VECTOR_P384_RISTRETTO255 $(, $par)*)?;
-        $name::<P521, KeGroup<P521>, KeHash<P521>>(full_test_vectors::TEST_VECTOR_P521 $(, $par)*)?;
-        $name::<P521P256, KeGroup<P521P256>, KeHash<P521P256>>(full_test_vectors::TEST_VECTOR_P521_P256 $(, $par)*)?;
-        $name::<P521P384, KeGroup<P521P384>, KeHash<P521P384>>(full_test_vectors::TEST_VECTOR_P521_P384 $(, $par)*)?;
-        #[cfg(feature = "ristretto255")]
-        $name::<P521Ristretto255, KeGroup<P521Ristretto255>, KeHash<P521Ristretto255>>(full_test_vectors::TEST_VECTOR_P521_RISTRETTO255 $(, $par)*)?;
-        #[cfg(feature = "curve25519")]
-        $name::<Curve25519P256, KeGroup<Curve25519P256>, KeHash<Curve25519P256>>(full_test_vectors::TEST_VECTOR_CURVE25519_P256 $(, $par)*)?;
-        #[cfg(feature = "curve25519")]
-        $name::<Curve25519P384, KeGroup<Curve25519P384>, KeHash<Curve25519P384>>(full_test_vectors::TEST_VECTOR_CURVE25519_P384 $(, $par)*)?;
-        #[cfg(feature = "curve25519")]
-        $name::<Curve25519P521, KeGroup<Curve25519P521>, KeHash<Curve25519P521>>(full_test_vectors::TEST_VECTOR_CURVE25519_P521 $(, $par)*)?;
-        #[cfg(all(feature = "curve25519", feature = "ristretto255"))]
-        $name::<Curve25519Ristretto255, KeGroup<Curve25519Ristretto255>, KeHash<Curve25519Ristretto255>>(full_test_vectors::TEST_VECTOR_CURVE25519_RISTRETTO255 $(, $par)*)?;
-    };
-}
 
 fn decode(values: &Value, key: &str) -> Option<Vec<u8>> {
     values[key].as_str().and_then(|s| hex::decode(s).ok())
@@ -328,6 +254,8 @@ fn populate_test_vectors(values: &Value) -> TestVectorParameters {
         envelope_nonce: decode(values, "envelope_nonce").unwrap(),
         client_nonce: decode(values, "client_nonce").unwrap(),
         server_nonce: decode(values, "server_nonce").unwrap(),
+        server_sig_rng: decode(values, "server_sig_rng").unwrap(),
+        client_sig_rng: decode(values, "client_sig_rng").unwrap(),
         context: decode(values, "context").unwrap(),
         registration_request: decode(values, "registration_request").unwrap(),
         registration_response: decode(values, "registration_response").unwrap(),
@@ -454,6 +382,20 @@ fn stringify_test_vectors(p: &TestVectorParameters) -> String {
         format!(
             "    \"server_nonce\": \"{}\",\n",
             hex::encode(&p.server_nonce)
+        )
+        .as_str(),
+    );
+    s.push_str(
+        format!(
+            "    \"server_sig_rng\": \"{}\",\n",
+            hex::encode(&p.server_sig_rng)
+        )
+        .as_str(),
+    );
+    s.push_str(
+        format!(
+            "    \"client_sig_rng\": \"{}\",\n",
+            hex::encode(&p.client_sig_rng)
         )
         .as_str(),
     );
@@ -606,6 +548,10 @@ where
     rng.fill_bytes(&mut client_nonce);
     let mut server_nonce = [0u8; NonceLen::USIZE];
     rng.fill_bytes(&mut server_nonce);
+    let mut server_sig_rng = GenericArray::<u8, <KeGroup<CS> as Group>::SkLen>::default();
+    rng.fill_bytes(&mut server_sig_rng);
+    let mut client_sig_rng = GenericArray::<u8, <KeGroup<CS> as Group>::SkLen>::default();
+    rng.fill_bytes(&mut client_sig_rng);
 
     let fake_sk: Vec<u8> = fake_kp.private().serialize().to_vec();
     let server_setup = ServerSetup::<CS>::deserialize(
@@ -688,6 +634,7 @@ where
             masking_nonce.to_vec(),
             server_e_kp.private().serialize().to_vec(),
             server_nonce.to_vec(),
+            server_sig_rng.to_vec(),
         ]
         .concat(),
     );
@@ -712,6 +659,7 @@ where
     let client_login_finish_result = client_login_start_result
         .state
         .finish(
+            &mut CycleRng::new(client_sig_rng.to_vec()),
             password,
             server_login_start_result.message,
             ClientLoginFinishParameters::new(
@@ -747,6 +695,8 @@ where
         envelope_nonce: envelope_nonce.to_vec(),
         client_nonce: client_nonce.to_vec(),
         server_nonce: server_nonce.to_vec(),
+        server_sig_rng: server_sig_rng.to_vec(),
+        client_sig_rng: client_sig_rng.to_vec(),
         context: context.to_vec(),
         registration_request: registration_request_bytes.to_vec(),
         registration_response: registration_response_bytes.to_vec(),
@@ -779,158 +729,14 @@ fn generate_test_vectors() -> Result<(), ProtocolError> {
         // licenses.\n\
         //\n\
         // To regenerate these test vectors, run:\n\
-        // FULL_TEST_VECTORS_FILE=src/tests/full_test_vectors.rs cargo test --features ristretto255,curve25519 -- generate_test_vectors\n\
+        // FULL_TEST_VECTORS_FILE=src/tests/full_test_vectors.rs cargo test --features ristretto255,curve25519,ecdsa -- generate_test_vectors\n\
+        \n\
+        #![allow(clippy::duplicated_attributes)]\n\
         \n",
     );
 
-    #[cfg(feature = "ristretto255")]
-    {
-        let parameters = generate_parameters::<Ristretto255>()?;
-        output.push_str("#[cfg(feature = \"ristretto255\")]\n");
-        output.push_str(&format!(
-            "pub static TEST_VECTOR_RISTRETTO255: &str = r#\"\n{}\"#;\n",
-            stringify_test_vectors(&parameters)
-        ));
-
-        let parameters = generate_parameters::<Ristretto255P256>()?;
-        output.push_str("#[cfg(feature = \"ristretto255\")]\n");
-        output.push_str(&format!(
-            "pub static TEST_VECTOR_RISTRETTO255_P256: &str = r#\"\n{}\"#;\n",
-            stringify_test_vectors(&parameters)
-        ));
-
-        let parameters = generate_parameters::<Ristretto255P384>()?;
-        output.push_str("#[cfg(feature = \"ristretto255\")]\n");
-        output.push_str(&format!(
-            "pub static TEST_VECTOR_RISTRETTO255_P384: &str = r#\"\n{}\"#;\n",
-            stringify_test_vectors(&parameters)
-        ));
-
-        let parameters = generate_parameters::<Ristretto255P521>()?;
-        output.push_str("#[cfg(feature = \"ristretto255\")]\n");
-        output.push_str(&format!(
-            "pub static TEST_VECTOR_RISTRETTO255_P521: &str = r#\"\n{}\"#;\n",
-            stringify_test_vectors(&parameters)
-        ));
-    }
-
-    let parameters = generate_parameters::<P256>()?;
-    output.push_str(&format!(
-        "pub static TEST_VECTOR_P256: &str = r#\"\n{}\"#;\n",
-        stringify_test_vectors(&parameters)
-    ));
-
-    let parameters = generate_parameters::<P256P384>()?;
-    output.push_str(&format!(
-        "pub static TEST_VECTOR_P256_P384: &str = r#\"\n{}\"#;\n",
-        stringify_test_vectors(&parameters)
-    ));
-
-    let parameters = generate_parameters::<P256P521>()?;
-    output.push_str(&format!(
-        "pub static TEST_VECTOR_P256_P521: &str = r#\"\n{}\"#;\n",
-        stringify_test_vectors(&parameters)
-    ));
-
-    #[cfg(feature = "ristretto255")]
-    {
-        let parameters = generate_parameters::<P256Ristretto255>()?;
-        output.push_str("#[cfg(feature = \"ristretto255\")]\n");
-        output.push_str(&format!(
-            "pub static TEST_VECTOR_P256_RISTRETTO255: &str = r#\"\n{}\"#;\n",
-            stringify_test_vectors(&parameters)
-        ));
-    }
-
-    let parameters = generate_parameters::<P384>()?;
-    output.push_str(&format!(
-        "pub static TEST_VECTOR_P384: &str = r#\"\n{}\"#;\n",
-        stringify_test_vectors(&parameters)
-    ));
-
-    let parameters = generate_parameters::<P384P256>()?;
-    output.push_str(&format!(
-        "pub static TEST_VECTOR_P384_P256: &str = r#\"\n{}\"#;\n",
-        stringify_test_vectors(&parameters)
-    ));
-
-    let parameters = generate_parameters::<P384P521>()?;
-    output.push_str(&format!(
-        "pub static TEST_VECTOR_P384_P521: &str = r#\"\n{}\"#;\n",
-        stringify_test_vectors(&parameters)
-    ));
-
-    #[cfg(feature = "ristretto255")]
-    {
-        let parameters = generate_parameters::<P384Ristretto255>()?;
-        output.push_str("#[cfg(feature = \"ristretto255\")]\n");
-        output.push_str(&format!(
-            "pub static TEST_VECTOR_P384_RISTRETTO255: &str = r#\"\n{}\"#;\n",
-            stringify_test_vectors(&parameters)
-        ));
-    }
-
-    let parameters = generate_parameters::<P521>()?;
-    output.push_str(&format!(
-        "pub static TEST_VECTOR_P521: &str = r#\"\n{}\"#;\n",
-        stringify_test_vectors(&parameters)
-    ));
-
-    let parameters = generate_parameters::<P521P256>()?;
-    output.push_str(&format!(
-        "pub static TEST_VECTOR_P521_P256: &str = r#\"\n{}\"#;\n",
-        stringify_test_vectors(&parameters)
-    ));
-
-    let parameters = generate_parameters::<P521P384>()?;
-    output.push_str(&format!(
-        "pub static TEST_VECTOR_P521_P384: &str = r#\"\n{}\"#;\n",
-        stringify_test_vectors(&parameters)
-    ));
-
-    #[cfg(feature = "ristretto255")]
-    {
-        let parameters = generate_parameters::<P521Ristretto255>()?;
-        output.push_str("#[cfg(feature = \"ristretto255\")]\n");
-        output.push_str(&format!(
-            "pub static TEST_VECTOR_P521_RISTRETTO255: &str = r#\"\n{}\"#;\n",
-            stringify_test_vectors(&parameters)
-        ));
-    }
-
-    #[cfg(feature = "curve25519")]
-    {
-        let parameters = generate_parameters::<Curve25519P256>()?;
-        output.push_str("#[cfg(feature = \"curve25519\")]\n");
-        output.push_str(&format!(
-            "pub static TEST_VECTOR_CURVE25519_P256: &str = r#\"\n{}\"#;\n",
-            stringify_test_vectors(&parameters)
-        ));
-
-        let parameters = generate_parameters::<Curve25519P384>()?;
-        output.push_str("#[cfg(feature = \"curve25519\")]\n");
-        output.push_str(&format!(
-            "pub static TEST_VECTOR_CURVE25519_P384: &str = r#\"\n{}\"#;\n",
-            stringify_test_vectors(&parameters)
-        ));
-
-        let parameters = generate_parameters::<Curve25519P521>()?;
-        output.push_str("#[cfg(feature = \"curve25519\")]\n");
-        output.push_str(&format!(
-            "pub static TEST_VECTOR_CURVE25519_P521: &str = r#\"\n{}\"#;\n",
-            stringify_test_vectors(&parameters)
-        ));
-
-        #[cfg(feature = "ristretto255")]
-        {
-            let parameters = generate_parameters::<Curve25519Ristretto255>()?;
-            output.push_str("#[cfg(all(feature = \"curve25519\", feature = \"ristretto255\"))]\n");
-            output.push_str(&format!(
-                "pub static TEST_VECTOR_CURVE25519_RISTRETTO255: &str = r#\"\n{}\"#;\n",
-                stringify_test_vectors(&parameters)
-            ));
-        }
-    }
+    triple_dh_ciphersuites!(generate!(output));
+    sigma_i_ciphersuites!(generate!(output));
 
     if let Ok(path) = std::env::var("FULL_TEST_VECTORS_FILE") {
         std::fs::write(path, output).unwrap();
@@ -943,8 +749,7 @@ fn generate_test_vectors() -> Result<(), ProtocolError> {
 
 #[test]
 fn test_registration_request() -> Result<(), ProtocolError> {
-    #[allow(clippy::extra_unused_type_parameters)]
-    fn inner<CS: CipherSuite, KG, H>(test_vector: &str) -> Result<(), ProtocolError>
+    fn inner<CS: CipherSuite>(test_vector: &str) -> Result<(), ProtocolError>
     where
         // ClientRegistration: KgSk + KgPk
         <OprfGroup<CS> as voprf::Group>::ScalarLen: Add<<OprfGroup<CS> as voprf::Group>::ElemLen>,
@@ -965,7 +770,8 @@ fn test_registration_request() -> Result<(), ProtocolError> {
         Ok(())
     }
 
-    run_all!(inner);
+    triple_dh_ciphersuites!(run_all!(inner));
+    sigma_i_ciphersuites!(run_all!(inner));
 
     Ok(())
 }
@@ -973,8 +779,7 @@ fn test_registration_request() -> Result<(), ProtocolError> {
 #[cfg(feature = "serde")]
 #[test]
 fn test_serialization() -> Result<(), ProtocolError> {
-    #[allow(clippy::extra_unused_type_parameters)]
-    fn inner<CS: CipherSuite, KG, H>(test_vector: &str) -> Result<(), ProtocolError> {
+    fn inner<CS: CipherSuite>(test_vector: &str) -> Result<(), ProtocolError> {
         let parameters = populate_test_vectors(&serde_json::from_str(test_vector).unwrap());
         let mut rng = CycleRng::new(parameters.blinding_factor.to_vec());
         let client_registration_start_result =
@@ -997,15 +802,15 @@ fn test_serialization() -> Result<(), ProtocolError> {
         Ok(())
     }
 
-    run_all!(inner);
+    triple_dh_ciphersuites!(run_all!(inner));
+    sigma_i_ciphersuites!(run_all!(inner));
 
     Ok(())
 }
 
 #[test]
 fn test_registration_response() -> Result<(), ProtocolError> {
-    #[allow(clippy::extra_unused_type_parameters)]
-    fn inner<CS: CipherSuite, KG, H>(test_vector: &str) -> Result<(), ProtocolError>
+    fn inner<CS: CipherSuite>(test_vector: &str) -> Result<(), ProtocolError>
     where
         // RegistrationResponse: KgPk + KePk
         <OprfGroup<CS> as voprf::Group>::ElemLen: Add<<KeGroup<CS> as Group>::PkLen>,
@@ -1036,15 +841,15 @@ fn test_registration_response() -> Result<(), ProtocolError> {
         Ok(())
     }
 
-    run_all!(inner);
+    triple_dh_ciphersuites!(run_all!(inner));
+    sigma_i_ciphersuites!(run_all!(inner));
 
     Ok(())
 }
 
 #[test]
 fn test_registration_upload() -> Result<(), ProtocolError> {
-    #[allow(clippy::extra_unused_type_parameters)]
-    fn inner<CS: CipherSuite, KG, H>(test_vector: &str) -> Result<(), ProtocolError>
+    fn inner<CS: CipherSuite>(test_vector: &str) -> Result<(), ProtocolError>
     where
         // Envelope: Nonce + Hash
         NonceLen: Add<OutputSize<OprfHash<CS>>>,
@@ -1088,15 +893,15 @@ fn test_registration_upload() -> Result<(), ProtocolError> {
         Ok(())
     }
 
-    run_all!(inner);
+    triple_dh_ciphersuites!(run_all!(inner));
+    sigma_i_ciphersuites!(run_all!(inner));
 
     Ok(())
 }
 
 #[test]
 fn test_password_file() -> Result<(), ProtocolError> {
-    #[allow(clippy::extra_unused_type_parameters)]
-    fn inner<CS: CipherSuite, KG, H>(test_vector: &str) -> Result<(), ProtocolError>
+    fn inner<CS: CipherSuite>(test_vector: &str) -> Result<(), ProtocolError>
     where
         // Envelope: Nonce + Hash
         NonceLen: Add<OutputSize<OprfHash<CS>>>,
@@ -1121,15 +926,15 @@ fn test_password_file() -> Result<(), ProtocolError> {
         Ok(())
     }
 
-    run_all!(inner);
+    triple_dh_ciphersuites!(run_all!(inner));
+    sigma_i_ciphersuites!(run_all!(inner));
 
     Ok(())
 }
 
 #[test]
 fn test_credential_request() -> Result<(), ProtocolError> {
-    #[allow(clippy::extra_unused_type_parameters)]
-    fn inner<CS: CipherSuite, KG, H>(test_vector: &str) -> Result<(), ProtocolError>
+    fn inner<CS: CipherSuite>(test_vector: &str) -> Result<(), ProtocolError>
     where
         // CredentialRequest: KgPk + Ke1Message
         <CS::KeyExchange as KeyExchange>::KE1Message: Serialize,
@@ -1164,15 +969,15 @@ fn test_credential_request() -> Result<(), ProtocolError> {
         Ok(())
     }
 
-    run_all!(inner);
+    triple_dh_ciphersuites!(run_all!(inner));
+    sigma_i_ciphersuites!(run_all!(inner));
 
     Ok(())
 }
 
 #[test]
 fn test_credential_response() -> Result<(), ProtocolError> {
-    #[allow(clippy::extra_unused_type_parameters)]
-    fn inner<CS: CipherSuite, KG, H>(test_vector: &str) -> Result<(), ProtocolError>
+    fn inner<CS: CipherSuite>(test_vector: &str) -> Result<(), ProtocolError>
     where
         <CS::KeyExchange as KeyExchange>::KE1Message: Deserialize,
         <CS::KeyExchange as KeyExchange>::KE2State: Serialize,
@@ -1208,6 +1013,7 @@ fn test_credential_response() -> Result<(), ProtocolError> {
                 parameters.masking_nonce,
                 parameters.server_e_sk,
                 parameters.server_nonce,
+                parameters.server_sig_rng,
             ]
             .concat(),
         );
@@ -1236,15 +1042,15 @@ fn test_credential_response() -> Result<(), ProtocolError> {
         Ok(())
     }
 
-    run_all!(inner);
+    triple_dh_ciphersuites!(run_all!(inner));
+    sigma_i_ciphersuites!(run_all!(inner));
 
     Ok(())
 }
 
 #[test]
 fn test_credential_finalization() -> Result<(), ProtocolError> {
-    #[allow(clippy::extra_unused_type_parameters)]
-    fn inner<CS: CipherSuite, KG, H>(test_vector: &str) -> Result<(), ProtocolError>
+    fn inner<CS: CipherSuite>(test_vector: &str) -> Result<(), ProtocolError>
     where
         <CS::KeyExchange as KeyExchange>::KE1Message: Deserialize + Serialize,
         <CS::KeyExchange as KeyExchange>::KE1State: Deserialize + Serialize,
@@ -1260,6 +1066,7 @@ fn test_credential_finalization() -> Result<(), ProtocolError> {
 
         let client_login_finish_result =
             ClientLogin::<CS>::deserialize(&parameters.client_login_state)?.finish(
+                &mut CycleRng::new(parameters.client_sig_rng),
                 &parameters.password,
                 CredentialResponse::<CS>::deserialize(&parameters.credential_response)?,
                 ClientLoginFinishParameters::new(
@@ -1292,15 +1099,15 @@ fn test_credential_finalization() -> Result<(), ProtocolError> {
         Ok(())
     }
 
-    run_all!(inner);
+    triple_dh_ciphersuites!(run_all!(inner));
+    sigma_i_ciphersuites!(run_all!(inner));
 
     Ok(())
 }
 
 #[test]
 fn test_server_login_finish() -> Result<(), ProtocolError> {
-    #[allow(clippy::extra_unused_type_parameters)]
-    fn inner<CS: CipherSuite, KG, H>(test_vector: &str) -> Result<(), ProtocolError>
+    fn inner<CS: CipherSuite>(test_vector: &str) -> Result<(), ProtocolError>
     where
         <CS::KeyExchange as KeyExchange>::KE2State: Deserialize,
         <CS::KeyExchange as KeyExchange>::KE3Message: Deserialize,
@@ -1320,13 +1127,13 @@ fn test_server_login_finish() -> Result<(), ProtocolError> {
         Ok(())
     }
 
-    run_all!(inner);
+    triple_dh_ciphersuites!(run_all!(inner));
+    sigma_i_ciphersuites!(run_all!(inner));
 
     Ok(())
 }
 
-#[allow(clippy::extra_unused_type_parameters)]
-fn test_complete_flow<CS: CipherSuite, KG, H>(
+fn test_complete_flow<CS: CipherSuite>(
     _test_vector: &str,
     registration_password: &[u8],
     login_password: &[u8],
@@ -1366,6 +1173,7 @@ where
     )?;
 
     let client_login_result = client_login_start_result.state.finish(
+        &mut client_rng,
         login_password,
         server_login_start_result.message,
         ClientLoginFinishParameters::default(),
@@ -1397,13 +1205,31 @@ where
 
 #[test]
 fn test_complete_flow_success() -> Result<(), ProtocolError> {
-    run_all!(test_complete_flow, b"good password", b"good password");
+    triple_dh_ciphersuites!(run_all!(
+        test_complete_flow,
+        b"good password",
+        b"good password"
+    ));
+    sigma_i_ciphersuites!(run_all!(
+        test_complete_flow,
+        b"good password",
+        b"good password"
+    ));
     Ok(())
 }
 
 #[test]
 fn test_complete_flow_fail() -> Result<(), ProtocolError> {
-    run_all!(test_complete_flow, b"good password", b"bad password");
+    triple_dh_ciphersuites!(run_all!(
+        test_complete_flow,
+        b"good password",
+        b"bad password"
+    ));
+    sigma_i_ciphersuites!(run_all!(
+        test_complete_flow,
+        b"good password",
+        b"bad password"
+    ));
     Ok(())
 }
 
@@ -1411,30 +1237,27 @@ fn test_complete_flow_fail() -> Result<(), ProtocolError> {
 
 #[test]
 fn test_zeroize_client_registration_start() -> Result<(), ProtocolError> {
-    #[allow(clippy::extra_unused_type_parameters)]
-    fn inner<CS: CipherSuite, KG, H>(_test_vector: &str) -> Result<(), ProtocolError> {
+    fn inner<CS: CipherSuite>(_test_vector: &str) -> Result<(), ProtocolError> {
         let mut client_rng = OsRng;
         let client_registration_start_result =
             ClientRegistration::<CS>::start(&mut client_rng, STR_PASSWORD.as_bytes())?;
 
         let mut state = client_registration_start_result.state;
         unsafe { ptr::drop_in_place(&mut state) };
-        for byte in state.to_vec() {
-            assert_eq!(byte, 0);
-        }
+        state.assert_zeroized();
 
         Ok(())
     }
 
-    run_all!(inner);
+    triple_dh_ciphersuites!(run_all!(inner));
+    sigma_i_ciphersuites!(run_all!(inner));
 
     Ok(())
 }
 
 #[test]
 fn test_zeroize_client_registration_finish() -> Result<(), ProtocolError> {
-    #[allow(clippy::extra_unused_type_parameters)]
-    fn inner<CS: CipherSuite, KG, H>(_test_vector: &str) -> Result<(), ProtocolError> {
+    fn inner<CS: CipherSuite>(_test_vector: &str) -> Result<(), ProtocolError> {
         let mut client_rng = OsRng;
         let mut server_rng = OsRng;
         let server_setup = ServerSetup::<CS>::new(&mut server_rng);
@@ -1454,23 +1277,22 @@ fn test_zeroize_client_registration_finish() -> Result<(), ProtocolError> {
 
         let mut state = client_registration_finish_result.state;
         unsafe { ptr::drop_in_place(&mut state) };
-        for byte in state.to_vec() {
-            assert_eq!(byte, 0);
-        }
+        state.assert_zeroized();
 
         Ok(())
     }
 
-    run_all!(inner);
+    triple_dh_ciphersuites!(run_all!(inner));
+    sigma_i_ciphersuites!(run_all!(inner));
 
     Ok(())
 }
 
 #[test]
 fn test_zeroize_server_registration_finish() -> Result<(), ProtocolError> {
-    #[allow(clippy::extra_unused_type_parameters)]
-    fn inner<CS: CipherSuite, KG, H>(_test_vector: &str) -> Result<(), ProtocolError>
+    fn inner<CS: CipherSuite>(_test_vector: &str) -> Result<(), ProtocolError>
     where
+        <KeGroup<CS> as Group>::Pk: AssertZeroized,
         // Envelope: Nonce + Hash
         NonceLen: Add<OutputSize<OprfHash<CS>>>,
         EnvelopeLen<CS>: ArrayLength<u8>,
@@ -1500,53 +1322,47 @@ fn test_zeroize_server_registration_finish() -> Result<(), ProtocolError> {
         let p_file = ServerRegistration::finish(client_registration_finish_result.message);
 
         let mut state = p_file;
-        util::drop_manually(&mut state);
-        util::test_zeroized(&mut state.0.envelope.mode);
-        util::test_zeroized(&mut state.0.masking_key);
+        unsafe { ptr::drop_in_place(&mut state) };
+        state.assert_zeroized();
 
         Ok(())
     }
 
-    run_all!(inner);
+    triple_dh_ciphersuites!(run_all!(inner));
+    sigma_i_ciphersuites!(run_all!(inner));
 
     Ok(())
 }
 
 #[test]
 fn test_zeroize_client_login_start() -> Result<(), ProtocolError> {
-    fn inner<CS: CipherSuite<KeyExchange = TripleDh<KG, H>>, KG: 'static + Group, H: Hash>(
-        _test_vector: &str,
-    ) -> Result<(), ProtocolError>
+    fn inner<CS: CipherSuite>(_test_vector: &str) -> Result<(), ProtocolError>
     where
-        KG::Sk: DiffieHellman<KG>,
-        H::Core: ProxyHash,
-        <H::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
-        Le<<H::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
+        <CS::KeyExchange as KeyExchange>::KE1State: AssertZeroized,
+        <CS::KeyExchange as KeyExchange>::KE1Message: AssertZeroized,
     {
         let mut client_rng = OsRng;
         let client_login_start_result =
             ClientLogin::<CS>::start(&mut client_rng, STR_PASSWORD.as_bytes())?;
 
         let mut state = client_login_start_result.state;
-        util::drop_manually(&mut state);
-        util::test_zeroized(&mut state.oprf_client);
-        util::test_zeroized(&mut state.ke1_state);
-        util::test_zeroized(&mut state.credential_request.ke1_message.client_nonce);
+        unsafe { ptr::drop_in_place(&mut state) };
+        state.assert_zeroized();
 
         Ok(())
     }
 
-    run_all!(inner);
+    triple_dh_ciphersuites!(run_all!(inner));
+    sigma_i_ciphersuites!(run_all!(inner));
 
     Ok(())
 }
 
 #[test]
 fn test_zeroize_server_login_start() -> Result<(), ProtocolError> {
-    #[allow(clippy::extra_unused_type_parameters)]
-    fn inner<CS: CipherSuite, KG, H>(_test_vector: &str) -> Result<(), ProtocolError>
+    fn inner<CS: CipherSuite>(_test_vector: &str) -> Result<(), ProtocolError>
     where
-        <CS::KeyExchange as KeyExchange>::KE2State: Serialize,
+        <CS::KeyExchange as KeyExchange>::KE2State: Serialize + AssertZeroized,
         // MaskedResponse: (Nonce + Hash) + KePk
         NonceLen: Add<OutputSize<OprfHash<CS>>>,
         Sum<NonceLen, OutputSize<OprfHash<CS>>>:
@@ -1583,86 +1399,23 @@ fn test_zeroize_server_login_start() -> Result<(), ProtocolError> {
 
         let mut state = server_login_start_result.state;
         unsafe { ptr::drop_in_place(&mut state) };
-        for byte in state.serialize() {
-            assert_eq!(byte, 0);
-        }
+        state.assert_zeroized();
 
         Ok(())
     }
 
-    run_all!(inner);
+    triple_dh_ciphersuites!(run_all!(inner));
+    sigma_i_ciphersuites!(run_all!(inner));
 
     Ok(())
 }
 
 #[test]
 fn test_zeroize_client_login_finish() -> Result<(), ProtocolError> {
-    fn inner<CS: CipherSuite<KeyExchange = TripleDh<KG, H>>, KG: 'static + Group, H: Hash>(
-        _test_vector: &str,
-    ) -> Result<(), ProtocolError>
+    fn inner<CS: CipherSuite>(_test_vector: &str) -> Result<(), ProtocolError>
     where
-        KG::Sk: DiffieHellman<KG>,
-        H::Core: ProxyHash,
-        <H::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
-        Le<<H::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
-        // MaskedResponse: (Nonce + Hash) + KePk
-        NonceLen: Add<OutputSize<OprfHash<CS>>>,
-        Sum<NonceLen, OutputSize<OprfHash<CS>>>: ArrayLength<u8> + Add<KG::PkLen>,
-        MaskedResponseLen<CS>: ArrayLength<u8>,
-    {
-        let mut client_rng = OsRng;
-        let mut server_rng = OsRng;
-        let server_setup = ServerSetup::<CS>::new(&mut server_rng);
-        let client_registration_start_result =
-            ClientRegistration::<CS>::start(&mut client_rng, STR_PASSWORD.as_bytes())?;
-        let server_registration_start_result = ServerRegistration::<CS>::start(
-            &server_setup,
-            client_registration_start_result.message,
-            STR_CREDENTIAL_IDENTIFIER.as_bytes(),
-        )?;
-        let client_registration_finish_result = client_registration_start_result.state.finish(
-            &mut client_rng,
-            STR_PASSWORD.as_bytes(),
-            server_registration_start_result.message,
-            ClientRegistrationFinishParameters::default(),
-        )?;
-        let p_file = ServerRegistration::finish(client_registration_finish_result.message);
-        let client_login_start_result =
-            ClientLogin::<CS>::start(&mut client_rng, STR_PASSWORD.as_bytes())?;
-        let server_login_start_result = ServerLogin::<CS>::start(
-            &mut server_rng,
-            &server_setup,
-            Some(p_file),
-            client_login_start_result.message,
-            STR_CREDENTIAL_IDENTIFIER.as_bytes(),
-            ServerLoginStartParameters::default(),
-        )?;
-        let client_login_finish_result = client_login_start_result.state.finish(
-            STR_PASSWORD.as_bytes(),
-            server_login_start_result.message,
-            ClientLoginFinishParameters::default(),
-        )?;
-
-        let mut state = client_login_finish_result.state;
-        util::drop_manually(&mut state);
-        util::test_zeroized(&mut state.oprf_client);
-        util::test_zeroized(&mut state.ke1_state);
-        util::test_zeroized(&mut state.credential_request.ke1_message.client_nonce);
-
-        Ok(())
-    }
-
-    run_all!(inner);
-
-    Ok(())
-}
-
-#[test]
-fn test_zeroize_server_login_finish() -> Result<(), ProtocolError> {
-    #[allow(clippy::extra_unused_type_parameters)]
-    fn inner<CS: CipherSuite, KG, H>(_test_vector: &str) -> Result<(), ProtocolError>
-    where
-        <CS::KeyExchange as KeyExchange>::KE2State: Serialize,
+        <CS::KeyExchange as KeyExchange>::KE1State: AssertZeroized,
+        <CS::KeyExchange as KeyExchange>::KE1Message: AssertZeroized,
         // MaskedResponse: (Nonce + Hash) + KePk
         NonceLen: Add<OutputSize<OprfHash<CS>>>,
         Sum<NonceLen, OutputSize<OprfHash<CS>>>:
@@ -1697,6 +1450,65 @@ fn test_zeroize_server_login_finish() -> Result<(), ProtocolError> {
             ServerLoginStartParameters::default(),
         )?;
         let client_login_finish_result = client_login_start_result.state.finish(
+            &mut client_rng,
+            STR_PASSWORD.as_bytes(),
+            server_login_start_result.message,
+            ClientLoginFinishParameters::default(),
+        )?;
+
+        let mut state = client_login_finish_result.state;
+        unsafe { ptr::drop_in_place(&mut state) };
+        state.assert_zeroized();
+
+        Ok(())
+    }
+
+    triple_dh_ciphersuites!(run_all!(inner));
+    sigma_i_ciphersuites!(run_all!(inner));
+
+    Ok(())
+}
+
+#[test]
+fn test_zeroize_server_login_finish() -> Result<(), ProtocolError> {
+    fn inner<CS: CipherSuite>(_test_vector: &str) -> Result<(), ProtocolError>
+    where
+        <CS::KeyExchange as KeyExchange>::KE2State: Serialize + AssertZeroized,
+        // MaskedResponse: (Nonce + Hash) + KePk
+        NonceLen: Add<OutputSize<OprfHash<CS>>>,
+        Sum<NonceLen, OutputSize<OprfHash<CS>>>:
+            ArrayLength<u8> + Add<<KeGroup<CS> as Group>::PkLen>,
+        MaskedResponseLen<CS>: ArrayLength<u8>,
+    {
+        let mut client_rng = OsRng;
+        let mut server_rng = OsRng;
+        let server_setup = ServerSetup::<CS>::new(&mut server_rng);
+        let client_registration_start_result =
+            ClientRegistration::<CS>::start(&mut client_rng, STR_PASSWORD.as_bytes())?;
+        let server_registration_start_result = ServerRegistration::<CS>::start(
+            &server_setup,
+            client_registration_start_result.message,
+            STR_CREDENTIAL_IDENTIFIER.as_bytes(),
+        )?;
+        let client_registration_finish_result = client_registration_start_result.state.finish(
+            &mut client_rng,
+            STR_PASSWORD.as_bytes(),
+            server_registration_start_result.message,
+            ClientRegistrationFinishParameters::default(),
+        )?;
+        let p_file = ServerRegistration::finish(client_registration_finish_result.message);
+        let client_login_start_result =
+            ClientLogin::<CS>::start(&mut client_rng, STR_PASSWORD.as_bytes())?;
+        let server_login_start_result = ServerLogin::<CS>::start(
+            &mut server_rng,
+            &server_setup,
+            Some(p_file),
+            client_login_start_result.message,
+            STR_CREDENTIAL_IDENTIFIER.as_bytes(),
+            ServerLoginStartParameters::default(),
+        )?;
+        let client_login_finish_result = client_login_start_result.state.finish(
+            &mut client_rng,
             STR_PASSWORD.as_bytes(),
             server_login_start_result.message,
             ClientLoginFinishParameters::default(),
@@ -1707,22 +1519,20 @@ fn test_zeroize_server_login_finish() -> Result<(), ProtocolError> {
 
         let mut state = server_login_finish_result.state;
         unsafe { ptr::drop_in_place(&mut state) };
-        for byte in state.serialize() {
-            assert_eq!(byte, 0);
-        }
+        state.assert_zeroized();
 
         Ok(())
     }
 
-    run_all!(inner);
+    triple_dh_ciphersuites!(run_all!(inner));
+    sigma_i_ciphersuites!(run_all!(inner));
 
     Ok(())
 }
 
 #[test]
 fn test_scalar_always_nonzero() -> Result<(), ProtocolError> {
-    #[allow(clippy::extra_unused_type_parameters)]
-    fn inner<CS: CipherSuite, KG, H>(_test_vector: &str) -> Result<(), ProtocolError> {
+    fn inner<CS: CipherSuite>(_test_vector: &str) -> Result<(), ProtocolError> {
         // Start out with a bunch of zeros to force resampling of scalar
         let mut client_registration_rng = CycleRng::new([vec![0u8; 128], vec![1u8; 128]].concat());
         let client_registration_start_result =
@@ -1754,15 +1564,15 @@ fn test_scalar_always_nonzero() -> Result<(), ProtocolError> {
         Ok(())
     }
 
-    run_all!(inner);
+    triple_dh_ciphersuites!(run_all!(inner));
+    sigma_i_ciphersuites!(run_all!(inner));
 
     Ok(())
 }
 
 #[test]
 fn test_reflected_value_error_registration() -> Result<(), ProtocolError> {
-    #[allow(clippy::extra_unused_type_parameters)]
-    fn inner<CS: CipherSuite, KG, H>(_test_vector: &str) -> Result<(), ProtocolError> {
+    fn inner<CS: CipherSuite>(_test_vector: &str) -> Result<(), ProtocolError> {
         let credential_identifier = b"credentialIdentifier";
         let password = b"password";
         let mut client_rng = OsRng;
@@ -1799,15 +1609,15 @@ fn test_reflected_value_error_registration() -> Result<(), ProtocolError> {
         Ok(())
     }
 
-    run_all!(inner);
+    triple_dh_ciphersuites!(run_all!(inner));
+    sigma_i_ciphersuites!(run_all!(inner));
 
     Ok(())
 }
 
 #[test]
 fn test_reflected_value_error_login() -> Result<(), ProtocolError> {
-    #[allow(clippy::extra_unused_type_parameters)]
-    fn inner<CS: CipherSuite, KG, H>(_test_vector: &str) -> Result<(), ProtocolError>
+    fn inner<CS: CipherSuite>(_test_vector: &str) -> Result<(), ProtocolError>
     where
         // MaskedResponse: (Nonce + Hash) + KePk
         NonceLen: Add<OutputSize<OprfHash<CS>>>,
@@ -1853,6 +1663,7 @@ fn test_reflected_value_error_login() -> Result<(), ProtocolError> {
             .set_evaluation_element_for_testing(alpha);
 
         let client_login_result = client_login_start_result.state.finish(
+            &mut client_rng,
             password,
             reflected_credential_response,
             ClientLoginFinishParameters::default(),
@@ -1865,7 +1676,8 @@ fn test_reflected_value_error_login() -> Result<(), ProtocolError> {
         Ok(())
     }
 
-    run_all!(inner);
+    triple_dh_ciphersuites!(run_all!(inner));
+    sigma_i_ciphersuites!(run_all!(inner));
 
     Ok(())
 }

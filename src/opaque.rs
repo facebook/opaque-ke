@@ -27,10 +27,10 @@ use crate::errors::utils::check_slice_size;
 use crate::errors::{InternalError, ProtocolError};
 use crate::hash::OutputSize;
 use crate::key_exchange::group::Group;
+use crate::key_exchange::shared::NonceLen;
 use crate::key_exchange::traits::{
     Deserialize, Ke1MessageLen, Ke1StateLen, Ke2StateLen, KeyExchange, Serialize,
 };
-use crate::key_exchange::tripledh::NonceLen;
 use crate::keypair::{KeyPair, PrivateKey, PrivateKeySerialization, PublicKey};
 use crate::ksf::Ksf;
 use crate::messages::{CredentialRequestLen, RegistrationUploadLen};
@@ -332,16 +332,6 @@ impl<CS: CipherSuite> ClientRegistration<CS> {
         })
     }
 
-    /// Only used for testing zeroize
-    #[cfg(test)]
-    pub(crate) fn to_vec(&self) -> std::vec::Vec<u8> {
-        [
-            self.oprf_client.serialize().to_vec(),
-            self.blinded_element.serialize().to_vec(),
-        ]
-        .concat()
-    }
-
     /// Returns an initial "blinded" request to send to the server, as well as a
     /// [`ClientRegistration`]
     pub fn start<R: RngCore + CryptoRng>(
@@ -579,8 +569,9 @@ impl<CS: CipherSuite> ClientLogin<CS> {
 
     /// "Unblinds" the server's answer and returns the opened assets from the
     /// server
-    pub fn finish(
+    pub fn finish<R: CryptoRng + RngCore>(
         self,
+        rng: &mut R,
         password: &[u8],
         credential_response: CredentialResponse<CS>,
         params: ClientLoginFinishParameters<CS>,
@@ -648,6 +639,7 @@ impl<CS: CipherSuite> ClientLogin<CS> {
         let serialized_credential_request = self.credential_request.serialize_iter();
 
         let result = CS::KeyExchange::generate_ke3(
+            rng,
             credential_response_component,
             credential_response.ke2_message,
             &self.ke1_state,
@@ -866,6 +858,7 @@ impl<CS: CipherSuite> ServerLogin<CS> {
         )?;
         let input = CS::KeyExchange::generate_ke2_input(
             &builder.ke2_builder,
+            rng,
             server_setup.keypair.private(),
         );
 
@@ -1159,7 +1152,7 @@ impl<CS: CipherSuite> MaskedResponse<CS> {
         }
     }
 
-    pub(crate) fn iter(&self) -> impl Iterator<Item = &[u8]> {
+    pub(crate) fn iter(&self) -> impl Clone + Iterator<Item = &[u8]> {
         [self.nonce.as_slice(), &self.hash, &self.pk].into_iter()
     }
 }
@@ -1270,4 +1263,91 @@ fn blind<CS: CipherSuite, R: RngCore + CryptoRng>(
     };
 
     Ok(result)
+}
+
+//////////////////////////
+// Test Implementations //
+//===================== //
+//////////////////////////
+
+#[cfg(test)]
+use crate::util::AssertZeroized;
+
+#[cfg(test)]
+impl<CS: CipherSuite> AssertZeroized for ClientRegistration<CS> {
+    fn assert_zeroized(&self) {
+        let Self {
+            oprf_client,
+            blinded_element,
+        } = self;
+
+        for byte in oprf_client
+            .serialize()
+            .iter()
+            .chain(&blinded_element.serialize())
+        {
+            assert_eq!(byte, &0);
+        }
+    }
+}
+
+#[cfg(test)]
+impl<CS: CipherSuite> AssertZeroized for ServerRegistration<CS>
+where
+    <KeGroup<CS> as Group>::Pk: AssertZeroized,
+{
+    fn assert_zeroized(&self) {
+        let RegistrationUpload {
+            envelope,
+            masking_key,
+            client_s_pk,
+        } = &self.0;
+
+        envelope.assert_zeroized();
+
+        assert_eq!(masking_key, &GenericArray::default());
+        client_s_pk.assert_zeroized();
+    }
+}
+
+#[cfg(test)]
+impl<CS: CipherSuite> AssertZeroized for ClientLogin<CS>
+where
+    <CS::KeyExchange as KeyExchange>::KE1State: AssertZeroized,
+    <CS::KeyExchange as KeyExchange>::KE1Message: AssertZeroized,
+{
+    fn assert_zeroized(&self) {
+        let Self {
+            ke1_state,
+            credential_request,
+            oprf_client,
+        } = self;
+        let CredentialRequest {
+            blinded_element,
+            ke1_message,
+        } = credential_request;
+
+        ke1_state.assert_zeroized();
+        ke1_message.assert_zeroized();
+
+        for byte in oprf_client
+            .serialize()
+            .iter()
+            .chain(&blinded_element.serialize())
+        {
+            assert_eq!(byte, &0);
+        }
+    }
+}
+
+#[cfg(test)]
+impl<CS: CipherSuite> AssertZeroized for ServerLogin<CS>
+where
+    <CS::KeyExchange as KeyExchange>::KE2State: AssertZeroized,
+{
+    fn assert_zeroized(&self) {
+        let Self { ke2_state } = self;
+
+        ke2_state.assert_zeroized();
+    }
 }

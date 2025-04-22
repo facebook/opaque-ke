@@ -255,6 +255,7 @@ fn client_login_finish(c: &mut Criterion) {
                 .clone()
                 .state
                 .finish(
+                    &mut rng,
                     password,
                     server_login_start.clone().message,
                     ClientLoginFinishParameters::default(),
@@ -300,6 +301,7 @@ fn server_login_finish(c: &mut Criterion) {
     let client_login_finish_result = client_login_start_result
         .state
         .finish(
+            &mut rng,
             password,
             server_login_start_result.clone().message,
             ClientLoginFinishParameters::default(),

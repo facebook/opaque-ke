@@ -18,6 +18,7 @@ use zeroize::Zeroize;
 
 use super::Group;
 use crate::errors::{InternalError, ProtocolError};
+use crate::key_exchange::sigma_i::SharedSecret;
 use crate::key_exchange::tripledh::DiffieHellman;
 
 /// Implementation for Curve25519.
@@ -79,11 +80,41 @@ impl Group for Curve25519 {
 }
 
 /// Curve25519 scalar.
-#[derive(Clone, Copy, Zeroize)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, Zeroize)]
 pub struct Scalar([u8; 32]);
 
 impl DiffieHellman<Curve25519> for Scalar {
     fn diffie_hellman(self, pk: MontgomeryPoint) -> GenericArray<u8, U32> {
         Curve25519::serialize_pk(pk.mul_clamped(self.0))
+    }
+}
+
+impl SharedSecret<Curve25519> for Scalar {
+    type Len = U32;
+
+    fn shared_secret(self, pk: MontgomeryPoint) -> GenericArray<u8, U32> {
+        Curve25519::serialize_pk(pk.mul_clamped(self.0))
+    }
+}
+
+//////////////////////////
+// Test Implementations //
+//===================== //
+//////////////////////////
+
+#[cfg(test)]
+use crate::util::AssertZeroized;
+
+#[cfg(test)]
+impl AssertZeroized for MontgomeryPoint {
+    fn assert_zeroized(&self) {
+        assert_eq!(*self, MontgomeryPoint::default());
+    }
+}
+
+#[cfg(test)]
+impl AssertZeroized for Scalar {
+    fn assert_zeroized(&self) {
+        assert_eq!(*self, Scalar(<_>::default()));
     }
 }

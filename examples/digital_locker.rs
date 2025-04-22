@@ -179,6 +179,7 @@ fn open_locker(
     // Server sends credential_response_bytes to client
 
     let result = client_login_start_result.state.finish(
+        &mut client_rng,
         password.as_bytes(),
         CredentialResponse::deserialize(&credential_response_bytes).unwrap(),
         ClientLoginFinishParameters::default(),

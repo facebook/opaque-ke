@@ -26,10 +26,10 @@ use crate::errors::utils::{check_slice_size, check_slice_size_atleast};
 use crate::errors::ProtocolError;
 use crate::hash::OutputSize;
 use crate::key_exchange::group::Group;
+use crate::key_exchange::shared::NonceLen;
 use crate::key_exchange::traits::{
     Deserialize, Ke1MessageLen, Ke2MessageLen, Ke3MessageLen, KeyExchange, Serialize, SerializeIter,
 };
-use crate::key_exchange::tripledh::NonceLen;
 use crate::keypair::PublicKey;
 use crate::opaque::{
     MaskedResponse, MaskedResponseLen, ServerLogin, ServerLoginStartResult, ServerSetup,
@@ -218,7 +218,7 @@ pub type RegistrationRequestLen<CS: CipherSuite> = <OprfGroup<CS> as voprf::Grou
 impl<CS: CipherSuite> RegistrationRequest<CS> {
     /// Only used for testing purposes
     #[cfg(test)]
-    pub fn get_blinded_element_for_testing(&self) -> voprf::BlindedElement<CS::OprfCs> {
+    pub(crate) fn get_blinded_element_for_testing(&self) -> voprf::BlindedElement<CS::OprfCs> {
         self.blinded_element.clone()
     }
 
@@ -270,7 +270,7 @@ impl<CS: CipherSuite> RegistrationResponse<CS> {
     #[cfg(test)]
     /// Only used for tests, where we can set the beta value to test for the
     /// reflection error case
-    pub fn set_evaluation_element_for_testing(
+    pub(crate) fn set_evaluation_element_for_testing(
         &self,
         beta: <OprfGroup<CS> as voprf::Group>::Elem,
     ) -> Self {
@@ -392,7 +392,7 @@ impl<CS: CipherSuite> CredentialRequest<CS> {
 
     /// Only used for testing purposes
     #[cfg(test)]
-    pub fn get_blinded_element_for_testing(&self) -> voprf::BlindedElement<CS::OprfCs> {
+    pub(crate) fn get_blinded_element_for_testing(&self) -> voprf::BlindedElement<CS::OprfCs> {
         self.blinded_element.clone()
     }
 }
@@ -408,7 +408,7 @@ impl<CS: CipherSuite> AsIterator for CredentialRequestAsIter<CS> {
     where
         Self: 'a;
 
-    fn as_iter(&self) -> impl Iterator<Item = Self::Item<'_>> {
+    fn as_iter(&self) -> impl Clone + Iterator<Item = Self::Item<'_>> {
         iter::once(self.blinded_element.as_slice()).chain(self.ke1_message.as_iter())
     }
 }
@@ -449,7 +449,7 @@ impl<CS: CipherSuite> CredentialResponse<CS> {
         beta: &'a GenericArray<u8, <OprfGroup<CS> as voprf::Group>::ElemLen>,
         masking_nonce: &'a GenericArray<u8, NonceLen>,
         masked_response: &'a MaskedResponse<CS>,
-    ) -> impl Iterator<Item = &'a [u8]> {
+    ) -> impl Clone + Iterator<Item = &'a [u8]> {
         [beta.as_slice(), masking_nonce.as_slice()]
             .into_iter()
             .chain(masked_response.iter())
@@ -505,7 +505,7 @@ impl<CS: CipherSuite> CredentialResponse<CS> {
     #[cfg(test)]
     /// Only used for tests, where we can set the beta value to test for the
     /// reflection error case
-    pub fn set_evaluation_element_for_testing(
+    pub(crate) fn set_evaluation_element_for_testing(
         &self,
         beta: <OprfGroup<CS> as voprf::Group>::Elem,
     ) -> Self {
