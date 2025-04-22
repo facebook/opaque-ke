@@ -37,7 +37,7 @@ use crate::*;
 #[allow(non_snake_case)]
 #[derive(Debug)]
 pub struct OpaqueTestVectorParameters {
-    pub dummy_private_key: Vec<u8>,
+    pub dummy_public_key: Vec<u8>,
     pub dummy_masking_key: Vec<u8>,
     pub context: Vec<u8>,
     #[allow(dead_code)] // client_private_key is not tested in the test vectors
@@ -96,10 +96,13 @@ fn populate_test_vectors<CS: CipherSuite>(values: &Value) -> OpaqueTestVectorPar
     let mut rng = OsRng;
 
     OpaqueTestVectorParameters {
-        dummy_private_key: {
-            match decode(values, "client_private_key") {
+        dummy_public_key: {
+            match decode(values, "client_public_key") {
                 Some(value) => value,
-                None => CS::KeGroup::serialize_sk(CS::KeGroup::random_sk(&mut OsRng)).to_vec(),
+                None => CS::KeGroup::serialize_pk(CS::KeGroup::public_key(CS::KeGroup::random_sk(
+                    &mut OsRng,
+                )))
+                .to_vec(),
             }
         },
         dummy_masking_key: {
@@ -333,7 +336,7 @@ where
             &[
                 parameters.oprf_seed.as_slice(),
                 &parameters.server_private_key,
-                &parameters.dummy_private_key,
+                &parameters.dummy_public_key,
             ]
             .concat(),
         )?;
@@ -467,7 +470,7 @@ where
             &[
                 parameters.oprf_seed.as_slice(),
                 &parameters.server_private_key,
-                &parameters.dummy_private_key,
+                &parameters.dummy_public_key,
             ]
             .concat(),
         )?;
@@ -596,7 +599,7 @@ where
             &[
                 parameters.oprf_seed.as_slice(),
                 &parameters.server_private_key,
-                &parameters.dummy_private_key,
+                &parameters.dummy_public_key,
             ]
             .concat(),
         )?;
@@ -661,7 +664,7 @@ where
             &[
                 parameters.oprf_seed.as_slice(),
                 &parameters.server_private_key,
-                &parameters.dummy_private_key,
+                &parameters.dummy_public_key,
             ]
             .concat(),
         )?;

@@ -73,7 +73,7 @@ pub struct ServerSetup<
 > {
     oprf_seed: OS,
     keypair: KeyPair<CS::KeGroup, SK>,
-    pub(crate) fake_keypair: KeyPair<CS::KeGroup>,
+    pub(crate) dummy_pk: PublicKey<CS::KeGroup>,
 }
 
 /// The state elements the client holds to register itself
@@ -170,7 +170,7 @@ pub type ServerSetupLen<
     CS: CipherSuite,
     SK: PrivateKeySerialization<CS::KeGroup>,
     OS: OprfSeedSerialization<OprfHash<CS>, SK::Error>,
-> = Sum<Sum<OS::Len, SK::Len>, <CS::KeGroup as KeGroup>::SkLen>;
+> = Sum<Sum<OS::Len, SK::Len>, <CS::KeGroup as KeGroup>::PkLen>;
 
 impl<CS: CipherSuite, SK: Clone, OS: Clone> ServerSetup<CS, SK, OS> {
     /// Create [`ServerSetup`] with the given keypair and OPRF seed.
@@ -186,7 +186,9 @@ impl<CS: CipherSuite, SK: Clone, OS: Clone> ServerSetup<CS, SK, OS> {
         Self {
             oprf_seed,
             keypair,
-            fake_keypair: KeyPair::<CS::KeGroup>::generate_random::<CS::OprfCs, _>(rng),
+            dummy_pk: KeyPair::<CS::KeGroup>::generate_random::<CS::OprfCs, _>(rng)
+                .public()
+                .clone(),
         }
     }
 
@@ -208,15 +210,15 @@ impl<CS: CipherSuite, SK: Clone, OS: Clone> ServerSetup<CS, SK, OS> {
     where
         SK: PrivateKeySerialization<CS::KeGroup>,
         OS: OprfSeedSerialization<OprfHash<CS>, SK::Error>,
-        // ServerSetup: Hash + KeSk + KeSk
+        // ServerSetup: Hash + KeSk + KePk
         OS::Len: Add<SK::Len>,
-        Sum<OS::Len, SK::Len>: ArrayLength<u8> + Add<<CS::KeGroup as KeGroup>::SkLen>,
+        Sum<OS::Len, SK::Len>: ArrayLength<u8> + Add<<CS::KeGroup as KeGroup>::PkLen>,
         ServerSetupLen<CS, SK, OS>: ArrayLength<u8>,
     {
         self.oprf_seed
             .serialize()
             .concat(SK::serialize_key_pair(&self.keypair))
-            .concat(self.fake_keypair.private().serialize())
+            .concat(self.dummy_pk.serialize())
     }
 
     /// Deserialization from bytes
@@ -226,14 +228,15 @@ impl<CS: CipherSuite, SK: Clone, OS: Clone> ServerSetup<CS, SK, OS> {
         OS: OprfSeedSerialization<OprfHash<CS>, SK::Error>,
     {
         let seed_len = OS::Len::USIZE;
-        let key_len = <CS::KeGroup as KeGroup>::SkLen::USIZE;
-        let checked_slice = check_slice_size(input, seed_len + key_len + key_len, "server_setup")
+        let sk_len = <CS::KeGroup as KeGroup>::SkLen::USIZE;
+        let pk_len = <CS::KeGroup as KeGroup>::PkLen::USIZE;
+        let checked_slice = check_slice_size(input, seed_len + sk_len + pk_len, "server_setup")
             .map_err(ProtocolError::into_custom)?;
 
         Ok(Self {
             oprf_seed: OS::deserialize(&checked_slice[..seed_len])?,
-            keypair: SK::deserialize_key_pair(&checked_slice[seed_len..seed_len + key_len])?,
-            fake_keypair: PrivateKey::deserialize_key_pair(&checked_slice[seed_len + key_len..])
+            keypair: SK::deserialize_key_pair(&checked_slice[seed_len..seed_len + sk_len])?,
+            dummy_pk: PublicKey::deserialize(&checked_slice[seed_len + sk_len..])
                 .map_err(ProtocolError::into_custom)?,
         })
     }
@@ -260,7 +263,9 @@ impl<CS: CipherSuite, SK: Clone> ServerSetup<CS, SK> {
         Self {
             oprf_seed: Zeroizing::new(oprf_seed),
             keypair,
-            fake_keypair: KeyPair::<CS::KeGroup>::generate_random::<CS::OprfCs, _>(rng),
+            dummy_pk: KeyPair::<CS::KeGroup>::generate_random::<CS::OprfCs, _>(rng)
+                .public()
+                .clone(),
         }
     }
 }
