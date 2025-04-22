@@ -316,7 +316,7 @@ impl<CS: CipherSuite> RegistrationUpload<CS> {
         Self {
             envelope: Envelope::<CS>::dummy(),
             masking_key,
-            client_s_pk: server_setup.fake_keypair.public().clone(),
+            client_s_pk: server_setup.dummy_pk.clone(),
         }
     }
 }
