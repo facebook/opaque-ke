@@ -196,10 +196,10 @@ where
     type KE2Message = Ke2Message<G, H>;
     type KE3Message = Ke3Message<H>;
 
-    fn generate_ke1<OprfCs: voprf::CipherSuite, R: RngCore + CryptoRng>(
+    fn generate_ke1<R: RngCore + CryptoRng>(
         rng: &mut R,
     ) -> Result<(Self::KE1State, Self::KE1Message), ProtocolError> {
-        let client_e_kp = KeyPair::<G>::generate_random::<OprfCs, _>(rng);
+        let client_e_kp = KeyPair::<G>::derive_random(rng);
         let client_nonce = generate_nonce::<R>(rng);
 
         let ke1_message = Ke1Message {
@@ -216,7 +216,7 @@ where
         ))
     }
 
-    fn ke2_builder<'a, 'b, 'c, 'd, OprfCs: voprf::CipherSuite, R: RngCore + CryptoRng>(
+    fn ke2_builder<'a, 'b, 'c, 'd, R: RngCore + CryptoRng>(
         rng: &mut R,
         serialized_credential_request: impl Iterator<Item = &'a [u8]>,
         serialized_credential_response: impl Iterator<Item = &'b [u8]>,
@@ -226,7 +226,7 @@ where
         id_s: impl Iterator<Item = &'d [u8]>,
         context: &[u8],
     ) -> Result<Self::KE2Builder, ProtocolError> {
-        let server_e = KeyPair::<G>::generate_random::<OprfCs, _>(rng);
+        let server_e = KeyPair::<G>::derive_random(rng);
         let server_nonce = generate_nonce::<R>(rng);
 
         let transcript_hasher = H::new()

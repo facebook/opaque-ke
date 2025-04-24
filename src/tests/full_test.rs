@@ -584,11 +584,11 @@ where
     let mut rng = OsRng;
 
     // Inputs
-    let server_s_kp = KeyPair::<KeGroup<CS>>::generate_random::<CS::OprfCs, _>(&mut rng);
-    let server_e_kp = KeyPair::<KeGroup<CS>>::generate_random::<CS::OprfCs, _>(&mut rng);
-    let client_s_kp = KeyPair::<KeGroup<CS>>::generate_random::<CS::OprfCs, _>(&mut rng);
-    let client_e_kp = KeyPair::<KeGroup<CS>>::generate_random::<CS::OprfCs, _>(&mut rng);
-    let fake_kp = KeyPair::<KeGroup<CS>>::generate_random::<CS::OprfCs, _>(&mut rng);
+    let server_s_kp = KeyPair::<KeGroup<CS>>::derive_random(&mut rng);
+    let server_e_kp = KeyPair::<KeGroup<CS>>::derive_random(&mut rng);
+    let client_s_kp = KeyPair::<KeGroup<CS>>::derive_random(&mut rng);
+    let client_e_kp = KeyPair::<KeGroup<CS>>::derive_random(&mut rng);
+    let fake_kp = KeyPair::<KeGroup<CS>>::derive_random(&mut rng);
     let credential_identifier = b"credIdentifier";
     let id_u = b"idU";
     let id_s = b"idS";

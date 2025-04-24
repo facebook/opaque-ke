@@ -6,29 +6,25 @@
 // of this source tree. You may select, at your option, one of the above-listed
 // licenses.
 
-use digest::core_api::BlockSizeUser;
-use digest::{FixedOutput, HashMarker};
-use elliptic_curve::group::cofactor::CofactorGroup;
-use elliptic_curve::hash2curve::{ExpandMsgXmd, FromOkm, GroupDigest};
 use elliptic_curve::sec1::{FromEncodedPoint, ModulusSize, ToEncodedPoint};
 use elliptic_curve::{
-    AffinePoint, Field, FieldBytesSize, Group as _, ProjectivePoint, PublicKey, Scalar, SecretKey,
+    AffinePoint, CurveArithmetic, FieldBytesSize, Group as _, ProjectivePoint, PublicKey, Scalar,
+    SecretKey,
 };
-use generic_array::typenum::{IsLess, IsLessOrEqual, U256};
 use generic_array::GenericArray;
 use rand::{CryptoRng, RngCore};
+use voprf::Mode;
 
-use super::Group;
+use super::{Group, STR_OPAQUE_DERIVE_AUTH_KEY_PAIR};
 use crate::errors::{InternalError, ProtocolError};
 use crate::key_exchange::tripledh::DiffieHellman;
 
 impl<G> Group for G
 where
-    G: GroupDigest,
+    Self: CurveArithmetic + voprf::CipherSuite<Group = Self> + voprf::Group<Scalar = Scalar<Self>>,
     FieldBytesSize<Self>: ModulusSize,
     AffinePoint<Self>: FromEncodedPoint<Self> + ToEncodedPoint<Self>,
-    ProjectivePoint<Self>: CofactorGroup + ToEncodedPoint<Self>,
-    Scalar<Self>: FromOkm,
+    ProjectivePoint<Self>: ToEncodedPoint<Self>,
 {
     type Pk = ProjectivePoint<Self>;
 
@@ -52,30 +48,13 @@ where
         *SecretKey::<Self>::random(rng).to_nonzero_scalar()
     }
 
-    // Implements the `HashToScalar()` function from
-    // <https://www.ietf.org/archive/id/draft-irtf-cfrg-voprf-19.html#section-4>
-    fn hash_to_scalar<H>(input: &[&[u8]], dst: &[&[u8]]) -> Result<Self::Sk, InternalError>
-    where
-        H: BlockSizeUser + Default + FixedOutput + HashMarker,
-        H::OutputSize: IsLess<U256> + IsLessOrEqual<H::BlockSize>,
-    {
-        Self::hash_to_scalar::<ExpandMsgXmd<H>>(input, dst)
-            .map_err(|_| InternalError::HashToScalar)
-            .and_then(|scalar| {
-                if bool::from(scalar.is_zero()) {
-                    Err(InternalError::HashToScalar)
-                } else {
-                    Ok(scalar)
-                }
-            })
+    fn derive_scalar(seed: GenericArray<u8, Self::SkLen>) -> Result<Self::Sk, InternalError> {
+        voprf::derive_key::<Self>(&seed, &STR_OPAQUE_DERIVE_AUTH_KEY_PAIR, Mode::Oprf)
+            .map_err(InternalError::from)
     }
 
     fn public_key(sk: Self::Sk) -> Self::Pk {
         ProjectivePoint::<Self>::generator() * sk
-    }
-
-    fn is_zero_scalar(scalar: Self::Sk) -> subtle::Choice {
-        scalar.is_zero()
     }
 
     fn serialize_sk(sk: Self::Sk) -> GenericArray<u8, Self::SkLen> {
@@ -91,11 +70,10 @@ where
 
 impl<G> DiffieHellman<G> for Scalar<G>
 where
-    G: GroupDigest,
+    G: CurveArithmetic + voprf::CipherSuite<Group = G> + voprf::Group<Scalar = Scalar<G>>,
     FieldBytesSize<G>: ModulusSize,
     AffinePoint<G>: FromEncodedPoint<G> + ToEncodedPoint<G>,
-    ProjectivePoint<G>: CofactorGroup + ToEncodedPoint<G>,
-    Scalar<G>: FromOkm,
+    ProjectivePoint<G>: ToEncodedPoint<G>,
 {
     fn diffie_hellman(
         self,

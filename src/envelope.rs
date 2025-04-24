@@ -302,10 +302,9 @@ fn build_inner_envelope_internal<CS: CipherSuite>(
     randomized_pwd_hasher
         .expand(&nonce.concat(STR_PRIVATE_KEY.into()), &mut keypair_seed)
         .map_err(|_| InternalError::HkdfError)?;
-    let client_static_keypair =
-        PrivateKey::<KeGroup<CS>>::deserialize_key_pair(&KeGroup::<CS>::serialize_sk(
-            KeGroup::<CS>::derive_auth_keypair::<CS::OprfCs>(keypair_seed)?,
-        ))?;
+    let client_static_keypair = PrivateKey::<KeGroup<CS>>::deserialize_key_pair(
+        &KeGroup::<CS>::serialize_sk(KeGroup::<CS>::derive_scalar(keypair_seed)?),
+    )?;
 
     Ok(client_static_keypair.public().clone())
 }
@@ -318,10 +317,9 @@ fn recover_keys_internal<CS: CipherSuite>(
     randomized_pwd_hasher
         .expand(&nonce.concat(STR_PRIVATE_KEY.into()), &mut keypair_seed)
         .map_err(|_| InternalError::HkdfError)?;
-    let client_static_keypair =
-        PrivateKey::<KeGroup<CS>>::deserialize_key_pair(&KeGroup::<CS>::serialize_sk(
-            KeGroup::<CS>::derive_auth_keypair::<CS::OprfCs>(keypair_seed)?,
-        ))?;
+    let client_static_keypair = PrivateKey::<KeGroup<CS>>::deserialize_key_pair(
+        &KeGroup::<CS>::serialize_sk(KeGroup::<CS>::derive_scalar(keypair_seed)?),
+    )?;
 
     Ok(client_static_keypair)
 }

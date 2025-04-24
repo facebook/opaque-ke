@@ -17,9 +17,9 @@ use digest::{FixedOutput, HashMarker};
 use generic_array::typenum::{IsLess, IsLessOrEqual, U256, U32};
 use generic_array::GenericArray;
 use rand::{CryptoRng, RngCore};
-use subtle::ConstantTimeEq;
+use voprf::Mode;
 
-use super::Group;
+use super::{Group, STR_OPAQUE_DERIVE_AUTH_KEY_PAIR};
 use crate::errors::{InternalError, ProtocolError};
 use crate::key_exchange::tripledh::DiffieHellman;
 
@@ -48,21 +48,7 @@ impl Group for Ristretto255 {
 
     fn random_sk<R: RngCore + CryptoRng>(rng: &mut R) -> Self::Sk {
         loop {
-            let scalar = {
-                #[cfg(not(test))]
-                {
-                    Scalar::random(rng)
-                }
-
-                // Tests need an exact conversion from bytes to scalar, sampling only 32 bytes
-                // from rng
-                #[cfg(test)]
-                {
-                    let mut scalar_bytes = [0u8; 32];
-                    rng.fill_bytes(&mut scalar_bytes);
-                    Scalar::from_bytes_mod_order(scalar_bytes)
-                }
-            };
+            let scalar = Scalar::random(rng);
 
             if scalar != Scalar::ZERO {
                 break scalar;
@@ -70,19 +56,9 @@ impl Group for Ristretto255 {
         }
     }
 
-    // Implements the `HashToScalar()` function from
-    // <https://www.ietf.org/archive/id/draft-irtf-cfrg-voprf-19.html#section-4>
-    fn hash_to_scalar<'a, H>(input: &[&[u8]], dst: &[&[u8]]) -> Result<Self::Sk, InternalError>
-    where
-        H: BlockSizeUser + Default + FixedOutput + HashMarker,
-        H::OutputSize: IsLess<U256> + IsLessOrEqual<H::BlockSize>,
-    {
-        <voprf::Ristretto255 as voprf::Group>::hash_to_scalar::<H>(input, dst)
-            .map_err(InternalError::OprfInternalError)
-    }
-
-    fn is_zero_scalar(scalar: Self::Sk) -> subtle::Choice {
-        scalar.ct_eq(&Scalar::ZERO)
+    fn derive_scalar(seed: GenericArray<u8, Self::SkLen>) -> Result<Self::Sk, InternalError> {
+        voprf::derive_key::<Self>(&seed, &STR_OPAQUE_DERIVE_AUTH_KEY_PAIR, Mode::Oprf)
+            .map_err(InternalError::from)
     }
 
     fn public_key(sk: Self::Sk) -> Self::Pk {

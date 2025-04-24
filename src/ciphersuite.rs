@@ -10,8 +10,7 @@
 //! OPAQUE
 
 use digest::core_api::{BlockSizeUser, CoreProxy};
-use digest::OutputSizeUser;
-use generic_array::typenum::{IsLess, IsLessOrEqual, Le, NonZero, U256};
+use generic_array::typenum::{IsLess, Le, NonZero, U256};
 
 use crate::hash::{Hash, ProxyHash};
 use crate::key_exchange::traits::KeyExchange;
@@ -25,8 +24,6 @@ use crate::ksf::Ksf;
 /// * `Ksf`: A key stretching function, typically used for password hashing
 pub trait CipherSuite
 where
-    <OprfHash<Self> as OutputSizeUser>::OutputSize:
-        IsLess<U256> + IsLessOrEqual<<OprfHash<Self> as BlockSizeUser>::BlockSize>,
     OprfHash<Self>: Hash,
     <OprfHash<Self> as CoreProxy>::Core: ProxyHash,
     <<OprfHash<Self> as CoreProxy>::Core as BlockSizeUser>::BlockSize: IsLess<U256>,

@@ -38,12 +38,12 @@ where
     type KE2Message: ZeroizeOnDrop + Clone;
     type KE3Message: ZeroizeOnDrop + Clone;
 
-    fn generate_ke1<OprfCs: voprf::CipherSuite, R: RngCore + CryptoRng>(
+    fn generate_ke1<R: RngCore + CryptoRng>(
         rng: &mut R,
     ) -> Result<(Self::KE1State, Self::KE1Message), ProtocolError>;
 
     #[allow(clippy::too_many_arguments)]
-    fn ke2_builder<'a, 'b, 'c, 'd, OprfCs: voprf::CipherSuite, R: RngCore + CryptoRng>(
+    fn ke2_builder<'a, 'b, 'c, 'd, R: RngCore + CryptoRng>(
         rng: &mut R,
         serialized_credential_request: impl Iterator<Item = &'a [u8]>,
         serialized_credential_response: impl Iterator<Item = &'b [u8]>,

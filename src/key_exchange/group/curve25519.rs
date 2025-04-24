@@ -11,12 +11,9 @@
 use curve25519_dalek::montgomery::MontgomeryPoint;
 use curve25519_dalek::scalar;
 use curve25519_dalek::traits::Identity;
-use digest::core_api::BlockSizeUser;
-use digest::{FixedOutput, HashMarker, OutputSizeUser};
-use generic_array::typenum::{IsLess, IsLessOrEqual, U256, U32};
+use generic_array::typenum::U32;
 use generic_array::GenericArray;
 use rand::{CryptoRng, RngCore};
-use subtle::ConstantTimeEq;
 use zeroize::Zeroize;
 
 use super::Group;
@@ -47,38 +44,16 @@ impl Group for Curve25519 {
     }
 
     fn random_sk<R: RngCore + CryptoRng>(rng: &mut R) -> Self::Sk {
-        loop {
-            // Sample 32 random bytes and then clamp, as described in https://cr.yp.to/ecdh.html
-            let mut scalar_bytes = [0u8; 32];
-            rng.fill_bytes(&mut scalar_bytes);
-            let scalar = scalar::clamp_integer(scalar_bytes);
+        // Sample 32 random bytes and then clamp, as described in https://cr.yp.to/ecdh.html
+        let mut scalar_bytes = [0u8; 32];
+        rng.fill_bytes(&mut scalar_bytes);
+        let scalar = scalar::clamp_integer(scalar_bytes);
 
-            if scalar != curve25519_dalek::Scalar::ZERO.to_bytes() {
-                break Scalar(scalar);
-            }
-        }
+        Scalar(scalar)
     }
 
-    fn hash_to_scalar<'a, H>(_input: &[&[u8]], _dst: &[&[u8]]) -> Result<Self::Sk, InternalError>
-    where
-        H: BlockSizeUser + Default + FixedOutput + HashMarker,
-        H::OutputSize: IsLess<U256> + IsLessOrEqual<H::BlockSize>,
-    {
-        unimplemented!()
-    }
-
-    fn derive_auth_keypair<CS: voprf::CipherSuite>(
-        seed: GenericArray<u8, Self::SkLen>,
-    ) -> Result<Self::Sk, InternalError>
-    where
-        <CS::Hash as OutputSizeUser>::OutputSize:
-            IsLess<U256> + IsLessOrEqual<<CS::Hash as BlockSizeUser>::BlockSize>,
-    {
+    fn derive_scalar(seed: GenericArray<u8, Self::SkLen>) -> Result<Self::Sk, InternalError> {
         Ok(Scalar(scalar::clamp_integer(seed.into())))
-    }
-
-    fn is_zero_scalar(scalar: Self::Sk) -> subtle::Choice {
-        scalar.0.ct_eq(&curve25519_dalek::Scalar::ZERO.to_bytes())
     }
 
     fn public_key(sk: Self::Sk) -> Self::Pk {

@@ -157,7 +157,7 @@ pub struct ServerLogin<CS: CipherSuite> {
 impl<CS: CipherSuite> ServerSetup<CS, PrivateKey<KeGroup<CS>>> {
     /// Generate a new instance of server setup
     pub fn new<R: CryptoRng + RngCore>(rng: &mut R) -> Self {
-        let keypair = KeyPair::generate_random::<CS::OprfCs, _>(rng);
+        let keypair = KeyPair::random(rng);
         Self::new_with_key_pair(rng, keypair)
     }
 }
@@ -183,7 +183,7 @@ impl<CS: CipherSuite, SK: Clone, OS: Clone> ServerSetup<CS, SK, OS> {
         Self {
             oprf_seed,
             keypair,
-            fake_keypair: KeyPair::<KeGroup<CS>>::generate_random::<CS::OprfCs, _>(rng),
+            fake_keypair: KeyPair::<KeGroup<CS>>::random(rng),
         }
     }
 
@@ -254,11 +254,7 @@ impl<CS: CipherSuite, SK: Clone> ServerSetup<CS, SK> {
         let mut oprf_seed = GenericArray::default();
         rng.fill_bytes(&mut oprf_seed);
 
-        Self {
-            oprf_seed: Zeroizing::new(oprf_seed),
-            keypair,
-            fake_keypair: KeyPair::<KeGroup<CS>>::generate_random::<CS::OprfCs, _>(rng),
-        }
+        Self::new_with_key_pair_and_seed(rng, keypair, Zeroizing::new(oprf_seed))
     }
 }
 
@@ -564,7 +560,7 @@ impl<CS: CipherSuite> ClientLogin<CS> {
         password: &[u8],
     ) -> Result<ClientLoginStartResult<CS>, ProtocolError> {
         let blind_result = blind::<CS, _>(rng, password)?;
-        let (ke1_state, ke1_message) = CS::KeyExchange::generate_ke1::<CS::OprfCs, _>(rng)?;
+        let (ke1_state, ke1_message) = CS::KeyExchange::generate_ke1(rng)?;
 
         let credential_request = CredentialRequest {
             blinded_element: blind_result.message,
@@ -760,7 +756,7 @@ impl<CS: CipherSuite> ServerLogin<CS> {
         let credential_response_component =
             CredentialResponse::<CS>::serialize_without_ke(&beta, &masking_nonce, &masked_response);
 
-        let ke2_builder = CS::KeyExchange::ke2_builder::<CS::OprfCs, _>(
+        let ke2_builder = CS::KeyExchange::ke2_builder(
             rng,
             credential_request_bytes.as_iter(),
             credential_response_component,
