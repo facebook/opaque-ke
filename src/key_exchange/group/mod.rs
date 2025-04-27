@@ -39,7 +39,9 @@ pub trait Group {
     fn serialize_pk(pk: Self::Pk) -> GenericArray<u8, Self::PkLen>;
 
     /// Return a public key from its fixed-length bytes representation
-    fn deserialize_pk(bytes: &[u8]) -> Result<Self::Pk, ProtocolError>;
+    ///
+    /// The deserialized bytes must be taken from `bytes`.
+    fn deserialize_take_pk(bytes: &mut &[u8]) -> Result<Self::Pk, ProtocolError>;
 
     /// Generate a random secret key
     fn random_sk<R: RngCore + CryptoRng>(rng: &mut R) -> Self::Sk;
@@ -54,5 +56,7 @@ pub trait Group {
     fn serialize_sk(sk: Self::Sk) -> GenericArray<u8, Self::SkLen>;
 
     /// Return a public key from its fixed-length bytes representation
-    fn deserialize_sk(bytes: &[u8]) -> Result<Self::Sk, ProtocolError>;
+    ///
+    /// The deserialized bytes must be taken from `bytes`.
+    fn deserialize_take_sk(bytes: &mut &[u8]) -> Result<Self::Sk, ProtocolError>;
 }

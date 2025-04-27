@@ -11,11 +11,12 @@
 use core::fmt::{self, Debug, Formatter};
 
 use derive_where::derive_where;
-use elliptic_curve::group::prime::PrimeCurveAffine;
-use elliptic_curve::sec1::{FromEncodedPoint, ModulusSize, ToEncodedPoint};
+use elliptic_curve::group::GroupEncoding;
+use elliptic_curve::ops::MulByGenerator;
+use elliptic_curve::sec1::{ModulusSize, ToEncodedPoint};
 use elliptic_curve::{
-    point, AffinePoint, CurveArithmetic, FieldBytesSize, Group as _, NonZeroScalar,
-    ProjectivePoint, PublicKey, Scalar, SecretKey,
+    point, CurveArithmetic, FieldBytesSize, Group as _, NonZeroScalar, ProjectivePoint, Scalar,
+    SecretKey,
 };
 use generic_array::GenericArray;
 use rand::{CryptoRng, RngCore};
@@ -26,15 +27,15 @@ use super::{Group, STR_OPAQUE_DERIVE_AUTH_KEY_PAIR};
 use crate::errors::{InternalError, ProtocolError};
 use crate::key_exchange::sigma_i::SharedSecret;
 use crate::key_exchange::tripledh::DiffieHellman;
+use crate::serialization::SliceExt;
 
 impl<G> Group for G
 where
     Self: CurveArithmetic + voprf::CipherSuite<Group = Self> + voprf::Group<Scalar = Scalar<Self>>,
     FieldBytesSize<Self>: ModulusSize,
-    AffinePoint<Self>: FromEncodedPoint<Self>
-        + ToEncodedPoint<Self>
-        + PrimeCurveAffine<Curve = ProjectivePoint<Self>>,
-    ProjectivePoint<Self>: ToEncodedPoint<Self>,
+    ProjectivePoint<Self>: GroupEncoding<
+            Repr = GenericArray<u8, <FieldBytesSize<Self> as ModulusSize>::CompressedPointSize>,
+        > + ToEncodedPoint<Self>,
 {
     type Pk = NonIdentity<Self>;
 
@@ -48,11 +49,11 @@ where
         GenericArray::clone_from_slice(pk.0.to_encoded_point(true).as_bytes())
     }
 
-    fn deserialize_pk(bytes: &[u8]) -> Result<Self::Pk, ProtocolError> {
-        PublicKey::<Self>::from_sec1_bytes(bytes)
-            .map(|public_key| public_key.to_nonidentity().to_curve())
+    fn deserialize_take_pk(bytes: &mut &[u8]) -> Result<Self::Pk, ProtocolError> {
+        point::NonIdentity::<ProjectivePoint<Self>>::from_bytes(&bytes.take_array("public key")?)
+            .into_option()
             .map(NonIdentity)
-            .map_err(|_| ProtocolError::SerializationError)
+            .ok_or(ProtocolError::SerializationError)
     }
 
     fn random_sk<R: RngCore + CryptoRng>(rng: &mut R) -> Self::Sk {
@@ -68,15 +69,19 @@ where
     }
 
     fn public_key(sk: Self::Sk) -> Self::Pk {
-        NonIdentity(SecretKey::from(sk).public_key().to_nonidentity().to_curve())
+        // Non-panicking version in https://github.com/RustCrypto/traits/pull/1833.
+        NonIdentity(
+            point::NonIdentity::new(ProjectivePoint::<Self>::mul_by_generator(&*sk))
+                .expect("multiplying with a non-zero scalar can never yield the identity element"),
+        )
     }
 
     fn serialize_sk(sk: Self::Sk) -> GenericArray<u8, Self::SkLen> {
         sk.into()
     }
 
-    fn deserialize_sk(bytes: &[u8]) -> Result<Self::Sk, ProtocolError> {
-        SecretKey::<Self>::from_slice(bytes)
+    fn deserialize_take_sk(bytes: &mut &[u8]) -> Result<Self::Sk, ProtocolError> {
+        SecretKey::<Self>::from_bytes(&bytes.take_array("secret key")?)
             .map(|secret_key| secret_key.to_nonzero_scalar())
             .map_err(|_| ProtocolError::SerializationError)
     }
@@ -122,9 +127,9 @@ impl<G> DiffieHellman<G> for NonZeroScalar<G>
 where
     G: CurveArithmetic + voprf::CipherSuite<Group = G> + voprf::Group<Scalar = Scalar<G>>,
     FieldBytesSize<G>: ModulusSize,
-    AffinePoint<G>:
-        FromEncodedPoint<G> + ToEncodedPoint<G> + PrimeCurveAffine<Curve = ProjectivePoint<G>>,
-    ProjectivePoint<G>: ToEncodedPoint<G>,
+    ProjectivePoint<G>: GroupEncoding<
+            Repr = GenericArray<u8, <FieldBytesSize<G> as ModulusSize>::CompressedPointSize>,
+        > + ToEncodedPoint<G>,
 {
     fn diffie_hellman(
         self,
@@ -138,9 +143,9 @@ impl<G> SharedSecret<G> for NonZeroScalar<G>
 where
     G: CurveArithmetic + voprf::CipherSuite<Group = G> + voprf::Group<Scalar = Scalar<G>>,
     FieldBytesSize<G>: ModulusSize,
-    AffinePoint<G>:
-        FromEncodedPoint<G> + ToEncodedPoint<G> + PrimeCurveAffine<Curve = ProjectivePoint<G>>,
-    ProjectivePoint<G>: ToEncodedPoint<G>,
+    ProjectivePoint<G>: GroupEncoding<
+            Repr = GenericArray<u8, <FieldBytesSize<G> as ModulusSize>::CompressedPointSize>,
+        > + ToEncodedPoint<G>,
 {
     type Len = <FieldBytesSize<G> as ModulusSize>::CompressedPointSize;
 
@@ -155,7 +160,7 @@ where
 //////////////////////////
 
 #[cfg(test)]
-use crate::util::AssertZeroized;
+use crate::serialization::AssertZeroized;
 
 #[cfg(test)]
 impl<G: CurveArithmetic> AssertZeroized for NonIdentity<G> {

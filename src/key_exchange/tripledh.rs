@@ -15,23 +15,24 @@ use derive_where::derive_where;
 use digest::core_api::BlockSizeUser;
 use digest::{Digest, Output, OutputSizeUser, Update};
 use generic_array::sequence::Concat;
-use generic_array::typenum::{IsLess, Le, NonZero, Sum, Unsigned, U2, U256};
+use generic_array::typenum::{IsLess, Le, NonZero, Sum, U2, U256};
 use generic_array::{ArrayLength, GenericArray};
 use hmac::{Hmac, Mac};
 use rand::{CryptoRng, RngCore};
 use subtle::{ConstantTimeEq, CtOption};
 use zeroize::{Zeroize, ZeroizeOnDrop};
 
-use crate::errors::utils::{check_slice_size, check_slice_size_atleast};
+use crate::ciphersuite::{CipherSuite, KeGroup, KeHash};
 use crate::errors::{InternalError, ProtocolError};
 use crate::hash::{Hash, OutputSize, ProxyHash};
 use crate::key_exchange::group::Group;
 use crate::key_exchange::shared::{self, Ke1Message, Ke1State, NonceLen, STR_CONTEXT};
 use crate::key_exchange::traits::{
-    Deserialize, GenerateKe2Result, GenerateKe3Result, KeyExchange, Serialize,
+    CredentialRequestParts, CredentialResponseParts, Deserialize, GenerateKe2Result,
+    GenerateKe3Result, KeyExchange, Serialize, SerializedIdentifiers,
 };
 use crate::keypair::{KeyPair, PrivateKey, PublicKey};
-use crate::serialization::{Input, UpdateExt};
+use crate::serialization::{i2osp, SliceExt, UpdateExt};
 
 ////////////////////////////
 // High-level API Structs //
@@ -145,8 +146,8 @@ where
     type KE1State = Ke1State<G>;
     type KE2State = Ke2State<H>;
     type KE1Message = Ke1Message<G>;
-    type KE2Builder = Ke2Builder<G, H>;
-    type KE2BuilderData<'a> = &'a PublicKey<G>;
+    type KE2Builder<CS: CipherSuite<KeyExchange = Self>> = Ke2Builder<G, H>;
+    type KE2BuilderData<'a, CS: 'static + CipherSuite> = &'a PublicKey<G>;
     type KE2BuilderInput = GenericArray<u8, G::PkLen>;
     type KE2Message = Ke2Message<G, H>;
     type KE3Message = Ke3Message<H>;
@@ -171,25 +172,24 @@ where
         ))
     }
 
-    fn ke2_builder<'a, 'b, 'c, 'd, R: RngCore + CryptoRng>(
+    fn ke2_builder<CS: CipherSuite<KeyExchange = Self>, R: RngCore + CryptoRng>(
         rng: &mut R,
-        serialized_credential_request: impl Iterator<Item = &'a [u8]>,
-        serialized_credential_response: impl Iterator<Item = &'b [u8]>,
+        credential_request: CredentialRequestParts<CS>,
         ke1_message: Self::KE1Message,
+        credential_response: CredentialResponseParts<CS>,
         client_s_pk: PublicKey<G>,
-        id_u: impl Iterator<Item = &'c [u8]>,
-        id_s: impl Iterator<Item = &'d [u8]>,
+        identifiers: SerializedIdentifiers<'_, KeGroup<CS>>,
         context: &[u8],
-    ) -> Result<Self::KE2Builder, ProtocolError> {
+    ) -> Result<Self::KE2Builder<CS>, ProtocolError> {
         let server_e = KeyPair::<G>::derive_random(rng);
         let server_nonce = shared::generate_nonce::<R>(rng);
 
         let transcript_hasher = transcript(
             context,
-            id_u,
-            serialized_credential_request,
-            id_s,
-            serialized_credential_response,
+            &identifiers,
+            &credential_request,
+            &ke1_message,
+            &credential_response,
             server_nonce,
             server_e.public(),
         )?;
@@ -209,20 +209,22 @@ where
         })
     }
 
-    fn ke2_builder_data(builder: &Self::KE2Builder) -> Self::KE2BuilderData<'_> {
+    fn ke2_builder_data<CS: 'static + CipherSuite<KeyExchange = Self>>(
+        builder: &Self::KE2Builder<CS>,
+    ) -> Self::KE2BuilderData<'_, CS> {
         &builder.client_e_pk
     }
 
-    fn generate_ke2_input<R: CryptoRng + RngCore>(
-        builder: &Self::KE2Builder,
+    fn generate_ke2_input<CS: CipherSuite<KeyExchange = Self>, R: CryptoRng + RngCore>(
+        builder: &Self::KE2Builder<CS>,
         _: &mut R,
         server_s_sk: &PrivateKey<G>,
     ) -> Self::KE2BuilderInput {
         server_s_sk.ke_diffie_hellman(&builder.client_e_pk)
     }
 
-    fn build_ke2(
-        mut builder: Self::KE2Builder,
+    fn build_ke2<CS: CipherSuite<KeyExchange = Self>>(
+        mut builder: Self::KE2Builder<CS>,
         shared_secret_2: Self::KE2BuilderInput,
     ) -> Result<GenerateKe2Result<Self>, ProtocolError> {
         let derived_keys = shared::derive_keys::<H>(
@@ -269,25 +271,24 @@ where
         ))
     }
 
-    #[allow(clippy::type_complexity)]
-    fn generate_ke3<'a, 'b, 'c, 'd, R: CryptoRng + RngCore>(
+    fn generate_ke3<CS: CipherSuite<KeyExchange = Self>, R: CryptoRng + RngCore>(
         _: &mut R,
-        serialized_credential_response: impl Iterator<Item = &'a [u8]>,
+        credential_request: CredentialRequestParts<CS>,
+        ke1_message: Self::KE1Message,
+        credential_response: CredentialResponseParts<CS>,
         ke2_message: Self::KE2Message,
         ke1_state: &Self::KE1State,
-        serialized_credential_request: impl Iterator<Item = &'b [u8]>,
         server_s_pk: PublicKey<G>,
         client_s_sk: PrivateKey<G>,
-        id_u: impl Iterator<Item = &'c [u8]>,
-        id_s: impl Iterator<Item = &'d [u8]>,
+        identifiers: SerializedIdentifiers<'_, KeGroup<CS>>,
         context: &[u8],
     ) -> Result<GenerateKe3Result<Self>, ProtocolError> {
-        let mut transcript_hasher = transcript::<G, H>(
+        let mut transcript_hasher = transcript(
             context,
-            id_u,
-            serialized_credential_request,
-            id_s,
-            serialized_credential_response,
+            &identifiers,
+            &credential_request,
+            &ke1_message,
+            &credential_response,
             ke2_message.server_nonce,
             &ke2_message.server_e_pk,
         )?;
@@ -352,22 +353,25 @@ where
 // ========================================== //
 ////////////////////////////////////////////////
 
-fn transcript<'a, 'b, 'c, 'd, G: Group, H: Digest + Update>(
+#[allow(clippy::too_many_arguments)]
+fn transcript<CS: CipherSuite>(
     context: &[u8],
-    id_u: impl Iterator<Item = &'a [u8]>,
-    serialized_credential_request: impl Iterator<Item = &'c [u8]>,
-    id_s: impl Iterator<Item = &'b [u8]>,
-    serialized_credential_response: impl Iterator<Item = &'d [u8]>,
+    identifiers: &SerializedIdentifiers<'_, KeGroup<CS>>,
+    credential_request: &CredentialRequestParts<CS>,
+    ke1_message: &Ke1Message<KeGroup<CS>>,
+    credential_response: &CredentialResponseParts<CS>,
     server_nonce: GenericArray<u8, NonceLen>,
-    server_e_pk: &PublicKey<G>,
-) -> Result<H, ProtocolError> {
-    Ok(H::new()
+    server_e_pk: &PublicKey<KeGroup<CS>>,
+) -> Result<KeHash<CS>, ProtocolError> {
+    Ok(KeHash::<CS>::new()
         .chain(STR_CONTEXT)
-        .chain_iter(Input::<U2>::from(context)?.iter())
-        .chain_iter(id_u)
-        .chain_iter(serialized_credential_request)
-        .chain_iter(id_s)
-        .chain_iter(serialized_credential_response)
+        .chain(i2osp::<U2>(context.len())?)
+        .chain(context)
+        .chain_iter(identifiers.client.iter())
+        .chain_iter(credential_request.iter())
+        .chain_iter(ke1_message.to_iter().iter())
+        .chain_iter(identifiers.server.iter())
+        .chain_iter(credential_response.iter())
         .chain(server_nonce)
         .chain(server_e_pk.serialize()))
 }
@@ -383,13 +387,10 @@ where
     <H::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
     Le<<H::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
 {
-    fn deserialize(input: &[u8]) -> Result<Self, ProtocolError> {
-        let hash_len = OutputSize::<H>::USIZE;
-        let checked_bytes = check_slice_size(input, 2 * hash_len, "ke2_state")?;
-
+    fn deserialize_take(input: &mut &[u8]) -> Result<Self, ProtocolError> {
         Ok(Self {
-            session_key: GenericArray::clone_from_slice(&checked_bytes[..hash_len]),
-            expected_mac: GenericArray::clone_from_slice(&checked_bytes[hash_len..]),
+            session_key: input.take_array("session key")?,
+            expected_mac: input.take_array("expected mac")?,
         })
     }
 }
@@ -451,29 +452,11 @@ where
     <H::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
     Le<<H::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
 {
-    fn deserialize(input: &[u8]) -> Result<Self, ProtocolError> {
-        let key_len = <G as Group>::PkLen::USIZE;
-        let nonce_len = NonceLen::USIZE;
-        let checked_nonce = check_slice_size_atleast(input, nonce_len, "ke2_message nonce")?;
-
-        let unchecked_server_e_pk = check_slice_size_atleast(
-            &checked_nonce[nonce_len..],
-            key_len,
-            "ke2_message server_e_pk",
-        )?;
-        let checked_mac = check_slice_size(
-            &unchecked_server_e_pk[key_len..],
-            OutputSize::<H>::USIZE,
-            "ke2_message mac",
-        )?;
-
-        // Check the public key bytes
-        let server_e_pk = PublicKey::deserialize(&unchecked_server_e_pk[..key_len])?;
-
+    fn deserialize_take(input: &mut &[u8]) -> Result<Self, ProtocolError> {
         Ok(Self {
-            server_nonce: GenericArray::clone_from_slice(&checked_nonce[..nonce_len]),
-            server_e_pk,
-            mac: GenericArray::clone_from_slice(checked_mac),
+            server_nonce: input.take_array("server nonce")?,
+            server_e_pk: PublicKey::deserialize_take(input)?,
+            mac: input.take_array("mac")?,
         })
     }
 }
@@ -503,11 +486,9 @@ where
     <H::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
     Le<<H::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
 {
-    fn deserialize(bytes: &[u8]) -> Result<Self, ProtocolError> {
-        let checked_bytes = check_slice_size(bytes, OutputSize::<H>::USIZE, "ke3_message")?;
-
+    fn deserialize_take(bytes: &mut &[u8]) -> Result<Self, ProtocolError> {
         Ok(Self {
-            mac: GenericArray::clone_from_slice(checked_bytes),
+            mac: bytes.take_array("mac")?,
         })
     }
 }
@@ -531,7 +512,7 @@ where
 //////////////////////////
 
 #[cfg(test)]
-use crate::util::AssertZeroized;
+use crate::serialization::AssertZeroized;
 
 #[cfg(test)]
 impl<H: OutputSizeUser> AssertZeroized for Ke2State<H> {

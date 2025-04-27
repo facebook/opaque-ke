@@ -23,6 +23,7 @@ use crate::ciphersuite::{CipherSuite, KeGroup, OprfGroup, OprfHash};
 use crate::envelope::{Envelope, EnvelopeLen, InnerEnvelopeMode};
 use crate::errors::*;
 use crate::hash::OutputSize;
+use crate::key_exchange::group::ecdsa::Ecdsa;
 use crate::key_exchange::group::Group;
 use crate::key_exchange::shared::NonceLen;
 use crate::key_exchange::sigma_i::SigmaI;
@@ -76,7 +77,8 @@ struct SigmaIP256;
 #[cfg(feature = "ecdsa")]
 impl CipherSuite for SigmaIP256 {
     type OprfCs = ::p256::NistP256;
-    type KeyExchange = SigmaI<::p256::NistP256, ::p256::NistP256, sha2::Sha256>;
+    type KeyExchange =
+        SigmaI<Ecdsa<::p256::NistP256, sha2::Sha256>, ::p256::NistP256, sha2::Sha256>;
     type Ksf = crate::ksf::Identity;
 }
 
@@ -86,7 +88,8 @@ struct SigmaIP384;
 #[cfg(feature = "ecdsa")]
 impl CipherSuite for SigmaIP384 {
     type OprfCs = ::p384::NistP384;
-    type KeyExchange = SigmaI<::p384::NistP384, ::p384::NistP384, sha2::Sha384>;
+    type KeyExchange =
+        SigmaI<Ecdsa<::p384::NistP384, sha2::Sha384>, ::p384::NistP384, sha2::Sha384>;
     type Ksf = crate::ksf::Identity;
 }
 
@@ -668,12 +671,13 @@ fn client_login_roundtrip() -> Result<(), ProtocolError> {
 
         let credential_request = CredentialRequest::<CS> {
             blinded_element: blind_result.message,
-            ke1_message: <CS::KeyExchange as KeyExchange>::KE1Message::deserialize(
-                &[
+            ke1_message: <CS::KeyExchange as KeyExchange>::KE1Message::deserialize_take(
+                &mut ([
                     client_nonce.as_ref(),
                     client_e_kp.public().serialize().as_ref(),
                 ]
-                .concat(),
+                .concat()
+                .as_slice()),
             )?,
         };
 
@@ -721,7 +725,8 @@ fn ke1_message_roundtrip() -> Result<(), ProtocolError> {
             client_e_kp.public().serialize().as_ref(),
         ]
         .concat();
-        let reg = <CS::KeyExchange as KeyExchange>::KE1Message::deserialize(&ke1m)?;
+        let reg =
+            <CS::KeyExchange as KeyExchange>::KE1Message::deserialize_take(&mut (ke1m.as_slice()))?;
         let reg_bytes = reg.serialize();
         assert_eq!(*reg_bytes, ke1m);
 
@@ -762,7 +767,8 @@ fn triple_dh_ke2_message_roundtrip() -> Result<(), ProtocolError> {
         ]
         .concat();
 
-        let reg = <CS::KeyExchange as KeyExchange>::KE2Message::deserialize(&ke2m)?;
+        let reg =
+            <CS::KeyExchange as KeyExchange>::KE2Message::deserialize_take(&mut (ke2m.as_slice()))?;
         let reg_bytes = reg.serialize();
         assert_eq!(*reg_bytes, ke2m);
 
@@ -804,7 +810,8 @@ fn sigma_i_ke2_message_roundtrip() -> Result<(), ProtocolError> {
         ]
         .concat();
 
-        let reg = <CS::KeyExchange as KeyExchange>::KE2Message::deserialize(&ke2m)?;
+        let reg =
+            <CS::KeyExchange as KeyExchange>::KE2Message::deserialize_take(&mut (ke2m.as_slice()))?;
         let reg_bytes = reg.serialize();
         assert_eq!(*reg_bytes, ke2m);
 
@@ -829,7 +836,8 @@ fn triple_dh_ke3_message_roundtrip() -> Result<(), ProtocolError> {
 
         let ke3m: Vec<u8> = [mac].concat();
 
-        let reg = <CS::KeyExchange as KeyExchange>::KE3Message::deserialize(&ke3m)?;
+        let reg =
+            <CS::KeyExchange as KeyExchange>::KE3Message::deserialize_take(&mut (ke3m.as_slice()))?;
         let reg_bytes = reg.serialize();
         assert_eq!(*reg_bytes, ke3m);
 
@@ -860,7 +868,8 @@ fn sigma_i_ke3_message_roundtrip() -> Result<(), ProtocolError> {
 
         let ke3m: Vec<u8> = [mac.as_slice(), &r, &s].concat();
 
-        let reg = <CS::KeyExchange as KeyExchange>::KE3Message::deserialize(&ke3m)?;
+        let reg =
+            <CS::KeyExchange as KeyExchange>::KE3Message::deserialize_take(&mut (ke3m.as_slice()))?;
         let reg_bytes = reg.serialize();
         assert_eq!(*reg_bytes, ke3m);
 
@@ -919,7 +928,7 @@ macro_rules! test {
 
                 #[test]
                 fn test_nocrash_credential_request(bytes in vec(any::<u8>(), 0..500)) {
-                    let _ = CredentialRequest::<$CS>::deserialize(&bytes).map_or(true, |_| true);
+                    let _ = CredentialRequest::<$CS>::deserialize(&mut (bytes.as_slice())).map_or(true, |_| true);
                 }
 
                 #[test]

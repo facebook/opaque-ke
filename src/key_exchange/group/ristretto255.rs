@@ -23,6 +23,7 @@ use super::{Group, STR_OPAQUE_DERIVE_AUTH_KEY_PAIR};
 use crate::errors::{InternalError, ProtocolError};
 use crate::key_exchange::sigma_i::SharedSecret;
 use crate::key_exchange::tripledh::DiffieHellman;
+use crate::serialization::SliceExt;
 
 /// Implementation for Ristretto255.
 // This is necessary because Rust lacks specialization, otherwise we could
@@ -39,8 +40,8 @@ impl Group for Ristretto255 {
         pk.compress().to_bytes().into()
     }
 
-    fn deserialize_pk(bytes: &[u8]) -> Result<Self::Pk, ProtocolError> {
-        CompressedRistretto::from_slice(bytes)
+    fn deserialize_take_pk(bytes: &mut &[u8]) -> Result<Self::Pk, ProtocolError> {
+        CompressedRistretto::from_slice(&bytes.take_array::<U32>("public key")?)
             .map_err(|_| ProtocolError::SerializationError)?
             .decompress()
             .filter(|point| point != &RistrettoPoint::identity())
@@ -70,11 +71,11 @@ impl Group for Ristretto255 {
         sk.to_bytes().into()
     }
 
-    fn deserialize_sk(bytes: &[u8]) -> Result<Self::Sk, ProtocolError> {
+    fn deserialize_take_sk(bytes: &mut &[u8]) -> Result<Self::Sk, ProtocolError> {
         bytes
-            .try_into()
+            .take_array::<U32>("secret key")
             .ok()
-            .and_then(|bytes| Scalar::from_canonical_bytes(bytes).into())
+            .and_then(|bytes| Scalar::from_canonical_bytes(bytes.into()).into())
             .filter(|scalar| scalar != &Scalar::ZERO)
             .ok_or(ProtocolError::SerializationError)
     }
@@ -177,7 +178,7 @@ impl SharedSecret<Ristretto255> for Scalar {
 //////////////////////////
 
 #[cfg(test)]
-use crate::util::AssertZeroized;
+use crate::serialization::AssertZeroized;
 
 #[cfg(test)]
 impl AssertZeroized for RistrettoPoint {

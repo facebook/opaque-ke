@@ -7,17 +7,18 @@
 // licenses.
 
 //! ECDSA implementation for [`elliptic_curve`] [`Group`] implementations to
-//! support [`SigmaI`](crate::key_exchange::sigma_i::SigmaI);
+//! support [`SigmaI`](crate::key_exchange::sigma_i::SigmaI).
+
+use core::marker::PhantomData;
 
 use derive_where::derive_where;
-use ecdsa::hazmat::{DigestPrimitive, SignPrimitive, VerifyPrimitive};
-use ecdsa::signature::hazmat::{PrehashVerifier, RandomizedPrehashSigner};
-use ecdsa::{PrimeCurve, SignatureSize, SigningKey, VerifyingKey};
+use digest::core_api::BlockSizeUser;
+use digest::{FixedOutputReset, HashMarker, Output, OutputSizeUser};
+use ecdsa::{hazmat, PrimeCurve, SignatureSize};
 use elliptic_curve::{
-    AffinePoint, CurveArithmetic, Field, FieldBytes, FieldBytesSize, NonZeroScalar, PublicKey,
-    Scalar,
+    CurveArithmetic, Field, FieldBytes, FieldBytesEncoding, FieldBytesSize, NonZeroScalar,
+    PrimeField, Scalar,
 };
-use generic_array::typenum::Unsigned;
 use generic_array::{ArrayLength, GenericArray};
 use rand::{CryptoRng, RngCore};
 use zeroize::Zeroize;
@@ -25,8 +26,65 @@ use zeroize::Zeroize;
 use super::elliptic_curve::NonIdentity;
 use super::Group;
 use crate::errors::ProtocolError;
-use crate::key_exchange::sigma_i::{Sign, Verify};
+use crate::key_exchange::sigma_i::SignatureGroup;
 use crate::key_exchange::traits::{Deserialize, Serialize};
+use crate::serialization::{SliceExt, UpdateExt};
+
+/// Implements ECDSA for [`SigmaI`](crate::key_exchange::sigma_i::SigmaI).
+pub struct Ecdsa<G, H>(PhantomData<(G, H)>);
+
+impl<G, H> SignatureGroup for Ecdsa<G, H>
+where
+    G: CurveArithmetic + Group<Sk = NonZeroScalar<G>, Pk = NonIdentity<G>> + PrimeCurve,
+    SignatureSize<G>: ArrayLength<u8>,
+    H: Default + BlockSizeUser + FixedOutputReset<OutputSize = FieldBytesSize<G>> + HashMarker,
+{
+    type Group = G;
+    type Signature = Signature<G>;
+    type VerifyState = PreHash<H>;
+
+    fn sign<'a, R: CryptoRng + RngCore>(
+        sk: &<Self::Group as Group>::Sk,
+        rng: &mut R,
+        message: impl Iterator<Item = &'a [u8]>,
+    ) -> (Self::Signature, Self::VerifyState) {
+        // We use a manual implementation of `RandomizedPrehashSigner` to use the same
+        // hash for the message as for generating `k`. See
+        // https://github.com/RustCrypto/signatures/issues/949.
+        let pre_hash = H::default().chain_iter(message).finalize_fixed();
+        let repr = sk.to_repr();
+        let order = G::ORDER.encode_field_bytes();
+        let z = hazmat::bits2field::<G>(&pre_hash)
+            .expect("hash output can not be shorter than a scalar");
+
+        let signature = loop {
+            let mut ad = FieldBytes::<G>::default();
+            rng.fill_bytes(&mut ad);
+
+            let k = Scalar::<G>::from_repr(rfc6979::generate_k::<H, _>(&repr, &order, &z, &ad))
+                .unwrap();
+
+            // This can only fail if the computed `r` or `s` are zero, in which case we just
+            // retry with a new `k`. See https://github.com/RustCrypto/signatures/pull/951.
+            if let Ok((signature, _)) = hazmat::sign_prehashed::<G, _>(sk, k, &z) {
+                break signature;
+            }
+        };
+
+        (Signature(signature), PreHash(pre_hash))
+    }
+
+    fn verify(
+        pk: &<Self::Group as Group>::Pk,
+        state: Self::VerifyState,
+        signature: &Self::Signature,
+    ) -> Result<(), ProtocolError> {
+        let z = hazmat::bits2field::<G>(&state.0)
+            .expect("hash output can not be shorter than a scalar");
+        hazmat::verify_prehashed(&pk.0.to_point(), &z, &signature.0)
+            .map_err(|_| ProtocolError::InvalidLoginError)
+    }
+}
 
 /// Wrapper around [`ecdsa::Signature`] to implement
 /// [`Zeroize`](crate::Zeroize).
@@ -48,8 +106,8 @@ impl<G: CurveArithmetic + PrimeCurve> Deserialize for Signature<G>
 where
     SignatureSize<G>: ArrayLength<u8>,
 {
-    fn deserialize(input: &[u8]) -> Result<Self, ProtocolError> {
-        ecdsa::Signature::from_slice(input)
+    fn deserialize_take(input: &mut &[u8]) -> Result<Self, ProtocolError> {
+        ecdsa::Signature::from_bytes(&input.take_array("signature")?)
             .map(Signature)
             .map_err(|_| ProtocolError::SerializationError)
     }
@@ -79,47 +137,36 @@ where
     }
 }
 
-impl<G> Sign for NonZeroScalar<G>
-where
-    G: CurveArithmetic + DigestPrimitive,
-    Scalar<G>: SignPrimitive<G>,
-    SignatureSize<G>: ArrayLength<u8>,
-{
-    type Signature = Signature<G>;
+/// Prehash to re-use when verifying the client signature.
+#[derive_where(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, Zeroize)]
+#[derive_where(Copy; <H::OutputSize as ArrayLength<u8>>::ArrayType)]
+pub struct PreHash<H: OutputSizeUser>(pub Output<H>);
 
-    fn sign<R: CryptoRng + RngCore>(self, rng: &mut R, prehash: &[u8]) -> Self::Signature {
-        if prehash.len() < FieldBytesSize::<G>::USIZE / 2 {
-            unreachable!("transcript shorter than a scalar");
-        }
-
-        // This can only fail if the prehash is too short, which we check beforehand, or
-        // if the computed `r` or `s` are zero, in which case we just retry with a new
-        // `k`. See https://github.com/RustCrypto/signatures/issues/950.
-        loop {
-            if let Ok(signature) = SigningKey::<G>::from(self)
-                .sign_prehash_with_rng(rng, prehash)
-                .map(Signature)
-            {
-                break signature;
-            }
-        }
+impl<H: OutputSizeUser> Deserialize for PreHash<H> {
+    fn deserialize_take(input: &mut &[u8]) -> Result<Self, ProtocolError> {
+        Ok(Self(input.take_array("pre-hash")?))
     }
 }
 
-impl<G: Group> Verify<G> for NonIdentity<G>
-where
-    G::Sk: Sign<Signature = Signature<G>>,
-    G: CurveArithmetic + DigestPrimitive,
-    AffinePoint<G>: VerifyPrimitive<G>,
-    SignatureSize<G>: ArrayLength<u8>,
-{
-    fn verify(
-        self,
-        prehash: &[u8],
-        signature: &<G::Sk as Sign>::Signature,
-    ) -> Result<(), ProtocolError> {
-        let key = VerifyingKey::<G>::from(PublicKey::from(self.0));
-        key.verify_prehash(prehash, &signature.0)
-            .map_err(|_| ProtocolError::InvalidLoginError)
+impl<H: OutputSizeUser> Serialize for PreHash<H> {
+    type Len = H::OutputSize;
+
+    fn serialize(&self) -> GenericArray<u8, Self::Len> {
+        self.0.clone()
+    }
+}
+
+//////////////////////////
+// Test Implementations //
+//===================== //
+//////////////////////////
+
+#[cfg(test)]
+use crate::serialization::AssertZeroized;
+
+#[cfg(test)]
+impl<H: OutputSizeUser> AssertZeroized for PreHash<H> {
+    fn assert_zeroized(&self) {
+        assert_eq!(self.0, GenericArray::default());
     }
 }

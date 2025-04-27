@@ -15,7 +15,7 @@ version = "3.0.0"
 argon2 = ["dep:argon2"]
 curve25519 = ["dep:curve25519-dalek"]
 default = ["ristretto255-voprf", "serde"]
-ecdsa = ["dep:ecdsa"]
+ecdsa = ["dep:ecdsa", "dep:rfc6979"]
 ristretto255 = ["dep:curve25519-dalek", "voprf/ristretto255"]
 ristretto255-voprf = ["ristretto255", "voprf/ristretto255-ciphersuite"]
 serde = [
@@ -49,6 +49,7 @@ generic-array = "0.14"
 hkdf = "0.12"
 hmac = "0.12"
 rand = { version = "0.8", default-features = false }
+rfc6979 = { version = "0.4", optional = true }
 serde = { version = "1", default-features = false, features = [
   "derive",
 ], optional = true }
@@ -68,19 +69,16 @@ cryptoki = "0.9"
 elliptic-curve = { version = "0.13", features = ["alloc", "pkcs8"] }
 hex = "0.4"
 p256 = { version = "0.13", default-features = false, features = [
-  "ecdsa",
   "hash2curve",
   "pkcs8",
   "voprf",
 ] }
 p384 = { version = "0.13", default-features = false, features = [
-  "ecdsa",
   "hash2curve",
   "pkcs8",
   "voprf",
 ] }
 p521 = { version = "0.13.3", default-features = false, features = [
-  "ecdsa",
   "hash2curve",
   "pkcs8",
   "voprf",

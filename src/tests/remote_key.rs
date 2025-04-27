@@ -19,15 +19,16 @@ use cryptoki::session::{Session, UserType};
 use cryptoki::types::AuthPin;
 use digest::OutputSizeUser;
 #[cfg(feature = "ecdsa")]
-use digest::{Digest, Output};
+use digest::{Digest, Update};
 #[cfg(feature = "ecdsa")]
 use ecdsa::SignatureSize;
+use elliptic_curve::group::prime::PrimeCurveAffine;
 use elliptic_curve::group::Curve;
 use elliptic_curve::pkcs8::der::asn1::{OctetString, OctetStringRef};
 use elliptic_curve::pkcs8::der::{Decode, Encode};
 use elliptic_curve::pkcs8::{AssociatedOid, ObjectIdentifier};
 use elliptic_curve::point::{AffineCoordinates, DecompressPoint};
-use elliptic_curve::sec1::{ModulusSize, Tag, ToEncodedPoint};
+use elliptic_curve::sec1::{FromEncodedPoint, ModulusSize, Tag, ToEncodedPoint};
 #[cfg(feature = "ecdsa")]
 use elliptic_curve::PrimeCurve;
 use elliptic_curve::{AffinePoint, CurveArithmetic, FieldBytesSize, Group as _, ProjectivePoint};
@@ -44,16 +45,18 @@ use crate::ciphersuite::{KeGroup, OprfGroup, OprfHash};
 use crate::envelope::NonceLen;
 use crate::hash::OutputSize;
 #[cfg(feature = "ecdsa")]
-use crate::key_exchange::group::ecdsa::Signature;
+use crate::key_exchange::group::ecdsa::{Ecdsa, PreHash, Signature};
 use crate::key_exchange::group::elliptic_curve::NonIdentity;
 use crate::key_exchange::group::Group;
 #[cfg(feature = "ecdsa")]
-use crate::key_exchange::sigma_i::SigmaI;
+use crate::key_exchange::sigma_i::{Message, SigmaI};
 use crate::key_exchange::traits::KeyExchange;
 use crate::key_exchange::tripledh::TripleDh;
 use crate::keypair::{KeyPair, PublicKey};
 use crate::ksf::Identity;
 use crate::opaque::MaskedResponseLen;
+#[cfg(feature = "ecdsa")]
+use crate::serialization::UpdateExt;
 use crate::{
     CipherSuite, ClientLogin, ClientLoginFinishParameters, ClientLoginStartResult,
     ClientRegistration, ClientRegistrationFinishParameters, ClientRegistrationStartResult,
@@ -145,7 +148,7 @@ fn sigma_i_p256() {
 
     impl CipherSuite for Suite {
         type OprfCs = NistP256;
-        type KeyExchange = SigmaI<NistP256, NistP256, Sha256>;
+        type KeyExchange = SigmaI<Ecdsa<NistP256, Sha256>, NistP256, Sha256>;
         type Ksf = Identity;
     }
 
@@ -164,7 +167,7 @@ fn sigma_i_p384() {
 
     impl CipherSuite for Suite {
         type OprfCs = NistP384;
-        type KeyExchange = SigmaI<NistP384, NistP384, Sha384>;
+        type KeyExchange = SigmaI<Ecdsa<NistP384, Sha384>, NistP384, Sha384>;
         type Ksf = Identity;
     }
 
@@ -179,20 +182,28 @@ fn sigma_i_p384() {
 #[derive(Clone)]
 struct RemoteKey(ObjectHandle);
 
+trait Pkcs11PublicKey
+where
+    Self: Group + Sized,
+{
+    fn pkcs11_public_key(data: &[u8]) -> PublicKey<Self>;
+}
+
 trait Pkcs11KeyExchange<KE: KeyExchange> {
-    fn pkcs11_key_exchange(
+    fn pkcs11_key_exchange<CS: CipherSuite>(
         &self,
         server_pk: &PublicKey<KE::Group>,
-        data: KE::KE2BuilderData<'_>,
+        data: KE::KE2BuilderData<'_, CS>,
     ) -> KE::KE2BuilderInput;
 }
 
-fn test<CS: CipherSuite>(
+fn test<CS: 'static + CipherSuite>(
     dh_mechanism: Mechanism,
     oid: ObjectIdentifier,
     attribute: Attribute,
     hmac_mechanism: Mechanism,
 ) where
+    KeGroup<CS>: Pkcs11PublicKey,
     RemoteKey: Pkcs11KeyExchange<CS::KeyExchange>,
     // MaskedResponse: (Nonce + Hash) + KePk
     NonceLen: Add<OutputSize<OprfHash<CS>>>,
@@ -299,11 +310,11 @@ static SESSION: LazyLock<Mutex<Session>> = LazyLock::new(|| {
     Mutex::new(session)
 });
 
-fn pkcs11_generate_key_pair<KG: Group>(
+fn pkcs11_generate_key_pair<G: Group + Pkcs11PublicKey>(
     mechanism: Mechanism,
     oid: ObjectIdentifier,
     attribute: Attribute,
-) -> (ObjectHandle, PublicKey<KG>) {
+) -> (ObjectHandle, PublicKey<G>) {
     let session = SESSION.lock().unwrap();
     let (pk, remote_key) = session
         .generate_key_pair(
@@ -327,7 +338,7 @@ fn pkcs11_generate_key_pair<KG: Group>(
     drop(session);
 
     let pk = OctetString::from_der(&pk).unwrap();
-    let pk = PublicKey::deserialize(pk.as_bytes()).unwrap();
+    let pk = G::pkcs11_public_key(pk.as_bytes());
 
     (remote_key, pk)
 }
@@ -379,8 +390,33 @@ fn pkcs11_hkdf<CS: CipherSuite>(
     okm
 }
 
+impl Pkcs11PublicKey for NistP256 {
+    fn pkcs11_public_key(data: &[u8]) -> PublicKey<NistP256> {
+        pkcs11_ec_public_key(data)
+    }
+}
+
+impl Pkcs11PublicKey for NistP384 {
+    fn pkcs11_public_key(data: &[u8]) -> PublicKey<NistP384> {
+        pkcs11_ec_public_key(data)
+    }
+}
+
+impl Pkcs11PublicKey for NistP521 {
+    fn pkcs11_public_key(data: &[u8]) -> PublicKey<NistP521> {
+        pkcs11_ec_public_key(data)
+    }
+}
+
+#[cfg(all(feature = "curve25519", feature = "ristretto255"))]
+impl Pkcs11PublicKey for Curve25519 {
+    fn pkcs11_public_key(data: &[u8]) -> PublicKey<Curve25519> {
+        PublicKey::deserialize(data).unwrap()
+    }
+}
+
 impl Pkcs11KeyExchange<TripleDh<NistP256, Sha256>> for RemoteKey {
-    fn pkcs11_key_exchange(
+    fn pkcs11_key_exchange<CS: CipherSuite>(
         &self,
         server_pk: &PublicKey<NistP256>,
         client_pk: &PublicKey<NistP256>,
@@ -390,7 +426,7 @@ impl Pkcs11KeyExchange<TripleDh<NistP256, Sha256>> for RemoteKey {
 }
 
 impl Pkcs11KeyExchange<TripleDh<NistP384, Sha384>> for RemoteKey {
-    fn pkcs11_key_exchange(
+    fn pkcs11_key_exchange<CS: CipherSuite>(
         &self,
         server_pk: &PublicKey<NistP384>,
         client_pk: &PublicKey<NistP384>,
@@ -400,7 +436,7 @@ impl Pkcs11KeyExchange<TripleDh<NistP384, Sha384>> for RemoteKey {
 }
 
 impl Pkcs11KeyExchange<TripleDh<NistP521, Sha512>> for RemoteKey {
-    fn pkcs11_key_exchange(
+    fn pkcs11_key_exchange<CS: CipherSuite>(
         &self,
         server_pk: &PublicKey<NistP521>,
         client_pk: &PublicKey<NistP521>,
@@ -411,7 +447,7 @@ impl Pkcs11KeyExchange<TripleDh<NistP521, Sha512>> for RemoteKey {
 
 #[cfg(all(feature = "curve25519", feature = "ristretto255"))]
 impl Pkcs11KeyExchange<TripleDh<Curve25519, Sha512>> for RemoteKey {
-    fn pkcs11_key_exchange(
+    fn pkcs11_key_exchange<CS: CipherSuite>(
         &self,
         _: &PublicKey<Curve25519>,
         pk: &PublicKey<Curve25519>,
@@ -423,25 +459,40 @@ impl Pkcs11KeyExchange<TripleDh<Curve25519, Sha512>> for RemoteKey {
 }
 
 #[cfg(feature = "ecdsa")]
-impl Pkcs11KeyExchange<SigmaI<NistP256, NistP256, Sha256>> for RemoteKey {
-    fn pkcs11_key_exchange(
+impl Pkcs11KeyExchange<SigmaI<Ecdsa<NistP256, Sha256>, NistP256, Sha256>> for RemoteKey {
+    fn pkcs11_key_exchange<CS: CipherSuite>(
         &self,
         _: &PublicKey<NistP256>,
-        message: &Output<Sha256>,
-    ) -> Signature<NistP256> {
-        pkcs_11_sign::<NistP256, Sha256>(self.0, message.as_slice())
+        message: &Message<CS, NistP256>,
+    ) -> (Signature<NistP256>, PreHash<Sha256>) {
+        pkcs_11_sign::<NistP256, Sha256>(self.0, message.message_iter())
     }
 }
 
 #[cfg(feature = "ecdsa")]
-impl Pkcs11KeyExchange<SigmaI<NistP384, NistP384, Sha384>> for RemoteKey {
-    fn pkcs11_key_exchange(
+impl Pkcs11KeyExchange<SigmaI<Ecdsa<NistP384, Sha384>, NistP384, Sha384>> for RemoteKey {
+    fn pkcs11_key_exchange<CS: CipherSuite>(
         &self,
         _: &PublicKey<NistP384>,
-        message: &Output<Sha384>,
-    ) -> Signature<NistP384> {
-        pkcs_11_sign::<NistP384, Sha384>(self.0, message.as_slice())
+        message: &Message<CS, NistP384>,
+    ) -> (Signature<NistP384>, PreHash<Sha384>) {
+        pkcs_11_sign::<NistP384, Sha384>(self.0, message.message_iter())
     }
+}
+
+fn pkcs11_ec_public_key<G>(data: &[u8]) -> PublicKey<G>
+where
+    G: Group<Pk = NonIdentity<G>> + CurveArithmetic,
+    FieldBytesSize<G>: ModulusSize,
+    AffinePoint<G>:
+        FromEncodedPoint<G> + ToEncodedPoint<G> + PrimeCurveAffine<Curve = ProjectivePoint<G>>,
+{
+    PublicKey::from_group_type(NonIdentity(
+        elliptic_curve::PublicKey::<G>::from_sec1_bytes(data)
+            .unwrap()
+            .to_nonidentity()
+            .to_curve(),
+    ))
 }
 
 fn pkcs_11_derive_secret(sk: ObjectHandle, pk: &[u8]) -> Vec<u8> {
@@ -472,15 +523,15 @@ fn pkcs_11_derive_secret(sk: ObjectHandle, pk: &[u8]) -> Vec<u8> {
     shared_secret
 }
 
-fn ec_pkcs_11_derive_secret<KG>(
+fn ec_pkcs_11_derive_secret<G>(
     server_sk: ObjectHandle,
-    server_pk: &PublicKey<KG>,
-    client_pk: &PublicKey<KG>,
-) -> GenericArray<u8, <KG as Group>::PkLen>
+    server_pk: &PublicKey<G>,
+    client_pk: &PublicKey<G>,
+) -> GenericArray<u8, <G as Group>::PkLen>
 where
-    KG: Group<Pk = NonIdentity<KG>> + CurveArithmetic,
-    AffinePoint<KG>: DecompressPoint<KG> + ToEncodedPoint<KG>,
-    FieldBytesSize<KG>: ModulusSize,
+    G: Group<Pk = NonIdentity<G>> + CurveArithmetic,
+    AffinePoint<G>: DecompressPoint<G> + ToEncodedPoint<G>,
+    FieldBytesSize<G>: ModulusSize,
 {
     let client_pk_point = client_pk.to_group_type();
     let client_pk = client_pk.serialize();
@@ -488,7 +539,7 @@ where
     let client_pk = client_pk.to_der().unwrap();
 
     let shared_secret_bytes = pkcs_11_derive_secret(server_sk, &client_pk);
-    let shared_secret_point = AffinePoint::<KG>::decompress(
+    let shared_secret_point = AffinePoint::<G>::decompress(
         &GenericArray::clone_from_slice(&shared_secret_bytes),
         Choice::from(0),
     )
@@ -496,7 +547,7 @@ where
     let mut shared_secret = GenericArray::default();
     shared_secret[1..].copy_from_slice(&shared_secret_bytes);
 
-    let shifted_client_pk = client_pk_point.0.to_point() + ProjectivePoint::<KG>::generator();
+    let shifted_client_pk = client_pk_point.0.to_point() + ProjectivePoint::<G>::generator();
     let shifted_client_pk = shifted_client_pk.to_affine().to_encoded_point(true);
     let shifted_client_pk = OctetStringRef::new(shifted_client_pk.as_bytes()).unwrap();
     let shifted_client_pk = shifted_client_pk.to_der().unwrap();
@@ -517,15 +568,17 @@ where
 }
 
 #[cfg(feature = "ecdsa")]
-fn pkcs_11_sign<G: CurveArithmetic + PrimeCurve, H: Digest>(
+fn pkcs_11_sign<'a, G: CurveArithmetic + PrimeCurve, H: Digest + Update>(
     sk: ObjectHandle,
-    message: &[u8],
-) -> Signature<G>
+    message: impl Iterator<Item = &'a [u8]>,
+) -> (Signature<G>, PreHash<H>)
 where
     SignatureSize<G>: ArrayLength<u8>,
 {
+    let pre_hash = H::new().chain_iter(message).finalize();
+
     let session = SESSION.lock().unwrap();
-    let signature = session.sign(&Mechanism::Ecdsa, sk, &message).unwrap();
+    let signature = session.sign(&Mechanism::Ecdsa, sk, &pre_hash).unwrap();
     drop(session);
 
     let signature = ecdsa::Signature::from_scalars(
@@ -534,5 +587,5 @@ where
     )
     .unwrap();
 
-    Signature(signature)
+    (Signature(signature), PreHash(pre_hash))
 }

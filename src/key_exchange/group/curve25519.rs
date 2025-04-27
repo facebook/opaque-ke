@@ -20,6 +20,7 @@ use super::Group;
 use crate::errors::{InternalError, ProtocolError};
 use crate::key_exchange::sigma_i::SharedSecret;
 use crate::key_exchange::tripledh::DiffieHellman;
+use crate::serialization::SliceExt;
 
 /// Implementation for Curve25519.
 pub struct Curve25519;
@@ -35,11 +36,11 @@ impl Group for Curve25519 {
         pk.to_bytes().into()
     }
 
-    fn deserialize_pk(bytes: &[u8]) -> Result<Self::Pk, ProtocolError> {
+    fn deserialize_take_pk(bytes: &mut &[u8]) -> Result<Self::Pk, ProtocolError> {
         bytes
-            .try_into()
+            .take_array::<U32>("public key")
             .ok()
-            .map(MontgomeryPoint)
+            .map(|array| MontgomeryPoint(array.into()))
             .filter(|pk| pk != &MontgomeryPoint::identity())
             .ok_or(ProtocolError::SerializationError)
     }
@@ -65,13 +66,13 @@ impl Group for Curve25519 {
         sk.0.into()
     }
 
-    fn deserialize_sk(bytes: &[u8]) -> Result<Self::Sk, ProtocolError> {
+    fn deserialize_take_sk(bytes: &mut &[u8]) -> Result<Self::Sk, ProtocolError> {
         bytes
-            .try_into()
+            .take_array::<U32>("secret key")
             .ok()
             .and_then(|bytes| {
-                let scalar = scalar::clamp_integer(bytes);
-                (scalar == bytes).then_some(scalar)
+                let scalar = scalar::clamp_integer(bytes.into());
+                (scalar == *bytes).then_some(scalar)
             })
             .filter(|scalar| scalar != &curve25519_dalek::Scalar::ZERO.to_bytes())
             .map(Scalar)
@@ -103,7 +104,7 @@ impl SharedSecret<Curve25519> for Scalar {
 //////////////////////////
 
 #[cfg(test)]
-use crate::util::AssertZeroized;
+use crate::serialization::AssertZeroized;
 
 #[cfg(test)]
 impl AssertZeroized for MontgomeryPoint {

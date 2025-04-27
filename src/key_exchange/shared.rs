@@ -12,19 +12,17 @@ use derive_where::derive_where;
 use digest::core_api::BlockSizeUser;
 use digest::{Output, OutputSizeUser};
 use generic_array::sequence::Concat;
-use generic_array::typenum::{IsLess, Le, NonZero, Sum, Unsigned, U1, U256, U32};
+use generic_array::typenum::{IsLess, Le, NonZero, Sum, Unsigned, U1, U2, U256, U32};
 use generic_array::{ArrayLength, GenericArray};
 use hkdf::{Hkdf, HkdfExtract};
 use rand::{CryptoRng, RngCore};
 
-use crate::errors::utils::{check_slice_size, check_slice_size_atleast};
 use crate::errors::{InternalError, ProtocolError};
 use crate::hash::{Hash, OutputSize, ProxyHash};
 use crate::key_exchange::group::Group;
-use crate::key_exchange::traits::{Deserialize, Serialize, SerializeIter};
+use crate::key_exchange::traits::{Deserialize, Serialize};
 use crate::keypair::{PrivateKey, PublicKey};
-use crate::serialization::Input;
-use crate::util::AsIterator;
+use crate::serialization::{i2osp, SliceExt};
 
 ///////////////
 // Constants //
@@ -165,20 +163,17 @@ where
 {
     let mut okm = GenericArray::default();
 
-    let length_u16: u16 =
-        u16::try_from(OutputSize::<H>::USIZE).map_err(|_| ProtocolError::SerializationError)?;
-    let label = Input::<U1>::from_label(STR_OPAQUE, label)?;
-    let label = label.to_array_3();
-    let context = Input::<U1>::from(context)?;
-    let context = context.to_array_2();
+    let length = i2osp::<U2>(OutputSize::<H>::USIZE)?;
+    let label_length = i2osp::<U1>(STR_OPAQUE.len() + label.len())?;
+    let context_len = i2osp::<U1>(context.len())?;
 
     let hkdf_label = [
-        &length_u16.to_be_bytes(),
-        label[0],
-        label[1],
-        label[2],
-        context[0],
-        context[1],
+        length.as_slice(),
+        &label_length,
+        STR_OPAQUE,
+        label,
+        &context_len,
+        context,
     ];
 
     hkdf.expand_multi_info(&hkdf_label, &mut okm)
@@ -202,17 +197,10 @@ where
 // Serialization and deserialization implementations
 
 impl<G: Group> Deserialize for Ke1State<G> {
-    fn deserialize(bytes: &[u8]) -> Result<Self, ProtocolError> {
-        let key_len = G::SkLen::USIZE;
-
-        let nonce_len = NonceLen::USIZE;
-        let checked_bytes = check_slice_size_atleast(bytes, key_len + nonce_len, "ke1_state")?;
-
+    fn deserialize_take(bytes: &mut &[u8]) -> Result<Self, ProtocolError> {
         Ok(Self {
-            client_e_sk: PrivateKey::deserialize(&checked_bytes[..key_len])?,
-            client_nonce: GenericArray::clone_from_slice(
-                &checked_bytes[key_len..key_len + nonce_len],
-            ),
+            client_e_sk: PrivateKey::deserialize_take(bytes)?,
+            client_nonce: bytes.take_array("client nonce")?,
         })
     }
 }
@@ -231,17 +219,10 @@ where
 }
 
 impl<G: Group> Deserialize for Ke1Message<G> {
-    fn deserialize(ke1_message_bytes: &[u8]) -> Result<Self, ProtocolError> {
-        let nonce_len = NonceLen::USIZE;
-        let checked_nonce = check_slice_size(
-            ke1_message_bytes,
-            nonce_len + <G as Group>::PkLen::USIZE,
-            "ke1_message nonce",
-        )?;
-
+    fn deserialize_take(input: &mut &[u8]) -> Result<Self, ProtocolError> {
         Ok(Self {
-            client_nonce: GenericArray::clone_from_slice(&checked_nonce[..nonce_len]),
-            client_e_pk: PublicKey::deserialize(&checked_nonce[nonce_len..])?,
+            client_nonce: input.take_array("client nonce")?,
+            client_e_pk: PublicKey::deserialize_take(input)?,
         })
     }
 }
@@ -259,28 +240,48 @@ where
     }
 }
 
-impl<G: 'static + Group> SerializeIter for Ke1Message<G> {
-    type AsIter = Ke1MessageAsIter<G>;
-
-    fn serialize_iter(&self) -> Self::AsIter {
-        Ke1MessageAsIter::<G> {
+impl<G: Group> Ke1Message<G> {
+    pub(crate) fn to_iter(&self) -> Ke1MessageIter<G> {
+        Ke1MessageIter {
             client_nonce: self.client_nonce,
             client_e_pk: self.client_e_pk.serialize(),
         }
     }
 }
 
-#[doc(hidden)]
-pub struct Ke1MessageAsIter<G: Group> {
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Deserialize, serde::Serialize),
+    serde(bound = "")
+)]
+#[derive_where(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, ZeroizeOnDrop)]
+pub(crate) struct Ke1MessageIter<G: Group> {
     client_nonce: GenericArray<u8, NonceLen>,
     client_e_pk: GenericArray<u8, G::PkLen>,
 }
 
-impl<G: 'static + Group> AsIterator for Ke1MessageAsIter<G> {
-    type Item<'a> = &'a [u8];
+pub(crate) type Ke1MessageIterLen<G: Group> = Sum<NonceLen, G::PkLen>;
 
-    fn as_iter(&self) -> impl Clone + Iterator<Item = &[u8]> {
+impl<G: Group> Ke1MessageIter<G> {
+    pub(crate) fn iter(&self) -> impl Iterator<Item = &[u8]> {
         [self.client_nonce.as_slice(), self.client_e_pk.as_slice()].into_iter()
+    }
+
+    pub(crate) fn deserialize_take(input: &mut &[u8]) -> Result<Self, ProtocolError> {
+        Ok(Ke1MessageIter {
+            client_nonce: input.take_array("client nonce")?,
+            client_e_pk: input.take_array("client ephemeral public key")?,
+        })
+    }
+}
+
+impl<G: Group> Ke1MessageIter<G>
+where
+    NonceLen: Add<G::PkLen>,
+    Ke1MessageIterLen<G>: ArrayLength<u8>,
+{
+    pub(crate) fn serialize(&self) -> GenericArray<u8, Ke1MessageIterLen<G>> {
+        self.client_nonce.concat(self.client_e_pk.clone())
     }
 }
 
@@ -290,7 +291,7 @@ impl<G: 'static + Group> AsIterator for Ke1MessageAsIter<G> {
 //////////////////////////
 
 #[cfg(test)]
-use crate::util::AssertZeroized;
+use crate::serialization::AssertZeroized;
 
 #[cfg(test)]
 impl<G: Group> AssertZeroized for Ke1State<G>

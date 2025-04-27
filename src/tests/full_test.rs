@@ -25,6 +25,7 @@ use crate::ciphersuite::{CipherSuite, KeGroup, OprfGroup, OprfHash};
 use crate::envelope::EnvelopeLen;
 use crate::errors::*;
 use crate::hash::OutputSize;
+use crate::key_exchange::group::ecdsa::Ecdsa;
 use crate::key_exchange::group::Group;
 use crate::key_exchange::shared::NonceLen;
 use crate::key_exchange::sigma_i::SigmaI;
@@ -38,8 +39,8 @@ use crate::messages::{
     RegistrationResponseLen, RegistrationUploadLen,
 };
 use crate::opaque::*;
+use crate::serialization::AssertZeroized;
 use crate::tests::mock_rng::CycleRng;
-use crate::util::AssertZeroized;
 use crate::*;
 
 // Tests
@@ -155,8 +156,8 @@ macro_rules! sigma_i_ciphersuites {
     ($macro:ident!$par:tt) => {
         sigma_i_ciphersuites!(
             $macro!$par => [
-                #[cfg(feature = "ecdsa")] [P256, p256::NistP256],
-                #[cfg(feature = "ecdsa")] [P384, p384::NistP384],
+                #[cfg(feature = "ecdsa")] [P256, Ecdsa<p256::NistP256, sha2::Sha256>],
+                #[cfg(feature = "ecdsa")] [P384, Ecdsa<p384::NistP384, sha2::Sha384>],
             ],
         );
     };
@@ -1109,7 +1110,7 @@ fn test_credential_finalization() -> Result<(), ProtocolError> {
 fn test_server_login_finish() -> Result<(), ProtocolError> {
     fn inner<CS: CipherSuite>(test_vector: &str) -> Result<(), ProtocolError>
     where
-        <CS::KeyExchange as KeyExchange>::KE2State: Deserialize,
+        for<'c> <CS::KeyExchange as KeyExchange>::KE2State: Deserialize,
         <CS::KeyExchange as KeyExchange>::KE3Message: Deserialize,
     {
         let parameters = populate_test_vectors(&serde_json::from_str(test_vector).unwrap());

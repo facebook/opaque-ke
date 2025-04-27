@@ -938,7 +938,7 @@
 //! # struct YourRemoteKey(<KeGroup<Default> as Group>::Sk);
 //! # impl YourRemoteKey {
 //! #     fn diffie_hellman(&self, pk: &PublicKey<KeGroup<Default>>) -> Result<GenericArray<u8, <KeGroup<Default> as Group>::PkLen>, YourRemoteKeyError> {
-//! #         Ok(<<KeGroup<Default> as Group>::Sk as DiffieHellman<KeGroup<Default>>>::diffie_hellman(self.0, KeGroup::<Default>::deserialize_pk(&pk.serialize()).unwrap()))
+//! #         Ok(<<KeGroup<Default> as Group>::Sk as DiffieHellman<KeGroup<Default>>>::diffie_hellman(self.0, pk.to_group_type()))
 //! #     }
 //! # }
 //! use opaque_ke::{ServerLogin, ServerLoginStartParameters, ServerSetup};
@@ -953,7 +953,7 @@
 //!         unimplemented!()
 //!     }
 //!
-//!     fn deserialize_key_pair(input: &[u8]) -> Result<KeyPair<KeGroup<Default>, Self>, ProtocolError<Self::Error>> {
+//!     fn deserialize_key_pair(input: &mut &[u8]) -> Result<KeyPair<KeGroup<Default>, Self>, ProtocolError<Self::Error>> {
 //!         unimplemented!()
 //!     }
 //! }
@@ -1136,7 +1136,6 @@ pub mod ksf;
 mod messages;
 mod opaque;
 mod serialization;
-mod util;
 
 #[cfg(test)]
 mod tests;
