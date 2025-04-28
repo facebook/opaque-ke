@@ -258,6 +258,7 @@ pub struct TestVectorParameters {
     pub password: Vec<u8>,
     pub blinding_factor: Vec<u8>,
     pub oprf_seed: Vec<u8>,
+    pub dummy_masking_key: Vec<u8>,
     pub masking_nonce: Vec<u8>,
     pub envelope_nonce: Vec<u8>,
     pub client_nonce: Vec<u8>,
@@ -339,6 +340,7 @@ fn populate_test_vectors(values: &Value) -> TestVectorParameters {
         password: decode(values, "password").unwrap(),
         blinding_factor: decode(values, "blinding_factor").unwrap(),
         oprf_seed: decode(values, "oprf_seed").unwrap(),
+        dummy_masking_key: decode(values, "dummy_masking_key").unwrap(),
         masking_nonce: decode(values, "masking_nonce").unwrap(),
         envelope_nonce: decode(values, "envelope_nonce").unwrap(),
         client_nonce: decode(values, "client_nonce").unwrap(),
@@ -437,6 +439,13 @@ fn stringify_test_vectors(p: &TestVectorParameters) -> String {
         .as_str(),
     );
     s.push_str(format!("    \"oprf_seed\": \"{}\",\n", hex::encode(&p.oprf_seed)).as_str());
+    s.push_str(
+        format!(
+            "    \"dummy_masking_key\": \"{}\",\n",
+            hex::encode(&p.dummy_masking_key)
+        )
+        .as_str(),
+    );
     s.push_str(
         format!(
             "    \"masking_nonce\": \"{}\",\n",
@@ -605,6 +614,8 @@ where
     let context = b"context";
     let mut oprf_seed = Output::<OprfHash<CS>>::default();
     rng.fill_bytes(&mut oprf_seed);
+    let mut dummy_masking_key = Output::<OprfHash<CS>>::default();
+    rng.fill_bytes(&mut dummy_masking_key);
     let mut masking_nonce = [0u8; 64];
     rng.fill_bytes(&mut masking_nonce);
     let mut envelope_nonce = [0u8; 32];
@@ -691,6 +702,7 @@ where
 
     let mut server_e_sk_and_nonce_rng = CycleRng::new(
         [
+            dummy_masking_key.to_vec(),
             masking_nonce.to_vec(),
             server_e_kp.private().serialize().to_vec(),
             server_nonce.to_vec(),
@@ -748,6 +760,7 @@ where
         password: password.to_vec(),
         blinding_factor: blinding_factor_bytes.to_vec(),
         oprf_seed: oprf_seed.to_vec(),
+        dummy_masking_key: dummy_masking_key.to_vec(),
         masking_nonce: masking_nonce.to_vec(),
         envelope_nonce: envelope_nonce.to_vec(),
         client_nonce: client_nonce.to_vec(),
@@ -1197,6 +1210,7 @@ fn test_credential_response() -> Result<(), ProtocolError> {
 
         let mut server_e_sk_and_nonce_rng = CycleRng::new(
             [
+                parameters.dummy_masking_key,
                 parameters.masking_nonce,
                 parameters.server_e_sk,
                 parameters.server_nonce,

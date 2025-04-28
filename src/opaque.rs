@@ -17,7 +17,7 @@ use generic_array::typenum::{Sum, Unsigned, U2};
 use generic_array::{ArrayLength, GenericArray};
 use hkdf::{Hkdf, HkdfExtract};
 use rand::{CryptoRng, RngCore};
-use subtle::ConstantTimeEq;
+use subtle::{Choice, ConstantTimeEq, CtOption};
 use voprf::Group;
 use zeroize::Zeroizing;
 
@@ -619,10 +619,12 @@ impl<CS: CipherSuite> ServerLogin<CS> {
             ArrayLength<u8> + Add<<CS::KeGroup as KeGroup>::PkLen>,
         MaskedResponseLen<CS>: ArrayLength<u8>,
     {
-        let record = match password_file {
-            Some(x) => x,
-            None => ServerRegistration::dummy(rng, server_setup),
-        };
+        let record = CtOption::new(
+            ServerRegistration::dummy(rng, server_setup),
+            Choice::from(password_file.is_none() as u8),
+        )
+        .into_option()
+        .unwrap_or_else(|| password_file.unwrap());
 
         let client_s_pk = record.0.client_s_pk.clone();
         let context = context.unwrap_or(&[]);
