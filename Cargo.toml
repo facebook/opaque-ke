@@ -17,7 +17,13 @@ curve25519 = ["dep:curve25519-dalek"]
 default = ["ristretto255-voprf", "serde"]
 ristretto255 = ["dep:curve25519-dalek", "voprf/ristretto255"]
 ristretto255-voprf = ["ristretto255", "voprf/ristretto255-ciphersuite"]
-serde = ["dep:serde", "generic-array/serde", "voprf/serde", "zeroize/serde"]
+serde = [
+  "dep:serde",
+  "curve25519-dalek?/serde",
+  "generic-array/serde",
+  "voprf/serde",
+  "zeroize/serde",
+]
 std = ["dep:getrandom"]
 
 [dependencies]
