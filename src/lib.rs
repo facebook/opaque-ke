@@ -1147,6 +1147,11 @@ pub use rand;
 
 #[cfg(feature = "curve25519")]
 pub use crate::key_exchange::group::curve25519::Curve25519;
+#[cfg(feature = "ecdsa")]
+pub use crate::key_exchange::group::ecdsa::Ecdsa;
+#[cfg(feature = "ed25519")]
+pub use crate::key_exchange::group::ed25519::Ed25519;
+pub use crate::key_exchange::group::eddsa::Eddsa;
 #[cfg(feature = "ristretto255")]
 pub use crate::key_exchange::group::ristretto255::Ristretto255;
 pub use crate::messages::{

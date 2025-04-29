@@ -254,7 +254,7 @@ impl<G: Group> Ke1Message<G> {
     derive(serde::Deserialize, serde::Serialize),
     serde(bound = "")
 )]
-#[derive_where(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, ZeroizeOnDrop)]
+#[derive_where(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, Zeroize)]
 pub(crate) struct Ke1MessageIter<G: Group> {
     client_nonce: GenericArray<u8, NonceLen>,
     client_e_pk: GenericArray<u8, G::PkLen>,
@@ -263,7 +263,7 @@ pub(crate) struct Ke1MessageIter<G: Group> {
 pub(crate) type Ke1MessageIterLen<G: Group> = Sum<NonceLen, G::PkLen>;
 
 impl<G: Group> Ke1MessageIter<G> {
-    pub(crate) fn iter(&self) -> impl Iterator<Item = &[u8]> {
+    pub(crate) fn iter(&self) -> impl Clone + Iterator<Item = &[u8]> {
         [self.client_nonce.as_slice(), self.client_e_pk.as_slice()].into_iter()
     }
 
@@ -322,5 +322,19 @@ where
 
         assert_eq!(client_nonce, &GenericArray::default());
         client_e_pk.assert_zeroized();
+    }
+}
+
+#[cfg(test)]
+impl<G: Group> AssertZeroized for Ke1MessageIter<G> {
+    fn assert_zeroized(&self) {
+        let Self {
+            client_nonce,
+            client_e_pk,
+        } = self;
+
+        for byte in client_nonce.iter().chain(client_e_pk) {
+            assert_eq!(byte, &0);
+        }
     }
 }

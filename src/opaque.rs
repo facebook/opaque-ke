@@ -132,17 +132,17 @@ pub struct ClientLogin<CS: CipherSuite> {
     feature = "serde",
     derive(serde::Deserialize, serde::Serialize),
     serde(bound(
-        deserialize = "<CS::KeyExchange as KeyExchange>::KE2State: serde::Deserialize<'de>",
-        serialize = "<CS::KeyExchange as KeyExchange>::KE2State: serde::Serialize"
+        deserialize = "<CS::KeyExchange as KeyExchange>::KE2State<CS>: serde::Deserialize<'de>",
+        serialize = "<CS::KeyExchange as KeyExchange>::KE2State<CS>: serde::Serialize"
     ))
 )]
 #[derive_where(Clone, ZeroizeOnDrop)]
 #[derive_where(
     Debug, Eq, Hash, PartialEq;
-    <CS::KeyExchange as KeyExchange>::KE2State,
+    <CS::KeyExchange as KeyExchange>::KE2State<CS>,
 )]
 pub struct ServerLogin<CS: CipherSuite> {
-    ke2_state: <CS::KeyExchange as KeyExchange>::KE2State,
+    ke2_state: <CS::KeyExchange as KeyExchange>::KE2State<CS>,
 }
 
 ////////////////////////////////
@@ -649,7 +649,7 @@ impl<CS: CipherSuite> ServerLogin<CS> {
     /// Serialization into bytes
     pub fn serialize(&self) -> GenericArray<u8, Ke2StateLen<CS>>
     where
-        <CS::KeyExchange as KeyExchange>::KE2State: Serialize,
+        <CS::KeyExchange as KeyExchange>::KE2State<CS>: Serialize,
     {
         self.ke2_state.serialize()
     }
@@ -657,7 +657,7 @@ impl<CS: CipherSuite> ServerLogin<CS> {
     /// Deserialization from bytes
     pub fn deserialize(mut bytes: &[u8]) -> Result<Self, ProtocolError>
     where
-        <CS::KeyExchange as KeyExchange>::KE2State: Deserialize,
+        <CS::KeyExchange as KeyExchange>::KE2State<CS>: Deserialize,
     {
         Ok(Self {
             ke2_state: <CS::KeyExchange as KeyExchange>::KE2State::deserialize_take(&mut bytes)?,
@@ -782,7 +782,7 @@ impl<CS: CipherSuite> ServerLogin<CS> {
 
     pub(crate) fn build<SK: Clone>(
         builder: ServerLoginBuilder<CS, SK>,
-        input: <CS::KeyExchange as KeyExchange>::KE2BuilderInput,
+        input: <CS::KeyExchange as KeyExchange>::KE2BuilderInput<CS>,
     ) -> Result<ServerLoginStartResult<CS>, ProtocolError> {
         let result = CS::KeyExchange::build_ke2(builder.ke2_builder.clone(), input)?;
 
@@ -1030,7 +1030,7 @@ pub struct ServerLoginStartParameters<'c, 'i> {
     Debug;
     voprf::EvaluationElement<CS::OprfCs>,
     <CS::KeyExchange as KeyExchange>::KE2Message,
-    <CS::KeyExchange as KeyExchange>::KE2State,
+    <CS::KeyExchange as KeyExchange>::KE2State<CS>,
 )]
 pub struct ServerLoginStartResult<CS: CipherSuite> {
     /// The message to send back to the client
@@ -1106,7 +1106,7 @@ fn oprf_key_from_key_material<CS: CipherSuite>(
     derive(serde::Deserialize, serde::Serialize),
     serde(bound = "")
 )]
-#[derive_where(Clone, ZeroizeOnDrop)]
+#[derive_where(Clone, Zeroize)]
 #[derive_where(Debug, Eq, Hash, PartialEq)]
 pub(crate) struct MaskedResponse<CS: CipherSuite> {
     pub(crate) nonce: GenericArray<u8, NonceLen>,
@@ -1308,7 +1308,7 @@ where
 #[cfg(test)]
 impl<CS: CipherSuite> AssertZeroized for ServerLogin<CS>
 where
-    <CS::KeyExchange as KeyExchange>::KE2State: AssertZeroized,
+    <CS::KeyExchange as KeyExchange>::KE2State<CS>: AssertZeroized,
 {
     fn assert_zeroized(&self) {
         let Self { ke2_state } = self;

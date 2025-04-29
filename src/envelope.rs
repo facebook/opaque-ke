@@ -26,7 +26,7 @@ use crate::key_exchange::group::Group;
 use crate::key_exchange::traits::SerializedIdentifiers;
 use crate::keypair::{KeyPair, PrivateKey, PublicKey};
 use crate::opaque::Identifiers;
-use crate::serialization::{MacExt, SliceExt};
+use crate::serialization::{SliceExt, UpdateExt};
 
 // Constant string used as salt for HKDF computation
 const STR_AUTH_KEY: [u8; 7] = *b"AuthKey";

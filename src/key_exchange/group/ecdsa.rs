@@ -25,8 +25,9 @@ use zeroize::Zeroize;
 
 use super::elliptic_curve::NonIdentity;
 use super::Group;
+use crate::ciphersuite::CipherSuite;
 use crate::errors::ProtocolError;
-use crate::key_exchange::sigma_i::SignatureGroup;
+use crate::key_exchange::sigma_i::{Message, SignatureGroup};
 use crate::key_exchange::traits::{Deserialize, Serialize};
 use crate::serialization::{SliceExt, UpdateExt};
 
@@ -41,17 +42,19 @@ where
 {
     type Group = G;
     type Signature = Signature<G>;
-    type VerifyState = PreHash<H>;
+    type VerifyState<CS: CipherSuite, KE: Group> = PreHash<H>;
 
-    fn sign<'a, R: CryptoRng + RngCore>(
+    fn sign<'a, R: CryptoRng + RngCore, CS: CipherSuite, KE: Group>(
         sk: &<Self::Group as Group>::Sk,
         rng: &mut R,
-        message: impl Iterator<Item = &'a [u8]>,
-    ) -> (Self::Signature, Self::VerifyState) {
+        message: Message<CS, KE>,
+    ) -> (Self::Signature, Self::VerifyState<CS, KE>) {
         // We use a manual implementation of `RandomizedPrehashSigner` to use the same
         // hash for the message as for generating `k`. See
         // https://github.com/RustCrypto/signatures/issues/949.
-        let pre_hash = H::default().chain_iter(message).finalize_fixed();
+        let pre_hash = H::default()
+            .chain_iter(message.message_iter())
+            .finalize_fixed();
         let repr = sk.to_repr();
         let order = G::ORDER.encode_field_bytes();
         let z = hazmat::bits2field::<G>(&pre_hash)
@@ -74,9 +77,9 @@ where
         (Signature(signature), PreHash(pre_hash))
     }
 
-    fn verify(
+    fn verify<CS: CipherSuite, KE: Group>(
         pk: &<Self::Group as Group>::Pk,
-        state: Self::VerifyState,
+        state: Self::VerifyState<CS, KE>,
         signature: &Self::Signature,
     ) -> Result<(), ProtocolError> {
         let z = hazmat::bits2field::<G>(&state.0)
@@ -93,10 +96,7 @@ where
 #[cfg_attr(
     feature = "serde",
     derive(serde::Deserialize, serde::Serialize),
-    serde(bound(
-        deserialize = "ecdsa::Signature<G>: serde::Deserialize<'de>",
-        serialize = "ecdsa::Signature<G>: serde::Serialize"
-    ))
+    serde(bound = "")
 )]
 pub struct Signature<G: CurveArithmetic + PrimeCurve>(pub ecdsa::Signature<G>)
 where
@@ -113,6 +113,17 @@ where
     }
 }
 
+impl<G: CurveArithmetic + PrimeCurve> Serialize for Signature<G>
+where
+    SignatureSize<G>: ArrayLength<u8>,
+{
+    type Len = SignatureSize<G>;
+
+    fn serialize(&self) -> GenericArray<u8, Self::Len> {
+        self.0.to_bytes()
+    }
+}
+
 impl<G: CurveArithmetic + PrimeCurve> Zeroize for Signature<G>
 where
     SignatureSize<G>: ArrayLength<u8>,
@@ -126,20 +137,14 @@ where
     }
 }
 
-impl<G: CurveArithmetic + PrimeCurve> Serialize for Signature<G>
-where
-    SignatureSize<G>: ArrayLength<u8>,
-{
-    type Len = SignatureSize<G>;
-
-    fn serialize(&self) -> GenericArray<u8, Self::Len> {
-        self.0.to_bytes()
-    }
-}
-
 /// Prehash to re-use when verifying the client signature.
 #[derive_where(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, Zeroize)]
 #[derive_where(Copy; <H::OutputSize as ArrayLength<u8>>::ArrayType)]
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Deserialize, serde::Serialize),
+    serde(bound = "")
+)]
 pub struct PreHash<H: OutputSizeUser>(pub Output<H>);
 
 impl<H: OutputSizeUser> Deserialize for PreHash<H> {

@@ -144,11 +144,11 @@ where
     type Hash = H;
 
     type KE1State = Ke1State<G>;
-    type KE2State = Ke2State<H>;
+    type KE2State<CS: CipherSuite> = Ke2State<H>;
     type KE1Message = Ke1Message<G>;
     type KE2Builder<CS: CipherSuite<KeyExchange = Self>> = Ke2Builder<G, H>;
     type KE2BuilderData<'a, CS: 'static + CipherSuite> = &'a PublicKey<G>;
-    type KE2BuilderInput = GenericArray<u8, G::PkLen>;
+    type KE2BuilderInput<CS: CipherSuite> = GenericArray<u8, G::PkLen>;
     type KE2Message = Ke2Message<G, H>;
     type KE3Message = Ke3Message<H>;
 
@@ -219,14 +219,14 @@ where
         builder: &Self::KE2Builder<CS>,
         _: &mut R,
         server_s_sk: &PrivateKey<G>,
-    ) -> Self::KE2BuilderInput {
+    ) -> Self::KE2BuilderInput<CS> {
         server_s_sk.ke_diffie_hellman(&builder.client_e_pk)
     }
 
     fn build_ke2<CS: CipherSuite<KeyExchange = Self>>(
         mut builder: Self::KE2Builder<CS>,
-        shared_secret_2: Self::KE2BuilderInput,
-    ) -> Result<GenerateKe2Result<Self>, ProtocolError> {
+        shared_secret_2: Self::KE2BuilderInput<CS>,
+    ) -> Result<GenerateKe2Result<CS>, ProtocolError> {
         let derived_keys = shared::derive_keys::<H>(
             [
                 builder.shared_secret_1.as_slice(),
@@ -335,9 +335,9 @@ where
         ))
     }
 
-    fn finish_ke(
+    fn finish_ke<CS: CipherSuite>(
         ke3_message: Self::KE3Message,
-        ke2_state: &Self::KE2State,
+        ke2_state: &Self::KE2State<CS>,
     ) -> Result<Output<H>, ProtocolError> {
         CtOption::new(
             ke2_state.session_key.clone(),

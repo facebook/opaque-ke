@@ -157,7 +157,7 @@ impl<CS: CipherSuite, SK: Clone> ServerLoginBuilder<CS, SK> {
     /// See [`ServerLogin::start()`] for the regular path.
     pub fn build(
         self,
-        input: <CS::KeyExchange as KeyExchange>::KE2BuilderInput,
+        input: <CS::KeyExchange as KeyExchange>::KE2BuilderInput<CS>,
     ) -> Result<ServerLoginStartResult<CS>, ProtocolError> {
         ServerLogin::build(self, input)
     }

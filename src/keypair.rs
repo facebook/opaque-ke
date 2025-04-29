@@ -14,9 +14,10 @@ use derive_where::derive_where;
 use generic_array::{ArrayLength, GenericArray};
 use rand::{CryptoRng, RngCore};
 
+use crate::ciphersuite::CipherSuite;
 use crate::errors::ProtocolError;
 use crate::key_exchange::group::Group;
-use crate::key_exchange::sigma_i::{SharedSecret, SignatureGroup};
+use crate::key_exchange::sigma_i::{Message, SharedSecret, SignatureGroup};
 use crate::key_exchange::tripledh::DiffieHellman;
 
 /// A Keypair trait with public-private verification
@@ -131,11 +132,16 @@ where
 
 impl<G: Group> PrivateKey<G> {
     /// Private-key signing implementation
-    pub(crate) fn sign<'a, R: CryptoRng + RngCore, SIG: SignatureGroup<Group = G>>(
+    pub(crate) fn sign<
+        R: CryptoRng + RngCore,
+        CS: CipherSuite,
+        SIG: SignatureGroup<Group = G>,
+        KE: Group,
+    >(
         &self,
         rng: &mut R,
-        message: impl Iterator<Item = &'a [u8]>,
-    ) -> (SIG::Signature, SIG::VerifyState) {
+        message: Message<CS, KE>,
+    ) -> (SIG::Signature, SIG::VerifyState<CS, KE>) {
         SIG::sign(&self.0, rng, message)
     }
 }
@@ -219,11 +225,6 @@ impl<G: Group> PublicKey<G> {
         G::serialize_pk(self.0)
     }
 
-    /// Creates a [`PublicKey`] from a [`Group::Pk`].
-    pub fn from_group_type(pk: G::Pk) -> Self {
-        Self(pk)
-    }
-
     /// Returns the inner [`Group::Pk`].
     pub fn to_group_type(&self) -> G::Pk {
         self.0
@@ -232,9 +233,9 @@ impl<G: Group> PublicKey<G> {
 
 impl<G: Group> PublicKey<G> {
     /// Public-key verifying implementation
-    pub(crate) fn verify<SIG: SignatureGroup<Group = G>>(
+    pub(crate) fn verify<CS: CipherSuite, SIG: SignatureGroup<Group = G>, KE: Group>(
         &self,
-        state: SIG::VerifyState,
+        state: SIG::VerifyState<CS, KE>,
         signature: &SIG::Signature,
     ) -> Result<(), ProtocolError> {
         SIG::verify(&self.0, state, signature)

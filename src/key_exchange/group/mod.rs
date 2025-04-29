@@ -12,6 +12,9 @@
 pub mod curve25519;
 #[cfg(feature = "ecdsa")]
 pub mod ecdsa;
+#[cfg(feature = "ed25519")]
+pub mod ed25519;
+pub mod eddsa;
 pub mod elliptic_curve;
 #[cfg(feature = "ristretto255")]
 pub mod ristretto255;

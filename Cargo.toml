@@ -16,11 +16,14 @@ argon2 = ["dep:argon2"]
 curve25519 = ["dep:curve25519-dalek"]
 default = ["ristretto255-voprf", "serde"]
 ecdsa = ["dep:ecdsa", "dep:rfc6979"]
+ed25519 = ["dep:ed25519-dalek"]
 ristretto255 = ["dep:curve25519-dalek", "voprf/ristretto255"]
 ristretto255-voprf = ["ristretto255", "voprf/ristretto255-ciphersuite"]
 serde = [
   "dep:serde",
   "curve25519-dalek?/serde",
+  "ecdsa?/serde",
+  "ed25519-dalek?/serde",
   "generic-array/serde",
   "voprf/serde",
   "zeroize/serde",
@@ -43,6 +46,10 @@ ecdsa = { version = "0.16", default-features = false, features = [
   "hazmat",
   "signing",
   "verifying",
+], optional = true }
+ed25519-dalek = { version = "2", default-features = false, features = [
+  "digest",
+  "hazmat",
 ], optional = true }
 elliptic-curve = { version = "0.13", features = ["hash2curve", "sec1"] }
 generic-array = "0.14"

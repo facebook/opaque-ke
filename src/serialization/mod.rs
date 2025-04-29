@@ -8,7 +8,6 @@
 
 use digest::Update;
 use generic_array::{ArrayLength, GenericArray};
-use hmac::Mac;
 
 use crate::errors::ProtocolError;
 
@@ -42,10 +41,18 @@ pub(crate) fn os2ip(input: &[u8]) -> Result<usize, ProtocolError> {
 }
 
 pub(crate) trait UpdateExt {
+    fn update_iter<'a>(&mut self, iter: impl Iterator<Item = &'a [u8]>);
+
     fn chain_iter<'a>(self, iter: impl Iterator<Item = &'a [u8]>) -> Self;
 }
 
 impl<T: Update> UpdateExt for T {
+    fn update_iter<'a>(&mut self, iter: impl Iterator<Item = &'a [u8]>) {
+        for bytes in iter {
+            self.update(bytes);
+        }
+    }
+
     fn chain_iter<'a>(self, iter: impl Iterator<Item = &'a [u8]>) -> Self {
         let mut self_ = self;
 
@@ -54,18 +61,6 @@ impl<T: Update> UpdateExt for T {
         }
 
         self_
-    }
-}
-
-pub(crate) trait MacExt {
-    fn update_iter<'a>(&mut self, iter: impl Iterator<Item = &'a [u8]>);
-}
-
-impl<T: Mac> MacExt for T {
-    fn update_iter<'a>(&mut self, iter: impl Iterator<Item = &'a [u8]>) {
-        for bytes in iter {
-            self.update(bytes);
-        }
     }
 }
 

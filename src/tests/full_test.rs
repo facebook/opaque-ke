@@ -25,7 +25,6 @@ use crate::ciphersuite::{CipherSuite, KeGroup, OprfGroup, OprfHash};
 use crate::envelope::EnvelopeLen;
 use crate::errors::*;
 use crate::hash::OutputSize;
-use crate::key_exchange::group::ecdsa::Ecdsa;
 use crate::key_exchange::group::Group;
 use crate::key_exchange::shared::NonceLen;
 use crate::key_exchange::sigma_i::SigmaI;
@@ -158,6 +157,7 @@ macro_rules! sigma_i_ciphersuites {
             $macro!$par => [
                 #[cfg(feature = "ecdsa")] [P256, Ecdsa<p256::NistP256, sha2::Sha256>],
                 #[cfg(feature = "ecdsa")] [P384, Ecdsa<p384::NistP384, sha2::Sha384>],
+                #[cfg(feature = "ed25519")] [Ed25519, Eddsa<Ed25519>],
             ],
         );
     };
@@ -479,7 +479,7 @@ fn stringify_test_vectors(p: &TestVectorParameters) -> String {
 
 fn generate_parameters<CS: CipherSuite>() -> Result<TestVectorParameters, ProtocolError>
 where
-    <CS::KeyExchange as KeyExchange>::KE2State: Serialize,
+    <CS::KeyExchange as KeyExchange>::KE2State<CS>: Serialize,
     <CS::KeyExchange as KeyExchange>::KE3Message: Serialize,
     // ClientRegistration: KgSk + KgPk
     <OprfGroup<CS> as voprf::Group>::ScalarLen: Add<<OprfGroup<CS> as voprf::Group>::ElemLen>,
@@ -730,7 +730,7 @@ fn generate_test_vectors() -> Result<(), ProtocolError> {
         // licenses.\n\
         //\n\
         // To regenerate these test vectors, run:\n\
-        // FULL_TEST_VECTORS_FILE=src/tests/full_test_vectors.rs cargo test --features ristretto255,curve25519,ecdsa -- generate_test_vectors\n\
+        // FULL_TEST_VECTORS_FILE=src/tests/full_test_vectors.rs cargo test --features curve25519,ecdsa,ed25519 -- generate_test_vectors\n\
         \n\
         #![allow(clippy::duplicated_attributes)]\n\
         \n",
@@ -981,7 +981,7 @@ fn test_credential_response() -> Result<(), ProtocolError> {
     fn inner<CS: CipherSuite>(test_vector: &str) -> Result<(), ProtocolError>
     where
         <CS::KeyExchange as KeyExchange>::KE1Message: Deserialize,
-        <CS::KeyExchange as KeyExchange>::KE2State: Serialize,
+        <CS::KeyExchange as KeyExchange>::KE2State<CS>: Serialize,
         // MaskedResponse: (Nonce + Hash) + KePk
         NonceLen: Add<OutputSize<OprfHash<CS>>>,
         Sum<NonceLen, OutputSize<OprfHash<CS>>>:
@@ -1110,7 +1110,7 @@ fn test_credential_finalization() -> Result<(), ProtocolError> {
 fn test_server_login_finish() -> Result<(), ProtocolError> {
     fn inner<CS: CipherSuite>(test_vector: &str) -> Result<(), ProtocolError>
     where
-        for<'c> <CS::KeyExchange as KeyExchange>::KE2State: Deserialize,
+        for<'c> <CS::KeyExchange as KeyExchange>::KE2State<CS>: Deserialize,
         <CS::KeyExchange as KeyExchange>::KE3Message: Deserialize,
     {
         let parameters = populate_test_vectors(&serde_json::from_str(test_vector).unwrap());
@@ -1363,7 +1363,7 @@ fn test_zeroize_client_login_start() -> Result<(), ProtocolError> {
 fn test_zeroize_server_login_start() -> Result<(), ProtocolError> {
     fn inner<CS: CipherSuite>(_test_vector: &str) -> Result<(), ProtocolError>
     where
-        <CS::KeyExchange as KeyExchange>::KE2State: Serialize + AssertZeroized,
+        <CS::KeyExchange as KeyExchange>::KE2State<CS>: Serialize + AssertZeroized,
         // MaskedResponse: (Nonce + Hash) + KePk
         NonceLen: Add<OutputSize<OprfHash<CS>>>,
         Sum<NonceLen, OutputSize<OprfHash<CS>>>:
@@ -1474,7 +1474,7 @@ fn test_zeroize_client_login_finish() -> Result<(), ProtocolError> {
 fn test_zeroize_server_login_finish() -> Result<(), ProtocolError> {
     fn inner<CS: CipherSuite>(_test_vector: &str) -> Result<(), ProtocolError>
     where
-        <CS::KeyExchange as KeyExchange>::KE2State: Serialize + AssertZeroized,
+        <CS::KeyExchange as KeyExchange>::KE2State<CS>: Serialize + AssertZeroized,
         // MaskedResponse: (Nonce + Hash) + KePk
         NonceLen: Add<OutputSize<OprfHash<CS>>>,
         Sum<NonceLen, OutputSize<OprfHash<CS>>>:
