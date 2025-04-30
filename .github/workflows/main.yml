@@ -13,12 +13,12 @@ jobs:
       fail-fast: false
       matrix:
         backend_feature:
-          - --features ristretto255
           -
-          - --features curve25519,ristretto255
+          - --features ristretto255
           - --features curve25519
           - --features ecdsa
           - --features ed25519
+          - --features ristretto255,curve25519,ecdsa,ed25519
         frontend_feature:
           -
           - --features argon2
@@ -71,12 +71,12 @@ jobs:
           # 32-bit x86
           - i686-unknown-linux-gnu
         backend_feature:
-          - --features ristretto255
           -
-          - --features curve25519,ristretto255
+          - --features ristretto255
           - --features curve25519
           - --features ecdsa
           - --features ed25519
+          - --features ristretto255,curve25519,ecdsa,ed25519
     steps:
       - uses: actions/checkout@main
       - uses: hecrj/setup-rust-action@v2
@@ -144,12 +144,12 @@ jobs:
           # for any no_std target
           - thumbv6m-none-eabi
         backend_feature:
-          - ristretto255
           -
-          - curve25519,ristretto255
+          - ristretto255
           - curve25519
           - ecdsa
           - ed25519
+          - ristretto255,curve25519,ecdsa,ed25519
         frontend_feature:
           - argon2
           - serde
@@ -168,10 +168,6 @@ jobs:
         backend_feature:
           - --features ristretto255
           -
-          - --features curve25519,ristretto255
-          - --features curve25519
-          - --features ecdsa
-          - --features ed25519
     steps:
       - name: Checkout sources
         uses: actions/checkout@main
