@@ -13,11 +13,11 @@ use core::ops::Add;
 
 use derive_where::derive_where;
 use digest::core_api::BlockSizeUser;
-use digest::{Digest, Output, OutputSizeUser, Update};
+use digest::{Digest, Mac, Output, OutputSizeUser, Update};
 use generic_array::sequence::Concat;
 use generic_array::typenum::{IsLess, Le, NonZero, Sum, U2, U256};
 use generic_array::{ArrayLength, GenericArray};
-use hmac::{Hmac, Mac};
+use hmac::Hmac;
 use rand::{CryptoRng, RngCore};
 use subtle::{ConstantTimeEq, CtOption};
 use zeroize::{Zeroize, ZeroizeOnDrop};
@@ -245,7 +245,7 @@ where
         );
         let mac = mac_hasher.finalize().into_bytes();
 
-        Digest::update(&mut builder.transcript_hasher, &mac);
+        builder.transcript_hasher.update(&mac);
         let mut mac_hasher =
             Hmac::<H>::new_from_slice(&derived_keys.km3).map_err(|_| InternalError::HmacError)?;
         Mac::update(
@@ -317,7 +317,7 @@ where
             .verify(&ke2_message.mac)
             .map_err(|_| ProtocolError::InvalidLoginError)?;
 
-        Digest::update(&mut transcript_hasher, &ke2_message.mac);
+        transcript_hasher.update(&ke2_message.mac);
 
         let mut client_mac =
             Hmac::<H>::new_from_slice(&derived_keys.km3).map_err(|_| InternalError::HmacError)?;

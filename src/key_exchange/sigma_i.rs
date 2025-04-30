@@ -14,11 +14,11 @@ use core::ops::Add;
 
 use derive_where::derive_where;
 use digest::core_api::BlockSizeUser;
-use digest::{Digest, Output, OutputSizeUser, Update};
+use digest::{Digest, Mac, Output, OutputSizeUser, Update};
 use generic_array::sequence::Concat;
 use generic_array::typenum::{IsLess, Le, NonZero, Sum, U2, U256};
 use generic_array::{ArrayLength, GenericArray};
-use hmac::{Hmac, Mac};
+use hmac::Hmac;
 use rand::{CryptoRng, RngCore};
 use subtle::{ConstantTimeEq, CtOption};
 use zeroize::Zeroize;
@@ -358,7 +358,9 @@ where
             Hmac::<KEH>::new_from_slice(&derived_keys.km2).map_err(|_| InternalError::HmacError)?;
         server_mac.update_iter(identifiers.server.iter());
 
-        Mac::verify(server_mac, &ke2_message.mac).map_err(|_| ProtocolError::InvalidLoginError)?;
+        server_mac
+            .verify(&ke2_message.mac)
+            .map_err(|_| ProtocolError::InvalidLoginError)?;
 
         let mut client_mac =
             Hmac::<KEH>::new_from_slice(&derived_keys.km3).map_err(|_| InternalError::HmacError)?;
