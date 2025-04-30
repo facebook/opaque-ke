@@ -10,7 +10,9 @@
 
 #[cfg(feature = "ecdsa")]
 pub mod ecdsa;
+pub mod hash_eddsa;
 pub mod pure_eddsa;
+pub(super) mod shared;
 
 use core::iter;
 use core::marker::PhantomData;
@@ -32,7 +34,9 @@ use crate::envelope::NonceLen;
 use crate::errors::{InternalError, ProtocolError};
 use crate::hash::{Hash, OutputSize, ProxyHash};
 use crate::key_exchange::group::Group;
-use crate::key_exchange::shared::{self, Ke1MessageIter, Ke1MessageIterLen, STR_CONTEXT};
+use crate::key_exchange::shared::{
+    derive_keys, generate_nonce, Ke1MessageIter, Ke1MessageIterLen, STR_CONTEXT,
+};
 pub use crate::key_exchange::shared::{Ke1Message, Ke1State};
 use crate::key_exchange::traits::{
     CredentialRequestParts, CredentialRequestPartsLen, CredentialResponseParts,
@@ -55,9 +59,10 @@ use crate::serialization::{i2osp, SliceExt, UpdateExt};
 /// [`ServerLoginBuilder::build()`](crate::ServerLoginBuilder::build()) expects
 /// a signature from signing the message with the servers private key and a
 /// "verification state". The "verification state" will be passed to the
-/// verification method in place of the message. For [ECDSA](crate::Ecdsa) this
+/// verification method in place of the message and depends on the signature
+/// protocol. E.g. [ECDSA](crate::Ecdsa) and [HashEdDSA](crate::HashEddsa) this
 /// is the pre-hash for the client signature message, for
-/// [PureEdDSA](crate::PureEddsa) it is the client signature message.
+/// [PureEdDSA](crate::PureEddsa) it is the client signature message itself.
 pub struct SigmaI<SIG, KE, KEH>(PhantomData<(SIG, KE, KEH)>);
 
 /// Trait to implement for signatures for [`SigmaI`].
@@ -239,7 +244,7 @@ where
         rng: &mut R,
     ) -> Result<(Self::KE1State, Self::KE1Message), ProtocolError> {
         let client_e_kp = KeyPair::<KE>::derive_random(rng);
-        let client_nonce = shared::generate_nonce::<R>(rng);
+        let client_nonce = generate_nonce::<R>(rng);
 
         let ke1_message = Ke1Message {
             client_nonce,
@@ -265,7 +270,7 @@ where
         context: &[u8],
     ) -> Result<Self::KE2Builder<CS>, ProtocolError> {
         let server_e = KeyPair::<KE>::derive_random(rng);
-        let server_nonce = shared::generate_nonce::<R>(rng);
+        let server_nonce = generate_nonce::<R>(rng);
 
         let ke1_message_iter = ke1_message.to_iter();
         let server_e_pk = server_e.public().serialize();
@@ -284,7 +289,7 @@ where
             .private()
             .ke_shared_secret(&ke1_message.client_e_pk);
 
-        let derived_keys = shared::derive_keys::<KEH>(
+        let derived_keys = derive_keys::<KEH>(
             iter::once(shared_secret.as_slice()),
             &transcript_hasher.finalize(),
         )?;
@@ -389,7 +394,7 @@ where
             .client_e_sk
             .ke_shared_secret(&ke2_message.server_e_pk);
 
-        let derived_keys = shared::derive_keys::<KEH>(
+        let derived_keys = derive_keys::<KEH>(
             iter::once(shared_secret.as_slice()),
             &transcript_hasher.finalize(),
         )?;

@@ -13,7 +13,7 @@ use core::marker::PhantomData;
 
 use derive_where::derive_where;
 use digest::core_api::BlockSizeUser;
-use digest::{FixedOutputReset, HashMarker, Output, OutputSizeUser};
+use digest::{FixedOutputReset, HashMarker};
 use ecdsa::{hazmat, PrimeCurve, SignatureSize};
 use elliptic_curve::{
     CurveArithmetic, Field, FieldBytes, FieldBytesEncoding, FieldBytesSize, NonZeroScalar,
@@ -27,11 +27,14 @@ use super::Group;
 use crate::ciphersuite::CipherSuite;
 use crate::errors::ProtocolError;
 use crate::key_exchange::group::elliptic_curve::NonIdentity;
+pub use crate::key_exchange::sigma_i::shared::PreHash;
 use crate::key_exchange::sigma_i::{Message, Role, SignatureGroup};
 use crate::key_exchange::traits::{Deserialize, Serialize};
 use crate::serialization::{SliceExt, UpdateExt};
 
 /// ECDSA for [`SigmaI`](crate::SigmaI).
+///
+/// The "verification state" is the pre-hash for the client signature message.
 pub struct Ecdsa<G, H>(PhantomData<(G, H)>);
 
 impl<G, H> SignatureGroup for Ecdsa<G, H>
@@ -149,44 +152,5 @@ where
             Into::<FieldBytes<G>>::into(Scalar::<G>::ONE),
         )
         .expect("failed to create `Signature` with non-zero `Scalar`s");
-    }
-}
-
-/// Prehash to re-use when verifying the client signature.
-#[derive_where(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, Zeroize)]
-#[derive_where(Copy; <H::OutputSize as ArrayLength<u8>>::ArrayType)]
-#[cfg_attr(
-    feature = "serde",
-    derive(serde::Deserialize, serde::Serialize),
-    serde(bound = "")
-)]
-pub struct PreHash<H: OutputSizeUser>(pub Output<H>);
-
-impl<H: OutputSizeUser> Deserialize for PreHash<H> {
-    fn deserialize_take(input: &mut &[u8]) -> Result<Self, ProtocolError> {
-        Ok(Self(input.take_array("pre-hash")?))
-    }
-}
-
-impl<H: OutputSizeUser> Serialize for PreHash<H> {
-    type Len = H::OutputSize;
-
-    fn serialize(&self) -> GenericArray<u8, Self::Len> {
-        self.0.clone()
-    }
-}
-
-//////////////////////////
-// Test Implementations //
-//===================== //
-//////////////////////////
-
-#[cfg(test)]
-use crate::serialization::AssertZeroized;
-
-#[cfg(test)]
-impl<H: OutputSizeUser> AssertZeroized for PreHash<H> {
-    fn assert_zeroized(&self) {
-        assert_eq!(self.0, GenericArray::default());
     }
 }

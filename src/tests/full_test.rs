@@ -156,6 +156,7 @@ macro_rules! sigma_i_ciphersuites {
                 #[cfg(feature = "ecdsa")] [P256, Ecdsa<p256::NistP256, sha2::Sha256>],
                 #[cfg(feature = "ecdsa")] [P384, Ecdsa<p384::NistP384, sha2::Sha384>],
                 #[cfg(feature = "ed25519")] [Ed25519, PureEddsa<Ed25519>],
+                #[cfg(feature = "ed25519")] [Ed25519Ph, HashEddsa<Ed25519>],
             ],
         );
     };

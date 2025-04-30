@@ -13,20 +13,19 @@ use core::marker::PhantomData;
 use rand::{CryptoRng, RngCore};
 use zeroize::Zeroize;
 
-use self::implementation::PureEddsaImpl;
+use self::implementation::HashEddsaImpl;
 use super::Group;
 use crate::ciphersuite::CipherSuite;
 use crate::errors::ProtocolError;
 use crate::key_exchange::sigma_i::{Message, Role, SignatureGroup};
 use crate::key_exchange::traits::{Deserialize, Serialize};
 
-/// PureEdDSA for [`SigmaI`](crate::SigmaI).
+/// HashEdDSA for [`SigmaI`](crate::SigmaI).
 ///
-/// The "verification state" is the client signature message, which is contained
-/// in [`Message`].
-pub struct PureEddsa<G>(PhantomData<G>);
+/// The "verification state" is the pre-hash for the client signature message.
+pub struct HashEddsa<G>(PhantomData<G>);
 
-impl<G: PureEddsaImpl> SignatureGroup for PureEddsa<G> {
+impl<G: HashEddsaImpl> SignatureGroup for HashEddsa<G> {
     type Group = G;
     type Signature = G::Signature;
     type VerifyState<CS: CipherSuite, KE: Group> = G::VerifyState<CS, KE>;
@@ -53,7 +52,7 @@ impl<G: PureEddsaImpl> SignatureGroup for PureEddsa<G> {
 pub(in super::super) mod implementation {
     use super::*;
 
-    pub trait PureEddsaImpl: Group {
+    pub trait HashEddsaImpl: Group {
         type Signature: Clone + Deserialize + Serialize + Zeroize;
         type VerifyState<CS: CipherSuite, KE: Group>: Clone + Zeroize;
 

@@ -1153,6 +1153,7 @@ pub use crate::key_exchange::group::ed25519::Ed25519;
 pub use crate::key_exchange::group::ristretto255::Ristretto255;
 #[cfg(feature = "ecdsa")]
 pub use crate::key_exchange::sigma_i::ecdsa::Ecdsa;
+pub use crate::key_exchange::sigma_i::hash_eddsa::HashEddsa;
 pub use crate::key_exchange::sigma_i::pure_eddsa::PureEddsa;
 pub use crate::key_exchange::sigma_i::SigmaI;
 pub use crate::key_exchange::tripledh::TripleDh;

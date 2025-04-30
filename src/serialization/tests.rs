@@ -110,6 +110,16 @@ impl CipherSuite for SigmaIEd25519 {
     type Ksf = crate::ksf::Identity;
 }
 
+#[cfg(all(feature = "ristretto255", feature = "ed25519", feature = "curve25519"))]
+struct SigmaIEd25519Ph;
+
+#[cfg(all(feature = "ristretto255", feature = "ed25519",))]
+impl CipherSuite for SigmaIEd25519Ph {
+    type OprfCs = Ristretto255;
+    type KeyExchange = SigmaI<HashEddsa<Ed25519>, Ristretto255, sha2::Sha512>;
+    type Ksf = crate::ksf::Identity;
+}
+
 fn random_point<CS: CipherSuite>() -> <KeGroup<CS> as Group>::Pk {
     let mut rng = OsRng;
     let sk = KeGroup::<CS>::random_sk(&mut rng);
@@ -162,6 +172,8 @@ fn client_registration_roundtrip() -> Result<(), ProtocolError> {
     inner::<SigmaIP384>()?;
     #[cfg(all(feature = "ristretto255", feature = "ed25519"))]
     inner::<SigmaIEd25519>()?;
+    #[cfg(all(feature = "ristretto255", feature = "ed25519"))]
+    inner::<SigmaIEd25519Ph>()?;
 
     Ok(())
 }
@@ -219,6 +231,8 @@ fn server_registration_roundtrip() -> Result<(), ProtocolError> {
     inner::<SigmaIP384>()?;
     #[cfg(all(feature = "ristretto255", feature = "ed25519"))]
     inner::<SigmaIEd25519>()?;
+    #[cfg(all(feature = "ristretto255", feature = "ed25519"))]
+    inner::<SigmaIEd25519Ph>()?;
 
     Ok(())
 }
@@ -263,6 +277,8 @@ fn registration_request_roundtrip() -> Result<(), ProtocolError> {
     inner::<SigmaIP384>()?;
     #[cfg(all(feature = "ristretto255", feature = "ed25519"))]
     inner::<SigmaIEd25519>()?;
+    #[cfg(all(feature = "ristretto255", feature = "ed25519"))]
+    inner::<SigmaIEd25519Ph>()?;
 
     Ok(())
 }
@@ -318,6 +334,8 @@ fn registration_response_roundtrip() -> Result<(), ProtocolError> {
     inner::<SigmaIP384>()?;
     #[cfg(all(feature = "ristretto255", feature = "ed25519"))]
     inner::<SigmaIEd25519>()?;
+    #[cfg(all(feature = "ristretto255", feature = "ed25519"))]
+    inner::<SigmaIEd25519Ph>()?;
 
     Ok(())
 }
@@ -383,6 +401,8 @@ fn registration_upload_roundtrip() -> Result<(), ProtocolError> {
     inner::<SigmaIP384>()?;
     #[cfg(all(feature = "ristretto255", feature = "ed25519"))]
     inner::<SigmaIEd25519>()?;
+    #[cfg(all(feature = "ristretto255", feature = "ed25519"))]
+    inner::<SigmaIEd25519Ph>()?;
 
     Ok(())
 }
@@ -1023,3 +1043,5 @@ test!(sigma_i_p256, SigmaIP256);
 test!(sigma_i_p384, SigmaIP384);
 #[cfg(all(feature = "ristretto255", feature = "ed25519", feature = "curve25519"))]
 test!(sigma_i_ed25519, SigmaIEd25519);
+#[cfg(all(feature = "ristretto255", feature = "ed25519", feature = "curve25519"))]
+test!(sigma_i_ed25519_ph, SigmaIEd25519Ph);

@@ -8,6 +8,8 @@
 
 //! Key Exchange group implementation for Ed25519
 
+use core::iter;
+
 use curve25519_dalek::edwards::CompressedEdwardsY;
 use curve25519_dalek::traits::IsIdentity;
 use curve25519_dalek::{EdwardsPoint, Scalar};
@@ -23,7 +25,9 @@ use zeroize::Zeroize;
 use super::Group;
 use crate::ciphersuite::CipherSuite;
 use crate::errors::{InternalError, ProtocolError};
+use crate::key_exchange::sigma_i::hash_eddsa::implementation::HashEddsaImpl;
 use crate::key_exchange::sigma_i::pure_eddsa::implementation::PureEddsaImpl;
+pub use crate::key_exchange::sigma_i::shared::PreHash;
 use crate::key_exchange::sigma_i::{Message, Role};
 use crate::key_exchange::traits::{Deserialize, Serialize};
 use crate::serialization::{SliceExt, UpdateExt};
@@ -123,19 +127,16 @@ impl SigningKey {
     }
 }
 
-// This contains a custom implementation for PureEdDSA because `ed25519-dalek`
-// doesn't support message streaming. See
-// https://github.com/dalek-cryptography/curve25519-dalek/pull/556.
 impl PureEddsaImpl for Ed25519 {
     type Signature = Signature;
     type VerifyState<CS: CipherSuite, KE: Group> = Message<CS, KE>;
 
     fn sign<CS: CipherSuite, KE: Group>(
         sk: &Self::Sk,
-        state: Message<CS, KE>,
+        message: Message<CS, KE>,
         role: Role,
     ) -> (Self::Signature, Self::VerifyState<CS, KE>) {
-        (sign(sk, state.sign_message(role)), state)
+        (sign(sk, false, message.sign_message(role)), message)
     }
 
     /// Validates that the signature was created by signing the given message
@@ -146,12 +147,65 @@ impl PureEddsaImpl for Ed25519 {
         signature: &Self::Signature,
         role: Role,
     ) -> Result<(), ProtocolError> {
-        verify(pk, state.verify_message(role), signature)
+        verify(pk, false, state.verify_message(role), signature)
     }
 }
 
-fn sign<'a>(sk: &SigningKey, message: impl Clone + Iterator<Item = &'a [u8]>) -> Signature {
+impl HashEddsaImpl for Ed25519 {
+    type Signature = Signature;
+    type VerifyState<CS: CipherSuite, KE: Group> = PreHash<Sha512>;
+
+    fn sign<CS: CipherSuite, KE: Group>(
+        sk: &Self::Sk,
+        message: Message<CS, KE>,
+        role: Role,
+    ) -> (Self::Signature, Self::VerifyState<CS, KE>) {
+        let server_pre_hash = Sha512::default().chain_iter(message.server_message());
+        let client_pre_hash = server_pre_hash
+            .clone()
+            .chain_iter(message.client_message_add())
+            .finalize();
+        let server_pre_hash = server_pre_hash.finalize();
+
+        let (sign_pre_hash, verify_pre_hash) = match role {
+            Role::Server => (server_pre_hash, client_pre_hash),
+            Role::Client => (client_pre_hash, server_pre_hash),
+        };
+
+        (
+            sign(sk, true, iter::once(sign_pre_hash.as_slice())),
+            PreHash(verify_pre_hash),
+        )
+    }
+
+    /// Validates that the signature was created by signing the given message
+    /// with the corresponding private key.
+    fn verify<CS: CipherSuite, KE: Group>(
+        pk: &Self::Pk,
+        state: Self::VerifyState<CS, KE>,
+        signature: &Self::Signature,
+        _: Role,
+    ) -> Result<(), ProtocolError> {
+        verify(pk, true, iter::once(state.0.as_slice()), signature)
+    }
+}
+
+// This contains a manual implementation of EdDSA because `ed25519-dalek`
+// doesn't support message streaming. See
+// https://github.com/dalek-cryptography/curve25519-dalek/pull/556.
+fn sign<'a>(
+    sk: &SigningKey,
+    pre_hash: bool,
+    message: impl Clone + Iterator<Item = &'a [u8]>,
+) -> Signature {
     let mut h = Sha512::new();
+
+    if pre_hash {
+        h.update(b"SigEd25519 no Ed25519 collisions");
+        h.update([1]); // Ed25519ph
+        h.update([0]);
+    }
+
     h.update(sk.hash_prefix);
     h.update_iter(message.clone());
 
@@ -160,23 +214,37 @@ fn sign<'a>(sk: &SigningKey, message: impl Clone + Iterator<Item = &'a [u8]>) ->
     let R = EdwardsPoint::mul_base(&r).compress();
 
     h = Sha512::new();
+
+    if pre_hash {
+        h.update(b"SigEd25519 no Ed25519 collisions");
+        h.update([1]); // Ed25519ph
+        h.update([0]);
+    }
+
     h.update(R.as_bytes());
     h.update(sk.verifying_key.compressed.0);
     h.update_iter(message);
 
     let k = Scalar::from_hash(h);
-
-    let s = (k * sk.scalar) + r;
+    let s: Scalar = (k * sk.scalar) + r;
 
     Signature { R, s }
 }
 
 fn verify<'a>(
     pk: &VerifyingKey,
+    pre_hash: bool,
     message: impl Iterator<Item = &'a [u8]>,
     signature: &Signature,
 ) -> Result<(), ProtocolError> {
     let mut h = Sha512::new();
+
+    if pre_hash {
+        h.update(b"SigEd25519 no Ed25519 collisions");
+        h.update([1]); // Ed25519ph
+        h.update([0]);
+    }
+
     h.update(signature.R.as_bytes());
     h.update(pk.compressed.as_bytes());
     h.update_iter(message);
@@ -275,39 +343,81 @@ impl AssertZeroized for VerifyingKey {
     }
 }
 
-#[test]
-fn pure_eddsa() {
+#[cfg(test)]
+mod test {
     use std::iter;
 
     use ecdsa::signature::{Signer, Verifier};
     use ed25519_dalek::{SigningKey, VerifyingKey};
     use rand::rngs::OsRng;
 
-    let mut message = [0; 1024];
-    OsRng.fill_bytes(&mut message);
+    use super::*;
 
-    let mut sk = SecretKey::default();
-    OsRng.fill_bytes(&mut sk);
-    let signing_key = SigningKey::from_bytes(&sk);
+    #[test]
+    fn pure_eddsa() {
+        let mut message = [0; 1024];
+        OsRng.fill_bytes(&mut message);
 
-    let signature = signing_key.sign(&message);
+        let mut sk = SecretKey::default();
+        OsRng.fill_bytes(&mut sk);
+        let signing_key = SigningKey::from_bytes(&sk);
 
-    let custom_sk = Ed25519::deserialize_take_sk(&mut sk.as_slice()).unwrap();
-    let custom_signature = sign(&custom_sk, iter::once(message.as_slice()));
+        let signature = signing_key.sign(&message);
 
-    assert_eq!(
-        signature.to_bytes(),
-        custom_signature.serialize().as_slice()
-    );
+        let custom_sk = Ed25519::deserialize_take_sk(&mut sk.as_slice()).unwrap();
+        let custom_signature = sign(&custom_sk, false, iter::once(message.as_slice()));
 
-    let verifying_key = VerifyingKey::from(&signing_key);
-    verifying_key.verify(&message, &signature).unwrap();
+        assert_eq!(
+            signature.to_bytes(),
+            custom_signature.serialize().as_slice()
+        );
 
-    let custom_pk = Ed25519::public_key(custom_sk);
-    verify(
-        &custom_pk,
-        iter::once(message.as_slice()),
-        &custom_signature,
-    )
-    .unwrap();
+        let verifying_key = VerifyingKey::from(&signing_key);
+        verifying_key.verify(&message, &signature).unwrap();
+
+        let custom_pk = Ed25519::public_key(custom_sk);
+        verify(
+            &custom_pk,
+            false,
+            iter::once(message.as_slice()),
+            &custom_signature,
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn hash_eddsa() {
+        let mut message = [0; 1024];
+        OsRng.fill_bytes(&mut message);
+        let message = Sha512::new_with_prefix(message);
+        let pre_hash = message.clone().finalize();
+
+        let mut sk = SecretKey::default();
+        OsRng.fill_bytes(&mut sk);
+        let signing_key = SigningKey::from_bytes(&sk);
+
+        let signature = signing_key.sign_prehashed(message.clone(), None).unwrap();
+
+        let custom_sk = Ed25519::deserialize_take_sk(&mut sk.as_slice()).unwrap();
+        let custom_signature = sign(&custom_sk, true, iter::once(pre_hash.as_slice()));
+
+        assert_eq!(
+            signature.to_bytes(),
+            custom_signature.serialize().as_slice()
+        );
+
+        let verifying_key = VerifyingKey::from(&signing_key);
+        verifying_key
+            .verify_prehashed(message, None, &signature)
+            .unwrap();
+
+        let custom_pk = Ed25519::public_key(custom_sk);
+        verify(
+            &custom_pk,
+            true,
+            iter::once(pre_hash.as_slice()),
+            &custom_signature,
+        )
+        .unwrap();
+    }
 }
