@@ -13,9 +13,9 @@ jobs:
       fail-fast: false
       matrix:
         backend_feature:
-          - --features ristretto255-voprf
+          - --features ristretto255
           -
-          - --features curve25519,ristretto255-voprf
+          - --features curve25519,ristretto255
           - --features curve25519
           - --features ecdsa
           - --features ed25519
@@ -71,9 +71,9 @@ jobs:
           # 32-bit x86
           - i686-unknown-linux-gnu
         backend_feature:
-          - --features ristretto255-voprf
+          - --features ristretto255
           -
-          - --features curve25519,ristretto255-voprf
+          - --features curve25519,ristretto255
           - --features curve25519
           - --features ecdsa
           - --features ed25519
@@ -144,9 +144,9 @@ jobs:
           # for any no_std target
           - thumbv6m-none-eabi
         backend_feature:
-          - ristretto255-voprf
+          - ristretto255
           -
-          - curve25519,ristretto255-voprf
+          - curve25519,ristretto255
           - curve25519
           - ecdsa
           - ed25519
@@ -166,9 +166,9 @@ jobs:
       fail-fast: false
       matrix:
         backend_feature:
-          - --features ristretto255-voprf
+          - --features ristretto255
           -
-          - --features curve25519,ristretto255-voprf
+          - --features curve25519,ristretto255
           - --features curve25519
           - --features ecdsa
           - --features ed25519

@@ -81,7 +81,6 @@ impl Group for Ristretto255 {
     }
 }
 
-#[cfg(feature = "ristretto255-voprf")]
 impl voprf::CipherSuite for Ristretto255 {
     const ID: &'static str = voprf::Ristretto255::ID;
 
