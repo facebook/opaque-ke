@@ -100,7 +100,7 @@ impl CipherSuite for SigmaIP384 {
     type Ksf = crate::ksf::Identity;
 }
 
-#[cfg(all(feature = "ristretto255", feature = "ed25519", feature = "curve25519"))]
+#[cfg(all(feature = "ristretto255", feature = "ed25519",))]
 struct SigmaIEd25519;
 
 #[cfg(all(feature = "ristretto255", feature = "ed25519",))]
@@ -110,7 +110,7 @@ impl CipherSuite for SigmaIEd25519 {
     type Ksf = crate::ksf::Identity;
 }
 
-#[cfg(all(feature = "ristretto255", feature = "ed25519", feature = "curve25519"))]
+#[cfg(all(feature = "ristretto255", feature = "ed25519"))]
 struct SigmaIEd25519Ph;
 
 #[cfg(all(feature = "ristretto255", feature = "ed25519",))]
@@ -1041,7 +1041,7 @@ test!(triple_dh_p521, TripleDhP521);
 test!(sigma_i_p256, SigmaIP256);
 #[cfg(feature = "ecdsa")]
 test!(sigma_i_p384, SigmaIP384);
-#[cfg(all(feature = "ristretto255", feature = "ed25519", feature = "curve25519"))]
+#[cfg(all(feature = "ristretto255", feature = "ed25519",))]
 test!(sigma_i_ed25519, SigmaIEd25519);
-#[cfg(all(feature = "ristretto255", feature = "ed25519", feature = "curve25519"))]
+#[cfg(all(feature = "ristretto255", feature = "ed25519"))]
 test!(sigma_i_ed25519_ph, SigmaIEd25519Ph);

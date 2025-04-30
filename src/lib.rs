@@ -1097,7 +1097,7 @@
 //!   more computationally intensive the `Ksf` function is, the more resistant
 //!   the server's password file records will be against offline dictionary and precomputation
 //!   attacks; see [the OPAQUE paper](https://eprint.iacr.org/2018/163.pdf) for
-//!   more details.
+//!   more details. The `argon2` feature requires [`alloc`].
 //!
 //! - The `serde` feature, enabled by default, provides convenience functions for serializing and deserializing with [serde](https://serde.rs/).
 //!
@@ -1114,8 +1114,8 @@
 //! - The `ed25519` feature enables using [`Ed25519`]s with [`PureEddsa`] and
 //!   [`HashEddsa`] for [`SigmaI`]s signature algorithm.
 //!
-//! [curve25519-dalek]:
-//!     (https://docs.rs/curve25519-dalek/4.0.0-pre.5/curve25519_dalek/index.html#backends)
+//! [`alloc`]: https://doc.rust-lang.org/alloc
+//! [curve25519-dalek]: https://docs.rs/curve25519-dalek/4/curve25519_dalek/index.html#backends
 
 #![no_std]
 #![cfg_attr(docsrs, feature(doc_auto_cfg))]
