@@ -107,8 +107,7 @@ where
     }
 }
 
-/// Wrapper around [`ecdsa::Signature`] to implement
-/// [`Zeroize`](crate::Zeroize).
+/// Wrapper around [`ecdsa::Signature`] to implement [`Zeroize`].
 // TODO: remove after https://github.com/RustCrypto/signatures/pull/948.
 #[derive_where(Clone, Debug, Eq, PartialEq)]
 #[cfg_attr(

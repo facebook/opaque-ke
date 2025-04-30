@@ -87,8 +87,7 @@ where
     }
 }
 
-/// Wrapper around [`NonIdentity`](point::NonIdentity) to implement
-/// [`Zeroize`](crate::Zeroize).
+/// Wrapper around [`NonIdentity`](point::NonIdentity) to implement [`Zeroize`].
 // TODO: remove after https://github.com/RustCrypto/traits/pull/1832.
 #[derive_where(Clone, Copy)]
 #[cfg_attr(
