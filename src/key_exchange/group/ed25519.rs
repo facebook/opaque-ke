@@ -84,8 +84,10 @@ impl Group for Ed25519 {
 }
 
 /// Ed25519 verifying key.
-// `VerifyingKey` doesn't implement `Zeroize`. See
-// https://github.com/dalek-cryptography/curve25519-dalek/pull/747
+// `ed25519_dalek::VerifyingKey` doesn't implement `Zeroize`.
+// TODO: remove after https://github.com/dalek-cryptography/curve25519-dalek/pull/747.
+// Required for manual implementation of EdDSA.
+// TODO: remove after https://github.com/dalek-cryptography/curve25519-dalek/pull/556.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Zeroize)]
 pub struct VerifyingKey {
     point: EdwardsPoint,
@@ -93,13 +95,17 @@ pub struct VerifyingKey {
 }
 
 /// Ed25519 siging key.
+// We store the `ExpandedSecret` in memory to avoid computing it on demand and then discarding it
+// again.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Zeroize)]
 pub struct SigningKey {
-    // `SigningKey` doesn't implement `Zeroize`. See
+    // `ed25519_dalek::SigningKey` doesn't implement `Zeroize`. See
     // https://github.com/dalek-cryptography/curve25519-dalek/pull/747
+    // Required for manual implementation of EdDSA.
+    // TODO: remove after https://github.com/dalek-cryptography/curve25519-dalek/pull/556.
     sk: SecretKey,
     verifying_key: VerifyingKey,
-    // `ExpandedSecret` doesn't implement traits we need. See
+    // `ed25519_dalek::ExpandedSecret` doesn't implement traits we need. See
     // https://github.com/dalek-cryptography/curve25519-dalek/pull/748 and
     // https://github.com/dalek-cryptography/curve25519-dalek/pull/747
     scalar: Scalar,
@@ -192,7 +198,7 @@ impl HashEddsaImpl for Ed25519 {
 
 // This contains a manual implementation of EdDSA because `ed25519-dalek`
 // doesn't support message streaming. See
-// https://github.com/dalek-cryptography/curve25519-dalek/pull/556.
+// TODO: remove after https://github.com/dalek-cryptography/curve25519-dalek/pull/556.
 fn sign<'a>(
     sk: &SigningKey,
     pre_hash: bool,
@@ -264,7 +270,7 @@ fn verify<'a>(
 }
 
 /// Ed25519 Signature.
-// `Signature` doesn't implement validation with Serde de/serialization.
+// `ed25519_dalek::Signature` doesn't implement validation with Serde de/serialization.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[allow(non_snake_case)]
 pub struct Signature {
