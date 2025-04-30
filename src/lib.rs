@@ -1108,8 +1108,11 @@
 //! - The `curve25519` feature enables Curve25519 as a `KeGroup`. To select a
 //!   specific backend see the [curve25519-dalek] documentation.
 //!
-//! - The `ecdsa` feature enables using [`elliptic_curve`]s for
+//! - The `ecdsa` feature enables using [`elliptic_curve`]s with [`Ecdsa`] for
 //!   [`SigmaI`](crate::SigmaI)s signature algorithm.
+//!
+//! - The `ed25519` feature enables using [`Ed25519`]s with [`PureEddsa`] and
+//!   [`HashEddsa`] for [`SigmaI`](crate::SigmaI)s signature algorithm.
 //!
 //! [curve25519-dalek]:
 //!     (https://docs.rs/curve25519-dalek/4.0.0-pre.5/curve25519_dalek/index.html#backends)
