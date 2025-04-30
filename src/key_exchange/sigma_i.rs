@@ -255,24 +255,23 @@ where
             &info_hasher.finalize(),
         )?;
 
-        let mut mac_hasher =
+        let mut server_mac =
             Hmac::<KEH>::new_from_slice(&derived_keys.km2).map_err(|_| InternalError::HmacError)?;
-        mac_hasher.update_iter(identifiers.server.iter());
-        let mac = mac_hasher.finalize().into_bytes();
+        server_mac.update_iter(identifiers.server.iter());
+        let server_mac = server_mac.finalize().into_bytes();
 
-        let mut mac_hasher =
+        let mut client_mac =
             Hmac::<KEH>::new_from_slice(&derived_keys.km3).map_err(|_| InternalError::HmacError)?;
-        mac_hasher.update_iter(identifiers.client.iter());
-        Mac::update(&mut mac_hasher, &mac);
-        let expected_mac = mac_hasher.finalize().into_bytes();
+        client_mac.update_iter(identifiers.client.iter());
+        let client_mac = client_mac.finalize().into_bytes();
 
         Ok(Ke2Builder {
             transcript: message,
             server_nonce,
             client_s_pk,
             server_e_pk: server_e.public().clone(),
-            mac,
-            expected_mac,
+            mac: server_mac,
+            expected_mac: client_mac,
             session_key: derived_keys.session_key,
             #[cfg(test)]
             km3: derived_keys.km3,
@@ -365,13 +364,13 @@ where
         let mut client_mac =
             Hmac::<KEH>::new_from_slice(&derived_keys.km3).map_err(|_| InternalError::HmacError)?;
         client_mac.update_iter(identifiers.client.iter());
-        Mac::update(&mut client_mac, &ke2_message.mac);
+        let client_mac = client_mac.finalize().into_bytes();
 
         Ok((
             derived_keys.session_key,
             Ke3Message {
                 signature,
-                mac: client_mac.finalize().into_bytes(),
+                mac: client_mac,
             },
             #[cfg(test)]
             derived_keys.handshake_secret,
