@@ -28,7 +28,7 @@ use crate::errors::{InternalError, ProtocolError};
 use crate::key_exchange::sigma_i::hash_eddsa::implementation::HashEddsaImpl;
 use crate::key_exchange::sigma_i::pure_eddsa::implementation::PureEddsaImpl;
 pub use crate::key_exchange::sigma_i::shared::PreHash;
-use crate::key_exchange::sigma_i::{Message, Role};
+use crate::key_exchange::sigma_i::{CachedMessage, Context, Message, Role};
 use crate::key_exchange::traits::{Deserialize, Serialize};
 use crate::serialization::{SliceExt, UpdateExt};
 
@@ -135,25 +135,34 @@ impl SigningKey {
 
 impl PureEddsaImpl for Ed25519 {
     type Signature = Signature;
-    type VerifyState<CS: CipherSuite, KE: Group> = Message<CS, KE>;
+    type VerifyState<CS: CipherSuite, KE: Group> = CachedMessage<CS, KE>;
 
     fn sign<CS: CipherSuite, KE: Group>(
         sk: &Self::Sk,
-        message: Message<CS, KE>,
+        message: &Message<CS, KE>,
         role: Role,
     ) -> (Self::Signature, Self::VerifyState<CS, KE>) {
-        (sign(sk, false, message.sign_message(role)), message)
+        (
+            sign(sk, false, message.sign_message(role)),
+            message.to_cached(),
+        )
     }
 
     /// Validates that the signature was created by signing the given message
     /// with the corresponding private key.
     fn verify<CS: CipherSuite, KE: Group>(
         pk: &Self::Pk,
+        context: Context<'_>,
         state: Self::VerifyState<CS, KE>,
         signature: &Self::Signature,
         role: Role,
     ) -> Result<(), ProtocolError> {
-        verify(pk, false, state.verify_message(role), signature)
+        verify(
+            pk,
+            false,
+            state.into_message(context).verify_message(role),
+            signature,
+        )
     }
 }
 
@@ -163,7 +172,7 @@ impl HashEddsaImpl for Ed25519 {
 
     fn sign<CS: CipherSuite, KE: Group>(
         sk: &Self::Sk,
-        message: Message<CS, KE>,
+        message: &Message<CS, KE>,
         role: Role,
     ) -> (Self::Signature, Self::VerifyState<CS, KE>) {
         let server_pre_hash = Sha512::default().chain_iter(message.server_message());
@@ -190,7 +199,6 @@ impl HashEddsaImpl for Ed25519 {
         pk: &Self::Pk,
         state: Self::VerifyState<CS, KE>,
         signature: &Self::Signature,
-        _: Role,
     ) -> Result<(), ProtocolError> {
         verify(pk, true, iter::once(state.0.as_slice()), signature)
     }

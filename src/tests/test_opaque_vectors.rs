@@ -635,9 +635,12 @@ where
             },
         )?;
 
-        let server_login_result = server_login_start_result
-            .state
-            .finish(CredentialFinalization::deserialize(&parameters.KE3)?)?;
+        let server_login_result = server_login_start_result.state.finish(
+            CredentialFinalization::deserialize(&parameters.KE3)?,
+            ServerLoginFinishParameters {
+                context: Some(&parameters.context),
+            },
+        )?;
 
         assert_eq!(
             hex::encode(&parameters.session_key),

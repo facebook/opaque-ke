@@ -312,7 +312,10 @@ fn server_login_finish(c: &mut Criterion) {
             server_login_start_result
                 .clone()
                 .state
-                .finish(client_login_finish_result.clone().message)
+                .finish(
+                    client_login_finish_result.clone().message,
+                    ServerLoginFinishParameters::default(),
+                )
                 .unwrap();
         })
     });

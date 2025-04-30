@@ -14,10 +14,10 @@ use rand::{CryptoRng, RngCore};
 use zeroize::Zeroize;
 
 use self::implementation::HashEddsaImpl;
-use super::Group;
+use super::{Context, Message, Role, SignatureGroup};
 use crate::ciphersuite::CipherSuite;
 use crate::errors::ProtocolError;
-use crate::key_exchange::sigma_i::{Message, Role, SignatureGroup};
+use crate::key_exchange::group::Group;
 use crate::key_exchange::traits::{Deserialize, Serialize};
 
 /// HashEdDSA for [`SigmaI`](crate::SigmaI).
@@ -33,7 +33,7 @@ impl<G: HashEddsaImpl> SignatureGroup for HashEddsa<G> {
     fn sign<'a, R: CryptoRng + RngCore, CS: CipherSuite, KE: Group>(
         sk: &<Self::Group as Group>::Sk,
         _: &mut R,
-        message: Message<CS, KE>,
+        message: &Message<CS, KE>,
         role: Role,
     ) -> (Self::Signature, Self::VerifyState<CS, KE>) {
         G::sign(sk, message, role)
@@ -41,11 +41,12 @@ impl<G: HashEddsaImpl> SignatureGroup for HashEddsa<G> {
 
     fn verify<CS: CipherSuite, KE: Group>(
         pk: &<Self::Group as Group>::Pk,
+        _: Context<'_>,
         state: Self::VerifyState<CS, KE>,
         signature: &Self::Signature,
-        role: Role,
+        _: Role,
     ) -> Result<(), ProtocolError> {
-        G::verify(pk, state, signature, role)
+        G::verify(pk, state, signature)
     }
 }
 
@@ -58,7 +59,7 @@ pub(in super::super) mod implementation {
 
         fn sign<CS: CipherSuite, KE: Group>(
             sk: &Self::Sk,
-            message: Message<CS, KE>,
+            message: &Message<CS, KE>,
             role: Role,
         ) -> (Self::Signature, Self::VerifyState<CS, KE>);
 
@@ -66,7 +67,6 @@ pub(in super::super) mod implementation {
             pk: &Self::Pk,
             state: Self::VerifyState<CS, KE>,
             signature: &Self::Signature,
-            role: Role,
         ) -> Result<(), ProtocolError>;
     }
 }

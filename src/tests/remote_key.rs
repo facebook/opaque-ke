@@ -53,7 +53,7 @@ use crate::key_exchange::sigma_i::ecdsa::{self, Ecdsa, PreHash};
 #[cfg(all(feature = "ristretto255", feature = "ed25519"))]
 use crate::key_exchange::sigma_i::pure_eddsa::PureEddsa;
 #[cfg(feature = "ecdsa")]
-use crate::key_exchange::sigma_i::{Message, SigmaI};
+use crate::key_exchange::sigma_i::{CachedMessage, Message, SigmaI};
 use crate::key_exchange::traits::KeyExchange;
 use crate::key_exchange::tripledh::TripleDh;
 use crate::keypair::{KeyPair, PublicKey};
@@ -62,8 +62,8 @@ use crate::opaque::MaskedResponseLen;
 use crate::{
     CipherSuite, ClientLogin, ClientLoginFinishParameters, ClientLoginStartResult,
     ClientRegistration, ClientRegistrationFinishParameters, ClientRegistrationStartResult,
-    ServerLogin, ServerLoginStartParameters, ServerLoginStartResult, ServerRegistration,
-    ServerSetup,
+    ServerLogin, ServerLoginFinishParameters, ServerLoginStartParameters, ServerLoginStartResult,
+    ServerRegistration, ServerSetup,
 };
 #[cfg(all(feature = "curve25519", feature = "ristretto255"))]
 use crate::{Curve25519, Ristretto255};
@@ -303,7 +303,11 @@ fn test<CS: 'static + CipherSuite>(
         .map(|result| result.message);
 
     message
-        .map(|message| server.finish(message).unwrap())
+        .map(|message| {
+            server
+                .finish(message, ServerLoginFinishParameters::default())
+                .unwrap()
+        })
         .unwrap();
 }
 
@@ -522,8 +526,8 @@ impl Pkcs11KeyExchange<SigmaI<PureEddsa<Ed25519>, Ristretto255, Sha512>> for Rem
         &self,
         _: &PublicKey<Ed25519>,
         message: &Message<CS, Ristretto255>,
-    ) -> (ed25519::Signature, Message<CS, Ristretto255>) {
-        pkcs_11_eddsa_sign(self.0, message.clone())
+    ) -> (ed25519::Signature, CachedMessage<CS, Ristretto255>) {
+        pkcs_11_eddsa_sign(self.0, message)
     }
 }
 
@@ -647,8 +651,8 @@ where
 #[cfg(all(feature = "ristretto255", feature = "ed25519"))]
 fn pkcs_11_eddsa_sign<CS: CipherSuite>(
     sk: ObjectHandle,
-    message: Message<CS, Ristretto255>,
-) -> (ed25519::Signature, Message<CS, Ristretto255>) {
+    message: &Message<CS, Ristretto255>,
+) -> (ed25519::Signature, CachedMessage<CS, Ristretto255>) {
     use cryptoki::mechanism::eddsa::{EddsaParams, EddsaSignatureScheme};
 
     use crate::key_exchange::traits::Deserialize;
@@ -669,5 +673,5 @@ fn pkcs_11_eddsa_sign<CS: CipherSuite>(
 
     let signature = ed25519::Signature::deserialize_take(&mut (signature.as_slice())).unwrap();
 
-    (signature, message)
+    (signature, message.to_cached())
 }

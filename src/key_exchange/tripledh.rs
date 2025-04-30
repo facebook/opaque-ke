@@ -15,7 +15,7 @@ use derive_where::derive_where;
 use digest::core_api::BlockSizeUser;
 use digest::{Digest, Mac, Output, OutputSizeUser, Update};
 use generic_array::sequence::Concat;
-use generic_array::typenum::{IsLess, Le, NonZero, Sum, U2, U256};
+use generic_array::typenum::{IsLess, Le, NonZero, Sum, U256};
 use generic_array::{ArrayLength, GenericArray};
 use hmac::Hmac;
 use rand::{CryptoRng, RngCore};
@@ -26,13 +26,13 @@ use crate::ciphersuite::{CipherSuite, KeGroup, KeHash};
 use crate::errors::{InternalError, ProtocolError};
 use crate::hash::{Hash, OutputSize, ProxyHash};
 use crate::key_exchange::group::Group;
-use crate::key_exchange::shared::{self, Ke1Message, Ke1State, NonceLen, STR_CONTEXT};
+use crate::key_exchange::shared::{self, Ke1Message, Ke1State, NonceLen};
 use crate::key_exchange::traits::{
     CredentialRequestParts, CredentialResponseParts, Deserialize, GenerateKe2Result,
-    GenerateKe3Result, KeyExchange, Serialize, SerializedIdentifiers,
+    GenerateKe3Result, KeyExchange, Serialize, SerializedContext, SerializedIdentifiers,
 };
 use crate::keypair::{KeyPair, PrivateKey, PublicKey};
-use crate::serialization::{i2osp, SliceExt, UpdateExt};
+use crate::serialization::{SliceExt, UpdateExt};
 
 ////////////////////////////
 // High-level API Structs //
@@ -146,7 +146,7 @@ where
     type KE1State = Ke1State<G>;
     type KE2State<CS: CipherSuite> = Ke2State<H>;
     type KE1Message = Ke1Message<G>;
-    type KE2Builder<CS: CipherSuite<KeyExchange = Self>> = Ke2Builder<G, H>;
+    type KE2Builder<'a, CS: CipherSuite<KeyExchange = Self>> = Ke2Builder<G, H>;
     type KE2BuilderData<'a, CS: 'static + CipherSuite> = &'a PublicKey<G>;
     type KE2BuilderInput<CS: CipherSuite> = GenericArray<u8, G::PkLen>;
     type KE2Message = Ke2Message<G, H>;
@@ -172,27 +172,27 @@ where
         ))
     }
 
-    fn ke2_builder<CS: CipherSuite<KeyExchange = Self>, R: RngCore + CryptoRng>(
+    fn ke2_builder<'c, CS: CipherSuite<KeyExchange = Self>, R: RngCore + CryptoRng>(
         rng: &mut R,
         credential_request: CredentialRequestParts<CS>,
         ke1_message: Self::KE1Message,
         credential_response: CredentialResponseParts<CS>,
         client_s_pk: PublicKey<G>,
         identifiers: SerializedIdentifiers<'_, KeGroup<CS>>,
-        context: &[u8],
-    ) -> Result<Self::KE2Builder<CS>, ProtocolError> {
+        context: SerializedContext<'c>,
+    ) -> Result<Self::KE2Builder<'c, CS>, ProtocolError> {
         let server_e = KeyPair::<G>::derive_random(rng);
         let server_nonce = shared::generate_nonce::<R>(rng);
 
         let transcript_hasher = transcript(
-            context,
+            &context,
             &identifiers,
             &credential_request,
             &ke1_message,
             &credential_response,
             server_nonce,
             server_e.public(),
-        )?;
+        );
 
         let shared_secret_1 = server_e
             .private()
@@ -209,14 +209,14 @@ where
         })
     }
 
-    fn ke2_builder_data<CS: 'static + CipherSuite<KeyExchange = Self>>(
-        builder: &Self::KE2Builder<CS>,
-    ) -> Self::KE2BuilderData<'_, CS> {
+    fn ke2_builder_data<'a, CS: 'static + CipherSuite<KeyExchange = Self>>(
+        builder: &'a Self::KE2Builder<'_, CS>,
+    ) -> Self::KE2BuilderData<'a, CS> {
         &builder.client_e_pk
     }
 
     fn generate_ke2_input<CS: CipherSuite<KeyExchange = Self>, R: CryptoRng + RngCore>(
-        builder: &Self::KE2Builder<CS>,
+        builder: &Self::KE2Builder<'_, CS>,
         _: &mut R,
         server_s_sk: &PrivateKey<G>,
     ) -> Self::KE2BuilderInput<CS> {
@@ -224,7 +224,7 @@ where
     }
 
     fn build_ke2<CS: CipherSuite<KeyExchange = Self>>(
-        mut builder: Self::KE2Builder<CS>,
+        mut builder: Self::KE2Builder<'_, CS>,
         shared_secret_2: Self::KE2BuilderInput<CS>,
     ) -> Result<GenerateKe2Result<CS>, ProtocolError> {
         let derived_keys = shared::derive_keys::<H>(
@@ -281,17 +281,17 @@ where
         server_s_pk: PublicKey<G>,
         client_s_sk: PrivateKey<G>,
         identifiers: SerializedIdentifiers<'_, KeGroup<CS>>,
-        context: &[u8],
+        context: SerializedContext<'_>,
     ) -> Result<GenerateKe3Result<Self>, ProtocolError> {
         let mut transcript_hasher = transcript(
-            context,
+            &context,
             &identifiers,
             &credential_request,
             &ke1_message,
             &credential_response,
             ke2_message.server_nonce,
             &ke2_message.server_e_pk,
-        )?;
+        );
 
         let shared_secret_1 = ke1_state
             .client_e_sk
@@ -338,6 +338,7 @@ where
     fn finish_ke<CS: CipherSuite>(
         ke3_message: Self::KE3Message,
         ke2_state: &Self::KE2State<CS>,
+        _: SerializedContext<'_>,
     ) -> Result<Output<H>, ProtocolError> {
         CtOption::new(
             ke2_state.session_key.clone(),
@@ -355,25 +356,23 @@ where
 
 #[allow(clippy::too_many_arguments)]
 fn transcript<CS: CipherSuite>(
-    context: &[u8],
+    context: &SerializedContext<'_>,
     identifiers: &SerializedIdentifiers<'_, KeGroup<CS>>,
     credential_request: &CredentialRequestParts<CS>,
     ke1_message: &Ke1Message<KeGroup<CS>>,
     credential_response: &CredentialResponseParts<CS>,
     server_nonce: GenericArray<u8, NonceLen>,
     server_e_pk: &PublicKey<KeGroup<CS>>,
-) -> Result<KeHash<CS>, ProtocolError> {
-    Ok(KeHash::<CS>::new()
-        .chain(STR_CONTEXT)
-        .chain(i2osp::<U2>(context.len())?)
-        .chain(context)
+) -> KeHash<CS> {
+    KeHash::<CS>::new()
+        .chain_iter(context.iter())
         .chain_iter(identifiers.client.iter())
         .chain_iter(credential_request.iter())
         .chain_iter(ke1_message.to_iter().iter())
         .chain_iter(identifiers.server.iter())
         .chain_iter(credential_response.iter())
         .chain(server_nonce)
-        .chain(server_e_pk.serialize()))
+        .chain(server_e_pk.serialize())
 }
 
 ////////////////////////////////////////////////

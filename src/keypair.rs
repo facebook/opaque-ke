@@ -17,7 +17,7 @@ use rand::{CryptoRng, RngCore};
 use crate::ciphersuite::CipherSuite;
 use crate::errors::ProtocolError;
 use crate::key_exchange::group::Group;
-use crate::key_exchange::sigma_i::{Message, Role, SharedSecret, SignatureGroup};
+use crate::key_exchange::sigma_i::{Context, Message, Role, SharedSecret, SignatureGroup};
 use crate::key_exchange::tripledh::DiffieHellman;
 
 /// A Keypair trait with public-private verification
@@ -140,7 +140,7 @@ impl<G: Group> PrivateKey<G> {
     >(
         &self,
         rng: &mut R,
-        message: Message<CS, KE>,
+        message: &Message<CS, KE>,
         role: Role,
     ) -> (SIG::Signature, SIG::VerifyState<CS, KE>) {
         SIG::sign(&self.0, rng, message, role)
@@ -236,11 +236,12 @@ impl<G: Group> PublicKey<G> {
     /// Public-key verifying implementation
     pub(crate) fn verify<CS: CipherSuite, SIG: SignatureGroup<Group = G>, KE: Group>(
         &self,
+        context: Context<'_>,
         state: SIG::VerifyState<CS, KE>,
         signature: &SIG::Signature,
         role: Role,
     ) -> Result<(), ProtocolError> {
-        SIG::verify(&self.0, state, signature, role)
+        SIG::verify(&self.0, context, state, signature, role)
     }
 }
 
@@ -403,8 +404,8 @@ mod tests {
             CipherSuite, ClientLogin, ClientLoginFinishParameters, ClientLoginFinishResult,
             ClientLoginStartResult, ClientRegistration, ClientRegistrationFinishParameters,
             ClientRegistrationFinishResult, ClientRegistrationStartResult, ServerLogin,
-            ServerLoginStartParameters, ServerLoginStartResult, ServerRegistration,
-            ServerRegistrationStartResult, ServerSetup,
+            ServerLoginFinishParameters, ServerLoginStartParameters, ServerLoginStartResult,
+            ServerRegistration, ServerRegistrationStartResult, ServerSetup,
         };
 
         struct Default;
@@ -477,6 +478,8 @@ mod tests {
                 ClientLoginFinishParameters::default(),
             )
             .unwrap();
-        server.finish(message).unwrap();
+        server
+            .finish(message, ServerLoginFinishParameters::default())
+            .unwrap();
     }
 }

@@ -445,7 +445,7 @@
 //! ```
 //! # use opaque_ke::{
 //! #   errors::ProtocolError,
-//! #   ClientRegistration, ClientRegistrationFinishParameters, ServerRegistration, ClientLogin, ClientLoginFinishParameters, ServerLogin, ServerLoginStartParameters, CredentialFinalization, ServerSetup,
+//! #   ClientRegistration, ClientRegistrationFinishParameters, ServerRegistration, ClientLogin, ClientLoginFinishParameters, ServerLogin, ServerLoginFinishParameters, ServerLoginStartParameters, CredentialFinalization, ServerSetup,
 //! #   ksf::Identity,
 //! # };
 //! # use opaque_ke::CipherSuite;
@@ -491,6 +491,7 @@
 //! # )?;
 //! let server_login_finish_result = server_login_start_result.state.finish(
 //!     client_login_finish_result.message,
+//!     ServerLoginFinishParameters::default(),
 //! )?;
 //!
 //! assert_eq!(
@@ -888,16 +889,12 @@
 //! complete, so as to bind the integrity of application-specific data or
 //! configuration parameters to the security of the key exchange. During the
 //! login phase, the client and server can specify this context using:
-//! - The second login message, where the server can populate
-//!   [`ServerLoginStartParameters`], and
-//! - The third login message, where the client can populate
-//!   [`ClientLoginFinishParameters`].
-//!
-//! For both of these messages, the `WithContextAndIdentifiers` variant can be
-//! used to specify these fields in addition to [custom
-//! identifiers](#custom-identifiers), with the ordering of the fields as
-//! `WithContextAndIdentifiers(context,
-//! Identifiers::ClientAndServerIdentifiers(username, server_name))`.
+//! - In [Server Login Start](#server-login-start), where the server can
+//!   populate [`ServerLoginStartParameters::context`].
+//! - In [Client Login Finish](#client-login-finish), where the client can
+//!   populate [`ClientLoginFinishParameters::context`].
+//! - In [Server Login Finish](#server-login-finish), where the server can
+//!   populate [`ServerLoginFinishParameters::context`].
 //!
 //! ## Dummy Server Login
 //!
@@ -1170,6 +1167,7 @@ pub use crate::opaque::{
     ClientLogin, ClientLoginFinishParameters, ClientLoginFinishResult, ClientLoginStartResult,
     ClientRegistration, ClientRegistrationFinishParameters, ClientRegistrationFinishResult,
     ClientRegistrationStartResult, Identifiers, KeyMaterialInfo, ServerLogin,
-    ServerLoginFinishResult, ServerLoginStartParameters, ServerLoginStartResult,
-    ServerRegistration, ServerRegistrationLen, ServerRegistrationStartResult, ServerSetup,
+    ServerLoginFinishParameters, ServerLoginFinishResult, ServerLoginStartParameters,
+    ServerLoginStartResult, ServerRegistration, ServerRegistrationLen,
+    ServerRegistrationStartResult, ServerSetup,
 };

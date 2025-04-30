@@ -17,7 +17,7 @@ use generic_array::typenum::{IsLess, Le, NonZero, Sum, U2, U256};
 use generic_array::{ArrayLength, GenericArray};
 use rand::{CryptoRng, RngCore};
 use voprf::{BlindedElement, EvaluationElement};
-use zeroize::ZeroizeOnDrop;
+use zeroize::{Zeroize, ZeroizeOnDrop};
 
 #[cfg(test)]
 use crate::ciphersuite::KeHash;
@@ -25,7 +25,7 @@ use crate::ciphersuite::{CipherSuite, KeGroup, OprfGroup, OprfHash};
 use crate::errors::ProtocolError;
 use crate::hash::{Hash, OutputSize, ProxyHash};
 use crate::key_exchange::group::Group;
-use crate::key_exchange::shared::NonceLen;
+use crate::key_exchange::shared::{NonceLen, STR_CONTEXT};
 use crate::keypair::{PrivateKey, PublicKey};
 use crate::opaque::{Identifiers, MaskedResponse, MaskedResponseLen};
 use crate::serialization::{i2osp, SliceExt};
@@ -42,7 +42,7 @@ where
     type KE1State: ZeroizeOnDrop + Clone;
     type KE2State<CS: CipherSuite>: ZeroizeOnDrop + Clone;
     type KE1Message: ZeroizeOnDrop + Clone;
-    type KE2Builder<CS: CipherSuite<KeyExchange = Self>>: ZeroizeOnDrop + Clone;
+    type KE2Builder<'a, CS: CipherSuite<KeyExchange = Self>>: ZeroizeOnDrop + Clone;
     type KE2BuilderData<'a, CS: 'static + CipherSuite>;
     type KE2BuilderInput<CS: CipherSuite>;
     type KE2Message: ZeroizeOnDrop + Clone;
@@ -52,28 +52,28 @@ where
         rng: &mut R,
     ) -> Result<(Self::KE1State, Self::KE1Message), ProtocolError>;
 
-    fn ke2_builder<CS: CipherSuite<KeyExchange = Self>, R: RngCore + CryptoRng>(
+    fn ke2_builder<'c, CS: CipherSuite<KeyExchange = Self>, R: RngCore + CryptoRng>(
         rng: &mut R,
         credential_request: CredentialRequestParts<CS>,
         ke1_message: Self::KE1Message,
         credential_response: CredentialResponseParts<CS>,
         client_s_pk: PublicKey<Self::Group>,
         identifiers: SerializedIdentifiers<'_, KeGroup<CS>>,
-        context: &[u8],
-    ) -> Result<Self::KE2Builder<CS>, ProtocolError>;
+        context: SerializedContext<'c>,
+    ) -> Result<Self::KE2Builder<'c, CS>, ProtocolError>;
 
-    fn ke2_builder_data<CS: CipherSuite<KeyExchange = Self>>(
-        builder: &Self::KE2Builder<CS>,
-    ) -> Self::KE2BuilderData<'_, CS>;
+    fn ke2_builder_data<'a, CS: CipherSuite<KeyExchange = Self>>(
+        builder: &'a Self::KE2Builder<'_, CS>,
+    ) -> Self::KE2BuilderData<'a, CS>;
 
     fn generate_ke2_input<CS: CipherSuite<KeyExchange = Self>, R: CryptoRng + RngCore>(
-        builder: &Self::KE2Builder<CS>,
+        builder: &Self::KE2Builder<'_, CS>,
         rng: &mut R,
         server_s_sk: &PrivateKey<Self::Group>,
     ) -> Self::KE2BuilderInput<CS>;
 
     fn build_ke2<CS: CipherSuite<KeyExchange = Self>>(
-        builder: Self::KE2Builder<CS>,
+        builder: Self::KE2Builder<'_, CS>,
         input: Self::KE2BuilderInput<CS>,
     ) -> Result<GenerateKe2Result<CS>, ProtocolError>;
 
@@ -88,12 +88,13 @@ where
         server_s_pk: PublicKey<Self::Group>,
         client_s_sk: PrivateKey<Self::Group>,
         identifiers: SerializedIdentifiers<'_, KeGroup<CS>>,
-        context: &[u8],
+        context: SerializedContext<'_>,
     ) -> Result<GenerateKe3Result<Self>, ProtocolError>;
 
     fn finish_ke<CS: CipherSuite<KeyExchange = Self>>(
         ke3_message: Self::KE3Message,
         ke2_state: &Self::KE2State<CS>,
+        context: SerializedContext<'_>,
     ) -> Result<Output<Self::Hash>, ProtocolError>;
 }
 
@@ -192,6 +193,33 @@ where
             .clone()
             .concat(self.masking_nonce)
             .concat(self.masked_response.serialize())
+    }
+}
+
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Deserialize, serde::Serialize),
+    serde(bound = "")
+)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq, Zeroize)]
+pub struct SerializedContext<'a> {
+    length: GenericArray<u8, U2>,
+    #[zeroize(skip)]
+    context: &'a [u8],
+}
+
+impl<'a> SerializedContext<'a> {
+    pub(crate) fn from(context: Option<&'a [u8]>) -> Result<Self, ProtocolError> {
+        let context = context.unwrap_or(&[]);
+
+        Ok(Self {
+            length: i2osp::<U2>(context.len())?,
+            context,
+        })
+    }
+
+    pub fn iter(&self) -> impl Clone + Iterator<Item = &[u8]> {
+        iter::once(STR_CONTEXT).chain([self.length.as_slice(), self.context])
     }
 }
 

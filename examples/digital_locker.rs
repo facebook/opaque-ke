@@ -38,7 +38,8 @@ use opaque_ke::{
     ClientLogin, ClientLoginFinishParameters, ClientRegistration,
     ClientRegistrationFinishParameters, CredentialFinalization, CredentialRequest,
     CredentialResponse, RegistrationRequest, RegistrationResponse, RegistrationUpload, ServerLogin,
-    ServerLoginStartParameters, ServerRegistration, ServerRegistrationLen, ServerSetup,
+    ServerLoginFinishParameters, ServerLoginStartParameters, ServerRegistration,
+    ServerRegistrationLen, ServerSetup,
 };
 use rustyline::error::ReadlineError;
 use rustyline::history::DefaultHistory;
@@ -195,7 +196,10 @@ fn open_locker(
 
     let server_login_finish_result = server_login_start_result
         .state
-        .finish(CredentialFinalization::deserialize(&credential_finalization_bytes).unwrap())
+        .finish(
+            CredentialFinalization::deserialize(&credential_finalization_bytes).unwrap(),
+            ServerLoginFinishParameters::default(),
+        )
         .unwrap();
 
     // Server sends locker contents, encrypted under the session key, to the client

@@ -114,8 +114,8 @@ pub struct CredentialRequest<CS: CipherSuite> {
     derive(serde::Deserialize, serde::Serialize),
     serde(bound(
         deserialize = "SK: serde::Deserialize<'de>, <CS::KeyExchange as \
-                       KeyExchange>::KE2Builder<CS>: serde::Deserialize<'de>",
-        serialize = "SK: serde::Serialize, <CS::KeyExchange as KeyExchange>::KE2Builder<CS>: \
+                       KeyExchange>::KE2Builder<'c, CS>: serde::Deserialize<'de>",
+        serialize = "SK: serde::Serialize, <CS::KeyExchange as KeyExchange>::KE2Builder<'c, CS>: \
                      serde::Serialize"
     ))
 )]
@@ -124,19 +124,19 @@ pub struct CredentialRequest<CS: CipherSuite> {
     Debug, Eq, PartialEq;
     SK,
     voprf::EvaluationElement<CS::OprfCs>,
-    <CS::KeyExchange as KeyExchange>::KE2Builder<CS>,
+    <CS::KeyExchange as KeyExchange>::KE2Builder<'c, CS>,
 )]
-pub struct ServerLoginBuilder<CS: CipherSuite, SK: Clone> {
+pub struct ServerLoginBuilder<'c, CS: CipherSuite, SK: Clone> {
     pub(crate) server_s_sk: SK,
     pub(crate) evaluation_element: voprf::EvaluationElement<CS::OprfCs>,
     pub(crate) masking_nonce: Zeroizing<GenericArray<u8, NonceLen>>,
     pub(crate) masked_response: MaskedResponse<CS>,
     #[cfg(test)]
     pub(crate) oprf_key: Zeroizing<GenericArray<u8, <OprfGroup<CS> as voprf::Group>::ScalarLen>>,
-    pub(crate) ke2_builder: <CS::KeyExchange as KeyExchange>::KE2Builder<CS>,
+    pub(crate) ke2_builder: <CS::KeyExchange as KeyExchange>::KE2Builder<'c, CS>,
 }
 
-impl<CS: CipherSuite, SK: Clone> ServerLoginBuilder<CS, SK> {
+impl<CS: CipherSuite, SK: Clone> ServerLoginBuilder<'_, CS, SK> {
     /// The returned data here has to be processed and the result given as an
     /// input to [`ServerLoginBuilder::build()`]. To understand what kind of
     /// output is expected here and how to process it, refer to the

@@ -23,12 +23,12 @@ use generic_array::{ArrayLength, GenericArray};
 use rand::{CryptoRng, RngCore};
 use zeroize::Zeroize;
 
-use super::Group;
+use super::{Context, Message, Role, SignatureGroup};
 use crate::ciphersuite::CipherSuite;
 use crate::errors::ProtocolError;
 use crate::key_exchange::group::elliptic_curve::NonIdentity;
+use crate::key_exchange::group::Group;
 pub use crate::key_exchange::sigma_i::shared::PreHash;
-use crate::key_exchange::sigma_i::{Message, Role, SignatureGroup};
 use crate::key_exchange::traits::{Deserialize, Serialize};
 use crate::serialization::{SliceExt, UpdateExt};
 
@@ -57,7 +57,7 @@ where
     fn sign<'a, R: CryptoRng + RngCore, CS: CipherSuite, KE: Group>(
         sk: &<Self::Group as Group>::Sk,
         rng: &mut R,
-        message: Message<CS, KE>,
+        message: &Message<CS, KE>,
         role: Role,
     ) -> (Self::Signature, Self::VerifyState<CS, KE>) {
         let server_pre_hash = H::default().chain_iter(message.server_message());
@@ -96,6 +96,7 @@ where
 
     fn verify<CS: CipherSuite, KE: Group>(
         pk: &<Self::Group as Group>::Pk,
+        _: Context<'_>,
         state: Self::VerifyState<CS, KE>,
         signature: &Self::Signature,
         _: Role,

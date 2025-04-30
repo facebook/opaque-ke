@@ -1115,9 +1115,12 @@ fn test_server_login_finish() -> Result<(), ProtocolError> {
         let parameters = populate_test_vectors(&serde_json::from_str(test_vector).unwrap());
 
         let server_login_result = ServerLogin::<CS>::deserialize(&parameters.server_login_state)?
-            .finish(CredentialFinalization::deserialize(
-            &parameters.credential_finalization,
-        )?)?;
+            .finish(
+            CredentialFinalization::deserialize(&parameters.credential_finalization)?,
+            ServerLoginFinishParameters {
+                context: Some(&parameters.context),
+            },
+        )?;
 
         assert_eq!(
             hex::encode(parameters.session_key),
@@ -1181,9 +1184,10 @@ where
 
     if hex::encode(registration_password) == hex::encode(login_password) {
         let client_login_finish_result = client_login_result?;
-        let server_login_finish_result = server_login_start_result
-            .state
-            .finish(client_login_finish_result.message)?;
+        let server_login_finish_result = server_login_start_result.state.finish(
+            client_login_finish_result.message,
+            ServerLoginFinishParameters::default(),
+        )?;
 
         assert_eq!(
             hex::encode(&server_login_finish_result.session_key),
@@ -1513,9 +1517,10 @@ fn test_zeroize_server_login_finish() -> Result<(), ProtocolError> {
             server_login_start_result.message,
             ClientLoginFinishParameters::default(),
         )?;
-        let server_login_finish_result = server_login_start_result
-            .state
-            .finish(client_login_finish_result.message)?;
+        let server_login_finish_result = server_login_start_result.state.finish(
+            client_login_finish_result.message,
+            ServerLoginFinishParameters::default(),
+        )?;
 
         let mut state = server_login_finish_result.state;
         unsafe { ptr::drop_in_place(&mut state) };
