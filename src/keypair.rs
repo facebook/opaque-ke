@@ -415,11 +415,9 @@ mod tests {
             #[cfg(not(feature = "ristretto255"))]
             type OprfCs = ::p256::NistP256;
             #[cfg(feature = "ristretto255")]
-            type KeyExchange =
-                crate::key_exchange::tripledh::TripleDh<crate::Ristretto255, sha2::Sha512>;
+            type KeyExchange = crate::TripleDh<crate::Ristretto255, sha2::Sha512>;
             #[cfg(not(feature = "ristretto255"))]
-            type KeyExchange =
-                crate::key_exchange::tripledh::TripleDh<::p256::NistP256, sha2::Sha256>;
+            type KeyExchange = crate::TripleDh<::p256::NistP256, sha2::Sha256>;
             type Ksf = crate::ksf::Identity;
         }
 

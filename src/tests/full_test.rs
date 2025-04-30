@@ -27,11 +27,9 @@ use crate::errors::*;
 use crate::hash::OutputSize;
 use crate::key_exchange::group::Group;
 use crate::key_exchange::shared::NonceLen;
-use crate::key_exchange::sigma_i::SigmaI;
 use crate::key_exchange::traits::{
     Deserialize, Ke1MessageLen, Ke1StateLen, Ke2MessageLen, KeyExchange, Serialize,
 };
-use crate::key_exchange::tripledh::TripleDh;
 use crate::ksf::Identity;
 use crate::messages::{
     CredentialRequestLen, CredentialResponseLen, CredentialResponseWithoutKeLen,
@@ -157,7 +155,7 @@ macro_rules! sigma_i_ciphersuites {
             $macro!$par => [
                 #[cfg(feature = "ecdsa")] [P256, Ecdsa<p256::NistP256, sha2::Sha256>],
                 #[cfg(feature = "ecdsa")] [P384, Ecdsa<p384::NistP384, sha2::Sha384>],
-                #[cfg(feature = "ed25519")] [Ed25519, Eddsa<Ed25519>],
+                #[cfg(feature = "ed25519")] [Ed25519, PureEddsa<Ed25519>],
             ],
         );
     };

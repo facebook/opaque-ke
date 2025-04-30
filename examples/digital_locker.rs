@@ -52,15 +52,14 @@ struct DefaultCipherSuite;
 #[cfg(feature = "ristretto255")]
 impl CipherSuite for DefaultCipherSuite {
     type OprfCs = opaque_ke::Ristretto255;
-    type KeyExchange =
-        opaque_ke::key_exchange::tripledh::TripleDh<opaque_ke::Ristretto255, sha2::Sha512>;
+    type KeyExchange = opaque_ke::TripleDh<opaque_ke::Ristretto255, sha2::Sha512>;
     type Ksf = opaque_ke::ksf::Identity;
 }
 
 #[cfg(not(feature = "ristretto255"))]
 impl CipherSuite for DefaultCipherSuite {
     type OprfCs = p256::NistP256;
-    type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDh<p256::NistP256, sha2::Sha256>;
+    type KeyExchange = opaque_ke::TripleDh<p256::NistP256, sha2::Sha256>;
     type Ksf = opaque_ke::ksf::Identity;
 }
 

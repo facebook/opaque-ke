@@ -26,7 +26,6 @@ use crate::key_exchange::shared::NonceLen;
 use crate::key_exchange::traits::{
     Deserialize, Ke1MessageLen, Ke2MessageLen, KeyExchange, Serialize,
 };
-use crate::key_exchange::tripledh::TripleDh;
 use crate::ksf::Identity;
 use crate::messages::{
     CredentialRequestLen, CredentialResponseLen, CredentialResponseWithoutKeLen,

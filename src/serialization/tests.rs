@@ -25,11 +25,9 @@ use crate::errors::*;
 use crate::hash::OutputSize;
 use crate::key_exchange::group::Group;
 use crate::key_exchange::shared::NonceLen;
-use crate::key_exchange::sigma_i::SigmaI;
 use crate::key_exchange::traits::{
     Deserialize, Ke1MessageLen, Ke1StateLen, Ke2MessageLen, KeyExchange, Serialize,
 };
-use crate::key_exchange::tripledh::TripleDh;
 use crate::keypair::KeyPair;
 use crate::messages::CredentialResponseWithoutKeLen;
 use crate::opaque::{ClientLoginLen, ClientRegistrationLen, MaskedResponseLen};
@@ -108,7 +106,7 @@ struct SigmaIEd25519;
 #[cfg(all(feature = "ristretto255", feature = "ed25519",))]
 impl CipherSuite for SigmaIEd25519 {
     type OprfCs = Ristretto255;
-    type KeyExchange = SigmaI<Eddsa<Ed25519>, Ristretto255, sha2::Sha512>;
+    type KeyExchange = SigmaI<PureEddsa<Ed25519>, Ristretto255, sha2::Sha512>;
     type Ksf = crate::ksf::Identity;
 }
 

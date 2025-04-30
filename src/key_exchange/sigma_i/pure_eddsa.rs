@@ -13,17 +13,17 @@ use core::marker::PhantomData;
 use rand::{CryptoRng, RngCore};
 use zeroize::Zeroize;
 
-use self::implementation::EddsaImpl;
+use self::implementation::PureEddsaImpl;
 use super::Group;
 use crate::ciphersuite::CipherSuite;
 use crate::errors::ProtocolError;
 use crate::key_exchange::sigma_i::{Message, Role, SignatureGroup};
 use crate::key_exchange::traits::{Deserialize, Serialize};
 
-/// Implements EdDSA for [`SigmaI`](crate::key_exchange::sigma_i::SigmaI).
-pub struct Eddsa<G>(PhantomData<G>);
+/// PureEdDSA for [`SigmaI`](crate::SigmaI).
+pub struct PureEddsa<G>(PhantomData<G>);
 
-impl<G: EddsaImpl> SignatureGroup for Eddsa<G> {
+impl<G: PureEddsaImpl> SignatureGroup for PureEddsa<G> {
     type Group = G;
     type Signature = G::Signature;
     type VerifyState<CS: CipherSuite, KE: Group> = G::VerifyState<CS, KE>;
@@ -50,7 +50,7 @@ impl<G: EddsaImpl> SignatureGroup for Eddsa<G> {
 pub(in super::super) mod implementation {
     use super::*;
 
-    pub trait EddsaImpl: Group {
+    pub trait PureEddsaImpl: Group {
         type Signature: Clone + Deserialize + Serialize + Zeroize;
         type VerifyState<CS: CipherSuite, KE: Group>: Clone + Zeroize;
 
@@ -60,8 +60,6 @@ pub(in super::super) mod implementation {
             role: Role,
         ) -> (Self::Signature, Self::VerifyState<CS, KE>);
 
-        /// Validates that the signature was created by signing the given
-        /// message with the corresponding private key.
         fn verify<CS: CipherSuite, KE: Group>(
             pk: &Self::Pk,
             state: Self::VerifyState<CS, KE>,

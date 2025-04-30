@@ -44,14 +44,14 @@ use subtle::{Choice, ConditionallySelectable, ConstantTimeEq};
 use crate::ciphersuite::{KeGroup, OprfGroup, OprfHash};
 use crate::envelope::NonceLen;
 use crate::hash::OutputSize;
-#[cfg(feature = "ecdsa")]
-use crate::key_exchange::group::ecdsa::{self, Ecdsa, PreHash};
 #[cfg(all(feature = "ristretto255", feature = "ed25519"))]
 use crate::key_exchange::group::ed25519::{self, Ed25519};
-#[cfg(all(feature = "ristretto255", feature = "ed25519"))]
-use crate::key_exchange::group::eddsa::Eddsa;
 use crate::key_exchange::group::elliptic_curve::NonIdentity;
 use crate::key_exchange::group::Group;
+#[cfg(feature = "ecdsa")]
+use crate::key_exchange::sigma_i::ecdsa::{self, Ecdsa, PreHash};
+#[cfg(all(feature = "ristretto255", feature = "ed25519"))]
+use crate::key_exchange::sigma_i::pure_eddsa::PureEddsa;
 #[cfg(feature = "ecdsa")]
 use crate::key_exchange::sigma_i::{Message, SigmaI};
 use crate::key_exchange::traits::KeyExchange;
@@ -188,7 +188,7 @@ fn sigma_i_ed25519() {
 
     impl CipherSuite for Suite {
         type OprfCs = Ristretto255;
-        type KeyExchange = SigmaI<Eddsa<Ed25519>, Ristretto255, Sha512>;
+        type KeyExchange = SigmaI<PureEddsa<Ed25519>, Ristretto255, Sha512>;
         type Ksf = Identity;
     }
 
@@ -517,7 +517,7 @@ impl Pkcs11KeyExchange<SigmaI<Ecdsa<NistP384, Sha384>, NistP384, Sha384>> for Re
 }
 
 #[cfg(all(feature = "ristretto255", feature = "ed25519"))]
-impl Pkcs11KeyExchange<SigmaI<Eddsa<Ed25519>, Ristretto255, Sha512>> for RemoteKey {
+impl Pkcs11KeyExchange<SigmaI<PureEddsa<Ed25519>, Ristretto255, Sha512>> for RemoteKey {
     fn pkcs11_key_exchange<CS: CipherSuite>(
         &self,
         _: &PublicKey<Ed25519>,

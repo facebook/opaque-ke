@@ -1,1 +1,1 @@
-doc-valid-idents = ["EdDSA", ".."]
+doc-valid-idents = ["HashEdDSA", "PureEdDSA", ".."]

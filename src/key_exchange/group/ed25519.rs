@@ -23,7 +23,7 @@ use zeroize::Zeroize;
 use super::Group;
 use crate::ciphersuite::CipherSuite;
 use crate::errors::{InternalError, ProtocolError};
-use crate::key_exchange::group::eddsa::implementation::EddsaImpl;
+use crate::key_exchange::sigma_i::pure_eddsa::implementation::PureEddsaImpl;
 use crate::key_exchange::sigma_i::{Message, Role};
 use crate::key_exchange::traits::{Deserialize, Serialize};
 use crate::serialization::{SliceExt, UpdateExt};
@@ -79,7 +79,7 @@ impl Group for Ed25519 {
     }
 }
 
-/// EdDSA verifying key.
+/// Ed25519 verifying key.
 // `VerifyingKey` doesn't implement `Zeroize`. See
 // https://github.com/dalek-cryptography/curve25519-dalek/pull/747
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Zeroize)]
@@ -88,7 +88,7 @@ pub struct VerifyingKey {
     compressed: CompressedEdwardsY,
 }
 
-/// EdDSA siging key.
+/// Ed25519 siging key.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Zeroize)]
 pub struct SigningKey {
     // `SigningKey` doesn't implement `Zeroize`. See
@@ -126,7 +126,7 @@ impl SigningKey {
 // This contains a custom implementation for PureEdDSA because `ed25519-dalek`
 // doesn't support message streaming. See
 // https://github.com/dalek-cryptography/curve25519-dalek/pull/556.
-impl EddsaImpl for Ed25519 {
+impl PureEddsaImpl for Ed25519 {
     type Signature = Signature;
     type VerifyState<CS: CipherSuite, KE: Group> = Message<CS, KE>;
 
@@ -195,7 +195,7 @@ fn verify<'a>(
     }
 }
 
-/// EdDSA Signature.
+/// Ed25519 Signature.
 // `Signature` doesn't implement validation with Serde de/serialization.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[allow(non_snake_case)]
@@ -276,7 +276,7 @@ impl AssertZeroized for VerifyingKey {
 }
 
 #[test]
-fn eddsa() {
+fn pure_eddsa() {
     use std::iter;
 
     use ecdsa::signature::{Signer, Verifier};

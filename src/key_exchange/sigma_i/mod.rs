@@ -8,6 +8,10 @@
 
 //! An implementation of the SIGMA-I key exchange protocol
 
+#[cfg(feature = "ecdsa")]
+pub mod ecdsa;
+pub mod pure_eddsa;
+
 use core::iter;
 use core::marker::PhantomData;
 use core::ops::Add;
@@ -52,8 +56,8 @@ use crate::serialization::{i2osp, SliceExt, UpdateExt};
 /// a signature from signing the message with the servers private key and a
 /// "verification state". The "verification state" will be passed to the
 /// verification method in place of the message. For [ECDSA](crate::Ecdsa) this
-/// is the pre-hash for the client signature message, for [EdDSA](crate::Eddsa)
-/// it is the client signature message.
+/// is the pre-hash for the client signature message, for
+/// [PureEdDSA](crate::PureEddsa) it is the client signature message.
 pub struct SigmaI<SIG, KE, KEH>(PhantomData<(SIG, KE, KEH)>);
 
 /// Trait to implement for signatures for [`SigmaI`].

@@ -7,7 +7,7 @@
 // licenses.
 
 //! ECDSA implementation for [`elliptic_curve`] [`Group`] implementations to
-//! support [`SigmaI`](crate::key_exchange::sigma_i::SigmaI).
+//! support [`SigmaI`](crate::SigmaI).
 
 use core::marker::PhantomData;
 
@@ -23,15 +23,15 @@ use generic_array::{ArrayLength, GenericArray};
 use rand::{CryptoRng, RngCore};
 use zeroize::Zeroize;
 
-use super::elliptic_curve::NonIdentity;
 use super::Group;
 use crate::ciphersuite::CipherSuite;
 use crate::errors::ProtocolError;
+use crate::key_exchange::group::elliptic_curve::NonIdentity;
 use crate::key_exchange::sigma_i::{Message, Role, SignatureGroup};
 use crate::key_exchange::traits::{Deserialize, Serialize};
 use crate::serialization::{SliceExt, UpdateExt};
 
-/// Implements ECDSA for [`SigmaI`](crate::key_exchange::sigma_i::SigmaI).
+/// ECDSA for [`SigmaI`](crate::SigmaI).
 pub struct Ecdsa<G, H>(PhantomData<(G, H)>);
 
 impl<G, H> SignatureGroup for Ecdsa<G, H>
