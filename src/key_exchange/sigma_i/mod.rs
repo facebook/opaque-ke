@@ -49,8 +49,9 @@ use crate::serialization::{i2osp, SliceExt, UpdateExt};
 
 /// The SIGMA-I key exchange implementation
 ///
-/// Generic `SIG` determines the algorithm used for the signature. `KE`
-/// determines the algorithm used for establishing the shared secret.
+/// `SIG` determines the algorithm used for the signature. `KE` determines the
+/// algorithm used for establishing the shared secret. `KEH` determines the hash
+/// used for the key exchange.
 ///
 /// # Remote Key
 ///
@@ -135,17 +136,17 @@ pub trait SharedSecret<KE: Group> {
 )]
 #[derive_where(Clone, ZeroizeOnDrop)]
 #[derive_where(Debug, Eq, Hash, PartialEq; PublicKey<KeGroup<CS>>, PublicKey<KE>)]
-pub struct Ke2Builder<CS: CipherSuite, KE: Group, KEH: OutputSizeUser> {
+pub struct Ke2Builder<CS: CipherSuite, KE: Group> {
     transcript: Message<CS, KE>,
     server_nonce: GenericArray<u8, NonceLen>,
     client_s_pk: PublicKey<KeGroup<CS>>,
     server_e_pk: PublicKey<KE>,
-    expected_mac: Output<KEH>,
-    session_key: Output<KEH>,
+    expected_mac: Output<KeHash<CS>>,
+    session_key: Output<KeHash<CS>>,
     #[cfg(test)]
-    km3: Output<KEH>,
+    km3: Output<KeHash<CS>>,
     #[cfg(test)]
-    handshake_secret: Output<KEH>,
+    handshake_secret: Output<KeHash<CS>>,
 }
 
 /// This holds the message to be signed. See its methods for more information.
@@ -175,11 +176,11 @@ pub struct Message<CS: CipherSuite, KE: Group> {
 )]
 #[derive_where(Clone, ZeroizeOnDrop)]
 #[derive_where(Debug, Eq, Hash, PartialEq; <SIG::Group as Group>::Pk, SIG::VerifyState<CS, KE>)]
-pub struct Ke2State<CS: CipherSuite, SIG: SignatureGroup, KE: Group, KEH: OutputSizeUser> {
+pub struct Ke2State<CS: CipherSuite, SIG: SignatureGroup, KE: Group> {
     client_s_pk: PublicKey<SIG::Group>,
-    session_key: Output<KEH>,
+    session_key: Output<KeHash<CS>>,
     verify_state: SIG::VerifyState<CS, KE>,
-    expected_mac: Output<KEH>,
+    expected_mac: Output<KeHash<CS>>,
 }
 
 /// The second key exchange message
@@ -233,10 +234,10 @@ where
 
     type KE1State = Ke1State<KE>;
     type KE1Message = Ke1Message<KE>;
-    type KE2Builder<CS: CipherSuite<KeyExchange = Self>> = Ke2Builder<CS, KE, KEH>;
+    type KE2Builder<CS: CipherSuite<KeyExchange = Self>> = Ke2Builder<CS, KE>;
     type KE2BuilderData<'a, CS: 'static + CipherSuite> = &'a Message<CS, KE>;
     type KE2BuilderInput<CS: CipherSuite> = (SIG::Signature, SIG::VerifyState<CS, KE>);
-    type KE2State<CS: CipherSuite> = Ke2State<CS, SIG, KE, KEH>;
+    type KE2State<CS: CipherSuite> = Ke2State<CS, SIG, KE>;
     type KE2Message = Ke2Message<SIG, KE, KEH>;
     type KE3Message = Ke3Message<SIG, KEH>;
 
@@ -439,7 +440,7 @@ where
         ))
     }
 
-    fn finish_ke<CS: CipherSuite>(
+    fn finish_ke<CS: CipherSuite<KeyExchange = Self>>(
         ke3_message: Self::KE3Message,
         ke2_state: &Self::KE2State<CS>,
     ) -> Result<Output<KEH>, ProtocolError> {
@@ -610,8 +611,7 @@ fn transcript<CS: CipherSuite, KE: Group>(
     Ok(transcript_hasher)
 }
 
-impl<CS: CipherSuite, SIG: SignatureGroup, KE: Group, KEH: OutputSizeUser> Deserialize
-    for Ke2State<CS, SIG, KE, KEH>
+impl<CS: CipherSuite, SIG: SignatureGroup, KE: Group> Deserialize for Ke2State<CS, SIG, KE>
 where
     SIG::VerifyState<CS, KE>: Deserialize,
 {
@@ -625,29 +625,25 @@ where
     }
 }
 
-type Ke2StateLen<CS, SIG: SignatureGroup, KE, KEH> = Sum<
-    Sum<Sum<<SIG::Group as Group>::PkLen, OutputSize<KEH>>, VerifyStateLen<CS, SIG, KE>>,
-    OutputSize<KEH>,
+type Ke2StateLen<CS, SIG: SignatureGroup, KE> = Sum<
+    Sum<Sum<<SIG::Group as Group>::PkLen, OutputSize<KeHash<CS>>>, VerifyStateLen<CS, SIG, KE>>,
+    OutputSize<KeHash<CS>>,
 >;
 
 type VerifyStateLen<CS, SIG: SignatureGroup, KE> = <SIG::VerifyState<CS, KE> as Serialize>::Len;
 
-impl<CS: CipherSuite, SIG: SignatureGroup, KE: Group, KEH: Hash> Serialize
-    for Ke2State<CS, SIG, KE, KEH>
+impl<CS: CipherSuite, SIG: SignatureGroup, KE: Group> Serialize for Ke2State<CS, SIG, KE>
 where
     SIG::VerifyState<CS, KE>: Serialize,
-    KEH::Core: ProxyHash,
-    <KEH::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
-    Le<<KEH::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
     // Ke2State: ((SigPk + Hash) + VerifyState) + Hash
-    <SIG::Group as Group>::PkLen: Add<OutputSize<KEH>>,
-    Sum<<SIG::Group as Group>::PkLen, OutputSize<KEH>>:
+    <SIG::Group as Group>::PkLen: Add<OutputSize<KeHash<CS>>>,
+    Sum<<SIG::Group as Group>::PkLen, OutputSize<KeHash<CS>>>:
         ArrayLength<u8> + Add<VerifyStateLen<CS, SIG, KE>>,
-    Sum<Sum<<SIG::Group as Group>::PkLen, OutputSize<KEH>>, VerifyStateLen<CS, SIG, KE>>:
-        ArrayLength<u8> + Add<OutputSize<KEH>>,
-    Ke2StateLen<CS, SIG, KE, KEH>: ArrayLength<u8>,
+    Sum<Sum<<SIG::Group as Group>::PkLen, OutputSize<KeHash<CS>>>, VerifyStateLen<CS, SIG, KE>>:
+        ArrayLength<u8> + Add<OutputSize<KeHash<CS>>>,
+    Ke2StateLen<CS, SIG, KE>: ArrayLength<u8>,
 {
-    type Len = Ke2StateLen<CS, SIG, KE, KEH>;
+    type Len = Ke2StateLen<CS, SIG, KE>;
 
     fn serialize(&self) -> GenericArray<u8, Self::Len> {
         self.client_s_pk
@@ -762,8 +758,7 @@ where
 }
 
 #[cfg(test)]
-impl<CS: CipherSuite, SIG: SignatureGroup, KE: Group, KEH: OutputSizeUser> AssertZeroized
-    for Ke2State<CS, SIG, KE, KEH>
+impl<CS: CipherSuite, SIG: SignatureGroup, KE: Group> AssertZeroized for Ke2State<CS, SIG, KE>
 where
     <SIG::Group as Group>::Pk: AssertZeroized,
     SIG::VerifyState<CS, KE>: AssertZeroized,

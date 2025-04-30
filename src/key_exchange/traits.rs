@@ -91,7 +91,7 @@ where
         context: &[u8],
     ) -> Result<GenerateKe3Result<Self>, ProtocolError>;
 
-    fn finish_ke<CS: CipherSuite>(
+    fn finish_ke<CS: CipherSuite<KeyExchange = Self>>(
         ke3_message: Self::KE3Message,
         ke2_state: &Self::KE2State<CS>,
     ) -> Result<Output<Self::Hash>, ProtocolError>;
