@@ -17,7 +17,7 @@ use self::implementation::EddsaImpl;
 use super::Group;
 use crate::ciphersuite::CipherSuite;
 use crate::errors::ProtocolError;
-use crate::key_exchange::sigma_i::{Message, SignatureGroup};
+use crate::key_exchange::sigma_i::{Message, Role, SignatureGroup};
 use crate::key_exchange::traits::{Deserialize, Serialize};
 
 /// Implements EdDSA for [`SigmaI`](crate::key_exchange::sigma_i::SigmaI).
@@ -32,16 +32,18 @@ impl<G: EddsaImpl> SignatureGroup for Eddsa<G> {
         sk: &<Self::Group as Group>::Sk,
         _: &mut R,
         message: Message<CS, KE>,
+        role: Role,
     ) -> (Self::Signature, Self::VerifyState<CS, KE>) {
-        G::sign(sk, message)
+        G::sign(sk, message, role)
     }
 
     fn verify<CS: CipherSuite, KE: Group>(
         pk: &<Self::Group as Group>::Pk,
         state: Self::VerifyState<CS, KE>,
         signature: &Self::Signature,
+        role: Role,
     ) -> Result<(), ProtocolError> {
-        G::verify(pk, state, signature)
+        G::verify(pk, state, signature, role)
     }
 }
 
@@ -55,6 +57,7 @@ pub(in super::super) mod implementation {
         fn sign<CS: CipherSuite, KE: Group>(
             sk: &Self::Sk,
             message: Message<CS, KE>,
+            role: Role,
         ) -> (Self::Signature, Self::VerifyState<CS, KE>);
 
         /// Validates that the signature was created by signing the given
@@ -63,6 +66,7 @@ pub(in super::super) mod implementation {
             pk: &Self::Pk,
             state: Self::VerifyState<CS, KE>,
             signature: &Self::Signature,
+            role: Role,
         ) -> Result<(), ProtocolError>;
     }
 }

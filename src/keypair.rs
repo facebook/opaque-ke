@@ -17,7 +17,7 @@ use rand::{CryptoRng, RngCore};
 use crate::ciphersuite::CipherSuite;
 use crate::errors::ProtocolError;
 use crate::key_exchange::group::Group;
-use crate::key_exchange::sigma_i::{Message, SharedSecret, SignatureGroup};
+use crate::key_exchange::sigma_i::{Message, Role, SharedSecret, SignatureGroup};
 use crate::key_exchange::tripledh::DiffieHellman;
 
 /// A Keypair trait with public-private verification
@@ -141,8 +141,9 @@ impl<G: Group> PrivateKey<G> {
         &self,
         rng: &mut R,
         message: Message<CS, KE>,
+        role: Role,
     ) -> (SIG::Signature, SIG::VerifyState<CS, KE>) {
-        SIG::sign(&self.0, rng, message)
+        SIG::sign(&self.0, rng, message, role)
     }
 }
 
@@ -237,8 +238,9 @@ impl<G: Group> PublicKey<G> {
         &self,
         state: SIG::VerifyState<CS, KE>,
         signature: &SIG::Signature,
+        role: Role,
     ) -> Result<(), ProtocolError> {
-        SIG::verify(&self.0, state, signature)
+        SIG::verify(&self.0, state, signature, role)
     }
 }
 

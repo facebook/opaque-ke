@@ -24,7 +24,7 @@ use super::Group;
 use crate::ciphersuite::CipherSuite;
 use crate::errors::{InternalError, ProtocolError};
 use crate::key_exchange::group::eddsa::implementation::EddsaImpl;
-use crate::key_exchange::sigma_i::Message;
+use crate::key_exchange::sigma_i::{Message, Role};
 use crate::key_exchange::traits::{Deserialize, Serialize};
 use crate::serialization::{SliceExt, UpdateExt};
 
@@ -132,9 +132,10 @@ impl EddsaImpl for Ed25519 {
 
     fn sign<CS: CipherSuite, KE: Group>(
         sk: &Self::Sk,
-        message: Message<CS, KE>,
+        state: Message<CS, KE>,
+        role: Role,
     ) -> (Self::Signature, Self::VerifyState<CS, KE>) {
-        (sign(sk, message.message_iter()), message)
+        (sign(sk, state.sign_message(role)), state)
     }
 
     /// Validates that the signature was created by signing the given message
@@ -143,8 +144,9 @@ impl EddsaImpl for Ed25519 {
         pk: &Self::Pk,
         state: Self::VerifyState<CS, KE>,
         signature: &Self::Signature,
+        role: Role,
     ) -> Result<(), ProtocolError> {
-        verify(pk, state.message_iter(), signature)
+        verify(pk, state.verify_message(role), signature)
     }
 }
 

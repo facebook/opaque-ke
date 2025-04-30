@@ -27,7 +27,7 @@ use super::elliptic_curve::NonIdentity;
 use super::Group;
 use crate::ciphersuite::CipherSuite;
 use crate::errors::ProtocolError;
-use crate::key_exchange::sigma_i::{Message, SignatureGroup};
+use crate::key_exchange::sigma_i::{Message, Role, SignatureGroup};
 use crate::key_exchange::traits::{Deserialize, Serialize};
 use crate::serialization::{SliceExt, UpdateExt};
 
@@ -38,26 +38,40 @@ impl<G, H> SignatureGroup for Ecdsa<G, H>
 where
     G: CurveArithmetic + Group<Sk = NonZeroScalar<G>, Pk = NonIdentity<G>> + PrimeCurve,
     SignatureSize<G>: ArrayLength<u8>,
-    H: Default + BlockSizeUser + FixedOutputReset<OutputSize = FieldBytesSize<G>> + HashMarker,
+    H: Clone
+        + Default
+        + BlockSizeUser
+        + FixedOutputReset<OutputSize = FieldBytesSize<G>>
+        + HashMarker,
 {
     type Group = G;
     type Signature = Signature<G>;
     type VerifyState<CS: CipherSuite, KE: Group> = PreHash<H>;
 
+    // We use a manual implementation of `RandomizedPrehashSigner` to use the same
+    // hash for the message as for generating `k`. See
+    // https://github.com/RustCrypto/signatures/issues/949.
     fn sign<'a, R: CryptoRng + RngCore, CS: CipherSuite, KE: Group>(
         sk: &<Self::Group as Group>::Sk,
         rng: &mut R,
         message: Message<CS, KE>,
+        role: Role,
     ) -> (Self::Signature, Self::VerifyState<CS, KE>) {
-        // We use a manual implementation of `RandomizedPrehashSigner` to use the same
-        // hash for the message as for generating `k`. See
-        // https://github.com/RustCrypto/signatures/issues/949.
-        let pre_hash = H::default()
-            .chain_iter(message.message_iter())
+        let server_pre_hash = H::default().chain_iter(message.server_message());
+        let client_pre_hash = server_pre_hash
+            .clone()
+            .chain_iter(message.client_message_add())
             .finalize_fixed();
+        let server_pre_hash = server_pre_hash.finalize_fixed();
+
+        let (sign_pre_hash, verify_pre_hash) = match role {
+            Role::Server => (server_pre_hash, client_pre_hash),
+            Role::Client => (client_pre_hash, server_pre_hash),
+        };
+
         let repr = sk.to_repr();
         let order = G::ORDER.encode_field_bytes();
-        let z = hazmat::bits2field::<G>(&pre_hash)
+        let z = hazmat::bits2field::<G>(&sign_pre_hash)
             .expect("hash output can not be shorter than a scalar");
 
         let signature = loop {
@@ -74,13 +88,14 @@ where
             }
         };
 
-        (Signature(signature), PreHash(pre_hash))
+        (Signature(signature), PreHash(verify_pre_hash))
     }
 
     fn verify<CS: CipherSuite, KE: Group>(
         pk: &<Self::Group as Group>::Pk,
         state: Self::VerifyState<CS, KE>,
         signature: &Self::Signature,
+        _: Role,
     ) -> Result<(), ProtocolError> {
         let z = hazmat::bits2field::<G>(&state.0)
             .expect("hash output can not be shorter than a scalar");
