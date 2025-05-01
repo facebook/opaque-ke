@@ -364,11 +364,19 @@ where
 mod tests {
     use core::ptr;
 
+    use hkdf::Hkdf;
     use rand::rngs::OsRng;
 
     use super::*;
-    use crate::ciphersuite::KeGroup;
+    use crate::ciphersuite::{KeGroup, KeHash};
     use crate::serialization::AssertZeroized;
+    use crate::{
+        CipherSuite, ClientLogin, ClientLoginFinishParameters, ClientLoginFinishResult,
+        ClientLoginStartResult, ClientRegistration, ClientRegistrationFinishParameters,
+        ClientRegistrationFinishResult, ClientRegistrationStartResult, ServerLogin,
+        ServerLoginParameters, ServerLoginStartResult, ServerRegistration,
+        ServerRegistrationStartResult, ServerSetup,
+    };
 
     #[test]
     fn test_zeroize_key() {
@@ -387,6 +395,10 @@ mod tests {
         inner::<::p256::NistP256>();
         inner::<::p384::NistP384>();
         inner::<::p521::NistP521>();
+        #[cfg(feature = "curve25519")]
+        inner::<crate::Curve25519>();
+        #[cfg(feature = "ed25519")]
+        inner::<crate::Ed25519>();
     }
 
     macro_rules! test {
@@ -420,7 +432,7 @@ mod tests {
                     fn private_key_slice(kp in KeyPair::<$point>::uniform_keypair_strategy()) {
                         let sk_bytes = kp.private().serialize().to_vec();
 
-                        let kp2 = PrivateKey::<$point>::deserialize_key_pair(&mut (sk_bytes.as_slice()))?;
+                        let kp2 = PrivateKey::<$point>::deserialize_take_key_pair(&mut (sk_bytes.as_slice()))?;
                         let kp2_private_bytes = kp2.private().serialize().to_vec();
 
                         prop_assert_eq!(sk_bytes, kp2_private_bytes);
@@ -436,37 +448,30 @@ mod tests {
     test!(p384, ::p384::NistP384);
     test!(p521, ::p521::NistP521);
 
+    struct Default;
+
+    impl CipherSuite for Default {
+        #[cfg(feature = "ristretto255")]
+        type OprfCs = crate::Ristretto255;
+        #[cfg(not(feature = "ristretto255"))]
+        type OprfCs = ::p256::NistP256;
+        #[cfg(feature = "ristretto255")]
+        type KeyExchange = crate::TripleDh<crate::Ristretto255, sha2::Sha512>;
+        #[cfg(not(feature = "ristretto255"))]
+        type KeyExchange = crate::TripleDh<::p256::NistP256, sha2::Sha256>;
+        type Ksf = crate::ksf::Identity;
+    }
+
+    #[derive(Clone)]
+    struct RemoteSeed<H: OutputSizeUser>(Output<H>);
+
+    #[derive(Clone)]
+    struct RemoteKey(PrivateKey<KeGroup<Default>>);
+
+    const PASSWORD: &str = "password";
+
     #[test]
     fn remote_key() {
-        use rand::rngs::OsRng;
-
-        use crate::{
-            CipherSuite, ClientLogin, ClientLoginFinishParameters, ClientLoginFinishResult,
-            ClientLoginStartResult, ClientRegistration, ClientRegistrationFinishParameters,
-            ClientRegistrationFinishResult, ClientRegistrationStartResult, ServerLogin,
-            ServerLoginParameters, ServerLoginStartResult, ServerRegistration,
-            ServerRegistrationStartResult, ServerSetup,
-        };
-
-        struct Default;
-
-        impl CipherSuite for Default {
-            #[cfg(feature = "ristretto255")]
-            type OprfCs = crate::Ristretto255;
-            #[cfg(not(feature = "ristretto255"))]
-            type OprfCs = ::p256::NistP256;
-            #[cfg(feature = "ristretto255")]
-            type KeyExchange = crate::TripleDh<crate::Ristretto255, sha2::Sha512>;
-            #[cfg(not(feature = "ristretto255"))]
-            type KeyExchange = crate::TripleDh<::p256::NistP256, sha2::Sha256>;
-            type Ksf = crate::ksf::Identity;
-        }
-
-        #[derive(Clone)]
-        struct RemoteKey(PrivateKey<KeGroup<Default>>);
-
-        const PASSWORD: &str = "password";
-
         let sk = PrivateKey(KeGroup::<Default>::random_sk(&mut OsRng));
         let pk = sk.public_key();
         let sk = RemoteKey(sk);
@@ -501,6 +506,80 @@ mod tests {
             Some(file),
             message,
             &[],
+            ServerLoginParameters::default(),
+        )
+        .unwrap();
+        let shared_secret = builder.private_key().0.ke_diffie_hellman(builder.data());
+        let ServerLoginStartResult {
+            message,
+            state: server,
+            ..
+        } = builder.build(shared_secret).unwrap();
+        let ClientLoginFinishResult { message, .. } = client
+            .finish(
+                &mut OsRng,
+                PASSWORD.as_bytes(),
+                message,
+                ClientLoginFinishParameters::default(),
+            )
+            .unwrap();
+        server
+            .finish(message, ServerLoginParameters::default())
+            .unwrap();
+    }
+
+    #[test]
+    fn remote_seed() {
+        let mut oprf_seed = RemoteSeed::<KeHash<Default>>(GenericArray::default());
+        OsRng.fill_bytes(&mut oprf_seed.0);
+
+        let sk = PrivateKey(KeGroup::<Default>::random_sk(&mut OsRng));
+        let pk = sk.public_key();
+        let sk = RemoteKey(sk);
+        let keypair = KeyPair::new(sk, pk);
+
+        let server_setup = ServerSetup::<Default, _, _>::new_with_key_pair_and_seed(
+            &mut OsRng, keypair, oprf_seed,
+        );
+
+        let ClientRegistrationStartResult {
+            message,
+            state: client,
+        } = ClientRegistration::<Default>::start(&mut OsRng, PASSWORD.as_bytes()).unwrap();
+        let km = server_setup.key_material_info(&[]);
+        let mut ikm = GenericArray::default();
+        Hkdf::<KeHash<Default>>::from_prk(&km.ikm.0)
+            .unwrap()
+            .expand_multi_info(&km.info, &mut ikm)
+            .unwrap();
+        let ServerRegistrationStartResult { message, .. } =
+            ServerRegistration::start_with_key_material(&server_setup, ikm, message).unwrap();
+        let ClientRegistrationFinishResult { message, .. } = client
+            .finish(
+                &mut OsRng,
+                PASSWORD.as_bytes(),
+                message,
+                ClientRegistrationFinishParameters::default(),
+            )
+            .unwrap();
+        let file = ServerRegistration::finish(message);
+
+        let ClientLoginStartResult {
+            message,
+            state: client,
+        } = ClientLogin::<Default>::start(&mut OsRng, PASSWORD.as_bytes()).unwrap();
+        let km = server_setup.key_material_info(&[]);
+        let mut ikm = GenericArray::default();
+        Hkdf::<KeHash<Default>>::from_prk(&km.ikm.0)
+            .unwrap()
+            .expand_multi_info(&km.info, &mut ikm)
+            .unwrap();
+        let builder = ServerLogin::builder_with_key_material(
+            &mut OsRng,
+            &server_setup,
+            ikm,
+            Some(file),
+            message,
             ServerLoginParameters::default(),
         )
         .unwrap();

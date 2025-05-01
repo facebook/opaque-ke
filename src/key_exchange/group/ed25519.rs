@@ -345,8 +345,28 @@ impl AssertZeroized for VerifyingKey {
     fn assert_zeroized(&self) {
         use curve25519_dalek::traits::Identity;
 
-        assert_eq!(self.point, EdwardsPoint::identity());
-        assert_eq!(self.compressed, EdwardsPoint::identity().compress());
+        let Self { point, compressed } = self;
+
+        assert_eq!(point, &EdwardsPoint::identity());
+        assert_eq!(compressed, &EdwardsPoint::identity().compress());
+    }
+}
+
+#[cfg(test)]
+impl AssertZeroized for SigningKey {
+    fn assert_zeroized(&self) {
+        let Self {
+            sk,
+            verifying_key,
+            scalar,
+            hash_prefix,
+        } = self;
+
+        verifying_key.assert_zeroized();
+
+        for byte in sk.iter().chain(scalar.to_bytes().iter()).chain(hash_prefix) {
+            assert_eq!(byte, &0);
+        }
     }
 }
 
