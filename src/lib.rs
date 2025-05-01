@@ -980,12 +980,9 @@
 //! exposing the bytes of the private key to this library.
 //! ```
 //! # use generic_array::{GenericArray, typenum::U0};
-//! # use opaque_ke::{CipherSuite, ClientLogin, ClientRegistration, ClientRegistrationFinishParameters, ServerRegistration, errors::ProtocolError, keypair::{PrivateKey, PublicKey}, key_exchange::{KeyExchange, group::Group, tripledh::DiffieHellman}};
+//! # use opaque_ke::{CipherSuite, ClientLogin, ClientRegistration, ClientRegistrationFinishParameters, ServerRegistration, keypair::{PrivateKey, PublicKey}, key_exchange::{KeyExchange, group::Group, tripledh::DiffieHellman}};
 //! # use rand::rngs::OsRng;
-//! # #[cfg(feature = "ristretto255")]
-//! # type Ristretto255 = opaque_ke::Ristretto255;
-//! # #[cfg(not(feature = "ristretto255"))]
-//! # type Ristretto255 = p256::NistP256;
+//! # type Ristretto255 = <<Default as CipherSuite>::KeyExchange as KeyExchange>::Group;
 //! # struct Default;
 //! # #[cfg(feature = "ristretto255")]
 //! # impl CipherSuite for Default {
@@ -1011,6 +1008,7 @@
 //! # }
 //! use opaque_ke::{ServerLogin, ServerLoginParameters, ServerSetup};
 //! use opaque_ke::keypair::{KeyPair, PrivateKeySerialization};
+//! use opaque_ke::errors::ProtocolError;
 //!
 //! // Implement if you intend to use `ServerSetup::de/serialize` instead of `serde`.
 //! impl PrivateKeySerialization<Ristretto255> for YourRemoteKey {
@@ -1047,13 +1045,143 @@
 //! #   b"password",
 //! # )?;
 //! # let password_file = ServerRegistration::<Default>::deserialize(&password_file_bytes)?;
-//! // Use `ServerLogin::builder` instead of `ServerLogin::start`.
+//! // Use `ServerLogin::builder()` instead of `ServerLogin::start()`.
 //! let server_login_builder = ServerLogin::builder(
 //!     &mut server_rng,
 //!     &server_setup,
 //!     Some(password_file),
 //!     client_login_start_result.message,
 //!     b"alice@example.com",
+//!     ServerLoginParameters::default(),
+//! )?;
+//!
+//! // Run Diffie-Hellman on your remote key.
+//! let client_e_public_key = server_login_builder.data();
+//! let shared_secret = server_login_builder.private_key().diffie_hellman(&client_e_public_key)?;
+//!
+//! // Use the shared secret to build `ServerLogin`.
+//! let server_login_start_result = server_login_builder.build(shared_secret)?;
+//! # Ok::<(), anyhow::Error>(())
+//! ```
+//!
+//! ## Remote OPRF Seeds
+//!
+//! In addition, the OPRF seed can be stored in an external location as well, by
+//! using [`ServerRegistration::start_with_key_material()`] and
+//! [`ServerLogin::builder_with_key_material()`] in combination with
+//! [`ServerSetup::key_material_info()`].
+//! ```
+//! # use digest::Output;
+//! # use generic_array::{GenericArray, typenum::U0};
+//! # use hkdf::Hkdf;
+//! # use opaque_ke::{CipherSuite, ClientLogin, ClientRegistration, ClientRegistrationFinishParameters, keypair::{PrivateKey, PublicKey}, key_exchange::{KeyExchange, group::Group, tripledh::DiffieHellman}};
+//! # use rand::rngs::OsRng;
+//! # use rand::RngCore;
+//! # type Ristretto255 = <<Default as CipherSuite>::KeyExchange as KeyExchange>::Group;
+//! # type Hash = <<Default as CipherSuite>::KeyExchange as KeyExchange>::Hash;
+//! # type OprfGroup = <<Default as CipherSuite>::OprfCs as voprf::CipherSuite>::Group;
+//! # struct Default;
+//! # #[cfg(feature = "ristretto255")]
+//! # impl CipherSuite for Default {
+//! #     type OprfCs = opaque_ke::Ristretto255;
+//! #     type KeyExchange = opaque_ke::TripleDh<opaque_ke::Ristretto255, sha2::Sha512>;
+//! #     type Ksf = opaque_ke::ksf::Identity;
+//! # }
+//! # #[cfg(not(feature = "ristretto255"))]
+//! # impl CipherSuite for Default {
+//! #     type OprfCs = p256::NistP256;
+//! #     type KeyExchange = opaque_ke::TripleDh<p256::NistP256, sha2::Sha256>;
+//! #     type Ksf = opaque_ke::ksf::Identity;
+//! # }
+//! # #[derive(Debug, thiserror::Error)]
+//! # #[error("test error")]
+//! # struct YourRemoteSecretsError;
+//! # #[derive(Clone)]
+//! # struct YourRemoteSeed(Output<Hash>);
+//! # impl YourRemoteSeed {
+//! #     fn hkdf(&self, info: &[&[u8]]) -> GenericArray<u8, <OprfGroup as voprf::Group>::ScalarLen> {
+//! #         let mut ikm = GenericArray::default();
+//! #         Hkdf::<Hash>::from_prk(&self.0)
+//! #             .unwrap()
+//! #             .expand_multi_info(info, &mut ikm)
+//! #             .unwrap();
+//! #         ikm
+//! #     }
+//! # }
+//! # #[derive(Clone)]
+//! # struct YourRemoteKey(<Ristretto255 as Group>::Sk);
+//! # impl YourRemoteKey {
+//! #     fn diffie_hellman(&self, pk: &PublicKey<Ristretto255>) -> Result<GenericArray<u8, <Ristretto255 as Group>::PkLen>, YourRemoteSecretsError> {
+//! #         Ok(<<Ristretto255 as Group>::Sk as DiffieHellman<Ristretto255>>::diffie_hellman(self.0, pk.to_group_type()))
+//! #     }
+//! # }
+//! use opaque_ke::{ServerLogin, ServerLoginParameters, ServerRegistration, ServerSetup};
+//! use opaque_ke::keypair::{KeyPair, OprfSeedSerialization};
+//! use opaque_ke::errors::ProtocolError;
+//!
+//! // Implement if you intend to use `ServerSetup::de/serialize` instead of `serde`.
+//! impl OprfSeedSerialization<sha2::Sha512, YourRemoteSecretsError> for YourRemoteSeed {
+//!     type Len = U0;
+//!
+//!     fn serialize(&self) -> GenericArray<u8, Self::Len> {
+//!         unimplemented!()
+//!     }
+//!
+//!     fn deserialize_take(input: &mut &[u8]) -> Result<YourRemoteSeed, ProtocolError<YourRemoteSecretsError>> {
+//!         unimplemented!()
+//!     }
+//! }
+//!
+//! # let mut oprf_seed = YourRemoteSeed(GenericArray::default());
+//! # OsRng.fill_bytes(&mut oprf_seed.0);
+//! # let sk = Ristretto255::random_sk(&mut OsRng);
+//! # let pk = Ristretto255::public_key(sk);
+//! # let pk = Ristretto255::serialize_pk(pk);
+//! # let public_key = PublicKey::deserialize(&pk).unwrap();
+//! # let remote_key = YourRemoteKey(sk);
+//! # let mut server_rng = OsRng;
+//! let keypair = KeyPair::new(remote_key, public_key);
+//! let server_setup = ServerSetup::<Default, YourRemoteKey, YourRemoteSeed>::new_with_key_pair_and_seed(&mut server_rng, keypair, oprf_seed);
+//!
+//! // Incoming registration ...
+//! # let client_registration_start_result = ClientRegistration::<Default>::start(
+//! #     &mut OsRng,
+//! #     b"password",
+//! # )?;
+//!
+//! // Run HKDF on your remote OPRF seed.
+//! let info = server_setup.key_material_info(b"alice@example.com");
+//! let key_material = info.ikm.hkdf(&info.info);
+//!
+//! // Use `ServerRegistration::start_with_key_material()` instead of `ServerRegistration::start()`.
+//! let server_registration_start_result = ServerRegistration::<Default>::start_with_key_material(
+//!     &server_setup,
+//!     key_material,
+//!     client_registration_start_result.message,
+//! )?;
+//!
+//! // Finish registration ...
+//! # let client_registration_finish_result = client_registration_start_result.state.finish(&mut OsRng, b"password", server_registration_start_result.message, ClientRegistrationFinishParameters::default())?;
+//!
+//! // Incoming login ...
+//! # let password_file_bytes = ServerRegistration::<Default>::finish(client_registration_finish_result.message).serialize();
+//! # let client_login_start_result = ClientLogin::<Default>::start(
+//! #   &mut OsRng,
+//! #   b"password",
+//! # )?;
+//! # let password_file = ServerRegistration::<Default>::deserialize(&password_file_bytes)?;
+//!
+//! // Run HKDF on your remote OPRF seed.
+//! let info = server_setup.key_material_info(b"alice@example.com");
+//! let key_material = info.ikm.hkdf(&info.info);
+//!
+//! // Use `ServerLogin::builder_with_key_material()` instead of `ServerLogin::start()`.
+//! let server_login_builder = ServerLogin::builder_with_key_material(
+//!     &mut server_rng,
+//!     &server_setup,
+//!     key_material,
+//!     Some(password_file),
+//!     client_login_start_result.message,
 //!     ServerLoginParameters::default(),
 //! )?;
 //!
