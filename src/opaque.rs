@@ -11,7 +11,7 @@
 use core::ops::{Add, Deref};
 
 use derive_where::derive_where;
-use digest::{Output, OutputSizeUser};
+use digest::Output;
 use generic_array::sequence::Concat;
 use generic_array::typenum::{Sum, Unsigned};
 use generic_array::{ArrayLength, GenericArray};
@@ -31,7 +31,9 @@ use crate::key_exchange::traits::{
     CredentialResponseParts, Deserialize, Ke1MessageLen, Ke1StateLen, Ke2StateLen, KeyExchange,
     Serialize, SerializedContext, SerializedIdentifiers,
 };
-use crate::keypair::{KeyPair, PrivateKey, PrivateKeySerialization, PublicKey};
+use crate::keypair::{
+    KeyPair, OprfSeed, OprfSeedSerialization, PrivateKey, PrivateKeySerialization, PublicKey,
+};
 use crate::ksf::Ksf;
 use crate::messages::{CredentialRequestLen, RegistrationUploadLen};
 use crate::serialization::SliceExt;
@@ -69,7 +71,7 @@ const STR_OPAQUE_DERIVE_KEY_PAIR: &[u8; 20] = b"OPAQUE-DeriveKeyPair";
 pub struct ServerSetup<
     CS: CipherSuite,
     SK: Clone = PrivateKey<KeGroup<CS>>,
-    OS: Clone = Zeroizing<Output<OprfHash<CS>>>,
+    OS: Clone = OprfSeed<OprfHash<CS>>,
 > {
     oprf_seed: OS,
     keypair: KeyPair<KeGroup<CS>, SK>,
@@ -250,36 +252,7 @@ impl<CS: CipherSuite, SK: Clone> ServerSetup<CS, SK> {
         let mut oprf_seed = GenericArray::default();
         rng.fill_bytes(&mut oprf_seed);
 
-        Self::new_with_key_pair_and_seed(rng, keypair, Zeroizing::new(oprf_seed))
-    }
-}
-
-/// A trait to facilitate
-/// [`ServerSetup::de/serialize`](crate::ServerSetup::serialize).
-pub trait OprfSeedSerialization<H, E>: Sized {
-    /// Serialization size in bytes.
-    type Len: ArrayLength<u8>;
-
-    /// Serialization into bytes
-    fn serialize(&self) -> GenericArray<u8, Self::Len>;
-
-    /// Deserialization from bytes
-    fn deserialize_take(input: &mut &[u8]) -> Result<Self, ProtocolError<E>>;
-}
-
-impl<H: OutputSizeUser, E> OprfSeedSerialization<H, E> for Zeroizing<Output<H>> {
-    type Len = H::OutputSize;
-
-    fn serialize(&self) -> GenericArray<u8, Self::Len> {
-        self.deref().clone()
-    }
-
-    fn deserialize_take(input: &mut &[u8]) -> Result<Self, ProtocolError<E>> {
-        Ok(Zeroizing::new(
-            input
-                .take_array("OPRF seed")
-                .map_err(ProtocolError::into_custom)?,
-        ))
+        Self::new_with_key_pair_and_seed(rng, keypair, OprfSeed(oprf_seed))
     }
 }
 
@@ -466,7 +439,7 @@ impl<CS: CipherSuite> ServerRegistration<CS> {
             ikm: oprf_seed,
             info,
         } = server_setup.key_material_info(credential_identifier);
-        let key_material = oprf_key_material::<CS>(&oprf_seed, &info)?;
+        let key_material = oprf_key_material::<CS>(&oprf_seed.0, &info)?;
 
         Self::start_with_key_material(server_setup, key_material, message)
     }
@@ -677,7 +650,10 @@ impl<CS: CipherSuite> ServerLogin<CS> {
         Ok(Self {
             client_s_pk: bytes.take_array("client static public key")?,
             server_s_pk: bytes.take_array("server static public key")?,
-            ke2_state: <CS::KeyExchange as KeyExchange>::KE2State::deserialize_take(&mut bytes)?,
+            ke2_state:
+                <<CS::KeyExchange as KeyExchange>::KE2State<CS> as Deserialize>::deserialize_take(
+                    &mut bytes,
+                )?,
         })
     }
 
@@ -789,7 +765,7 @@ impl<CS: CipherSuite> ServerLogin<CS> {
             ikm: oprf_seed,
             info,
         } = server_setup.key_material_info(credential_identifier);
-        let key_material = oprf_key_material::<CS>(&oprf_seed, &info)?;
+        let key_material = oprf_key_material::<CS>(&oprf_seed.0, &info)?;
 
         Self::builder_with_key_material(
             rng,

@@ -11,6 +11,7 @@
 #![allow(unsafe_code)]
 
 use derive_where::derive_where;
+use digest::{Output, OutputSizeUser};
 use generic_array::{ArrayLength, GenericArray};
 use rand::{CryptoRng, RngCore};
 
@@ -20,6 +21,7 @@ use crate::key_exchange::group::Group;
 use crate::key_exchange::sigma_i::{Message, MessageBuilder, SharedSecret, SignatureProtocol};
 use crate::key_exchange::traits::KeyExchange;
 use crate::key_exchange::tripledh::DiffieHellman;
+use crate::serialization::SliceExt;
 
 /// A Keypair trait with public-private verification
 #[cfg_attr(
@@ -270,6 +272,46 @@ impl<G: Group> serde::Serialize for PublicKey<G> {
         SK: serde::Serializer,
     {
         G::serialize_pk(self.0).serialize(serializer)
+    }
+}
+
+/// Default OPRF seed container.
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Deserialize, serde::Serialize),
+    serde(bound = "")
+)]
+#[derive_where(Clone, Debug, Eq, Hash, PartialEq, ZeroizeOnDrop)]
+pub struct OprfSeed<H: OutputSizeUser>(pub(crate) Output<H>);
+
+/// A trait to facilitate
+/// [`ServerSetup::de/serialize`](crate::ServerSetup::serialize).
+///
+/// Will be called with `E` being [`PrivateKeySerialization::Error`].
+pub trait OprfSeedSerialization<H, E>: Sized {
+    /// Serialization size in bytes.
+    type Len: ArrayLength<u8>;
+
+    /// Serialization into bytes
+    fn serialize(&self) -> GenericArray<u8, Self::Len>;
+
+    /// Deserialization from bytes
+    fn deserialize_take(input: &mut &[u8]) -> Result<Self, ProtocolError<E>>;
+}
+
+impl<H: OutputSizeUser, E> OprfSeedSerialization<H, E> for OprfSeed<H> {
+    type Len = H::OutputSize;
+
+    fn serialize(&self) -> GenericArray<u8, Self::Len> {
+        self.0.clone()
+    }
+
+    fn deserialize_take(input: &mut &[u8]) -> Result<Self, ProtocolError<E>> {
+        Ok(Self(
+            input
+                .take_array("OPRF seed")
+                .map_err(ProtocolError::into_custom)?,
+        ))
     }
 }
 

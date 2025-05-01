@@ -42,4 +42,5 @@ pub(crate) type OprfHash<CS: CipherSuite> = <CS::OprfCs as voprf::CipherSuite>::
 /// Type alias for the [`KeyExchange`](CipherSuite::KeyExchange)
 /// [`Group`](crate::key_exchange::group::Group).
 pub type KeGroup<CS: CipherSuite> = <CS::KeyExchange as KeyExchange>::Group;
-pub(crate) type KeHash<CS: CipherSuite> = <CS::KeyExchange as KeyExchange>::Hash;
+/// Type alias for the [`KeyExchange`](CipherSuite::KeyExchange) hash.
+pub type KeHash<CS: CipherSuite> = <CS::KeyExchange as KeyExchange>::Hash;
