@@ -122,12 +122,13 @@ pub struct CredentialRequest<CS: CipherSuite> {
 #[derive_where(Clone)]
 #[derive_where(
     Debug, Eq, PartialEq;
+    <KeGroup<CS> as Group>::Pk,
     SK,
     voprf::EvaluationElement<CS::OprfCs>,
     <CS::KeyExchange as KeyExchange>::KE2Builder<'a, CS>,
 )]
 pub struct ServerLoginBuilder<'a, CS: CipherSuite, SK: Clone> {
-    pub(crate) client_s_pk: GenericArray<u8, <KeGroup<CS> as Group>::PkLen>,
+    pub(crate) client_s_pk: PublicKey<KeGroup<CS>>,
     pub(crate) server_s_pk: GenericArray<u8, <KeGroup<CS> as Group>::PkLen>,
     pub(crate) server_s_sk: SK,
     pub(crate) evaluation_element: voprf::EvaluationElement<CS::OprfCs>,

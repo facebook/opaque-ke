@@ -1348,6 +1348,7 @@ fn test_zeroize_client_login_start() -> Result<(), ProtocolError> {
 fn test_zeroize_server_login_start() -> Result<(), ProtocolError> {
     fn inner<CS: CipherSuite>(_test_vector: &str) -> Result<(), ProtocolError>
     where
+        <KeGroup<CS> as Group>::Pk: AssertZeroized,
         <CS::KeyExchange as KeyExchange>::KE2State<CS>: Serialize + AssertZeroized,
     {
         let mut client_rng = OsRng;
@@ -1449,6 +1450,7 @@ fn test_zeroize_client_login_finish() -> Result<(), ProtocolError> {
 fn test_zeroize_server_login_finish() -> Result<(), ProtocolError> {
     fn inner<CS: CipherSuite>(_test_vector: &str) -> Result<(), ProtocolError>
     where
+        <KeGroup<CS> as Group>::Pk: AssertZeroized,
         <CS::KeyExchange as KeyExchange>::KE2State<CS>: Serialize + AssertZeroized,
     {
         let mut client_rng = OsRng;

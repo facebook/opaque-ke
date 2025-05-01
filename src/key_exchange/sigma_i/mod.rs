@@ -150,11 +150,10 @@ pub trait SharedSecret<KE: Group> {
     serde(bound(deserialize = "'de: 'a", serialize = ""))
 )]
 #[derive_where(Clone, ZeroizeOnDrop)]
-#[derive_where(Debug, Eq, Hash, PartialEq; PublicKey<KeGroup<CS>>, PublicKey<KE>)]
+#[derive_where(Debug, Eq, Hash, PartialEq; PublicKey<KE>)]
 pub struct Ke2Builder<'a, CS: CipherSuite, KE: Group> {
     transcript: Message<'a, CS, KE>,
     server_nonce: GenericArray<u8, NonceLen>,
-    client_s_pk: PublicKey<KeGroup<CS>>,
     server_e_pk: PublicKey<KE>,
     expected_mac: Output<KeHash<CS>>,
     session_key: Output<KeHash<CS>>,
@@ -212,9 +211,8 @@ pub struct CachedMessage<CS: CipherSuite, KE: Group> {
     ))
 )]
 #[derive_where(Clone, ZeroizeOnDrop)]
-#[derive_where(Debug, Eq, Hash, PartialEq; <SIG::Group as Group>::Pk, SIG::VerifyState<CS, KE>)]
+#[derive_where(Debug, Eq, Hash, PartialEq; SIG::VerifyState<CS, KE>)]
 pub struct Ke2State<CS: CipherSuite, SIG: SignatureProtocol, KE: Group> {
-    client_s_pk: PublicKey<SIG::Group>,
     session_key: Output<KeHash<CS>>,
     verify_state: SIG::VerifyState<CS, KE>,
     expected_mac: Output<KeHash<CS>>,
@@ -303,7 +301,7 @@ where
         credential_request: CredentialRequestParts<CS>,
         ke1_message: Self::KE1Message,
         credential_response: CredentialResponseParts<CS>,
-        client_s_pk: PublicKey<Self::Group>,
+        _: &PublicKey<Self::Group>,
         identifiers: SerializedIdentifiers<'a, KeGroup<CS>>,
         context: SerializedContext<'a>,
     ) -> Result<Self::KE2Builder<'a, CS>, ProtocolError> {
@@ -359,7 +357,6 @@ where
         Ok(Ke2Builder {
             transcript: message,
             server_nonce,
-            client_s_pk,
             server_e_pk: server_e.public().clone(),
             expected_mac: client_mac,
             session_key: derived_keys.session_key,
@@ -390,7 +387,6 @@ where
     ) -> Result<GenerateKe2Result<CS>, ProtocolError> {
         Ok((
             Ke2State {
-                client_s_pk: builder.client_s_pk.clone(),
                 session_key: builder.session_key.clone(),
                 verify_state: input.1,
                 expected_mac: builder.expected_mac.clone(),
@@ -498,10 +494,11 @@ where
     fn finish_ke<CS: CipherSuite<KeyExchange = Self>>(
         ke3_message: Self::KE3Message,
         ke2_state: &Self::KE2State<CS>,
+        client_s_pk: &PublicKey<Self::Group>,
         identifiers: SerializedIdentifiers<'_, Self::Group>,
         context: SerializedContext<'_>,
     ) -> Result<Output<KEH>, ProtocolError> {
-        ke2_state.client_s_pk.verify::<CS, SIG, KE>(
+        client_s_pk.verify::<CS, SIG, KE>(
             MessageBuilder {
                 role: Role::Server,
                 context,
@@ -729,7 +726,6 @@ where
 {
     fn deserialize_take(input: &mut &[u8]) -> Result<Self, ProtocolError> {
         Ok(Self {
-            client_s_pk: PublicKey::deserialize_take(input)?,
             session_key: input.take_array("session key")?,
             verify_state: SIG::VerifyState::deserialize_take(input)?,
             expected_mac: input.take_array("expected mac")?,
@@ -737,30 +733,25 @@ where
     }
 }
 
-type Ke2StateLen<CS, SIG: SignatureProtocol, KE> = Sum<
-    Sum<Sum<<SIG::Group as Group>::PkLen, OutputSize<KeHash<CS>>>, VerifyStateLen<CS, SIG, KE>>,
-    OutputSize<KeHash<CS>>,
->;
+type Ke2StateLen<CS, SIG: SignatureProtocol, KE> =
+    Sum<Sum<OutputSize<KeHash<CS>>, VerifyStateLen<CS, SIG, KE>>, OutputSize<KeHash<CS>>>;
 
 type VerifyStateLen<CS, SIG: SignatureProtocol, KE> = <SIG::VerifyState<CS, KE> as Serialize>::Len;
 
 impl<CS: CipherSuite, SIG: SignatureProtocol, KE: Group> Serialize for Ke2State<CS, SIG, KE>
 where
     SIG::VerifyState<CS, KE>: Serialize,
-    // Ke2State: ((SigPk + Hash) + VerifyState) + Hash
-    <SIG::Group as Group>::PkLen: Add<OutputSize<KeHash<CS>>>,
-    Sum<<SIG::Group as Group>::PkLen, OutputSize<KeHash<CS>>>:
-        ArrayLength<u8> + Add<VerifyStateLen<CS, SIG, KE>>,
-    Sum<Sum<<SIG::Group as Group>::PkLen, OutputSize<KeHash<CS>>>, VerifyStateLen<CS, SIG, KE>>:
+    // Ke2State: (Hash + VerifyState) + Hash
+    OutputSize<KeHash<CS>>: ArrayLength<u8> + Add<VerifyStateLen<CS, SIG, KE>>,
+    Sum<OutputSize<KeHash<CS>>, VerifyStateLen<CS, SIG, KE>>:
         ArrayLength<u8> + Add<OutputSize<KeHash<CS>>>,
     Ke2StateLen<CS, SIG, KE>: ArrayLength<u8>,
 {
     type Len = Ke2StateLen<CS, SIG, KE>;
 
     fn serialize(&self) -> GenericArray<u8, Self::Len> {
-        self.client_s_pk
-            .serialize()
-            .concat(self.session_key.clone())
+        self.session_key
+            .clone()
             .concat(self.verify_state.serialize())
             .concat(self.expected_mac.clone())
     }
@@ -872,18 +863,15 @@ where
 #[cfg(test)]
 impl<CS: CipherSuite, SIG: SignatureProtocol, KE: Group> AssertZeroized for Ke2State<CS, SIG, KE>
 where
-    <SIG::Group as Group>::Pk: AssertZeroized,
     SIG::VerifyState<CS, KE>: AssertZeroized,
 {
     fn assert_zeroized(&self) {
         let Self {
-            client_s_pk,
             session_key,
             verify_state,
             expected_mac,
         } = self;
 
-        client_s_pk.assert_zeroized();
         verify_state.assert_zeroized();
 
         for byte in session_key.iter().chain(expected_mac) {

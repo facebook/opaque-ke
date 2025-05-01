@@ -139,12 +139,9 @@ pub struct ClientLogin<CS: CipherSuite> {
     ))
 )]
 #[derive_where(Clone, ZeroizeOnDrop)]
-#[derive_where(
-    Debug, Eq, Hash, PartialEq;
-    <CS::KeyExchange as KeyExchange>::KE2State<CS>,
-)]
+#[derive_where(Debug, Eq, Hash, PartialEq; <KeGroup<CS> as Group>::Pk, <CS::KeyExchange as KeyExchange>::KE2State<CS>)]
 pub struct ServerLogin<CS: CipherSuite> {
-    client_s_pk: GenericArray<u8, <KeGroup<CS> as Group>::PkLen>,
+    client_s_pk: PublicKey<KeGroup<CS>>,
     server_s_pk: GenericArray<u8, <KeGroup<CS> as Group>::PkLen>,
     ke2_state: <CS::KeyExchange as KeyExchange>::KE2State<CS>,
 }
@@ -627,7 +624,7 @@ impl<CS: CipherSuite> ServerLogin<CS> {
         ServerLoginLen<CS>: ArrayLength<u8>,
     {
         self.client_s_pk
-            .clone()
+            .serialize()
             .concat(self.server_s_pk.clone())
             .concat(self.ke2_state.serialize())
     }
@@ -638,7 +635,7 @@ impl<CS: CipherSuite> ServerLogin<CS> {
         <CS::KeyExchange as KeyExchange>::KE2State<CS>: Deserialize,
     {
         Ok(Self {
-            client_s_pk: bytes.take_array("client static public key")?,
+            client_s_pk: PublicKey::deserialize_take(&mut bytes)?,
             server_s_pk: bytes.take_array("server static public key")?,
             ke2_state:
                 <<CS::KeyExchange as KeyExchange>::KE2State<CS> as Deserialize>::deserialize_take(
@@ -708,13 +705,13 @@ impl<CS: CipherSuite> ServerLogin<CS> {
             credential_request.to_parts(),
             credential_request.ke1_message.clone(),
             credential_response,
-            client_s_pk,
+            &client_s_pk,
             identifiers,
             context,
         )?;
 
         Ok(ServerLoginBuilder {
-            client_s_pk: serialized_client_s_pk,
+            client_s_pk,
             server_s_pk: serialized_server_s_pk,
             server_s_sk: server_setup.keypair().private().clone(),
             evaluation_element,
@@ -818,7 +815,7 @@ impl<CS: CipherSuite> ServerLogin<CS> {
     ) -> Result<ServerLoginFinishResult<CS>, ProtocolError> {
         let identifiers = SerializedIdentifiers::<KeGroup<CS>>::from_identifiers(
             parameters.identifiers,
-            self.client_s_pk.clone(),
+            self.client_s_pk.serialize(),
             self.server_s_pk.clone(),
         )?;
         let context = SerializedContext::from(parameters.context)?;
@@ -826,6 +823,7 @@ impl<CS: CipherSuite> ServerLogin<CS> {
         let session_key = <CS::KeyExchange as KeyExchange>::finish_ke(
             message.ke3_message,
             &self.ke2_state,
+            &self.client_s_pk,
             identifiers,
             context,
         )?;
@@ -995,6 +993,7 @@ pub struct ServerLoginParameters<'c, 'i> {
 #[derive_where(Clone)]
 #[derive_where(
     Debug;
+    <KeGroup<CS> as Group>::Pk,
     voprf::EvaluationElement<CS::OprfCs>,
     <CS::KeyExchange as KeyExchange>::KE2Message,
     <CS::KeyExchange as KeyExchange>::KE2State<CS>,
@@ -1256,6 +1255,7 @@ where
 #[cfg(test)]
 impl<CS: CipherSuite> AssertZeroized for ServerLogin<CS>
 where
+    PublicKey<KeGroup<CS>>: AssertZeroized,
     <CS::KeyExchange as KeyExchange>::KE2State<CS>: AssertZeroized,
 {
     fn assert_zeroized(&self) {
@@ -1265,9 +1265,10 @@ where
             ke2_state,
         } = self;
 
+        client_s_pk.assert_zeroized();
         ke2_state.assert_zeroized();
 
-        for byte in client_s_pk.into_iter().chain(server_s_pk) {
+        for byte in server_s_pk {
             assert_eq!(byte, &0);
         }
     }

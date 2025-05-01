@@ -179,7 +179,7 @@ where
         credential_request: CredentialRequestParts<CS>,
         ke1_message: Self::KE1Message,
         credential_response: CredentialResponseParts<CS>,
-        client_s_pk: PublicKey<G>,
+        client_s_pk: &PublicKey<G>,
         identifiers: SerializedIdentifiers<'_, KeGroup<CS>>,
         context: SerializedContext<'a>,
     ) -> Result<Self::KE2Builder<'a, CS>, ProtocolError> {
@@ -199,7 +199,7 @@ where
         let shared_secret_1 = server_e
             .private()
             .ke_diffie_hellman(&ke1_message.client_e_pk);
-        let shared_secret_3 = server_e.private().ke_diffie_hellman(&client_s_pk);
+        let shared_secret_3 = server_e.private().ke_diffie_hellman(client_s_pk);
 
         Ok(Ke2Builder {
             server_nonce,
@@ -340,6 +340,7 @@ where
     fn finish_ke<CS: CipherSuite>(
         ke3_message: Self::KE3Message,
         ke2_state: &Self::KE2State<CS>,
+        _: &PublicKey<G>,
         _: SerializedIdentifiers<'_, KeGroup<CS>>,
         _: SerializedContext<'_>,
     ) -> Result<Output<H>, ProtocolError> {

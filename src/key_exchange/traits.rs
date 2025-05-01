@@ -60,7 +60,7 @@ where
         credential_request: CredentialRequestParts<CS>,
         ke1_message: Self::KE1Message,
         credential_response: CredentialResponseParts<CS>,
-        client_s_pk: PublicKey<Self::Group>,
+        client_s_pk: &PublicKey<Self::Group>,
         identifiers: SerializedIdentifiers<'a, Self::Group>,
         context: SerializedContext<'a>,
     ) -> Result<Self::KE2Builder<'a, CS>, ProtocolError>;
@@ -97,6 +97,7 @@ where
     fn finish_ke<CS: CipherSuite<KeyExchange = Self>>(
         ke3_message: Self::KE3Message,
         ke2_state: &Self::KE2State<CS>,
+        client_s_pk: &PublicKey<Self::Group>,
         identifiers: SerializedIdentifiers<'_, Self::Group>,
         context: SerializedContext<'_>,
     ) -> Result<Output<Self::Hash>, ProtocolError>;
