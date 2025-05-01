@@ -32,29 +32,41 @@ use crate::serialization::{i2osp, SliceExt};
 
 /// The key exchange trait. This is only exposed so users can use it in generics
 /// and qualified bounds.
-#[allow(missing_docs, private_bounds)]
+#[allow(private_bounds)]
 pub trait KeyExchange: Sealed
 where
     <Self::Hash as CoreProxy>::Core: ProxyHash,
     <<Self::Hash as CoreProxy>::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
     Le<<<Self::Hash as CoreProxy>::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
 {
+    /// The group used for the key exchange.
     type Group: Group;
+    /// The has used for the key exchange.
     type Hash: Hash;
 
+    #[doc(hidden)]
     type KE1State: ZeroizeOnDrop + Clone;
+    #[doc(hidden)]
     type KE2State<CS: CipherSuite>: ZeroizeOnDrop + Clone;
+    #[doc(hidden)]
     type KE1Message: ZeroizeOnDrop + Clone;
+    #[doc(hidden)]
     type KE2Builder<'a, CS: CipherSuite<KeyExchange = Self>>: ZeroizeOnDrop + Clone;
+    #[doc(hidden)]
     type KE2BuilderData<'a, CS: 'static + CipherSuite>;
+    #[doc(hidden)]
     type KE2BuilderInput<CS: CipherSuite>;
+    #[doc(hidden)]
     type KE2Message: ZeroizeOnDrop + Clone;
+    #[doc(hidden)]
     type KE3Message: ZeroizeOnDrop + Clone;
 
+    #[doc(hidden)]
     fn generate_ke1<R: RngCore + CryptoRng>(
         rng: &mut R,
     ) -> Result<(Self::KE1State, Self::KE1Message), ProtocolError>;
 
+    #[doc(hidden)]
     fn ke2_builder<'a, CS: CipherSuite<KeyExchange = Self>, R: RngCore + CryptoRng>(
         rng: &mut R,
         credential_request: CredentialRequestParts<CS>,
@@ -65,21 +77,25 @@ where
         context: SerializedContext<'a>,
     ) -> Result<Self::KE2Builder<'a, CS>, ProtocolError>;
 
+    #[doc(hidden)]
     fn ke2_builder_data<'a, CS: CipherSuite<KeyExchange = Self>>(
         builder: &'a Self::KE2Builder<'_, CS>,
     ) -> Self::KE2BuilderData<'a, CS>;
 
+    #[doc(hidden)]
     fn generate_ke2_input<CS: CipherSuite<KeyExchange = Self>, R: CryptoRng + RngCore>(
         builder: &Self::KE2Builder<'_, CS>,
         rng: &mut R,
         server_s_sk: &PrivateKey<Self::Group>,
     ) -> Self::KE2BuilderInput<CS>;
 
+    #[doc(hidden)]
     fn build_ke2<CS: CipherSuite<KeyExchange = Self>>(
         builder: Self::KE2Builder<'_, CS>,
         input: Self::KE2BuilderInput<CS>,
     ) -> Result<GenerateKe2Result<CS>, ProtocolError>;
 
+    #[doc(hidden)]
     #[allow(clippy::too_many_arguments)]
     fn generate_ke3<CS: CipherSuite<KeyExchange = Self>, R: CryptoRng + RngCore>(
         rng: &mut R,
@@ -94,6 +110,7 @@ where
         context: SerializedContext<'_>,
     ) -> Result<GenerateKe3Result<Self>, ProtocolError>;
 
+    #[doc(hidden)]
     fn finish_ke<CS: CipherSuite<KeyExchange = Self>>(
         ke3_message: Self::KE3Message,
         ke2_state: &Self::KE2State<CS>,
