@@ -36,7 +36,7 @@ argon2 = { version = "0.5", default-features = false, features = [
 curve25519-dalek = { version = "4", default-features = false, features = [
   "zeroize",
 ], optional = true }
-derive-where = { version = "1.3", features = ["zeroize-on-drop"] }
+derive-where = { version = "1.4", features = ["zeroize-on-drop"] }
 digest = "0.10"
 displaydoc = { version = "0.2", default-features = false }
 ecdsa = { version = "0.16", default-features = false, features = [
@@ -116,6 +116,3 @@ required-features = ["argon2"]
 
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(test_hsm)'] }
-
-[patch.crates-io]
-derive-where = { git = "https://github.com/khonsulabs/derive-where", branch = "zeroize-skip-fix" }
