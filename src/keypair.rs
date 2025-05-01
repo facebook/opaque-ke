@@ -160,7 +160,7 @@ pub trait PrivateKeySerialization<G: Group>: Clone {
     fn serialize_key_pair(key_pair: &KeyPair<G, Self>) -> GenericArray<u8, Self::Len>;
 
     /// Deserialization from bytes
-    fn deserialize_key_pair(
+    fn deserialize_take_key_pair(
         input: &mut &[u8],
     ) -> Result<KeyPair<G, Self>, ProtocolError<Self::Error>>;
 }
@@ -173,7 +173,7 @@ impl<G: Group> PrivateKeySerialization<G> for PrivateKey<G> {
         key_pair.private().serialize()
     }
 
-    fn deserialize_key_pair(input: &mut &[u8]) -> Result<KeyPair<G, Self>, ProtocolError> {
+    fn deserialize_take_key_pair(input: &mut &[u8]) -> Result<KeyPair<G, Self>, ProtocolError> {
         let sk = PrivateKey::deserialize_take(input)?;
         let pk = sk.public_key();
 

@@ -224,8 +224,8 @@ impl<CS: CipherSuite, SK: Clone, OS: Clone> ServerSetup<CS, SK, OS> {
     {
         Ok(Self {
             oprf_seed: OS::deserialize_take(&mut input)?,
-            keypair: SK::deserialize_key_pair(&mut input)?,
-            fake_keypair: PrivateKey::deserialize_key_pair(&mut input)
+            keypair: SK::deserialize_take_key_pair(&mut input)?,
+            fake_keypair: PrivateKey::deserialize_take_key_pair(&mut input)
                 .map_err(ProtocolError::into_custom)?,
         })
     }

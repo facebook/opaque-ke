@@ -1019,7 +1019,7 @@
 //!         unimplemented!()
 //!     }
 //!
-//!     fn deserialize_key_pair(input: &mut &[u8]) -> Result<KeyPair<Ristretto255, Self>, ProtocolError<Self::Error>> {
+//!     fn deserialize_take_key_pair(input: &mut &[u8]) -> Result<KeyPair<Ristretto255, Self>, ProtocolError<Self::Error>> {
 //!         unimplemented!()
 //!     }
 //! }
