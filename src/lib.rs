@@ -32,7 +32,9 @@
 //! We will use the following choices in this example:
 //! ```ignore
 //! use opaque_ke::CipherSuite;
+//!
 //! struct Default;
+//!
 //! impl CipherSuite for Default {
 //!     type OprfCs = opaque_ke::Ristretto255;
 //!     type KeyExchange = opaque_ke::TripleDh<opaque_ke::Ristretto255, sha2::Sha512>;
@@ -70,6 +72,7 @@
 //! # }
 //! use rand::rngs::OsRng;
 //! use rand::RngCore;
+//!
 //! let mut rng = OsRng;
 //! let server_setup = ServerSetup::<Default>::new(&mut rng);
 //! # Ok::<(), ProtocolError>(())
@@ -126,6 +129,7 @@
 //! use opaque_ke::ClientRegistration;
 //! use rand::rngs::OsRng;
 //! use rand::RngCore;
+//!
 //! let mut client_rng = OsRng;
 //! let client_registration_start_result =
 //!     ClientRegistration::<Default>::start(&mut client_rng, b"password")?;
@@ -167,6 +171,7 @@
 //! #     b"password",
 //! # )?;
 //! use opaque_ke::ServerRegistration;
+//!
 //! # let mut server_rng = OsRng;
 //! # let server_setup = ServerSetup::<Default>::new(&mut server_rng);
 //! let server_registration_start_result = ServerRegistration::<Default>::start(
@@ -189,7 +194,7 @@
 //! ```
 //! # use opaque_ke::{
 //! #   errors::ProtocolError,
-//! #   ClientRegistration, ClientRegistrationFinishParameters, ServerRegistration, ServerSetup,
+//! #   ClientRegistration, ServerRegistration, ServerSetup,
 //! #   ksf::Identity,
 //! # };
 //! # use opaque_ke::CipherSuite;
@@ -215,6 +220,8 @@
 //! # let mut server_rng = OsRng;
 //! # let server_setup = ServerSetup::<Default>::new(&mut server_rng);
 //! # let server_registration_start_result = ServerRegistration::<Default>::start(&server_setup, client_registration_start_result.message, b"alice@example.com")?;
+//! use opaque_ke::ClientRegistrationFinishParameters;
+//!
 //! let client_registration_finish_result = client_registration_start_result.state.finish(
 //!     &mut client_rng,
 //!     b"password",
@@ -305,6 +312,7 @@
 //! # }
 //! # use rand::{rngs::OsRng, RngCore};
 //! use opaque_ke::ClientLogin;
+//!
 //! let mut client_rng = OsRng;
 //! let client_login_start_result = ClientLogin::<Default>::start(&mut client_rng, b"password")?;
 //! # Ok::<(), ProtocolError>(())
@@ -354,6 +362,7 @@
 //! #   b"password",
 //! # )?;
 //! use opaque_ke::{ServerLogin, ServerLoginParameters};
+//!
 //! let password_file = ServerRegistration::<Default>::deserialize(&password_file_bytes)?;
 //! let mut server_rng = OsRng;
 //! let server_login_start_result = ServerLogin::start(
@@ -390,7 +399,7 @@
 //! ```
 //! # use opaque_ke::{
 //! #   errors::ProtocolError,
-//! #   ClientRegistration, ClientRegistrationFinishParameters, ServerRegistration, ClientLogin, ClientLoginFinishParameters, ServerLogin, ServerLoginParameters, CredentialFinalization, ServerSetup,
+//! #   ClientRegistration, ClientRegistrationFinishParameters, ServerRegistration, ClientLogin, ServerLogin, ServerLoginParameters, CredentialFinalization, ServerSetup,
 //! #   ksf::Identity,
 //! # };
 //! # use opaque_ke::CipherSuite;
@@ -428,6 +437,8 @@
 //! #   )?;
 //! # let server_login_start_result =
 //! #     ServerLogin::start(&mut server_rng, &server_setup, Some(password_file), client_login_start_result.message, b"alice@example.com", ServerLoginParameters::default())?;
+//! use opaque_ke::ClientLoginFinishParameters;
+//!
 //! let client_login_finish_result = client_login_start_result.state.finish(
 //!     &mut client_rng,
 //!     b"password",
@@ -969,7 +980,7 @@
 //! exposing the bytes of the private key to this library.
 //! ```
 //! # use generic_array::{GenericArray, typenum::U0};
-//! # use opaque_ke::{CipherSuite, ClientLogin, ClientRegistration, ClientRegistrationFinishParameters, ServerRegistration, errors::ProtocolError, keypair::PrivateKey, key_exchange::{KeyExchange, group::Group, tripledh::DiffieHellman}};
+//! # use opaque_ke::{CipherSuite, ClientLogin, ClientRegistration, ClientRegistrationFinishParameters, ServerRegistration, errors::ProtocolError, keypair::{PrivateKey, PublicKey}, key_exchange::{KeyExchange, group::Group, tripledh::DiffieHellman}};
 //! # use rand::rngs::OsRng;
 //! # #[cfg(feature = "ristretto255")]
 //! # type Ristretto255 = opaque_ke::Ristretto255;
@@ -999,7 +1010,7 @@
 //! #     }
 //! # }
 //! use opaque_ke::{ServerLogin, ServerLoginParameters, ServerSetup};
-//! use opaque_ke::keypair::{KeyPair, PrivateKeySerialization, PublicKey};
+//! use opaque_ke::keypair::{KeyPair, PrivateKeySerialization};
 //!
 //! // Implement if you intend to use `ServerSetup::de/serialize` instead of `serde`.
 //! impl PrivateKeySerialization<Ristretto255> for YourRemoteKey {
@@ -1023,6 +1034,7 @@
 //! # let mut server_rng = OsRng;
 //! let keypair = KeyPair::new(remote_key, public_key);
 //! let server_setup = ServerSetup::<Default, YourRemoteKey>::new_with_key_pair(&mut server_rng, keypair);
+//!
 //! # let client_registration_start_result = ClientRegistration::<Default>::start(
 //! #     &mut OsRng,
 //! #     b"password",
@@ -1034,7 +1046,8 @@
 //! #   &mut OsRng,
 //! #   b"password",
 //! # )?;
-//! let password_file = ServerRegistration::<Default>::deserialize(&password_file_bytes)?;
+//! # let password_file = ServerRegistration::<Default>::deserialize(&password_file_bytes)?;
+//! // Use `ServerLogin::builder` instead of `ServerLogin::start`.
 //! let server_login_builder = ServerLogin::builder(
 //!     &mut server_rng,
 //!     &server_setup,
@@ -1043,8 +1056,12 @@
 //!     b"alice@example.com",
 //!     ServerLoginParameters::default(),
 //! )?;
+//!
+//! // Run Diffie-Hellman on your remote key.
 //! let client_e_public_key = server_login_builder.data();
 //! let shared_secret = server_login_builder.private_key().diffie_hellman(&client_e_public_key)?;
+//!
+//! // Use the shared secret to build `ServerLogin`.
 //! let server_login_start_result = server_login_builder.build(shared_secret)?;
 //! # Ok::<(), anyhow::Error>(())
 //! ```
@@ -1058,11 +1075,13 @@
 //! can be used.
 //! ```
 //! # use generic_array::GenericArray;
+//! use opaque_ke::ksf::Ksf;
+//!
 //! #[derive(Default)]
 //! struct CustomKsf(scrypt::Params);
 //!
 //! // The Ksf trait must be implemented to be used in the ciphersuite.
-//! impl opaque_ke::ksf::Ksf for CustomKsf {
+//! impl Ksf for CustomKsf {
 //!     fn hash<L: generic_array::ArrayLength<u8>>(
 //!         &self,
 //!         input: GenericArray<u8, L>,
