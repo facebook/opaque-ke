@@ -21,16 +21,19 @@ use zeroize::{Zeroize, ZeroizeOnDrop};
 
 #[cfg(test)]
 use crate::ciphersuite::KeHash;
-use crate::ciphersuite::{CipherSuite, KeGroup, OprfGroup, OprfHash};
+use crate::ciphersuite::{CipherSuite, OprfGroup};
 use crate::errors::ProtocolError;
-use crate::hash::{Hash, OutputSize, ProxyHash};
+use crate::hash::{Hash, ProxyHash};
 use crate::key_exchange::group::Group;
 use crate::key_exchange::shared::{NonceLen, STR_CONTEXT};
 use crate::keypair::{PrivateKey, PublicKey};
 use crate::opaque::{Identifiers, MaskedResponse, MaskedResponseLen};
 use crate::serialization::{i2osp, SliceExt};
 
-pub trait KeyExchange
+/// The key exchange trait. This is only exposed so users can use it in generics
+/// and qualified bounds.
+#[allow(missing_docs, private_bounds)]
+pub trait KeyExchange: Sealed
 where
     <Self::Hash as CoreProxy>::Core: ProxyHash,
     <<Self::Hash as CoreProxy>::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
@@ -98,6 +101,8 @@ where
         context: SerializedContext<'_>,
     ) -> Result<Output<Self::Hash>, ProtocolError>;
 }
+
+pub(super) trait Sealed {}
 
 #[cfg_attr(
     feature = "serde",
@@ -182,10 +187,6 @@ where
     Sum<<OprfGroup<CS> as voprf::Group>::ElemLen, NonceLen>:
         ArrayLength<u8> + Add<MaskedResponseLen<CS>>,
     CredentialResponsePartsLen<CS>: ArrayLength<u8>,
-    // MaskedResponse: (Nonce + Hash) + KePk
-    NonceLen: Add<OutputSize<OprfHash<CS>>>,
-    Sum<NonceLen, OutputSize<OprfHash<CS>>>: ArrayLength<u8> + Add<<KeGroup<CS> as Group>::PkLen>,
-    MaskedResponseLen<CS>: ArrayLength<u8>,
 {
     type Len = CredentialResponsePartsLen<CS>;
 

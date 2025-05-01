@@ -7,13 +7,12 @@
 // licenses.
 
 use core::convert::TryFrom;
-use core::ops::Add;
 
 use derive_where::derive_where;
 use digest::Output;
 use generic_array::sequence::Concat;
 use generic_array::typenum::{Sum, U32};
-use generic_array::{ArrayLength, GenericArray};
+use generic_array::GenericArray;
 use hkdf::Hkdf;
 use hmac::{Hmac, Mac};
 use rand::{CryptoRng, RngCore};
@@ -26,7 +25,7 @@ use crate::key_exchange::group::Group;
 use crate::key_exchange::traits::SerializedIdentifiers;
 use crate::keypair::{KeyPair, PrivateKey, PublicKey};
 use crate::opaque::Identifiers;
-use crate::serialization::{SliceExt, UpdateExt};
+use crate::serialization::{GenericArrayExt, SliceExt, UpdateExt};
 
 // Constant string used as salt for HKDF computation
 const STR_AUTH_KEY: [u8; 7] = *b"AuthKey";
@@ -105,7 +104,7 @@ type SealResult<CS: CipherSuite> = (
     Output<OprfHash<CS>>,
 );
 
-pub(crate) type EnvelopeLen<CS: CipherSuite> = Sum<NonceLen, OutputSize<OprfHash<CS>>>;
+pub(crate) type EnvelopeLen<CS: CipherSuite> = Sum<OutputSize<OprfHash<CS>>, NonceLen>;
 
 impl<CS: CipherSuite> Envelope<CS> {
     #[allow(clippy::type_complexity)]
@@ -262,13 +261,8 @@ impl<CS: CipherSuite> Envelope<CS> {
         OutputSize::<OprfHash<CS>>::USIZE + NonceLen::USIZE
     }
 
-    pub(crate) fn serialize(&self) -> GenericArray<u8, EnvelopeLen<CS>>
-    where
-        // Envelope: Nonce + Hash
-        NonceLen: Add<OutputSize<OprfHash<CS>>>,
-        EnvelopeLen<CS>: ArrayLength<u8>,
-    {
-        self.nonce.concat(self.hmac.clone())
+    pub(crate) fn serialize(&self) -> GenericArray<u8, EnvelopeLen<CS>> {
+        self.nonce.concat_ext(&self.hmac)
     }
 
     pub(crate) fn deserialize_take(bytes: &mut &[u8]) -> Result<Self, ProtocolError> {

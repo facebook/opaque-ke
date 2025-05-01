@@ -14,3 +14,5 @@ pub(crate) mod shared;
 pub mod sigma_i;
 pub(crate) mod traits;
 pub mod tripledh;
+
+pub use crate::key_exchange::traits::KeyExchange;

@@ -91,7 +91,7 @@ where
 
     fn verify<CS: CipherSuite, KE: Group>(
         pk: &<Self::Group as Group>::Pk,
-        _: MessageBuilder<'_, G>,
+        _: MessageBuilder<'_, CS>,
         state: Self::VerifyState<CS, KE>,
         signature: &Self::Signature,
     ) -> Result<(), ProtocolError> {

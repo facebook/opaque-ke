@@ -26,10 +26,11 @@ use crate::ciphersuite::{CipherSuite, KeGroup, KeHash};
 use crate::errors::{InternalError, ProtocolError};
 use crate::hash::{Hash, OutputSize, ProxyHash};
 use crate::key_exchange::group::Group;
-use crate::key_exchange::shared::{self, Ke1Message, Ke1State, NonceLen};
+use crate::key_exchange::shared::{self, NonceLen};
+pub use crate::key_exchange::shared::{Ke1Message, Ke1State};
 use crate::key_exchange::traits::{
     CredentialRequestParts, CredentialResponseParts, Deserialize, GenerateKe2Result,
-    GenerateKe3Result, KeyExchange, Serialize, SerializedContext, SerializedIdentifiers,
+    GenerateKe3Result, KeyExchange, Sealed, Serialize, SerializedContext, SerializedIdentifiers,
 };
 use crate::keypair::{KeyPair, PrivateKey, PublicKey};
 use crate::serialization::{SliceExt, UpdateExt};
@@ -349,6 +350,14 @@ where
         .into_option()
         .ok_or(ProtocolError::InvalidLoginError)
     }
+}
+
+impl<G: Group + 'static, H: Hash> Sealed for TripleDh<G, H>
+where
+    H::Core: ProxyHash,
+    <H::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
+    Le<<H::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
+{
 }
 
 ////////////////////////////////////////////////

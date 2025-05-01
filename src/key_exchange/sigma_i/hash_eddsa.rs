@@ -6,7 +6,8 @@
 // of this source tree. You may select, at your option, one of the above-listed
 // licenses.
 
-//! Key Exchange group implementation for Ed25519
+//! HashEdDSA implementation for [`SigmaI`](crate::SigmaI). Currently only
+//! supports [`Ed25519`](crate::Ed25519).
 
 use core::marker::PhantomData;
 
@@ -41,7 +42,7 @@ impl<G: HashEddsaImpl> SignatureProtocol for HashEddsa<G> {
 
     fn verify<CS: CipherSuite, KE: Group>(
         pk: &<Self::Group as Group>::Pk,
-        _: MessageBuilder<'_, G>,
+        _: MessageBuilder<'_, CS>,
         state: Self::VerifyState<CS, KE>,
         signature: &Self::Signature,
     ) -> Result<(), ProtocolError> {

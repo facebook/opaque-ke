@@ -6,7 +6,11 @@
 // of this source tree. You may select, at your option, one of the above-listed
 // licenses.
 
+use core::ops::Add;
+
 use digest::Update;
+use generic_array::sequence::Concat;
+use generic_array::typenum::Sum;
 use generic_array::{ArrayLength, GenericArray};
 
 use crate::errors::ProtocolError;
@@ -87,6 +91,31 @@ impl SliceExt for [u8] {
         let (front, back) = self.split_at(L::USIZE);
         *self = back;
         Ok(GenericArray::clone_from_slice(front))
+    }
+}
+
+pub(crate) trait GenericArrayExt<O: ArrayLength<u8>> {
+    type Output: ArrayLength<u8>;
+
+    /// This allows us to concat two [`GenericArray`]s but with `where` bounds
+    /// `Other + Self`. Because sometimes `Self + Other` doesn't imply the
+    /// bounds and we have to add them to every call.
+    fn concat_ext(&self, rest: &GenericArray<u8, O>) -> GenericArray<u8, Self::Output>;
+}
+
+impl<L: ArrayLength<u8>, O: ArrayLength<u8>> GenericArrayExt<O> for GenericArray<u8, L>
+where
+    O: Add<L>,
+    Sum<O, L>: ArrayLength<u8>,
+{
+    type Output = Sum<O, L>;
+
+    fn concat_ext(&self, other: &GenericArray<u8, O>) -> GenericArray<u8, Self::Output> {
+        let mut output = GenericArray::<u8, O>::default().concat(GenericArray::<u8, L>::default());
+        output[..L::USIZE].copy_from_slice(self);
+        output[L::USIZE..].copy_from_slice(other);
+
+        output
     }
 }
 

@@ -8,6 +8,7 @@
 
 //! Key Exchange group implementation for Curve25519
 
+pub use curve25519_dalek;
 use curve25519_dalek::montgomery::MontgomeryPoint;
 use curve25519_dalek::scalar;
 use curve25519_dalek::traits::Identity;

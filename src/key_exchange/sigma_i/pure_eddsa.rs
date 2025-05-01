@@ -6,7 +6,8 @@
 // of this source tree. You may select, at your option, one of the above-listed
 // licenses.
 
-//! Key Exchange group implementation for Ed25519
+//! PureEdDSA implementation for [`SigmaI`](crate::SigmaI). Currently only
+//! supports [`Ed25519`](crate::Ed25519).
 
 use core::marker::PhantomData;
 
@@ -18,7 +19,7 @@ use super::{Message, MessageBuilder, SignatureProtocol};
 use crate::ciphersuite::CipherSuite;
 use crate::errors::ProtocolError;
 use crate::key_exchange::group::Group;
-use crate::key_exchange::traits::{Deserialize, KeyExchange, Serialize};
+use crate::key_exchange::traits::{Deserialize, Serialize};
 
 /// PureEdDSA for [`SigmaI`](crate::SigmaI).
 ///
@@ -33,7 +34,7 @@ impl<G: PureEddsaImpl> SignatureProtocol for PureEddsa<G> {
     type VerifyState<CS: CipherSuite, KE: Group> = G::VerifyState<CS, KE>;
 
     fn sign<'a, R: CryptoRng + RngCore, CS: CipherSuite, KE: Group>(
-        sk: &<Self::Group as Group>::Sk,
+        sk: &G::Sk,
         _: &mut R,
         message: &Message<CS, KE>,
     ) -> (Self::Signature, Self::VerifyState<CS, KE>) {
@@ -41,21 +42,17 @@ impl<G: PureEddsaImpl> SignatureProtocol for PureEddsa<G> {
     }
 
     fn verify<CS: CipherSuite, KE: Group>(
-        pk: &<Self::Group as Group>::Pk,
-        message_builder: MessageBuilder<'_, G>,
+        pk: &G::Pk,
+        message_builder: MessageBuilder<'_, CS>,
         state: Self::VerifyState<CS, KE>,
         signature: &Self::Signature,
-    ) -> Result<(), ProtocolError>
-    where
-        CS::KeyExchange: KeyExchange<Group = G>,
-    {
+    ) -> Result<(), ProtocolError> {
         G::verify(pk, message_builder, state, signature)
     }
 }
 
 pub(in super::super) mod implementation {
     use super::*;
-    use crate::key_exchange::traits::KeyExchange;
 
     pub trait PureEddsaImpl: Group + Sized {
         type Signature: Clone + Deserialize + Serialize + Zeroize;
@@ -68,11 +65,9 @@ pub(in super::super) mod implementation {
 
         fn verify<CS: CipherSuite, KE: Group>(
             pk: &Self::Pk,
-            message_builder: MessageBuilder<'_, Self>,
+            message_builder: MessageBuilder<'_, CS>,
             state: Self::VerifyState<CS, KE>,
             signature: &Self::Signature,
-        ) -> Result<(), ProtocolError>
-        where
-            CS::KeyExchange: KeyExchange<Group = Self>;
+        ) -> Result<(), ProtocolError>;
     }
 }

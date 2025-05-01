@@ -182,9 +182,6 @@ fn client_registration_roundtrip() -> Result<(), ProtocolError> {
 fn server_registration_roundtrip() -> Result<(), ProtocolError> {
     fn inner<CS: CipherSuite>() -> Result<(), ProtocolError>
     where
-        // Envelope: Nonce + Hash
-        NonceLen: Add<OutputSize<OprfHash<CS>>>,
-        EnvelopeLen<CS>: ArrayLength<u8>,
         // RegistrationUpload: (KePk + Hash) + Envelope
         <KeGroup<CS> as Group>::PkLen: Add<OutputSize<OprfHash<CS>>>,
         Sum<<KeGroup<CS> as Group>::PkLen, OutputSize<OprfHash<CS>>>:
@@ -344,9 +341,6 @@ fn registration_response_roundtrip() -> Result<(), ProtocolError> {
 fn registration_upload_roundtrip() -> Result<(), ProtocolError> {
     fn inner<CS: CipherSuite>() -> Result<(), ProtocolError>
     where
-        // Envelope: Nonce + Hash
-        NonceLen: Add<OutputSize<OprfHash<CS>>>,
-        EnvelopeLen<CS>: ArrayLength<u8>,
         // RegistrationUpload: (KePk + Hash) + Envelope
         <KeGroup<CS> as Group>::PkLen: Add<OutputSize<OprfHash<CS>>>,
         Sum<<KeGroup<CS> as Group>::PkLen, OutputSize<OprfHash<CS>>>:
@@ -473,11 +467,6 @@ fn triple_dh_credential_response_roundtrip() -> Result<(), ProtocolError> {
         Sum<<OprfGroup<CS> as voprf::Group>::ElemLen, NonceLen>:
             ArrayLength<u8> + Add<MaskedResponseLen<CS>>,
         CredentialResponseWithoutKeLen<CS>: ArrayLength<u8>,
-        // MaskedResponse: (Nonce + Hash) + KePk
-        NonceLen: Add<OutputSize<OprfHash<CS>>>,
-        Sum<NonceLen, OutputSize<OprfHash<CS>>>:
-            ArrayLength<u8> + Add<<KeGroup<CS> as Group>::PkLen>,
-        MaskedResponseLen<CS>: ArrayLength<u8>,
         // CredentialResponse: CredentialResponseWithoutKeLen + Ke2Message
         <CS::KeyExchange as KeyExchange>::KE2Message: Serialize,
         CredentialResponseWithoutKeLen<CS>: Add<Ke2MessageLen<CS>>,
@@ -562,11 +551,6 @@ fn sigma_i_ecdsa_credential_response_roundtrip() -> Result<(), ProtocolError> {
         Sum<<OprfGroup<CS> as voprf::Group>::ElemLen, NonceLen>:
             ArrayLength<u8> + Add<MaskedResponseLen<CS>>,
         CredentialResponseWithoutKeLen<CS>: ArrayLength<u8>,
-        // MaskedResponse: (Nonce + Hash) + KePk
-        NonceLen: Add<OutputSize<OprfHash<CS>>>,
-        Sum<NonceLen, OutputSize<OprfHash<CS>>>:
-            ArrayLength<u8> + Add<<KeGroup<CS> as Group>::PkLen>,
-        MaskedResponseLen<CS>: ArrayLength<u8>,
         // CredentialResponse: CredentialResponseWithoutKeLen + Ke2Message
         <CS::KeyExchange as KeyExchange>::KE2Message: Serialize,
         CredentialResponseWithoutKeLen<CS>: Add<Ke2MessageLen<CS>>,

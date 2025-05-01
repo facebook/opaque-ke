@@ -19,7 +19,6 @@ use crate::ciphersuite::CipherSuite;
 use crate::errors::ProtocolError;
 use crate::key_exchange::group::Group;
 use crate::key_exchange::sigma_i::{Message, MessageBuilder, SharedSecret, SignatureProtocol};
-use crate::key_exchange::traits::KeyExchange;
 use crate::key_exchange::tripledh::DiffieHellman;
 use crate::serialization::SliceExt;
 
@@ -238,13 +237,10 @@ impl<G: Group> PublicKey<G> {
     /// Public-key verifying implementation
     pub(crate) fn verify<CS: CipherSuite, SIG: SignatureProtocol<Group = G>, KE: Group>(
         &self,
-        message_builder: MessageBuilder<'_, G>,
+        message_builder: MessageBuilder<'_, CS>,
         state: SIG::VerifyState<CS, KE>,
         signature: &SIG::Signature,
-    ) -> Result<(), ProtocolError>
-    where
-        CS::KeyExchange: KeyExchange<Group = G>,
-    {
+    ) -> Result<(), ProtocolError> {
         SIG::verify(&self.0, message_builder, state, signature)
     }
 }

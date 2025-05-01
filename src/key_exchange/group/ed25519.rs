@@ -14,6 +14,7 @@ use curve25519_dalek::edwards::CompressedEdwardsY;
 use curve25519_dalek::traits::IsIdentity;
 use curve25519_dalek::{EdwardsPoint, Scalar};
 use digest::Digest;
+pub use ed25519_dalek;
 use ed25519_dalek::hazmat::ExpandedSecretKey;
 use ed25519_dalek::{SecretKey, Sha512};
 use generic_array::sequence::Concat;
@@ -29,7 +30,7 @@ use crate::key_exchange::sigma_i::hash_eddsa::implementation::HashEddsaImpl;
 use crate::key_exchange::sigma_i::pure_eddsa::implementation::PureEddsaImpl;
 pub use crate::key_exchange::sigma_i::shared::PreHash;
 use crate::key_exchange::sigma_i::{CachedMessage, Message, MessageBuilder};
-use crate::key_exchange::traits::{Deserialize, KeyExchange, Serialize};
+use crate::key_exchange::traits::{Deserialize, Serialize};
 use crate::serialization::{SliceExt, UpdateExt};
 
 /// Implementation for Ed25519.
@@ -148,17 +149,14 @@ impl PureEddsaImpl for Ed25519 {
     /// with the corresponding private key.
     fn verify<CS: CipherSuite, KE: Group>(
         pk: &Self::Pk,
-        message_builder: MessageBuilder<'_, Self>,
+        message_builder: MessageBuilder<'_, CS>,
         state: Self::VerifyState<CS, KE>,
         signature: &Self::Signature,
-    ) -> Result<(), ProtocolError>
-    where
-        CS::KeyExchange: KeyExchange<Group = Self>,
-    {
+    ) -> Result<(), ProtocolError> {
         verify(
             pk,
             false,
-            message_builder.build::<CS, KE>(state).verify_message(),
+            message_builder.build::<KE>(state).verify_message(),
             signature,
         )
     }
@@ -274,6 +272,14 @@ fn verify<'a>(
 pub struct Signature {
     R: CompressedEdwardsY,
     s: Scalar,
+}
+
+impl Signature {
+    /// Expects the `R` and `s` components of a Ed25519 signature with no added
+    /// framing.
+    pub fn from_slice(mut bytes: &[u8]) -> Result<Self, ProtocolError> {
+        Self::deserialize_take(&mut bytes)
+    }
 }
 
 impl Deserialize for Signature {

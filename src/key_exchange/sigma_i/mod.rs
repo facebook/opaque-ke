@@ -29,7 +29,7 @@ use rand::{CryptoRng, RngCore};
 use subtle::{ConstantTimeEq, CtOption};
 use zeroize::{Zeroize, ZeroizeOnDrop};
 
-use crate::ciphersuite::{CipherSuite, KeGroup, KeHash, OprfGroup, OprfHash};
+use crate::ciphersuite::{CipherSuite, KeGroup, KeHash, OprfGroup};
 use crate::envelope::NonceLen;
 use crate::errors::{InternalError, ProtocolError};
 use crate::hash::{Hash, OutputSize, ProxyHash};
@@ -39,7 +39,7 @@ pub use crate::key_exchange::shared::{Ke1Message, Ke1State};
 use crate::key_exchange::traits::{
     CredentialRequestParts, CredentialRequestPartsLen, CredentialResponseParts,
     CredentialResponsePartsLen, Deserialize, GenerateKe2Result, GenerateKe3Result, KeyExchange,
-    Serialize, SerializedContext, SerializedIdentifiers,
+    Sealed, Serialize, SerializedContext, SerializedIdentifiers,
 };
 use crate::keypair::{KeyPair, PrivateKey, PublicKey};
 use crate::opaque::MaskedResponseLen;
@@ -119,20 +119,18 @@ pub trait SignatureProtocol {
     /// The `state` is created by [`sign()`](Self::sign()).
     fn verify<CS: CipherSuite, KE: Group>(
         pk: &<Self::Group as Group>::Pk,
-        message_builder: MessageBuilder<'_, Self::Group>,
+        message_builder: MessageBuilder<'_, CS>,
         state: Self::VerifyState<CS, KE>,
         signature: &Self::Signature,
-    ) -> Result<(), ProtocolError>
-    where
-        CS::KeyExchange: KeyExchange<Group = Self::Group>;
+    ) -> Result<(), ProtocolError>;
 }
 
 /// Holds the context.
 #[derive(Debug, Eq, Hash, PartialEq, ZeroizeOnDrop)]
-pub struct MessageBuilder<'a, G: Group> {
+pub struct MessageBuilder<'a, CS: CipherSuite> {
     role: Role,
     context: SerializedContext<'a>,
-    identifiers: SerializedIdentifiers<'a, G>,
+    identifiers: SerializedIdentifiers<'a, KeGroup<CS>>,
 }
 
 /// Shared secret computation implementation.
@@ -533,6 +531,14 @@ where
     }
 }
 
+impl<SIG: SignatureProtocol, KE: 'static + Group, KEH: Hash> Sealed for SigmaI<SIG, KE, KEH>
+where
+    KEH::Core: ProxyHash,
+    <KEH::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
+    Le<<KEH::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
+{
+}
+
 impl<CS: CipherSuite, KE: Group> Message<'_, CS, KE> {
     /// Returns the message to be signed.
     pub fn sign_message(&self) -> impl Clone + Iterator<Item = &[u8]> {
@@ -580,17 +586,11 @@ impl<CS: CipherSuite, KE: Group> Message<'_, CS, KE> {
     }
 }
 
-impl<'a, G: Group> MessageBuilder<'a, G> {
+impl<'a, CS: CipherSuite> MessageBuilder<'a, CS> {
     /// Re-create a [`Message`] again. [`CachedMessage`] can be created by
     /// [`Message::to_cached()`] and stored in
     /// [`SignatureProtocol::VerifyState`].
-    pub fn build<CS: CipherSuite, KE: Group>(
-        self,
-        cache: CachedMessage<CS, KE>,
-    ) -> Message<'a, CS, KE>
-    where
-        CS::KeyExchange: KeyExchange<Group = G>,
-    {
+    pub fn build<KE: Group>(self, cache: CachedMessage<CS, KE>) -> Message<'a, CS, KE> {
         Message {
             role: self.role,
             context: self.context.clone(),
@@ -661,10 +661,6 @@ where
     Sum<<OprfGroup<CS> as voprf::Group>::ElemLen, NonceLen>:
         ArrayLength<u8> + Add<MaskedResponseLen<CS>>,
     CredentialResponsePartsLen<CS>: ArrayLength<u8>,
-    // MaskedResponse: (Nonce + Hash) + KePk
-    NonceLen: Add<OutputSize<OprfHash<CS>>>,
-    Sum<NonceLen, OutputSize<OprfHash<CS>>>: ArrayLength<u8> + Add<<KeGroup<CS> as Group>::PkLen>,
-    MaskedResponseLen<CS>: ArrayLength<u8>,
 {
     type Len = CachedMessageLen<CS, KE>;
 

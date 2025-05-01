@@ -6,8 +6,10 @@
 // of this source tree. You may select, at your option, one of the above-listed
 // licenses.
 
+#![cfg(test_hsm)]
+#![allow(type_alias_bounds)]
+
 use std::env;
-use std::ops::Add;
 use std::sync::{LazyLock, Mutex};
 use std::vec::Vec;
 
@@ -19,9 +21,9 @@ use cryptoki::mechanism::Mechanism;
 use cryptoki::object::{Attribute, AttributeType, KeyType, ObjectClass, ObjectHandle};
 use cryptoki::session::{Session, UserType};
 use cryptoki::types::AuthPin;
-use digest::OutputSizeUser;
 #[cfg(feature = "ecdsa")]
-use digest::{Digest, Update};
+use digest::Digest;
+use digest::OutputSizeUser;
 use elliptic_curve::group::prime::PrimeCurveAffine;
 use elliptic_curve::group::Curve;
 use elliptic_curve::pkcs8::der::asn1::{OctetString, OctetStringRef};
@@ -32,8 +34,29 @@ use elliptic_curve::sec1::{FromEncodedPoint, ModulusSize, Tag, ToEncodedPoint};
 #[cfg(feature = "ecdsa")]
 use elliptic_curve::PrimeCurve;
 use elliptic_curve::{AffinePoint, CurveArithmetic, FieldBytesSize, Group as _, ProjectivePoint};
-use generic_array::typenum::{Sum, Unsigned};
+use generic_array::typenum::Unsigned;
 use generic_array::{ArrayLength, GenericArray};
+#[cfg(all(feature = "ristretto255", feature = "ed25519"))]
+use opaque_ke::key_exchange::group::ed25519::{self, Ed25519};
+use opaque_ke::key_exchange::group::elliptic_curve::NonIdentity;
+use opaque_ke::key_exchange::group::Group;
+#[cfg(feature = "ecdsa")]
+use opaque_ke::key_exchange::sigma_i::ecdsa::{self, Ecdsa, PreHash};
+#[cfg(all(feature = "ristretto255", feature = "ed25519"))]
+use opaque_ke::key_exchange::sigma_i::pure_eddsa::PureEddsa;
+#[cfg(feature = "ecdsa")]
+use opaque_ke::key_exchange::sigma_i::{CachedMessage, Message, SigmaI};
+use opaque_ke::key_exchange::tripledh::TripleDh;
+use opaque_ke::key_exchange::KeyExchange;
+use opaque_ke::keypair::{KeyPair, PublicKey};
+use opaque_ke::ksf::Identity;
+use opaque_ke::{
+    CipherSuite, ClientLogin, ClientLoginFinishParameters, ClientLoginStartResult,
+    ClientRegistration, ClientRegistrationFinishParameters, ClientRegistrationStartResult,
+    ServerLogin, ServerLoginParameters, ServerLoginStartResult, ServerRegistration, ServerSetup,
+};
+#[cfg(all(feature = "curve25519", feature = "ristretto255"))]
+use opaque_ke::{Curve25519, Ristretto255};
 use p256::NistP256;
 use p384::NistP384;
 use p521::NistP521;
@@ -41,31 +64,9 @@ use rand::rngs::OsRng;
 use sha2::{Sha256, Sha384, Sha512};
 use subtle::{Choice, ConditionallySelectable, ConstantTimeEq};
 
-use crate::ciphersuite::{KeGroup, OprfGroup, OprfHash};
-use crate::envelope::NonceLen;
-use crate::hash::OutputSize;
-#[cfg(all(feature = "ristretto255", feature = "ed25519"))]
-use crate::key_exchange::group::ed25519::{self, Ed25519};
-use crate::key_exchange::group::elliptic_curve::NonIdentity;
-use crate::key_exchange::group::Group;
-#[cfg(feature = "ecdsa")]
-use crate::key_exchange::sigma_i::ecdsa::{self, Ecdsa, PreHash};
-#[cfg(all(feature = "ristretto255", feature = "ed25519"))]
-use crate::key_exchange::sigma_i::pure_eddsa::PureEddsa;
-#[cfg(feature = "ecdsa")]
-use crate::key_exchange::sigma_i::{CachedMessage, Message, SigmaI};
-use crate::key_exchange::traits::KeyExchange;
-use crate::key_exchange::tripledh::TripleDh;
-use crate::keypair::{KeyPair, PublicKey};
-use crate::ksf::Identity;
-use crate::opaque::MaskedResponseLen;
-use crate::{
-    CipherSuite, ClientLogin, ClientLoginFinishParameters, ClientLoginStartResult,
-    ClientRegistration, ClientRegistrationFinishParameters, ClientRegistrationStartResult,
-    ServerLogin, ServerLoginParameters, ServerLoginStartResult, ServerRegistration, ServerSetup,
-};
-#[cfg(all(feature = "curve25519", feature = "ristretto255"))]
-use crate::{Curve25519, Ristretto255};
+type OprfGroup<CS: CipherSuite> = <CS::OprfCs as voprf::CipherSuite>::Group;
+type OprfHash<CS: CipherSuite> = <CS::OprfCs as voprf::CipherSuite>::Hash;
+type KeGroup<CS: CipherSuite> = <CS::KeyExchange as KeyExchange>::Group;
 
 #[test]
 fn triple_dh_p256() {
@@ -225,10 +226,6 @@ fn test<CS: 'static + CipherSuite>(
 ) where
     KeGroup<CS>: Pkcs11PublicKey,
     RemoteKey: Pkcs11KeyExchange<CS::KeyExchange>,
-    // MaskedResponse: (Nonce + Hash) + KePk
-    NonceLen: Add<OutputSize<OprfHash<CS>>>,
-    Sum<NonceLen, OutputSize<OprfHash<CS>>>: ArrayLength<u8> + Add<<KeGroup<CS> as Group>::PkLen>,
-    MaskedResponseLen<CS>: ArrayLength<u8>,
 {
     let (remote_key, pk) = pkcs11_generate_key_pair(dh_mechanism, oid, attribute);
 
@@ -619,7 +616,7 @@ where
 }
 
 #[cfg(feature = "ecdsa")]
-fn pkcs_11_ecdsa_sign<'a, G: CurveArithmetic + PrimeCurve, H: Clone + Digest + Update>(
+fn pkcs_11_ecdsa_sign<'a, G: CurveArithmetic + PrimeCurve, H: Clone + Digest>(
     sk: ObjectHandle,
     sign_message: impl Iterator<Item = &'a [u8]>,
     verify_message: impl Iterator<Item = &'a [u8]>,
@@ -627,10 +624,19 @@ fn pkcs_11_ecdsa_sign<'a, G: CurveArithmetic + PrimeCurve, H: Clone + Digest + U
 where
     SignatureSize<G>: ArrayLength<u8>,
 {
-    use crate::serialization::UpdateExt;
+    let mut sign_hash = H::new();
+    let mut verify_hash = H::new();
 
-    let sign_pre_hash = H::new().chain_iter(sign_message).finalize();
-    let verify_pre_hash = H::new().chain_iter(verify_message).finalize();
+    for bytes in sign_message {
+        sign_hash.update(bytes);
+    }
+
+    for bytes in verify_message {
+        verify_hash.update(bytes);
+    }
+
+    let sign_pre_hash = sign_hash.finalize();
+    let verify_pre_hash = verify_hash.finalize();
 
     let session = SESSION.lock().unwrap();
     let signature = session.sign(&Mechanism::Ecdsa, sk, &sign_pre_hash).unwrap();
@@ -648,8 +654,6 @@ fn pkcs_11_eddsa_sign<CS: CipherSuite>(
 ) -> (ed25519::Signature, CachedMessage<CS, Ristretto255>) {
     use cryptoki::mechanism::eddsa::{EddsaParams, EddsaSignatureScheme};
 
-    use crate::key_exchange::traits::Deserialize;
-
     let mut message_bytes = Vec::new();
     message
         .sign_message()
@@ -665,7 +669,7 @@ fn pkcs_11_eddsa_sign<CS: CipherSuite>(
         .unwrap();
     drop(session);
 
-    let signature = ed25519::Signature::deserialize_take(&mut (signature.as_slice())).unwrap();
+    let signature = ed25519::Signature::from_slice(&signature).unwrap();
 
     (signature, message.to_cached())
 }

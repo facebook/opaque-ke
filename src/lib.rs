@@ -969,8 +969,12 @@
 //! exposing the bytes of the private key to this library.
 //! ```
 //! # use generic_array::{GenericArray, typenum::U0};
-//! # use opaque_ke::{CipherSuite, ClientLogin, ClientRegistration, ClientRegistrationFinishParameters, ServerRegistration, ciphersuite::KeGroup, errors::ProtocolError, keypair::PrivateKey, key_exchange::{group::Group, tripledh::DiffieHellman}};
+//! # use opaque_ke::{CipherSuite, ClientLogin, ClientRegistration, ClientRegistrationFinishParameters, ServerRegistration, errors::ProtocolError, keypair::PrivateKey, key_exchange::{KeyExchange, group::Group, tripledh::DiffieHellman}};
 //! # use rand::rngs::OsRng;
+//! # #[cfg(feature = "ristretto255")]
+//! # type Ristretto255 = opaque_ke::Ristretto255;
+//! # #[cfg(not(feature = "ristretto255"))]
+//! # type Ristretto255 = p256::NistP256;
 //! # struct Default;
 //! # #[cfg(feature = "ristretto255")]
 //! # impl CipherSuite for Default {
@@ -988,32 +992,32 @@
 //! # #[error("test error")]
 //! # struct YourRemoteKeyError;
 //! # #[derive(Clone)]
-//! # struct YourRemoteKey(<KeGroup<Default> as Group>::Sk);
+//! # struct YourRemoteKey(<Ristretto255 as Group>::Sk);
 //! # impl YourRemoteKey {
-//! #     fn diffie_hellman(&self, pk: &PublicKey<KeGroup<Default>>) -> Result<GenericArray<u8, <KeGroup<Default> as Group>::PkLen>, YourRemoteKeyError> {
-//! #         Ok(<<KeGroup<Default> as Group>::Sk as DiffieHellman<KeGroup<Default>>>::diffie_hellman(self.0, pk.to_group_type()))
+//! #     fn diffie_hellman(&self, pk: &PublicKey<Ristretto255>) -> Result<GenericArray<u8, <Ristretto255 as Group>::PkLen>, YourRemoteKeyError> {
+//! #         Ok(<<Ristretto255 as Group>::Sk as DiffieHellman<Ristretto255>>::diffie_hellman(self.0, pk.to_group_type()))
 //! #     }
 //! # }
 //! use opaque_ke::{ServerLogin, ServerLoginParameters, ServerSetup};
 //! use opaque_ke::keypair::{KeyPair, PrivateKeySerialization, PublicKey};
 //!
 //! // Implement if you intend to use `ServerSetup::de/serialize` instead of `serde`.
-//! impl PrivateKeySerialization<KeGroup<Default>> for YourRemoteKey {
+//! impl PrivateKeySerialization<Ristretto255> for YourRemoteKey {
 //!     type Error = YourRemoteKeyError;
 //!     type Len = U0;
 //!
-//!     fn serialize_key_pair(_: &KeyPair<KeGroup<Default>, Self>) -> GenericArray<u8, Self::Len> {
+//!     fn serialize_key_pair(_: &KeyPair<Ristretto255, Self>) -> GenericArray<u8, Self::Len> {
 //!         unimplemented!()
 //!     }
 //!
-//!     fn deserialize_key_pair(input: &mut &[u8]) -> Result<KeyPair<KeGroup<Default>, Self>, ProtocolError<Self::Error>> {
+//!     fn deserialize_key_pair(input: &mut &[u8]) -> Result<KeyPair<Ristretto255, Self>, ProtocolError<Self::Error>> {
 //!         unimplemented!()
 //!     }
 //! }
 //!
-//! # let sk = KeGroup::<Default>::random_sk(&mut OsRng);
-//! # let pk = KeGroup::<Default>::public_key(sk);
-//! # let pk = KeGroup::<Default>::serialize_pk(pk);
+//! # let sk = Ristretto255::random_sk(&mut OsRng);
+//! # let pk = Ristretto255::public_key(sk);
+//! # let pk = Ristretto255::serialize_pk(pk);
 //! # let public_key = PublicKey::deserialize(&pk).unwrap();
 //! # let remote_key = YourRemoteKey(sk);
 //! # let mut server_rng = OsRng;

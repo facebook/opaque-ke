@@ -36,7 +36,7 @@ use crate::keypair::{
 };
 use crate::ksf::Ksf;
 use crate::messages::{CredentialRequestLen, RegistrationUploadLen};
-use crate::serialization::SliceExt;
+use crate::serialization::{GenericArrayExt, SliceExt};
 use crate::{
     CredentialFinalization, CredentialRequest, CredentialResponse, RegistrationRequest,
     RegistrationResponse, RegistrationUpload, ServerLoginBuilder,
@@ -260,8 +260,8 @@ impl<CS: CipherSuite, SK: Clone> ServerSetup<CS, SK> {
 /// [`ServerRegistration::start_with_key_material()`] and
 /// [`ServerLogin::builder_with_key_material()`].
 ///
-/// Use an HKDF, with the input key material [`ikm`](Self::ikm), expand
-/// operation with [`info`](Self::info) with an output length
+/// Use a HKDF, with the input key material [`ikm`](Self::ikm), expand operation
+/// with [`info`](Self::info) with an output length
 /// of [`CS::OprfCs::ScalarLen`](voprf::Group::ScalarLen).
 pub struct KeyMaterialInfo<'ci, OS: Clone> {
     /// Input key material for the HKDF.
@@ -386,9 +386,6 @@ impl<CS: CipherSuite> ServerRegistration<CS> {
     /// Serialization into bytes
     pub fn serialize(&self) -> GenericArray<u8, ServerRegistrationLen<CS>>
     where
-        // Envelope: Nonce + Hash
-        NonceLen: Add<OutputSize<OprfHash<CS>>>,
-        EnvelopeLen<CS>: ArrayLength<u8>,
         // RegistrationUpload: (KePk + Hash) + Envelope
         <KeGroup<CS> as Group>::PkLen: Add<OutputSize<OprfHash<CS>>>,
         Sum<<KeGroup<CS> as Group>::PkLen, OutputSize<OprfHash<CS>>>:
@@ -536,14 +533,7 @@ impl<CS: CipherSuite> ClientLogin<CS> {
         password: &[u8],
         credential_response: CredentialResponse<CS>,
         params: ClientLoginFinishParameters<CS>,
-    ) -> Result<ClientLoginFinishResult<CS>, ProtocolError>
-    where
-        // MaskedResponse: (Nonce + Hash) + KePk
-        NonceLen: Add<OutputSize<OprfHash<CS>>>,
-        Sum<NonceLen, OutputSize<OprfHash<CS>>>:
-            ArrayLength<u8> + Add<<KeGroup<CS> as Group>::PkLen>,
-        MaskedResponseLen<CS>: ArrayLength<u8>,
-    {
+    ) -> Result<ClientLoginFinishResult<CS>, ProtocolError> {
         // Check if beta value from server is equal to alpha value from client
         if self
             .credential_request
@@ -673,14 +663,7 @@ impl<CS: CipherSuite> ServerLogin<CS> {
             context,
             identifiers,
         }: ServerLoginParameters<'a, 'a>,
-    ) -> Result<ServerLoginBuilder<'a, CS, SK>, ProtocolError>
-    where
-        // MaskedResponse: (Nonce + Hash) + KePk
-        NonceLen: Add<OutputSize<OprfHash<CS>>>,
-        Sum<NonceLen, OutputSize<OprfHash<CS>>>:
-            ArrayLength<u8> + Add<<KeGroup<CS> as Group>::PkLen>,
-        MaskedResponseLen<CS>: ArrayLength<u8>,
-    {
+    ) -> Result<ServerLoginBuilder<'a, CS, SK>, ProtocolError> {
         let record = CtOption::new(
             ServerRegistration::dummy(rng, server_setup),
             Choice::from(password_file.is_none() as u8),
@@ -753,14 +736,7 @@ impl<CS: CipherSuite> ServerLogin<CS> {
         credential_request: CredentialRequest<CS>,
         credential_identifier: &[u8],
         params: ServerLoginParameters<'a, 'a>,
-    ) -> Result<ServerLoginBuilder<'a, CS, SK>, ProtocolError>
-    where
-        // MaskedResponse: (Nonce + Hash) + KePk
-        NonceLen: Add<OutputSize<OprfHash<CS>>>,
-        Sum<NonceLen, OutputSize<OprfHash<CS>>>:
-            ArrayLength<u8> + Add<<KeGroup<CS> as Group>::PkLen>,
-        MaskedResponseLen<CS>: ArrayLength<u8>,
-    {
+    ) -> Result<ServerLoginBuilder<'a, CS, SK>, ProtocolError> {
         let KeyMaterialInfo {
             ikm: oprf_seed,
             info,
@@ -815,14 +791,7 @@ impl<CS: CipherSuite> ServerLogin<CS> {
         credential_request: CredentialRequest<CS>,
         credential_identifier: &[u8],
         parameters: ServerLoginParameters,
-    ) -> Result<ServerLoginStartResult<CS>, ProtocolError>
-    where
-        // MaskedResponse: (Nonce + Hash) + KePk
-        NonceLen: Add<OutputSize<OprfHash<CS>>>,
-        Sum<NonceLen, OutputSize<OprfHash<CS>>>:
-            ArrayLength<u8> + Add<<KeGroup<CS> as Group>::PkLen>,
-        MaskedResponseLen<CS>: ArrayLength<u8>,
-    {
+    ) -> Result<ServerLoginStartResult<CS>, ProtocolError> {
         let builder = Self::builder(
             rng,
             server_setup,
@@ -1113,18 +1082,11 @@ pub(crate) struct MaskedResponse<CS: CipherSuite> {
 }
 
 pub(crate) type MaskedResponseLen<CS: CipherSuite> =
-    Sum<Sum<NonceLen, OutputSize<OprfHash<CS>>>, <KeGroup<CS> as Group>::PkLen>;
+    Sum<Sum<OutputSize<OprfHash<CS>>, NonceLen>, <KeGroup<CS> as Group>::PkLen>;
 
 impl<CS: CipherSuite> MaskedResponse<CS> {
-    pub(crate) fn serialize(&self) -> GenericArray<u8, MaskedResponseLen<CS>>
-    where
-        // MaskedResponse: (Nonce + Hash) + KePk
-        NonceLen: Add<OutputSize<OprfHash<CS>>>,
-        Sum<NonceLen, OutputSize<OprfHash<CS>>>:
-            ArrayLength<u8> + Add<<KeGroup<CS> as Group>::PkLen>,
-        MaskedResponseLen<CS>: ArrayLength<u8>,
-    {
-        self.nonce.concat(self.hash.clone()).concat(self.pk.clone())
+    pub(crate) fn serialize(&self) -> GenericArray<u8, MaskedResponseLen<CS>> {
+        self.nonce.concat_ext(&self.hash).concat(self.pk.clone())
     }
 
     pub(crate) fn deserialize_take(bytes: &mut &[u8]) -> Result<Self, ProtocolError> {
@@ -1145,13 +1107,7 @@ fn mask_response<CS: CipherSuite>(
     masking_nonce: &[u8],
     server_s_pk: &PublicKey<KeGroup<CS>>,
     envelope: &Envelope<CS>,
-) -> Result<MaskedResponse<CS>, ProtocolError>
-where
-    // MaskedResponse: (Nonce + Hash) + KePk
-    NonceLen: Add<OutputSize<OprfHash<CS>>>,
-    Sum<NonceLen, OutputSize<OprfHash<CS>>>: ArrayLength<u8> + Add<<KeGroup<CS> as Group>::PkLen>,
-    MaskedResponseLen<CS>: ArrayLength<u8>,
-{
+) -> Result<MaskedResponse<CS>, ProtocolError> {
     let mut xor_pad = GenericArray::<_, MaskedResponseLen<CS>>::default();
 
     Hkdf::<OprfHash<CS>>::from_prk(masking_key)
@@ -1176,13 +1132,7 @@ fn unmask_response<CS: CipherSuite>(
     masking_key: &[u8],
     masking_nonce: &[u8],
     masked_response: &MaskedResponse<CS>,
-) -> Result<(PublicKey<KeGroup<CS>>, Envelope<CS>), ProtocolError>
-where
-    // MaskedResponse: (Nonce + Hash) + KePk
-    NonceLen: Add<OutputSize<OprfHash<CS>>>,
-    Sum<NonceLen, OutputSize<OprfHash<CS>>>: ArrayLength<u8> + Add<<KeGroup<CS> as Group>::PkLen>,
-    MaskedResponseLen<CS>: ArrayLength<u8>,
-{
+) -> Result<(PublicKey<KeGroup<CS>>, Envelope<CS>), ProtocolError> {
     let mut xor_pad = GenericArray::<_, MaskedResponseLen<CS>>::default();
 
     Hkdf::<OprfHash<CS>>::from_prk(masking_key)
