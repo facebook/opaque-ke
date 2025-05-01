@@ -35,7 +35,7 @@
 //! struct Default;
 //! impl CipherSuite for Default {
 //!     type OprfCs = opaque_ke::Ristretto255;
-//!     type KeyExchange = opaque_ke::TripleDh<opaque_ke::Ristretto255, sha2::Sha256>;
+//!     type KeyExchange = opaque_ke::TripleDh<opaque_ke::Ristretto255, sha2::Sha512>;
 //!     type Ksf = opaque_ke::ksf::Identity;
 //! }
 //! ```
