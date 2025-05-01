@@ -639,6 +639,10 @@ where
             CredentialFinalization::deserialize(&parameters.KE3)?,
             ServerLoginFinishParameters {
                 context: Some(&parameters.context),
+                identifiers: Identifiers {
+                    client: parameters.client_identity.as_deref(),
+                    server: parameters.server_identity.as_deref(),
+                },
             },
         )?;
 

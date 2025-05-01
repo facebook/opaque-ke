@@ -52,15 +52,15 @@ where
         rng: &mut R,
     ) -> Result<(Self::KE1State, Self::KE1Message), ProtocolError>;
 
-    fn ke2_builder<'c, CS: CipherSuite<KeyExchange = Self>, R: RngCore + CryptoRng>(
+    fn ke2_builder<'a, CS: CipherSuite<KeyExchange = Self>, R: RngCore + CryptoRng>(
         rng: &mut R,
         credential_request: CredentialRequestParts<CS>,
         ke1_message: Self::KE1Message,
         credential_response: CredentialResponseParts<CS>,
         client_s_pk: PublicKey<Self::Group>,
-        identifiers: SerializedIdentifiers<'_, KeGroup<CS>>,
-        context: SerializedContext<'c>,
-    ) -> Result<Self::KE2Builder<'c, CS>, ProtocolError>;
+        identifiers: SerializedIdentifiers<'a, Self::Group>,
+        context: SerializedContext<'a>,
+    ) -> Result<Self::KE2Builder<'a, CS>, ProtocolError>;
 
     fn ke2_builder_data<'a, CS: CipherSuite<KeyExchange = Self>>(
         builder: &'a Self::KE2Builder<'_, CS>,
@@ -87,13 +87,14 @@ where
         ke1_state: &Self::KE1State,
         server_s_pk: PublicKey<Self::Group>,
         client_s_sk: PrivateKey<Self::Group>,
-        identifiers: SerializedIdentifiers<'_, KeGroup<CS>>,
+        identifiers: SerializedIdentifiers<'_, Self::Group>,
         context: SerializedContext<'_>,
     ) -> Result<GenerateKe3Result<Self>, ProtocolError>;
 
     fn finish_ke<CS: CipherSuite<KeyExchange = Self>>(
         ke3_message: Self::KE3Message,
         ke2_state: &Self::KE2State<CS>,
+        identifiers: SerializedIdentifiers<'_, Self::Group>,
         context: SerializedContext<'_>,
     ) -> Result<Output<Self::Hash>, ProtocolError>;
 }
@@ -223,6 +224,12 @@ impl<'a> SerializedContext<'a> {
     }
 }
 
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Deserialize, serde::Serialize),
+    serde(bound(deserialize = "'de: 'a", serialize = ""))
+)]
+#[derive_where(Clone, Debug, Eq, Hash, PartialEq, Zeroize)]
 pub struct SerializedIdentifiers<'a, G: Group> {
     pub client: SerializedIdentifier<'a, G>,
     pub server: SerializedIdentifier<'a, G>,
@@ -230,13 +237,26 @@ pub struct SerializedIdentifiers<'a, G: Group> {
 
 /// Computes `I2OSP(len(input), max_bytes) || input` and helps hold output
 /// without allocation.
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Deserialize, serde::Serialize),
+    serde(bound(deserialize = "'de: 'a", serialize = ""))
+)]
+#[derive_where(Clone, Debug, Eq, Hash, PartialEq, Zeroize)]
 pub struct SerializedIdentifier<'a, G: Group> {
     length: GenericArray<u8, U2>,
     identifier: Identifier<'a, G>,
 }
 
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Deserialize, serde::Serialize),
+    serde(bound = "")
+)]
+#[derive_where(Clone, Debug, Eq, Hash, PartialEq, Zeroize)]
 enum Identifier<'a, G: Group> {
     Owned(GenericArray<u8, G::PkLen>),
+    #[derive_where(skip_inner(Zeroize))]
     Borrowed(&'a [u8]),
 }
 

@@ -876,6 +876,62 @@
 //!
 //! # Ok::<(), ProtocolError>(())
 //! ```
+//! and in [`ServerLoginFinishParameters`] in [Server Login
+//! Finish](#server-login-finish):
+//! ```
+//! # use opaque_ke::{
+//! #   errors::ProtocolError,
+//! #   ClientRegistration, ClientRegistrationFinishParameters, ServerRegistration, ClientLogin, ClientLoginFinishParameters, Identifiers, ServerLogin, ServerLoginStartParameters, ServerLoginFinishParameters, CredentialFinalization, ServerSetup,
+//! #   ksf::Identity,
+//! # };
+//! # use opaque_ke::CipherSuite;
+//! # struct Default;
+//! # #[cfg(feature = "ristretto255")]
+//! # impl CipherSuite for Default {
+//! #     type OprfCs = opaque_ke::Ristretto255;
+//! #     type KeyExchange = opaque_ke::TripleDh<opaque_ke::Ristretto255, sha2::Sha512>;
+//! #     type Ksf = opaque_ke::ksf::Identity;
+//! # }
+//! # #[cfg(not(feature = "ristretto255"))]
+//! # impl CipherSuite for Default {
+//! #     type OprfCs = p256::NistP256;
+//! #     type KeyExchange = opaque_ke::TripleDh<p256::NistP256, sha2::Sha256>;
+//! #     type Ksf = opaque_ke::ksf::Identity;
+//! # }
+//! # use rand::{rngs::OsRng, RngCore};
+//! # let mut client_rng = OsRng;
+//! # let client_registration_start_result = ClientRegistration::<Default>::start(
+//! #     &mut client_rng,
+//! #     b"password",
+//! # )?;
+//! # let mut server_rng = OsRng;
+//! # let server_setup = ServerSetup::<Default>::new(&mut server_rng);
+//! # let server_registration_start_result = ServerRegistration::<Default>::start(&server_setup, client_registration_start_result.message, b"alice@example.com")?;
+//! # let client_registration_finish_result = client_registration_start_result.state.finish(&mut client_rng, b"password", server_registration_start_result.message, ClientRegistrationFinishParameters::new(Identifiers { client: Some(b"Alice_the_Cryptographer"), server: Some(b"Facebook") }, None))?;
+//! # let password_file_bytes = ServerRegistration::<Default>::finish(client_registration_finish_result.message).serialize();
+//! # let client_login_start_result = ClientLogin::<Default>::start(
+//! #     &mut client_rng,
+//! #     b"password",
+//! # )?;
+//! # let password_file =
+//! #   ServerRegistration::<Default>::deserialize(
+//! #     &password_file_bytes,
+//! #   )?;
+//! # let server_login_start_result =
+//! #     ServerLogin::start(&mut server_rng, &server_setup, Some(password_file), client_login_start_result.message, b"alice@example.com", ServerLoginStartParameters { context: None, identifiers: Identifiers { client: Some(b"Alice_the_Cryptographer"), server: Some(b"Facebook") } })?;
+//! # let client_login_finish_result = client_login_start_result.state.finish(
+//! #   &mut client_rng,
+//! #   b"password",
+//! #   server_login_start_result.message,
+//! #   ClientLoginFinishParameters::new(None, Identifiers { client: Some(b"Alice_the_Cryptographer"), server: Some(b"Facebook") }, None),
+//! # )?;
+//! let server_login_finish_result = server_login_start_result.state.finish(
+//!     client_login_finish_result.message,
+//!     ServerLoginFinishParameters { context: None, identifiers: Identifiers { client: Some(b"Alice_the_Cryptographer"), server: Some(b"Facebook") } },
+//! )?;
+//!
+//! # Ok::<(), ProtocolError>(())
+//! ```
 //! Failing to supply the same pair of custom identifiers in any of the three
 //! steps above will result in an error in attempting to complete the protocol!
 //!

@@ -28,7 +28,7 @@ use crate::hash::OutputSize;
 use crate::key_exchange::group::Group;
 use crate::key_exchange::shared::NonceLen;
 use crate::key_exchange::traits::{
-    Deserialize, Ke1MessageLen, Ke1StateLen, Ke2MessageLen, KeyExchange, Serialize,
+    Deserialize, Ke1MessageLen, Ke1StateLen, Ke2MessageLen, Ke2StateLen, KeyExchange, Serialize,
 };
 use crate::ksf::Identity;
 use crate::messages::{
@@ -505,6 +505,11 @@ where
     Sum<<OprfGroup<CS> as voprf::Group>::ScalarLen, CredentialRequestLen<CS>>:
         ArrayLength<u8> + Add<Ke1StateLen<CS>>,
     ClientLoginLen<CS>: ArrayLength<u8>,
+    // ServerLogin: Pk + Pk + Ke2State
+    <KeGroup<CS> as Group>::PkLen: Add<<KeGroup<CS> as Group>::PkLen>,
+    Sum<<KeGroup<CS> as Group>::PkLen, <KeGroup<CS> as Group>::PkLen>:
+        ArrayLength<u8> + Add<Ke2StateLen<CS>>,
+    ServerLoginLen<CS>: ArrayLength<u8>,
     // MaskedResponse: (Nonce + Hash) + KePk
     NonceLen: Add<OutputSize<OprfHash<CS>>>,
     Sum<NonceLen, OutputSize<OprfHash<CS>>>: ArrayLength<u8> + Add<<KeGroup<CS> as Group>::PkLen>,
@@ -995,6 +1000,11 @@ fn test_credential_response() -> Result<(), ProtocolError> {
         <CS::KeyExchange as KeyExchange>::KE2Message: Serialize,
         CredentialResponseWithoutKeLen<CS>: Add<Ke2MessageLen<CS>>,
         CredentialResponseLen<CS>: ArrayLength<u8>,
+        // ServerLogin: Pk + Pk + Ke2State
+        <KeGroup<CS> as Group>::PkLen: Add<<KeGroup<CS> as Group>::PkLen>,
+        Sum<<KeGroup<CS> as Group>::PkLen, <KeGroup<CS> as Group>::PkLen>:
+            ArrayLength<u8> + Add<Ke2StateLen<CS>>,
+        ServerLoginLen<CS>: ArrayLength<u8>,
     {
         let parameters = populate_test_vectors(&serde_json::from_str(test_vector).unwrap());
 
@@ -1109,7 +1119,7 @@ fn test_credential_finalization() -> Result<(), ProtocolError> {
 fn test_server_login_finish() -> Result<(), ProtocolError> {
     fn inner<CS: CipherSuite>(test_vector: &str) -> Result<(), ProtocolError>
     where
-        for<'c> <CS::KeyExchange as KeyExchange>::KE2State<CS>: Deserialize,
+        <CS::KeyExchange as KeyExchange>::KE2State<CS>: Deserialize,
         <CS::KeyExchange as KeyExchange>::KE3Message: Deserialize,
     {
         let parameters = populate_test_vectors(&serde_json::from_str(test_vector).unwrap());
@@ -1119,6 +1129,10 @@ fn test_server_login_finish() -> Result<(), ProtocolError> {
             CredentialFinalization::deserialize(&parameters.credential_finalization)?,
             ServerLoginFinishParameters {
                 context: Some(&parameters.context),
+                identifiers: Identifiers {
+                    client: Some(&parameters.id_u),
+                    server: Some(&parameters.id_s),
+                },
             },
         )?;
 

@@ -14,19 +14,20 @@ use rand::{CryptoRng, RngCore};
 use zeroize::Zeroize;
 
 use self::implementation::PureEddsaImpl;
-use super::{Context, Message, Role, SignatureGroup};
+use super::{Message, MessageBuilder, SignatureProtocol};
 use crate::ciphersuite::CipherSuite;
 use crate::errors::ProtocolError;
 use crate::key_exchange::group::Group;
-use crate::key_exchange::traits::{Deserialize, Serialize};
+use crate::key_exchange::traits::{Deserialize, KeyExchange, Serialize};
 
 /// PureEdDSA for [`SigmaI`](crate::SigmaI).
 ///
-/// The "verification state" is the client signature message, which is contained
-/// in [`Message`].
+/// The ["verification state"](Self::VerifyState) is the [verification
+/// message](Message::verify_message). A [`super::CachedMessage`] is expected,
+/// created by calling [`Message::to_cached()`].
 pub struct PureEddsa<G>(PhantomData<G>);
 
-impl<G: PureEddsaImpl> SignatureGroup for PureEddsa<G> {
+impl<G: PureEddsaImpl> SignatureProtocol for PureEddsa<G> {
     type Group = G;
     type Signature = G::Signature;
     type VerifyState<CS: CipherSuite, KE: Group> = G::VerifyState<CS, KE>;
@@ -35,41 +36,43 @@ impl<G: PureEddsaImpl> SignatureGroup for PureEddsa<G> {
         sk: &<Self::Group as Group>::Sk,
         _: &mut R,
         message: &Message<CS, KE>,
-        role: Role,
     ) -> (Self::Signature, Self::VerifyState<CS, KE>) {
-        G::sign(sk, message, role)
+        G::sign(sk, message)
     }
 
     fn verify<CS: CipherSuite, KE: Group>(
         pk: &<Self::Group as Group>::Pk,
-        context: Context<'_>,
+        message_builder: MessageBuilder<'_, G>,
         state: Self::VerifyState<CS, KE>,
         signature: &Self::Signature,
-        role: Role,
-    ) -> Result<(), ProtocolError> {
-        G::verify(pk, context, state, signature, role)
+    ) -> Result<(), ProtocolError>
+    where
+        CS::KeyExchange: KeyExchange<Group = G>,
+    {
+        G::verify(pk, message_builder, state, signature)
     }
 }
 
 pub(in super::super) mod implementation {
     use super::*;
+    use crate::key_exchange::traits::KeyExchange;
 
-    pub trait PureEddsaImpl: Group {
+    pub trait PureEddsaImpl: Group + Sized {
         type Signature: Clone + Deserialize + Serialize + Zeroize;
         type VerifyState<CS: CipherSuite, KE: Group>: Clone + Zeroize;
 
         fn sign<CS: CipherSuite, KE: Group>(
             sk: &Self::Sk,
             message: &Message<CS, KE>,
-            role: Role,
         ) -> (Self::Signature, Self::VerifyState<CS, KE>);
 
         fn verify<CS: CipherSuite, KE: Group>(
             pk: &Self::Pk,
-            context: Context<'_>,
+            message_builder: MessageBuilder<'_, Self>,
             state: Self::VerifyState<CS, KE>,
             signature: &Self::Signature,
-            role: Role,
-        ) -> Result<(), ProtocolError>;
+        ) -> Result<(), ProtocolError>
+        where
+            CS::KeyExchange: KeyExchange<Group = Self>;
     }
 }

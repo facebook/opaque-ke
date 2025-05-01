@@ -115,3 +115,6 @@ required-features = ["argon2"]
 
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(test_hsm)'] }
+
+[patch.crates-io]
+derive-where = { git = "https://github.com/khonsulabs/derive-where", branch = "zeroize-skip-fix" }

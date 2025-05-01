@@ -23,7 +23,7 @@ use generic_array::{ArrayLength, GenericArray};
 use rand::{CryptoRng, RngCore};
 use zeroize::Zeroize;
 
-use super::{Context, Message, Role, SignatureGroup};
+use super::{Message, MessageBuilder, SignatureProtocol};
 use crate::ciphersuite::CipherSuite;
 use crate::errors::ProtocolError;
 use crate::key_exchange::group::elliptic_curve::NonIdentity;
@@ -34,10 +34,11 @@ use crate::serialization::{SliceExt, UpdateExt};
 
 /// ECDSA for [`SigmaI`](crate::SigmaI).
 ///
-/// The "verification state" is the pre-hash for the client signature message.
+/// The ["verification state"](Self::VerifyState) is the pre-hash for the
+/// [verification message](Message::verify_message).
 pub struct Ecdsa<G, H>(PhantomData<(G, H)>);
 
-impl<G, H> SignatureGroup for Ecdsa<G, H>
+impl<G, H> SignatureProtocol for Ecdsa<G, H>
 where
     G: CurveArithmetic + Group<Sk = NonZeroScalar<G>, Pk = NonIdentity<G>> + PrimeCurve,
     SignatureSize<G>: ArrayLength<u8>,
@@ -58,19 +59,13 @@ where
         sk: &<Self::Group as Group>::Sk,
         rng: &mut R,
         message: &Message<CS, KE>,
-        role: Role,
     ) -> (Self::Signature, Self::VerifyState<CS, KE>) {
-        let server_pre_hash = H::default().chain_iter(message.server_message());
-        let client_pre_hash = server_pre_hash
-            .clone()
-            .chain_iter(message.client_message_add())
+        let sign_pre_hash = H::default()
+            .chain_iter(message.sign_message())
             .finalize_fixed();
-        let server_pre_hash = server_pre_hash.finalize_fixed();
-
-        let (sign_pre_hash, verify_pre_hash) = match role {
-            Role::Server => (server_pre_hash, client_pre_hash),
-            Role::Client => (client_pre_hash, server_pre_hash),
-        };
+        let verify_pre_hash = H::default()
+            .chain_iter(message.verify_message())
+            .finalize_fixed();
 
         let repr = sk.to_repr();
         let order = G::ORDER.encode_field_bytes();
@@ -96,10 +91,9 @@ where
 
     fn verify<CS: CipherSuite, KE: Group>(
         pk: &<Self::Group as Group>::Pk,
-        _: Context<'_>,
+        _: MessageBuilder<'_, G>,
         state: Self::VerifyState<CS, KE>,
         signature: &Self::Signature,
-        _: Role,
     ) -> Result<(), ProtocolError> {
         let z = hazmat::bits2field::<G>(&state.0)
             .expect("hash output can not be shorter than a scalar");

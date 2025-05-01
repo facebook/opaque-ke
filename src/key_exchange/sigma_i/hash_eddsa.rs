@@ -14,7 +14,7 @@ use rand::{CryptoRng, RngCore};
 use zeroize::Zeroize;
 
 use self::implementation::HashEddsaImpl;
-use super::{Context, Message, Role, SignatureGroup};
+use super::{Message, MessageBuilder, SignatureProtocol};
 use crate::ciphersuite::CipherSuite;
 use crate::errors::ProtocolError;
 use crate::key_exchange::group::Group;
@@ -22,10 +22,11 @@ use crate::key_exchange::traits::{Deserialize, Serialize};
 
 /// HashEdDSA for [`SigmaI`](crate::SigmaI).
 ///
-/// The "verification state" is the pre-hash for the client signature message.
+/// The ["verification state"](Self::VerifyState) is the pre-hash for the
+/// [verification message](Message::verify_message).
 pub struct HashEddsa<G>(PhantomData<G>);
 
-impl<G: HashEddsaImpl> SignatureGroup for HashEddsa<G> {
+impl<G: HashEddsaImpl> SignatureProtocol for HashEddsa<G> {
     type Group = G;
     type Signature = G::Signature;
     type VerifyState<CS: CipherSuite, KE: Group> = G::VerifyState<CS, KE>;
@@ -34,17 +35,15 @@ impl<G: HashEddsaImpl> SignatureGroup for HashEddsa<G> {
         sk: &<Self::Group as Group>::Sk,
         _: &mut R,
         message: &Message<CS, KE>,
-        role: Role,
     ) -> (Self::Signature, Self::VerifyState<CS, KE>) {
-        G::sign(sk, message, role)
+        G::sign(sk, message)
     }
 
     fn verify<CS: CipherSuite, KE: Group>(
         pk: &<Self::Group as Group>::Pk,
-        _: Context<'_>,
+        _: MessageBuilder<'_, G>,
         state: Self::VerifyState<CS, KE>,
         signature: &Self::Signature,
-        _: Role,
     ) -> Result<(), ProtocolError> {
         G::verify(pk, state, signature)
     }
@@ -60,7 +59,6 @@ pub(in super::super) mod implementation {
         fn sign<CS: CipherSuite, KE: Group>(
             sk: &Self::Sk,
             message: &Message<CS, KE>,
-            role: Role,
         ) -> (Self::Signature, Self::VerifyState<CS, KE>);
 
         fn verify<CS: CipherSuite, KE: Group>(

@@ -28,8 +28,8 @@ use crate::errors::{InternalError, ProtocolError};
 use crate::key_exchange::sigma_i::hash_eddsa::implementation::HashEddsaImpl;
 use crate::key_exchange::sigma_i::pure_eddsa::implementation::PureEddsaImpl;
 pub use crate::key_exchange::sigma_i::shared::PreHash;
-use crate::key_exchange::sigma_i::{CachedMessage, Context, Message, Role};
-use crate::key_exchange::traits::{Deserialize, Serialize};
+use crate::key_exchange::sigma_i::{CachedMessage, Message, MessageBuilder};
+use crate::key_exchange::traits::{Deserialize, KeyExchange, Serialize};
 use crate::serialization::{SliceExt, UpdateExt};
 
 /// Implementation for Ed25519.
@@ -140,27 +140,25 @@ impl PureEddsaImpl for Ed25519 {
     fn sign<CS: CipherSuite, KE: Group>(
         sk: &Self::Sk,
         message: &Message<CS, KE>,
-        role: Role,
     ) -> (Self::Signature, Self::VerifyState<CS, KE>) {
-        (
-            sign(sk, false, message.sign_message(role)),
-            message.to_cached(),
-        )
+        (sign(sk, false, message.sign_message()), message.to_cached())
     }
 
     /// Validates that the signature was created by signing the given message
     /// with the corresponding private key.
     fn verify<CS: CipherSuite, KE: Group>(
         pk: &Self::Pk,
-        context: Context<'_>,
+        message_builder: MessageBuilder<'_, Self>,
         state: Self::VerifyState<CS, KE>,
         signature: &Self::Signature,
-        role: Role,
-    ) -> Result<(), ProtocolError> {
+    ) -> Result<(), ProtocolError>
+    where
+        CS::KeyExchange: KeyExchange<Group = Self>,
+    {
         verify(
             pk,
             false,
-            state.into_message(context).verify_message(role),
+            message_builder.build::<CS, KE>(state).verify_message(),
             signature,
         )
     }
@@ -173,19 +171,11 @@ impl HashEddsaImpl for Ed25519 {
     fn sign<CS: CipherSuite, KE: Group>(
         sk: &Self::Sk,
         message: &Message<CS, KE>,
-        role: Role,
     ) -> (Self::Signature, Self::VerifyState<CS, KE>) {
-        let server_pre_hash = Sha512::default().chain_iter(message.server_message());
-        let client_pre_hash = server_pre_hash
-            .clone()
-            .chain_iter(message.client_message_add())
+        let sign_pre_hash = Sha512::new().chain_iter(message.sign_message()).finalize();
+        let verify_pre_hash = Sha512::new()
+            .chain_iter(message.verify_message())
             .finalize();
-        let server_pre_hash = server_pre_hash.finalize();
-
-        let (sign_pre_hash, verify_pre_hash) = match role {
-            Role::Server => (server_pre_hash, client_pre_hash),
-            Role::Client => (client_pre_hash, server_pre_hash),
-        };
 
         (
             sign(sk, true, iter::once(sign_pre_hash.as_slice())),

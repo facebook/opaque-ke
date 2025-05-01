@@ -14,7 +14,7 @@ use crate::errors::ProtocolError;
 use crate::key_exchange::traits::{Deserialize, Serialize};
 use crate::serialization::SliceExt;
 
-/// Prehash to re-use when verifying the client signature.
+/// Pre-hash of the [verification message](super::Message::verify_message).
 #[derive_where(Clone, Debug, Eq, Hash, PartialEq, Zeroize)]
 #[derive_where(Copy; <H::OutputSize as ArrayLength<u8>>::ArrayType)]
 #[cfg_attr(

@@ -114,8 +114,8 @@ pub struct CredentialRequest<CS: CipherSuite> {
     derive(serde::Deserialize, serde::Serialize),
     serde(bound(
         deserialize = "SK: serde::Deserialize<'de>, <CS::KeyExchange as \
-                       KeyExchange>::KE2Builder<'c, CS>: serde::Deserialize<'de>",
-        serialize = "SK: serde::Serialize, <CS::KeyExchange as KeyExchange>::KE2Builder<'c, CS>: \
+                       KeyExchange>::KE2Builder<'a, CS>: serde::Deserialize<'de>",
+        serialize = "SK: serde::Serialize, <CS::KeyExchange as KeyExchange>::KE2Builder<'a, CS>: \
                      serde::Serialize"
     ))
 )]
@@ -124,16 +124,18 @@ pub struct CredentialRequest<CS: CipherSuite> {
     Debug, Eq, PartialEq;
     SK,
     voprf::EvaluationElement<CS::OprfCs>,
-    <CS::KeyExchange as KeyExchange>::KE2Builder<'c, CS>,
+    <CS::KeyExchange as KeyExchange>::KE2Builder<'a, CS>,
 )]
-pub struct ServerLoginBuilder<'c, CS: CipherSuite, SK: Clone> {
+pub struct ServerLoginBuilder<'a, CS: CipherSuite, SK: Clone> {
+    pub(crate) client_s_pk: GenericArray<u8, <KeGroup<CS> as Group>::PkLen>,
+    pub(crate) server_s_pk: GenericArray<u8, <KeGroup<CS> as Group>::PkLen>,
     pub(crate) server_s_sk: SK,
     pub(crate) evaluation_element: voprf::EvaluationElement<CS::OprfCs>,
     pub(crate) masking_nonce: Zeroizing<GenericArray<u8, NonceLen>>,
     pub(crate) masked_response: MaskedResponse<CS>,
     #[cfg(test)]
     pub(crate) oprf_key: Zeroizing<GenericArray<u8, <OprfGroup<CS> as voprf::Group>::ScalarLen>>,
-    pub(crate) ke2_builder: <CS::KeyExchange as KeyExchange>::KE2Builder<'c, CS>,
+    pub(crate) ke2_builder: <CS::KeyExchange as KeyExchange>::KE2Builder<'a, CS>,
 }
 
 impl<CS: CipherSuite, SK: Clone> ServerLoginBuilder<'_, CS, SK> {

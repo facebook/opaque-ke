@@ -499,8 +499,8 @@ impl Pkcs11KeyExchange<SigmaI<Ecdsa<NistP256, Sha256>, NistP256, Sha256>> for Re
     ) -> (ecdsa::Signature<NistP256>, PreHash<Sha256>) {
         pkcs_11_ecdsa_sign::<NistP256, Sha256>(
             self.0,
-            message.server_message(),
-            message.client_message_add(),
+            message.sign_message(),
+            message.verify_message(),
         )
     }
 }
@@ -514,8 +514,8 @@ impl Pkcs11KeyExchange<SigmaI<Ecdsa<NistP384, Sha384>, NistP384, Sha384>> for Re
     ) -> (ecdsa::Signature<NistP384>, PreHash<Sha384>) {
         pkcs_11_ecdsa_sign::<NistP384, Sha384>(
             self.0,
-            message.server_message(),
-            message.client_message_add(),
+            message.sign_message(),
+            message.verify_message(),
         )
     }
 }
@@ -622,30 +622,24 @@ where
 #[cfg(feature = "ecdsa")]
 fn pkcs_11_ecdsa_sign<'a, G: CurveArithmetic + PrimeCurve, H: Clone + Digest + Update>(
     sk: ObjectHandle,
-    server_message: impl Iterator<Item = &'a [u8]>,
-    client_message_add: impl Iterator<Item = &'a [u8]>,
+    sign_message: impl Iterator<Item = &'a [u8]>,
+    verify_message: impl Iterator<Item = &'a [u8]>,
 ) -> (ecdsa::Signature<G>, PreHash<H>)
 where
     SignatureSize<G>: ArrayLength<u8>,
 {
     use crate::serialization::UpdateExt;
 
-    let server_pre_hash = H::new().chain_iter(server_message);
-    let client_pre_hash = server_pre_hash
-        .clone()
-        .chain_iter(client_message_add)
-        .finalize();
-    let server_pre_hash = server_pre_hash.finalize();
+    let sign_pre_hash = H::new().chain_iter(sign_message).finalize();
+    let verify_pre_hash = H::new().chain_iter(verify_message).finalize();
 
     let session = SESSION.lock().unwrap();
-    let signature = session
-        .sign(&Mechanism::Ecdsa, sk, &server_pre_hash)
-        .unwrap();
+    let signature = session.sign(&Mechanism::Ecdsa, sk, &sign_pre_hash).unwrap();
     drop(session);
 
     let signature = ::ecdsa::Signature::from_slice(&signature).unwrap();
 
-    (ecdsa::Signature(signature), PreHash(client_pre_hash))
+    (ecdsa::Signature(signature), PreHash(verify_pre_hash))
 }
 
 #[cfg(all(feature = "ristretto255", feature = "ed25519"))]
@@ -657,16 +651,17 @@ fn pkcs_11_eddsa_sign<CS: CipherSuite>(
 
     use crate::key_exchange::traits::Deserialize;
 
+    let mut message_bytes = Vec::new();
+    message
+        .sign_message()
+        .for_each(|bytes| message_bytes.extend_from_slice(bytes));
+
     let session = SESSION.lock().unwrap();
     let signature = session
         .sign(
             &Mechanism::Eddsa(EddsaParams::new(EddsaSignatureScheme::Pure)),
             sk,
-            &message
-                .server_message()
-                .flatten()
-                .copied()
-                .collect::<Vec<u8>>(),
+            &message_bytes,
         )
         .unwrap();
     drop(session);

@@ -142,6 +142,8 @@ pub struct ClientLogin<CS: CipherSuite> {
     <CS::KeyExchange as KeyExchange>::KE2State<CS>,
 )]
 pub struct ServerLogin<CS: CipherSuite> {
+    client_s_pk: GenericArray<u8, <KeGroup<CS> as Group>::PkLen>,
+    server_s_pk: GenericArray<u8, <KeGroup<CS> as Group>::PkLen>,
     ke2_state: <CS::KeyExchange as KeyExchange>::KE2State<CS>,
 }
 
@@ -647,13 +649,24 @@ impl<CS: CipherSuite> ClientLogin<CS> {
     }
 }
 
+pub(crate) type ServerLoginLen<CS: CipherSuite> =
+    Sum<Sum<<KeGroup<CS> as Group>::PkLen, <KeGroup<CS> as Group>::PkLen>, Ke2StateLen<CS>>;
+
 impl<CS: CipherSuite> ServerLogin<CS> {
     /// Serialization into bytes
-    pub fn serialize(&self) -> GenericArray<u8, Ke2StateLen<CS>>
+    pub fn serialize(&self) -> GenericArray<u8, ServerLoginLen<CS>>
     where
         <CS::KeyExchange as KeyExchange>::KE2State<CS>: Serialize,
+        // ServerLogin: Pk + Pk + Ke2State
+        <KeGroup<CS> as Group>::PkLen: Add<<KeGroup<CS> as Group>::PkLen>,
+        Sum<<KeGroup<CS> as Group>::PkLen, <KeGroup<CS> as Group>::PkLen>:
+            ArrayLength<u8> + Add<Ke2StateLen<CS>>,
+        ServerLoginLen<CS>: ArrayLength<u8>,
     {
-        self.ke2_state.serialize()
+        self.client_s_pk
+            .clone()
+            .concat(self.server_s_pk.clone())
+            .concat(self.ke2_state.serialize())
     }
 
     /// Deserialization from bytes
@@ -662,6 +675,8 @@ impl<CS: CipherSuite> ServerLogin<CS> {
         <CS::KeyExchange as KeyExchange>::KE2State<CS>: Deserialize,
     {
         Ok(Self {
+            client_s_pk: bytes.take_array("client static public key")?,
+            server_s_pk: bytes.take_array("server static public key")?,
             ke2_state: <CS::KeyExchange as KeyExchange>::KE2State::deserialize_take(&mut bytes)?,
         })
     }
@@ -672,7 +687,7 @@ impl<CS: CipherSuite> ServerLogin<CS> {
     ///
     /// See [`ServerLogin::start()`] for the regular path. Or
     /// [`ServerLogin::builder()`] with just a remote private key.
-    pub fn builder_with_key_material<'c, R: RngCore + CryptoRng, SK: Clone, OS: Clone>(
+    pub fn builder_with_key_material<'a, R: RngCore + CryptoRng, SK: Clone, OS: Clone>(
         rng: &mut R,
         server_setup: &ServerSetup<CS, SK, OS>,
         key_material: GenericArray<u8, <OprfGroup<CS> as voprf::Group>::ScalarLen>,
@@ -681,8 +696,8 @@ impl<CS: CipherSuite> ServerLogin<CS> {
         ServerLoginStartParameters {
             context,
             identifiers,
-        }: ServerLoginStartParameters<'c, '_>,
-    ) -> Result<ServerLoginBuilder<'c, CS, SK>, ProtocolError>
+        }: ServerLoginStartParameters<'a, 'a>,
+    ) -> Result<ServerLoginBuilder<'a, CS, SK>, ProtocolError>
     where
         // MaskedResponse: (Nonce + Hash) + KePk
         NonceLen: Add<OutputSize<OprfHash<CS>>>,
@@ -711,10 +726,12 @@ impl<CS: CipherSuite> ServerLogin<CS> {
             &record.0.envelope,
         )?;
 
+        let serialized_client_s_pk = client_s_pk.serialize();
+        let serialized_server_s_pk = server_s_pk.serialize();
         let identifiers = SerializedIdentifiers::<KeGroup<CS>>::from_identifiers(
             identifiers,
-            client_s_pk.serialize(),
-            server_s_pk.serialize(),
+            serialized_client_s_pk.clone(),
+            serialized_server_s_pk.clone(),
         )?;
 
         let oprf_key = oprf_key_from_key_material::<CS>(key_material)?;
@@ -738,6 +755,8 @@ impl<CS: CipherSuite> ServerLogin<CS> {
         )?;
 
         Ok(ServerLoginBuilder {
+            client_s_pk: serialized_client_s_pk,
+            server_s_pk: serialized_server_s_pk,
             server_s_sk: server_setup.keypair().private().clone(),
             evaluation_element,
             masking_nonce: Zeroizing::new(masking_nonce),
@@ -751,14 +770,14 @@ impl<CS: CipherSuite> ServerLogin<CS> {
     /// Create a [`ServerLoginBuilder`] to use with a remote private key.
     ///
     /// See [`ServerLogin::start()`] for the regular path.
-    pub fn builder<'c, R: RngCore + CryptoRng, SK: Clone>(
+    pub fn builder<'a, R: RngCore + CryptoRng, SK: Clone>(
         rng: &mut R,
         server_setup: &ServerSetup<CS, SK>,
         password_file: Option<ServerRegistration<CS>>,
         credential_request: CredentialRequest<CS>,
         credential_identifier: &[u8],
-        params: ServerLoginStartParameters<'c, '_>,
-    ) -> Result<ServerLoginBuilder<'c, CS, SK>, ProtocolError>
+        params: ServerLoginStartParameters<'a, 'a>,
+    ) -> Result<ServerLoginBuilder<'a, CS, SK>, ProtocolError>
     where
         // MaskedResponse: (Nonce + Hash) + KePk
         NonceLen: Add<OutputSize<OprfHash<CS>>>,
@@ -798,6 +817,8 @@ impl<CS: CipherSuite> ServerLogin<CS> {
         Ok(ServerLoginStartResult {
             message: credential_response,
             state: Self {
+                client_s_pk: builder.client_s_pk,
+                server_s_pk: builder.server_s_pk,
                 ke2_state: result.0,
             },
             #[cfg(test)]
@@ -845,37 +866,28 @@ impl<CS: CipherSuite> ServerLogin<CS> {
 
     /// From the client's second and final message, check the client's
     /// authentication and produce a message transport
-    #[cfg(not(test))]
     pub fn finish(
         self,
         message: CredentialFinalization<CS>,
         parameters: ServerLoginFinishParameters,
     ) -> Result<ServerLoginFinishResult<CS>, ProtocolError> {
-        let session_key = <CS::KeyExchange as KeyExchange>::finish_ke(
-            message.ke3_message,
-            &self.ke2_state,
-            SerializedContext::from(parameters.context)?,
+        let identifiers = SerializedIdentifiers::<KeGroup<CS>>::from_identifiers(
+            parameters.identifiers,
+            self.client_s_pk.clone(),
+            self.server_s_pk.clone(),
         )?;
+        let context = SerializedContext::from(parameters.context)?;
 
-        Ok(ServerLoginFinishResult { session_key })
-    }
-
-    /// From the client's second and final message, check the client's
-    /// authentication and produce a message transport
-    #[cfg(test)]
-    pub fn finish(
-        self,
-        message: CredentialFinalization<CS>,
-        parameters: ServerLoginFinishParameters,
-    ) -> Result<ServerLoginFinishResult<CS>, ProtocolError> {
         let session_key = <CS::KeyExchange as KeyExchange>::finish_ke(
             message.ke3_message,
             &self.ke2_state,
-            SerializedContext::from(parameters.context)?,
+            identifiers,
+            context,
         )?;
 
         Ok(ServerLoginFinishResult {
             session_key,
+            #[cfg(test)]
             state: self,
         })
     }
@@ -1037,9 +1049,12 @@ pub struct ServerLoginStartParameters<'c, 'i> {
 /// Parameters for server login finish. Must match what was provided in
 /// [`ServerLogin::start()`] with [`ServerLoginStartParameters`].
 #[derive(Clone, Debug, Default)]
-pub struct ServerLoginFinishParameters<'c> {
+pub struct ServerLoginFinishParameters<'c, 'i> {
     /// Specifying a context field that the client must agree on
     pub context: Option<&'c [u8]>,
+    /// Specifying a user identifier and server identifier that will be matched
+    /// against the client
+    pub identifiers: Identifiers<'i>,
 }
 
 /// Contains the fields that are returned by a server login start
@@ -1329,8 +1344,16 @@ where
     <CS::KeyExchange as KeyExchange>::KE2State<CS>: AssertZeroized,
 {
     fn assert_zeroized(&self) {
-        let Self { ke2_state } = self;
+        let Self {
+            client_s_pk,
+            server_s_pk,
+            ke2_state,
+        } = self;
 
         ke2_state.assert_zeroized();
+
+        for byte in client_s_pk.into_iter().chain(server_s_pk) {
+            assert_eq!(byte, &0);
+        }
     }
 }

@@ -17,7 +17,8 @@ use rand::{CryptoRng, RngCore};
 use crate::ciphersuite::CipherSuite;
 use crate::errors::ProtocolError;
 use crate::key_exchange::group::Group;
-use crate::key_exchange::sigma_i::{Context, Message, Role, SharedSecret, SignatureGroup};
+use crate::key_exchange::sigma_i::{Message, MessageBuilder, SharedSecret, SignatureProtocol};
+use crate::key_exchange::traits::KeyExchange;
 use crate::key_exchange::tripledh::DiffieHellman;
 
 /// A Keypair trait with public-private verification
@@ -135,15 +136,14 @@ impl<G: Group> PrivateKey<G> {
     pub(crate) fn sign<
         R: CryptoRng + RngCore,
         CS: CipherSuite,
-        SIG: SignatureGroup<Group = G>,
+        SIG: SignatureProtocol<Group = G>,
         KE: Group,
     >(
         &self,
         rng: &mut R,
         message: &Message<CS, KE>,
-        role: Role,
     ) -> (SIG::Signature, SIG::VerifyState<CS, KE>) {
-        SIG::sign(&self.0, rng, message, role)
+        SIG::sign(&self.0, rng, message)
     }
 }
 
@@ -234,14 +234,16 @@ impl<G: Group> PublicKey<G> {
 
 impl<G: Group> PublicKey<G> {
     /// Public-key verifying implementation
-    pub(crate) fn verify<CS: CipherSuite, SIG: SignatureGroup<Group = G>, KE: Group>(
+    pub(crate) fn verify<CS: CipherSuite, SIG: SignatureProtocol<Group = G>, KE: Group>(
         &self,
-        context: Context<'_>,
+        message_builder: MessageBuilder<'_, G>,
         state: SIG::VerifyState<CS, KE>,
         signature: &SIG::Signature,
-        role: Role,
-    ) -> Result<(), ProtocolError> {
-        SIG::verify(&self.0, context, state, signature, role)
+    ) -> Result<(), ProtocolError>
+    where
+        CS::KeyExchange: KeyExchange<Group = G>,
+    {
+        SIG::verify(&self.0, message_builder, state, signature)
     }
 }
 

@@ -45,6 +45,7 @@ use crate::serialization::{SliceExt, UpdateExt};
 ///
 /// [`ServerLoginBuilder::data()`](crate::ServerLoginBuilder::data()) will
 /// return the client's ephemeral public key.
+///
 /// [`ServerLoginBuilder::build()`](crate::ServerLoginBuilder::build()) expects
 /// a shared secret computed through Diffie-Hellman from the servers private key
 /// and the given public key.
@@ -172,15 +173,15 @@ where
         ))
     }
 
-    fn ke2_builder<'c, CS: CipherSuite<KeyExchange = Self>, R: RngCore + CryptoRng>(
+    fn ke2_builder<'a, CS: CipherSuite<KeyExchange = Self>, R: RngCore + CryptoRng>(
         rng: &mut R,
         credential_request: CredentialRequestParts<CS>,
         ke1_message: Self::KE1Message,
         credential_response: CredentialResponseParts<CS>,
         client_s_pk: PublicKey<G>,
         identifiers: SerializedIdentifiers<'_, KeGroup<CS>>,
-        context: SerializedContext<'c>,
-    ) -> Result<Self::KE2Builder<'c, CS>, ProtocolError> {
+        context: SerializedContext<'a>,
+    ) -> Result<Self::KE2Builder<'a, CS>, ProtocolError> {
         let server_e = KeyPair::<G>::derive_random(rng);
         let server_nonce = shared::generate_nonce::<R>(rng);
 
@@ -338,6 +339,7 @@ where
     fn finish_ke<CS: CipherSuite>(
         ke3_message: Self::KE3Message,
         ke2_state: &Self::KE2State<CS>,
+        _: SerializedIdentifiers<'_, KeGroup<CS>>,
         _: SerializedContext<'_>,
     ) -> Result<Output<H>, ProtocolError> {
         CtOption::new(
@@ -354,7 +356,6 @@ where
 // ========================================== //
 ////////////////////////////////////////////////
 
-#[allow(clippy::too_many_arguments)]
 fn transcript<CS: CipherSuite>(
     context: &SerializedContext<'_>,
     identifiers: &SerializedIdentifiers<'_, KeGroup<CS>>,
