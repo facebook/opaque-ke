@@ -406,8 +406,8 @@ mod tests {
             CipherSuite, ClientLogin, ClientLoginFinishParameters, ClientLoginFinishResult,
             ClientLoginStartResult, ClientRegistration, ClientRegistrationFinishParameters,
             ClientRegistrationFinishResult, ClientRegistrationStartResult, ServerLogin,
-            ServerLoginFinishParameters, ServerLoginStartParameters, ServerLoginStartResult,
-            ServerRegistration, ServerRegistrationStartResult, ServerSetup,
+            ServerLoginParameters, ServerLoginStartResult, ServerRegistration,
+            ServerRegistrationStartResult, ServerSetup,
         };
 
         struct Default;
@@ -463,7 +463,7 @@ mod tests {
             Some(file),
             message,
             &[],
-            ServerLoginStartParameters::default(),
+            ServerLoginParameters::default(),
         )
         .unwrap();
         let shared_secret = builder.private_key().0.ke_diffie_hellman(builder.data());
@@ -481,7 +481,7 @@ mod tests {
             )
             .unwrap();
         server
-            .finish(message, ServerLoginFinishParameters::default())
+            .finish(message, ServerLoginParameters::default())
             .unwrap();
     }
 }

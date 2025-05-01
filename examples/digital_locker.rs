@@ -38,8 +38,7 @@ use opaque_ke::{
     ClientLogin, ClientLoginFinishParameters, ClientRegistration,
     ClientRegistrationFinishParameters, CredentialFinalization, CredentialRequest,
     CredentialResponse, RegistrationRequest, RegistrationResponse, RegistrationUpload, ServerLogin,
-    ServerLoginFinishParameters, ServerLoginStartParameters, ServerRegistration,
-    ServerRegistrationLen, ServerSetup,
+    ServerLoginParameters, ServerRegistration, ServerRegistrationLen, ServerSetup,
 };
 use rustyline::error::ReadlineError;
 use rustyline::history::DefaultHistory;
@@ -171,7 +170,7 @@ fn open_locker(
         Some(password_file),
         CredentialRequest::deserialize(&credential_request_bytes).unwrap(),
         &locker_id.to_be_bytes(),
-        ServerLoginStartParameters::default(),
+        ServerLoginParameters::default(),
     )
     .unwrap();
     let credential_response_bytes = server_login_start_result.message.serialize();
@@ -198,7 +197,7 @@ fn open_locker(
         .state
         .finish(
             CredentialFinalization::deserialize(&credential_finalization_bytes).unwrap(),
-            ServerLoginFinishParameters::default(),
+            ServerLoginParameters::default(),
         )
         .unwrap();
 

@@ -649,7 +649,7 @@ where
         Some(password_file),
         client_login_start_result.message,
         credential_identifier,
-        ServerLoginStartParameters {
+        ServerLoginParameters {
             context: Some(context),
             identifiers: Identifiers {
                 client: Some(id_u),
@@ -1033,7 +1033,7 @@ fn test_credential_response() -> Result<(), ProtocolError> {
             Some(ServerRegistration::deserialize(&parameters.password_file)?),
             CredentialRequest::<CS>::deserialize(&parameters.credential_request)?,
             &parameters.credential_identifier,
-            ServerLoginStartParameters {
+            ServerLoginParameters {
                 context: Some(&parameters.context),
                 identifiers: Identifiers {
                     client: Some(&parameters.id_u),
@@ -1127,7 +1127,7 @@ fn test_server_login_finish() -> Result<(), ProtocolError> {
         let server_login_result = ServerLogin::<CS>::deserialize(&parameters.server_login_state)?
             .finish(
             CredentialFinalization::deserialize(&parameters.credential_finalization)?,
-            ServerLoginFinishParameters {
+            ServerLoginParameters {
                 context: Some(&parameters.context),
                 identifiers: Identifiers {
                     client: Some(&parameters.id_u),
@@ -1186,7 +1186,7 @@ where
         Some(p_file),
         client_login_start_result.message,
         credential_identifier,
-        ServerLoginStartParameters::default(),
+        ServerLoginParameters::default(),
     )?;
 
     let client_login_result = client_login_start_result.state.finish(
@@ -1200,7 +1200,7 @@ where
         let client_login_finish_result = client_login_result?;
         let server_login_finish_result = server_login_start_result.state.finish(
             client_login_finish_result.message,
-            ServerLoginFinishParameters::default(),
+            ServerLoginParameters::default(),
         )?;
 
         assert_eq!(
@@ -1412,7 +1412,7 @@ fn test_zeroize_server_login_start() -> Result<(), ProtocolError> {
             Some(p_file),
             client_login_start_result.message,
             STR_CREDENTIAL_IDENTIFIER.as_bytes(),
-            ServerLoginStartParameters::default(),
+            ServerLoginParameters::default(),
         )?;
 
         let mut state = server_login_start_result.state;
@@ -1465,7 +1465,7 @@ fn test_zeroize_client_login_finish() -> Result<(), ProtocolError> {
             Some(p_file),
             client_login_start_result.message,
             STR_CREDENTIAL_IDENTIFIER.as_bytes(),
-            ServerLoginStartParameters::default(),
+            ServerLoginParameters::default(),
         )?;
         let client_login_finish_result = client_login_start_result.state.finish(
             &mut client_rng,
@@ -1523,7 +1523,7 @@ fn test_zeroize_server_login_finish() -> Result<(), ProtocolError> {
             Some(p_file),
             client_login_start_result.message,
             STR_CREDENTIAL_IDENTIFIER.as_bytes(),
-            ServerLoginStartParameters::default(),
+            ServerLoginParameters::default(),
         )?;
         let client_login_finish_result = client_login_start_result.state.finish(
             &mut client_rng,
@@ -1533,7 +1533,7 @@ fn test_zeroize_server_login_finish() -> Result<(), ProtocolError> {
         )?;
         let server_login_finish_result = server_login_start_result.state.finish(
             client_login_finish_result.message,
-            ServerLoginFinishParameters::default(),
+            ServerLoginParameters::default(),
         )?;
 
         let mut state = server_login_finish_result.state;
@@ -1674,7 +1674,7 @@ fn test_reflected_value_error_login() -> Result<(), ProtocolError> {
             Some(p_file),
             client_login_start_result.message,
             credential_identifier,
-            ServerLoginStartParameters::default(),
+            ServerLoginParameters::default(),
         )?;
 
         let reflected_credential_response = server_login_start_result

@@ -693,10 +693,10 @@ impl<CS: CipherSuite> ServerLogin<CS> {
         key_material: GenericArray<u8, <OprfGroup<CS> as voprf::Group>::ScalarLen>,
         password_file: Option<ServerRegistration<CS>>,
         credential_request: CredentialRequest<CS>,
-        ServerLoginStartParameters {
+        ServerLoginParameters {
             context,
             identifiers,
-        }: ServerLoginStartParameters<'a, 'a>,
+        }: ServerLoginParameters<'a, 'a>,
     ) -> Result<ServerLoginBuilder<'a, CS, SK>, ProtocolError>
     where
         // MaskedResponse: (Nonce + Hash) + KePk
@@ -776,7 +776,7 @@ impl<CS: CipherSuite> ServerLogin<CS> {
         password_file: Option<ServerRegistration<CS>>,
         credential_request: CredentialRequest<CS>,
         credential_identifier: &[u8],
-        params: ServerLoginStartParameters<'a, 'a>,
+        params: ServerLoginParameters<'a, 'a>,
     ) -> Result<ServerLoginBuilder<'a, CS, SK>, ProtocolError>
     where
         // MaskedResponse: (Nonce + Hash) + KePk
@@ -838,7 +838,7 @@ impl<CS: CipherSuite> ServerLogin<CS> {
         password_file: Option<ServerRegistration<CS>>,
         credential_request: CredentialRequest<CS>,
         credential_identifier: &[u8],
-        parameters: ServerLoginStartParameters,
+        parameters: ServerLoginParameters,
     ) -> Result<ServerLoginStartResult<CS>, ProtocolError>
     where
         // MaskedResponse: (Nonce + Hash) + KePk
@@ -869,7 +869,7 @@ impl<CS: CipherSuite> ServerLogin<CS> {
     pub fn finish(
         self,
         message: CredentialFinalization<CS>,
-        parameters: ServerLoginFinishParameters,
+        parameters: ServerLoginParameters,
     ) -> Result<ServerLoginFinishResult<CS>, ProtocolError> {
         let identifiers = SerializedIdentifiers::<KeGroup<CS>>::from_identifiers(
             parameters.identifiers,
@@ -1036,20 +1036,9 @@ pub struct ServerLoginFinishResult<CS: CipherSuite> {
     pub state: ServerLogin<CS>,
 }
 
-/// Optional parameters for server login start
+/// Optional parameters for server login start and finish
 #[derive(Clone, Debug, Default)]
-pub struct ServerLoginStartParameters<'c, 'i> {
-    /// Specifying a context field that the client must agree on
-    pub context: Option<&'c [u8]>,
-    /// Specifying a user identifier and server identifier that will be matched
-    /// against the client
-    pub identifiers: Identifiers<'i>,
-}
-
-/// Parameters for server login finish. Must match what was provided in
-/// [`ServerLogin::start()`] with [`ServerLoginStartParameters`].
-#[derive(Clone, Debug, Default)]
-pub struct ServerLoginFinishParameters<'c, 'i> {
+pub struct ServerLoginParameters<'c, 'i> {
     /// Specifying a context field that the client must agree on
     pub context: Option<&'c [u8]>,
     /// Specifying a user identifier and server identifier that will be matched

@@ -33,8 +33,7 @@ use opaque_ke::{
     ClientLogin, ClientLoginFinishParameters, ClientRegistration,
     ClientRegistrationFinishParameters, CredentialFinalization, CredentialRequest,
     CredentialResponse, RegistrationRequest, RegistrationResponse, RegistrationUpload, ServerLogin,
-    ServerLoginFinishParameters, ServerLoginStartParameters, ServerRegistration,
-    ServerRegistrationLen, ServerSetup,
+    ServerLoginParameters, ServerRegistration, ServerRegistrationLen, ServerSetup,
 };
 use rustyline::error::ReadlineError;
 use rustyline::history::DefaultHistory;
@@ -127,7 +126,7 @@ fn account_login(
         Some(password_file),
         CredentialRequest::deserialize(&credential_request_bytes).unwrap(),
         username.as_bytes(),
-        ServerLoginStartParameters::default(),
+        ServerLoginParameters::default(),
     )
     .unwrap();
     let credential_response_bytes = server_login_start_result.message.serialize();
@@ -154,7 +153,7 @@ fn account_login(
         .state
         .finish(
             CredentialFinalization::deserialize(&credential_finalization_bytes).unwrap(),
-            ServerLoginFinishParameters::default(),
+            ServerLoginParameters::default(),
         )
         .unwrap();
 

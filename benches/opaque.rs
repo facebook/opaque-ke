@@ -185,7 +185,7 @@ fn server_login_start_real(c: &mut Criterion) {
                 Some(password_file.clone()),
                 client_login_start_result.clone().message,
                 username,
-                ServerLoginStartParameters::default(),
+                ServerLoginParameters::default(),
             )
             .unwrap();
         })
@@ -207,7 +207,7 @@ fn server_login_start_fake(c: &mut Criterion) {
                 None,
                 client_login_start_result.clone().message,
                 username,
-                ServerLoginStartParameters::default(),
+                ServerLoginParameters::default(),
             )
             .unwrap();
         })
@@ -244,7 +244,7 @@ fn client_login_finish(c: &mut Criterion) {
         Some(password_file),
         client_login_start_result.clone().message,
         username,
-        ServerLoginStartParameters::default(),
+        ServerLoginParameters::default(),
     )
     .unwrap();
 
@@ -294,7 +294,7 @@ fn server_login_finish(c: &mut Criterion) {
         Some(password_file),
         client_login_start_result.clone().message,
         username,
-        ServerLoginStartParameters::default(),
+        ServerLoginParameters::default(),
     )
     .unwrap();
     let client_login_finish_result = client_login_start_result
@@ -314,7 +314,7 @@ fn server_login_finish(c: &mut Criterion) {
                 .state
                 .finish(
                     client_login_finish_result.clone().message,
-                    ServerLoginFinishParameters::default(),
+                    ServerLoginParameters::default(),
                 )
                 .unwrap();
         })

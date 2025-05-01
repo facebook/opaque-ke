@@ -62,8 +62,7 @@ use crate::opaque::MaskedResponseLen;
 use crate::{
     CipherSuite, ClientLogin, ClientLoginFinishParameters, ClientLoginStartResult,
     ClientRegistration, ClientRegistrationFinishParameters, ClientRegistrationStartResult,
-    ServerLogin, ServerLoginFinishParameters, ServerLoginStartParameters, ServerLoginStartResult,
-    ServerRegistration, ServerSetup,
+    ServerLogin, ServerLoginParameters, ServerLoginStartResult, ServerRegistration, ServerSetup,
 };
 #[cfg(all(feature = "curve25519", feature = "ristretto255"))]
 use crate::{Curve25519, Ristretto255};
@@ -279,7 +278,7 @@ fn test<CS: 'static + CipherSuite>(
         key_material,
         Some(file),
         message,
-        ServerLoginStartParameters::default(),
+        ServerLoginParameters::default(),
     )
     .unwrap();
     let shared_secret = builder
@@ -305,7 +304,7 @@ fn test<CS: 'static + CipherSuite>(
     message
         .map(|message| {
             server
-                .finish(message, ServerLoginFinishParameters::default())
+                .finish(message, ServerLoginParameters::default())
                 .unwrap()
         })
         .unwrap();

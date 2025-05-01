@@ -353,7 +353,7 @@
 //! #   &mut client_rng,
 //! #   b"password",
 //! # )?;
-//! use opaque_ke::{ServerLogin, ServerLoginStartParameters};
+//! use opaque_ke::{ServerLogin, ServerLoginParameters};
 //! let password_file = ServerRegistration::<Default>::deserialize(&password_file_bytes)?;
 //! let mut server_rng = OsRng;
 //! let server_login_start_result = ServerLogin::start(
@@ -362,7 +362,7 @@
 //!     Some(password_file),
 //!     client_login_start_result.message,
 //!     b"alice@example.com",
-//!     ServerLoginStartParameters::default(),
+//!     ServerLoginParameters::default(),
 //! )?;
 //! # Ok::<(), ProtocolError>(())
 //! ```
@@ -390,7 +390,7 @@
 //! ```
 //! # use opaque_ke::{
 //! #   errors::ProtocolError,
-//! #   ClientRegistration, ClientRegistrationFinishParameters, ServerRegistration, ClientLogin, ClientLoginFinishParameters, ServerLogin, ServerLoginStartParameters, CredentialFinalization, ServerSetup,
+//! #   ClientRegistration, ClientRegistrationFinishParameters, ServerRegistration, ClientLogin, ClientLoginFinishParameters, ServerLogin, ServerLoginParameters, CredentialFinalization, ServerSetup,
 //! #   ksf::Identity,
 //! # };
 //! # use opaque_ke::CipherSuite;
@@ -427,7 +427,7 @@
 //! #     &password_file_bytes,
 //! #   )?;
 //! # let server_login_start_result =
-//! #     ServerLogin::start(&mut server_rng, &server_setup, Some(password_file), client_login_start_result.message, b"alice@example.com", ServerLoginStartParameters::default())?;
+//! #     ServerLogin::start(&mut server_rng, &server_setup, Some(password_file), client_login_start_result.message, b"alice@example.com", ServerLoginParameters::default())?;
 //! let client_login_finish_result = client_login_start_result.state.finish(
 //!     &mut client_rng,
 //!     b"password",
@@ -445,7 +445,7 @@
 //! ```
 //! # use opaque_ke::{
 //! #   errors::ProtocolError,
-//! #   ClientRegistration, ClientRegistrationFinishParameters, ServerRegistration, ClientLogin, ClientLoginFinishParameters, ServerLogin, ServerLoginFinishParameters, ServerLoginStartParameters, CredentialFinalization, ServerSetup,
+//! #   ClientRegistration, ClientRegistrationFinishParameters, ServerRegistration, ClientLogin, ClientLoginFinishParameters, ServerLogin, ServerLoginParameters, CredentialFinalization, ServerSetup,
 //! #   ksf::Identity,
 //! # };
 //! # use opaque_ke::CipherSuite;
@@ -482,7 +482,7 @@
 //! #     &password_file_bytes,
 //! #   )?;
 //! # let server_login_start_result =
-//! #     ServerLogin::start(&mut server_rng, &server_setup, Some(password_file), client_login_start_result.message, b"alice@example.com", ServerLoginStartParameters::default())?;
+//! #     ServerLogin::start(&mut server_rng, &server_setup, Some(password_file), client_login_start_result.message, b"alice@example.com", ServerLoginParameters::default())?;
 //! # let client_login_finish_result = client_login_start_result.state.finish(
 //! #   &mut client_rng,
 //! #   b"password",
@@ -491,7 +491,7 @@
 //! # )?;
 //! let server_login_finish_result = server_login_start_result.state.finish(
 //!     client_login_finish_result.message,
-//!     ServerLoginFinishParameters::default(),
+//!     ServerLoginParameters::default(),
 //! )?;
 //!
 //! assert_eq!(
@@ -542,7 +542,7 @@
 //! ```
 //! # use opaque_ke::{
 //! #   errors::ProtocolError,
-//! #   ClientRegistration, ClientRegistrationFinishParameters, ServerRegistration, ClientLogin, ClientLoginFinishParameters, ServerLogin, ServerLoginStartParameters, CredentialFinalization, ServerSetup,
+//! #   ClientRegistration, ClientRegistrationFinishParameters, ServerRegistration, ClientLogin, ClientLoginFinishParameters, ServerLogin, ServerLoginParameters, CredentialFinalization, ServerSetup,
 //! #   ksf::Identity,
 //! # };
 //! # use opaque_ke::CipherSuite;
@@ -586,7 +586,7 @@
 //! #     &password_file_bytes,
 //! #   )?;
 //! # let server_login_start_result =
-//! #     ServerLogin::start(&mut server_rng, &server_setup, Some(password_file), client_login_start_result.message, b"alice@example.com", ServerLoginStartParameters::default())?;
+//! #     ServerLogin::start(&mut server_rng, &server_setup, Some(password_file), client_login_start_result.message, b"alice@example.com", ServerLoginParameters::default())?;
 //!
 //! // And then later, during login...
 //! let client_login_finish_result = client_login_start_result.state.finish(
@@ -639,7 +639,7 @@
 //! ```
 //! # use opaque_ke::{
 //! #   errors::ProtocolError,
-//! #   ClientRegistration, ClientRegistrationFinishParameters, ServerRegistration, ClientLogin, ClientLoginFinishParameters, ServerLogin, ServerLoginStartParameters, CredentialFinalization, ServerSetup,
+//! #   ClientRegistration, ClientRegistrationFinishParameters, ServerRegistration, ClientLogin, ClientLoginFinishParameters, ServerLogin, ServerLoginParameters, CredentialFinalization, ServerSetup,
 //! #   ksf::Identity,
 //! # };
 //! # use opaque_ke::CipherSuite;
@@ -682,7 +682,7 @@
 //! #     &password_file_bytes,
 //! #   )?;
 //! # let server_login_start_result =
-//! #     ServerLogin::start(&mut server_rng, &server_setup, Some(password_file), client_login_start_result.message, b"alice@example.com", ServerLoginStartParameters::default())?;
+//! #     ServerLogin::start(&mut server_rng, &server_setup, Some(password_file), client_login_start_result.message, b"alice@example.com", ServerLoginParameters::default())?;
 //!
 //! // And then later, during login...
 //! let client_login_finish_result = client_login_start_result.state.finish(
@@ -760,8 +760,8 @@
 //! # Ok::<(), ProtocolError>(())
 //! ```
 //!
-//! The same identifiers must also be supplied using
-//! [`ServerLoginStartParameters`] in [Server Login Start](#server-login-start):
+//! The same identifiers must also be supplied using [`ServerLoginParameters`]
+//! in [Server Login Start](#server-login-start):
 //! ```
 //! # use opaque_ke::{
 //! #   errors::ProtocolError,
@@ -797,7 +797,7 @@
 //! #   &mut client_rng,
 //! #   b"password",
 //! # )?;
-//! # use opaque_ke::{ServerLogin, ServerLoginStartParameters};
+//! # use opaque_ke::{ServerLogin, ServerLoginParameters};
 //! # let password_file = ServerRegistration::<Default>::deserialize(&password_file_bytes)?;
 //! # let mut server_rng = OsRng;
 //! let server_login_start_result = ServerLogin::start(
@@ -806,7 +806,7 @@
 //!     Some(password_file),
 //!     client_login_start_result.message,
 //!     b"alice@example.com",
-//!     ServerLoginStartParameters {
+//!     ServerLoginParameters {
 //!         context: None,
 //!         identifiers: Identifiers {
 //!             client: Some(b"Alice_the_Cryptographer"),
@@ -822,7 +822,7 @@
 //! ```
 //! # use opaque_ke::{
 //! #   errors::ProtocolError,
-//! #   ClientRegistration, ClientRegistrationFinishParameters, ServerRegistration, ClientLogin, ClientLoginFinishParameters, Identifiers, ServerLogin, ServerLoginStartParameters, CredentialFinalization, ServerSetup,
+//! #   ClientRegistration, ClientRegistrationFinishParameters, ServerRegistration, ClientLogin, ClientLoginFinishParameters, Identifiers, ServerLogin, ServerLoginParameters, CredentialFinalization, ServerSetup,
 //! #   ksf::Identity,
 //! # };
 //! # use opaque_ke::CipherSuite;
@@ -859,7 +859,7 @@
 //! #     &password_file_bytes,
 //! #   )?;
 //! # let server_login_start_result =
-//! #     ServerLogin::start(&mut server_rng, &server_setup, Some(password_file), client_login_start_result.message, b"alice@example.com", ServerLoginStartParameters { context: None, identifiers: Identifiers { client: Some(b"Alice_the_Cryptographer"), server: Some(b"Facebook") } })?;
+//! #     ServerLogin::start(&mut server_rng, &server_setup, Some(password_file), client_login_start_result.message, b"alice@example.com", ServerLoginParameters { context: None, identifiers: Identifiers { client: Some(b"Alice_the_Cryptographer"), server: Some(b"Facebook") } })?;
 //! let client_login_finish_result = client_login_start_result.state.finish(
 //!     &mut client_rng,
 //!     b"password",
@@ -876,12 +876,12 @@
 //!
 //! # Ok::<(), ProtocolError>(())
 //! ```
-//! and in [`ServerLoginFinishParameters`] in [Server Login
+//! and in [`ServerLoginParameters`] in [Server Login
 //! Finish](#server-login-finish):
 //! ```
 //! # use opaque_ke::{
 //! #   errors::ProtocolError,
-//! #   ClientRegistration, ClientRegistrationFinishParameters, ServerRegistration, ClientLogin, ClientLoginFinishParameters, Identifiers, ServerLogin, ServerLoginStartParameters, ServerLoginFinishParameters, CredentialFinalization, ServerSetup,
+//! #   ClientRegistration, ClientRegistrationFinishParameters, ServerRegistration, ClientLogin, ClientLoginFinishParameters, Identifiers, ServerLogin, ServerLoginParameters, CredentialFinalization, ServerSetup,
 //! #   ksf::Identity,
 //! # };
 //! # use opaque_ke::CipherSuite;
@@ -918,7 +918,7 @@
 //! #     &password_file_bytes,
 //! #   )?;
 //! # let server_login_start_result =
-//! #     ServerLogin::start(&mut server_rng, &server_setup, Some(password_file), client_login_start_result.message, b"alice@example.com", ServerLoginStartParameters { context: None, identifiers: Identifiers { client: Some(b"Alice_the_Cryptographer"), server: Some(b"Facebook") } })?;
+//! #     ServerLogin::start(&mut server_rng, &server_setup, Some(password_file), client_login_start_result.message, b"alice@example.com", ServerLoginParameters { context: None, identifiers: Identifiers { client: Some(b"Alice_the_Cryptographer"), server: Some(b"Facebook") } })?;
 //! # let client_login_finish_result = client_login_start_result.state.finish(
 //! #   &mut client_rng,
 //! #   b"password",
@@ -927,7 +927,7 @@
 //! # )?;
 //! let server_login_finish_result = server_login_start_result.state.finish(
 //!     client_login_finish_result.message,
-//!     ServerLoginFinishParameters { context: None, identifiers: Identifiers { client: Some(b"Alice_the_Cryptographer"), server: Some(b"Facebook") } },
+//!     ServerLoginParameters { context: None, identifiers: Identifiers { client: Some(b"Alice_the_Cryptographer"), server: Some(b"Facebook") } },
 //! )?;
 //!
 //! # Ok::<(), ProtocolError>(())
@@ -946,11 +946,11 @@
 //! configuration parameters to the security of the key exchange. During the
 //! login phase, the client and server can specify this context using:
 //! - In [Server Login Start](#server-login-start), where the server can
-//!   populate [`ServerLoginStartParameters::context`].
+//!   populate [`ServerLoginParameters::context`].
 //! - In [Client Login Finish](#client-login-finish), where the client can
 //!   populate [`ClientLoginFinishParameters::context`].
 //! - In [Server Login Finish](#server-login-finish), where the server can
-//!   populate [`ServerLoginFinishParameters::context`].
+//!   populate [`ServerLoginParameters::context`].
 //!
 //! ## Dummy Server Login
 //!
@@ -994,7 +994,7 @@
 //! #         Ok(<<KeGroup<Default> as Group>::Sk as DiffieHellman<KeGroup<Default>>>::diffie_hellman(self.0, pk.to_group_type()))
 //! #     }
 //! # }
-//! use opaque_ke::{ServerLogin, ServerLoginStartParameters, ServerSetup};
+//! use opaque_ke::{ServerLogin, ServerLoginParameters, ServerSetup};
 //! use opaque_ke::keypair::{KeyPair, PrivateKeySerialization, PublicKey};
 //!
 //! // Implement if you intend to use `ServerSetup::de/serialize` instead of `serde`.
@@ -1037,7 +1037,7 @@
 //!     Some(password_file),
 //!     client_login_start_result.message,
 //!     b"alice@example.com",
-//!     ServerLoginStartParameters::default(),
+//!     ServerLoginParameters::default(),
 //! )?;
 //! let client_e_public_key = server_login_builder.data();
 //! let shared_secret = server_login_builder.private_key().diffie_hellman(&client_e_public_key)?;
@@ -1223,7 +1223,6 @@ pub use crate::opaque::{
     ClientLogin, ClientLoginFinishParameters, ClientLoginFinishResult, ClientLoginStartResult,
     ClientRegistration, ClientRegistrationFinishParameters, ClientRegistrationFinishResult,
     ClientRegistrationStartResult, Identifiers, KeyMaterialInfo, ServerLogin,
-    ServerLoginFinishParameters, ServerLoginFinishResult, ServerLoginStartParameters,
-    ServerLoginStartResult, ServerRegistration, ServerRegistrationLen,
-    ServerRegistrationStartResult, ServerSetup,
+    ServerLoginFinishResult, ServerLoginParameters, ServerLoginStartResult, ServerRegistration,
+    ServerRegistrationLen, ServerRegistrationStartResult, ServerSetup,
 };

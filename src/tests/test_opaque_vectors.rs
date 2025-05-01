@@ -492,7 +492,7 @@ where
             Some(record),
             CredentialRequest::<CS>::deserialize(&parameters.KE1).unwrap(),
             &parameters.credential_identifier,
-            ServerLoginStartParameters {
+            ServerLoginParameters {
                 context: Some(&parameters.context),
                 identifiers: Identifiers {
                     client: parameters.client_identity.as_deref(),
@@ -626,7 +626,7 @@ where
             Some(record),
             CredentialRequest::<CS>::deserialize(&parameters.KE1).unwrap(),
             &parameters.credential_identifier,
-            ServerLoginStartParameters {
+            ServerLoginParameters {
                 context: Some(&parameters.context),
                 identifiers: Identifiers {
                     client: parameters.client_identity.as_deref(),
@@ -637,7 +637,7 @@ where
 
         let server_login_result = server_login_start_result.state.finish(
             CredentialFinalization::deserialize(&parameters.KE3)?,
-            ServerLoginFinishParameters {
+            ServerLoginParameters {
                 context: Some(&parameters.context),
                 identifiers: Identifiers {
                     client: parameters.client_identity.as_deref(),
@@ -698,7 +698,7 @@ where
             None,
             CredentialRequest::<CS>::deserialize(&parameters.KE1).unwrap(),
             &parameters.credential_identifier,
-            ServerLoginStartParameters {
+            ServerLoginParameters {
                 context: Some(&parameters.context),
                 identifiers: Identifiers {
                     client: parameters.client_identity.as_deref(),
