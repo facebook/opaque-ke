@@ -67,26 +67,10 @@ where
             .chain_iter(message.verify_message())
             .finalize_fixed();
 
-        let repr = sk.to_repr();
-        let order = G::ORDER.encode_field_bytes();
-        let z = hazmat::bits2field::<G>(&sign_pre_hash)
-            .expect("hash output can not be shorter than a scalar");
-
-        let signature = loop {
-            let mut ad = FieldBytes::<G>::default();
-            rng.fill_bytes(&mut ad);
-
-            let k = Scalar::<G>::from_repr(rfc6979::generate_k::<H, _>(&repr, &order, &z, &ad))
-                .unwrap();
-
-            // This can only fail if the computed `r` or `s` are zero, in which case we just
-            // retry with a new `k`. See https://github.com/RustCrypto/signatures/pull/951.
-            if let Ok((signature, _)) = hazmat::sign_prehashed::<G, _>(sk, k, &z) {
-                break signature;
-            }
-        };
-
-        (Signature(signature), PreHash(verify_pre_hash))
+        (
+            Signature(sign::<_, G, H>(sk, rng, &sign_pre_hash)),
+            PreHash(verify_pre_hash),
+        )
     }
 
     fn verify<CS: CipherSuite, KE: Group>(
@@ -95,11 +79,50 @@ where
         state: Self::VerifyState<CS, KE>,
         signature: &Self::Signature,
     ) -> Result<(), ProtocolError> {
-        let z = hazmat::bits2field::<G>(&state.0)
-            .expect("hash output can not be shorter than a scalar");
-        hazmat::verify_prehashed(&pk.0.to_point(), &z, &signature.0)
-            .map_err(|_| ProtocolError::InvalidLoginError)
+        verify(pk, &state.0, &signature.0)
     }
+}
+
+fn sign<R, C, H>(sk: &NonZeroScalar<C>, rng: &mut R, pre_hash: &[u8]) -> ecdsa::Signature<C>
+where
+    R: CryptoRng + RngCore,
+    C: CurveArithmetic + PrimeCurve,
+    SignatureSize<C>: ArrayLength<u8>,
+    H: Default + BlockSizeUser + FixedOutputReset<OutputSize = FieldBytesSize<C>> + HashMarker,
+{
+    let repr = sk.to_repr();
+    let order = C::ORDER.encode_field_bytes();
+    let z =
+        hazmat::bits2field::<C>(pre_hash).expect("hash output can not be shorter than a scalar");
+
+    loop {
+        let mut ad = FieldBytes::<C>::default();
+        rng.fill_bytes(&mut ad);
+
+        let k =
+            Scalar::<C>::from_repr(rfc6979::generate_k::<H, _>(&repr, &order, &z, &ad)).unwrap();
+
+        // This can only fail if the computed `r` or `s` are zero, in which case we just
+        // retry with a new `k`. See https://github.com/RustCrypto/signatures/pull/951.
+        if let Ok((signature, _)) = hazmat::sign_prehashed::<C, _>(sk, k, &z) {
+            break signature;
+        }
+    }
+}
+
+fn verify<C>(
+    pk: &NonIdentity<C>,
+    pre_hash: &[u8],
+    signature: &ecdsa::Signature<C>,
+) -> Result<(), ProtocolError>
+where
+    C: CurveArithmetic + PrimeCurve,
+    SignatureSize<C>: ArrayLength<u8>,
+{
+    let z =
+        hazmat::bits2field::<C>(pre_hash).expect("hash output can not be shorter than a scalar");
+    hazmat::verify_prehashed(&pk.0.to_point(), &z, signature)
+        .map_err(|_| ProtocolError::InvalidLoginError)
 }
 
 /// Wrapper around [`ecdsa::Signature`] to implement [`Zeroize`].
@@ -147,4 +170,40 @@ where
         )
         .expect("failed to create `Signature` with non-zero `Scalar`s");
     }
+}
+
+#[test]
+fn ecdsa() {
+    use std::vec;
+
+    use digest::Digest;
+    use p256::ecdsa::signature::{DigestVerifier, RandomizedDigestSigner};
+    use p256::ecdsa::{Signature, SigningKey, VerifyingKey};
+    use p256::{NistP256, PublicKey};
+    use rand::rngs::OsRng;
+    use sha2::Sha256;
+
+    use crate::tests::mock_rng::CycleRng;
+
+    let mut rng = CycleRng::new(vec![1; 32]);
+
+    let mut message = [0; 1024];
+    OsRng.fill_bytes(&mut message);
+    let hash = Sha256::new_with_prefix(message);
+
+    let sk = NistP256::random_sk(&mut OsRng);
+    let signing_key = SigningKey::from(sk);
+
+    let signature: Signature = signing_key.sign_digest_with_rng(&mut rng, hash.clone());
+    let custom_signature = sign::<_, _, Sha256>(&sk, &mut rng, &hash.clone().finalize());
+
+    assert_eq!(signature, custom_signature);
+
+    let pk = NistP256::public_key(sk);
+    let verifying_key = VerifyingKey::from(PublicKey::from(pk.0));
+
+    verifying_key
+        .verify_digest(hash.clone(), &signature)
+        .unwrap();
+    verify(&pk, &hash.finalize(), &custom_signature).unwrap();
 }

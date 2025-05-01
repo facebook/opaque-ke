@@ -75,6 +75,7 @@ cryptoki = "0.9"
 elliptic-curve = { version = "0.13", features = ["alloc", "pkcs8"] }
 hex = "0.4"
 p256 = { version = "0.13", default-features = false, features = [
+  "ecdsa",
   "hash2curve",
   "pkcs8",
   "voprf",
