@@ -20,7 +20,7 @@ use core::ops::Add;
 
 use derive_where::derive_where;
 use digest::core_api::BlockSizeUser;
-use digest::{Digest, Mac, Output, OutputSizeUser, Update};
+use digest::{Digest, FixedOutput, Mac, Output, OutputSizeUser, Update};
 use generic_array::sequence::Concat;
 use generic_array::typenum::{IsLess, Le, NonZero, Sum, U256};
 use generic_array::{ArrayLength, GenericArray};
@@ -180,17 +180,6 @@ pub struct Message<'a, CS: CipherSuite, KE: Group> {
     context: SerializedContext<'a>,
     identifiers: SerializedIdentifiers<'a, KeGroup<CS>>,
     cache: CachedMessage<CS, KE>,
-}
-
-#[cfg_attr(
-    feature = "serde",
-    derive(serde::Deserialize, serde::Serialize),
-    serde(bound = "")
-)]
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, Zeroize)]
-enum Role {
-    Server,
-    Client,
 }
 
 /// Created by [`Message::to_cached()`]. This is used to save [`Message`] in
@@ -542,40 +531,54 @@ where
 impl<CS: CipherSuite, KE: Group> Message<'_, CS, KE> {
     /// Returns the message to be signed.
     pub fn sign_message(&self) -> impl Clone + Iterator<Item = &[u8]> {
-        match self.role {
-            Role::Server => self.message(Role::Server),
-            Role::Client => self.message(Role::Client),
-        }
+        self.context.iter().chain(self.post_message(Stage::Sign))
     }
 
     /// Returns the message to be verified.
     pub fn verify_message(&self) -> impl Clone + Iterator<Item = &[u8]> {
-        match self.role {
-            Role::Server => self.message(Role::Client),
-            Role::Client => self.message(Role::Server),
-        }
+        self.context.iter().chain(self.post_message(Stage::Verify))
     }
 
-    fn message(&self, role: Role) -> impl Clone + Iterator<Item = &[u8]> {
-        self.context
-            .iter()
-            .chain(
-                Some(self.identifiers.client.iter())
-                    .filter(|_| matches!(role, Role::Client))
-                    .into_iter()
-                    .flatten(),
-            )
+    /// Returns the hash of both messages. This is more efficient than using
+    /// [`sign_message()`](Self::sign_message) and
+    /// [`verify_message()`](Self::verify_message) because both messages share a
+    /// beginning which doesn't need to be hashed twice.
+    pub fn hash<KEH: Default + Clone + FixedOutput + Update>(&self) -> HashOutput<KEH> {
+        let mut context = KEH::default();
+        context.update_iter(self.context.iter());
+
+        let sign = context.clone().chain_iter(self.post_message(Stage::Sign));
+        let verify = context.chain_iter(self.post_message(Stage::Verify));
+
+        HashOutput { sign, verify }
+    }
+
+    fn post_message(&self, stage: Stage) -> impl Clone + Iterator<Item = &[u8]> {
+        let transcript = match (self.role, stage) {
+            (Role::Server, Stage::Sign) => Role::Server,
+            (Role::Server, Stage::Verify) => Role::Client,
+            (Role::Client, Stage::Sign) => Role::Client,
+            (Role::Client, Stage::Verify) => Role::Server,
+        };
+
+        Some(self.identifiers.client.iter())
+            .filter(|_| matches!(transcript, Role::Client))
+            .into_iter()
+            .flatten()
             .chain(self.cache.credential_request.iter())
             .chain(self.cache.ke1_message.iter())
             .chain(
                 Some(self.identifiers.server.iter())
-                    .filter(|_| matches!(role, Role::Server))
+                    .filter(|_| matches!(transcript, Role::Server))
                     .into_iter()
                     .flatten(),
             )
             .chain(self.cache.credential_response.iter())
             .chain([self.cache.server_nonce.as_slice(), &self.cache.server_e_pk])
-            .chain(Some(self.cache.server_mac.as_slice()).filter(|_| matches!(role, Role::Client)))
+            .chain(
+                Some(self.cache.server_mac.as_slice())
+                    .filter(|_| matches!(transcript, Role::Client)),
+            )
     }
 
     /// Create a [`CachedMessage`], which can be saved in
@@ -584,6 +587,31 @@ impl<CS: CipherSuite, KE: Group> Message<'_, CS, KE> {
     pub fn to_cached(&self) -> CachedMessage<CS, KE> {
         self.cache.clone()
     }
+}
+
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Deserialize, serde::Serialize),
+    serde(bound = "")
+)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, Zeroize)]
+enum Role {
+    Server,
+    Client,
+}
+
+enum Stage {
+    Sign,
+    Verify,
+}
+
+/// Returned by [`Message::hash()`] containing the hash of the messages to be
+/// signed and verified.
+pub struct HashOutput<H> {
+    /// The hash of the message to be signed.
+    pub sign: H,
+    /// The hash of the message to be verified.
+    pub verify: H,
 }
 
 impl<'a, CS: CipherSuite> MessageBuilder<'a, CS> {

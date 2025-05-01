@@ -30,7 +30,7 @@ use crate::key_exchange::group::elliptic_curve::NonIdentity;
 use crate::key_exchange::group::Group;
 pub use crate::key_exchange::sigma_i::shared::PreHash;
 use crate::key_exchange::traits::{Deserialize, Serialize};
-use crate::serialization::{SliceExt, UpdateExt};
+use crate::serialization::SliceExt;
 
 /// ECDSA for [`SigmaI`](crate::SigmaI).
 ///
@@ -60,16 +60,11 @@ where
         rng: &mut R,
         message: &Message<CS, KE>,
     ) -> (Self::Signature, Self::VerifyState<CS, KE>) {
-        let sign_pre_hash = H::default()
-            .chain_iter(message.sign_message())
-            .finalize_fixed();
-        let verify_pre_hash = H::default()
-            .chain_iter(message.verify_message())
-            .finalize_fixed();
+        let hash = message.hash::<H>();
 
         (
-            Signature(sign::<_, G, H>(sk, rng, &sign_pre_hash)),
-            PreHash(verify_pre_hash),
+            Signature(sign::<_, G, H>(sk, rng, &hash.sign.finalize_fixed())),
+            PreHash(hash.verify.finalize_fixed()),
         )
     }
 
@@ -95,6 +90,8 @@ where
     let z =
         hazmat::bits2field::<C>(pre_hash).expect("hash output can not be shorter than a scalar");
 
+    // This can only fail if the computed `r` or `s` are zero, in which case we just
+    // retry with a new `k`. See https://github.com/RustCrypto/signatures/pull/951.
     loop {
         let mut ad = FieldBytes::<C>::default();
         rng.fill_bytes(&mut ad);
@@ -102,8 +99,6 @@ where
         let k =
             Scalar::<C>::from_repr(rfc6979::generate_k::<H, _>(&repr, &order, &z, &ad)).unwrap();
 
-        // This can only fail if the computed `r` or `s` are zero, in which case we just
-        // retry with a new `k`. See https://github.com/RustCrypto/signatures/pull/951.
         if let Ok((signature, _)) = hazmat::sign_prehashed::<C, _>(sk, k, &z) {
             break signature;
         }

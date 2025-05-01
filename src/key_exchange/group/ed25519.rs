@@ -170,14 +170,11 @@ impl HashEddsaImpl for Ed25519 {
         sk: &Self::Sk,
         message: &Message<CS, KE>,
     ) -> (Self::Signature, Self::VerifyState<CS, KE>) {
-        let sign_pre_hash = Sha512::new().chain_iter(message.sign_message()).finalize();
-        let verify_pre_hash = Sha512::new()
-            .chain_iter(message.verify_message())
-            .finalize();
+        let hash = message.hash::<Sha512>();
 
         (
-            sign(sk, true, iter::once(sign_pre_hash.as_slice())),
-            PreHash(verify_pre_hash),
+            sign(sk, true, iter::once(hash.sign.finalize().as_slice())),
+            PreHash(hash.verify.finalize()),
         )
     }
 
