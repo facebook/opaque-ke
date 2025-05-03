@@ -11,6 +11,7 @@
 #[cfg(feature = "ecdsa")]
 pub mod ecdsa;
 pub mod hash_eddsa;
+mod message;
 pub mod pure_eddsa;
 pub(super) mod shared;
 
@@ -20,29 +21,30 @@ use core::ops::Add;
 
 use derive_where::derive_where;
 use digest::core_api::BlockSizeUser;
-use digest::{Digest, FixedOutput, Mac, Output, OutputSizeUser, Update};
+use digest::{Digest, Mac, Output, OutputSizeUser, Update};
 use generic_array::sequence::Concat;
 use generic_array::typenum::{IsLess, Le, NonZero, Sum, U256};
 use generic_array::{ArrayLength, GenericArray};
 use hmac::Hmac;
 use rand::{CryptoRng, RngCore};
 use subtle::{ConstantTimeEq, CtOption};
-use zeroize::{Zeroize, ZeroizeOnDrop};
+use zeroize::Zeroize;
 
-use crate::ciphersuite::{CipherSuite, KeGroup, KeHash, OprfGroup};
+use self::message::Role;
+pub use self::message::{CachedMessage, HashOutput, Message, MessageBuilder, VerifyMessage};
+use crate::ciphersuite::{CipherSuite, KeGroup, KeHash};
 use crate::envelope::NonceLen;
 use crate::errors::{InternalError, ProtocolError};
 use crate::hash::{Hash, OutputSize, ProxyHash};
 use crate::key_exchange::group::Group;
-use crate::key_exchange::shared::{derive_keys, generate_nonce, Ke1MessageIter, Ke1MessageIterLen};
+use crate::key_exchange::shared::{derive_keys, generate_nonce, Ke1MessageIter};
 pub use crate::key_exchange::shared::{DiffieHellman, Ke1Message, Ke1State};
 use crate::key_exchange::traits::{
-    CredentialRequestParts, CredentialRequestPartsLen, CredentialResponseParts,
-    CredentialResponsePartsLen, Deserialize, GenerateKe2Result, GenerateKe3Result, KeyExchange,
-    Sealed, Serialize, SerializedContext, SerializedIdentifiers,
+    CredentialRequestParts, CredentialResponseParts, Deserialize, GenerateKe2Result,
+    GenerateKe3Result, KeyExchange, Sealed, Serialize, SerializedContext, SerializedIdentifiers,
 };
 use crate::keypair::{KeyPair, PrivateKey, PublicKey};
-use crate::opaque::MaskedResponseLen;
+use crate::opaque::Identifiers;
 use crate::serialization::{SliceExt, UpdateExt};
 
 /// The SIGMA-I key exchange implementation
@@ -109,12 +111,11 @@ pub trait SignatureProtocol {
         message: &Message<CS, KE>,
     ) -> (Self::Signature, Self::VerifyState<CS, KE>);
 
-    /// Validates that the signature was created by signing the
-    /// [message](Message::verify_message) received in
-    /// [`sign()`](Self::sign) with the corresponding private key.
+    /// Validates that the signature was created by signing the message with the
+    /// corresponding private key.
     ///
-    /// The [`MessageBuilder`] can be used with [`CachedMessage`] to re-create
-    /// the [`Message`] which contains the message of the given `signature`.
+    /// The [`MessageBuilder`] can be used with [`CachedMessage`] to create
+    /// [`VerifyMessage`] which contains the message of the given `signature`.
     ///
     /// The `state` is created by [`sign()`](Self::sign()).
     fn verify<CS: CipherSuite, KE: Group>(
@@ -125,14 +126,6 @@ pub trait SignatureProtocol {
     ) -> Result<(), ProtocolError>;
 }
 
-/// Holds the context.
-#[derive(Debug, Eq, Hash, PartialEq, ZeroizeOnDrop)]
-pub struct MessageBuilder<'a, CS: CipherSuite> {
-    role: Role,
-    context: SerializedContext<'a>,
-    identifiers: SerializedIdentifiers<'a, KeGroup<CS>>,
-}
-
 /// Builder for the second key exchange message
 #[cfg_attr(
     feature = "serde",
@@ -140,10 +133,11 @@ pub struct MessageBuilder<'a, CS: CipherSuite> {
     serde(bound(deserialize = "'de: 'a", serialize = ""))
 )]
 #[derive_where(Clone, ZeroizeOnDrop)]
-#[derive_where(Debug, Eq, Hash, PartialEq; PublicKey<KE>)]
+#[derive_where(Debug, Eq, Hash, PartialEq; PublicKey<KeGroup<CS>>, PublicKey<KE>)]
 pub struct Ke2Builder<'a, CS: CipherSuite, KE: Group> {
     transcript: Message<'a, CS, KE>,
     server_nonce: GenericArray<u8, NonceLen>,
+    client_s_pk: PublicKey<KeGroup<CS>>,
     server_e_pk: PublicKey<KE>,
     expected_mac: Output<KeHash<CS>>,
     session_key: Output<KeHash<CS>>,
@@ -151,44 +145,6 @@ pub struct Ke2Builder<'a, CS: CipherSuite, KE: Group> {
     km3: Output<KeHash<CS>>,
     #[cfg(test)]
     handshake_secret: Output<KeHash<CS>>,
-}
-
-/// This holds the message to be signed and the message to be verified.
-///
-/// It is only available in [`SignatureProtocol::sign()`], if you need it again
-/// during verification, because e.g. you can't pre-hash the message for the
-/// verification, save [`CachedMessage`] in [`SignatureProtocol::VerifyState`].
-#[cfg_attr(
-    feature = "serde",
-    derive(serde::Deserialize, serde::Serialize),
-    serde(bound(deserialize = "'de: 'a", serialize = ""))
-)]
-#[derive_where(Clone, Debug, Eq, Hash, PartialEq, ZeroizeOnDrop)]
-pub struct Message<'a, CS: CipherSuite, KE: Group> {
-    role: Role,
-    context: SerializedContext<'a>,
-    identifiers: SerializedIdentifiers<'a, KeGroup<CS>>,
-    cache: CachedMessage<CS, KE>,
-}
-
-/// Created by [`Message::to_cached()`]. This is used to save [`Message`] in
-/// [`SignatureProtocol::VerifyState`].
-///
-/// Use [`MessageBuilder::build()`] to re-create the [`Message`] again in
-/// [`SignatureProtocol::verify()`].
-#[cfg_attr(
-    feature = "serde",
-    derive(serde::Deserialize, serde::Serialize),
-    serde(bound = "")
-)]
-#[derive_where(Clone, Debug, Eq, Hash, PartialEq, Zeroize, ZeroizeOnDrop)]
-pub struct CachedMessage<CS: CipherSuite, KE: Group> {
-    credential_request: CredentialRequestParts<CS>,
-    ke1_message: Ke1MessageIter<KE>,
-    credential_response: CredentialResponseParts<CS>,
-    server_nonce: GenericArray<u8, NonceLen>,
-    server_e_pk: GenericArray<u8, KE::PkLen>,
-    server_mac: Output<KeHash<CS>>,
 }
 
 /// The server state produced after the second key exchange message
@@ -201,8 +157,9 @@ pub struct CachedMessage<CS: CipherSuite, KE: Group> {
     ))
 )]
 #[derive_where(Clone, ZeroizeOnDrop)]
-#[derive_where(Debug, Eq, Hash, PartialEq; SIG::VerifyState<CS, KE>)]
+#[derive_where(Debug, Eq, Hash, PartialEq; <SIG::Group as Group>::Pk, SIG::VerifyState<CS, KE>)]
 pub struct Ke2State<CS: CipherSuite, SIG: SignatureProtocol, KE: Group> {
+    client_s_pk: PublicKey<SIG::Group>,
     session_key: Output<KeHash<CS>>,
     verify_state: SIG::VerifyState<CS, KE>,
     expected_mac: Output<KeHash<CS>>,
@@ -291,7 +248,7 @@ where
         credential_request: CredentialRequestParts<CS>,
         ke1_message: Self::KE1Message,
         credential_response: CredentialResponseParts<CS>,
-        _: &PublicKey<Self::Group>,
+        client_s_pk: PublicKey<Self::Group>,
         identifiers: SerializedIdentifiers<'a, KeGroup<CS>>,
         context: SerializedContext<'a>,
     ) -> Result<Self::KE2Builder<'a, CS>, ProtocolError> {
@@ -347,6 +304,7 @@ where
         Ok(Ke2Builder {
             transcript: message,
             server_nonce,
+            client_s_pk,
             server_e_pk: server_e.public().clone(),
             expected_mac: client_mac,
             session_key: derived_keys.session_key,
@@ -377,6 +335,7 @@ where
     ) -> Result<GenerateKe2Result<CS>, ProtocolError> {
         Ok((
             Ke2State {
+                client_s_pk: builder.client_s_pk.clone(),
                 session_key: builder.session_key.clone(),
                 verify_state: input.1,
                 expected_mac: builder.expected_mac.clone(),
@@ -462,7 +421,7 @@ where
             MessageBuilder {
                 role: Role::Client,
                 context,
-                identifiers,
+                identifier: identifiers.server,
             },
             state,
             &ke2_message.signature,
@@ -484,15 +443,17 @@ where
     fn finish_ke<CS: CipherSuite<KeyExchange = Self>>(
         ke3_message: Self::KE3Message,
         ke2_state: &Self::KE2State<CS>,
-        client_s_pk: &PublicKey<Self::Group>,
-        identifiers: SerializedIdentifiers<'_, Self::Group>,
+        identifiers: Identifiers<'_>,
         context: SerializedContext<'_>,
     ) -> Result<Output<KEH>, ProtocolError> {
-        client_s_pk.verify::<CS, SIG, KE>(
+        ke2_state.client_s_pk.verify::<CS, SIG, KE>(
             MessageBuilder {
                 role: Role::Server,
                 context,
-                identifiers,
+                identifier: SerializedIdentifier::from_identifier(
+                    identifiers.client,
+                    ke2_state.client_s_pk.serialize(),
+                )?,
             },
             ke2_state.verify_state.clone(),
             &ke3_message.signature,
@@ -513,181 +474,6 @@ where
     <KEH::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
     Le<<KEH::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
 {
-}
-
-impl<CS: CipherSuite, KE: Group> Message<'_, CS, KE> {
-    /// Returns the message to be signed.
-    pub fn sign_message(&self) -> impl Clone + Iterator<Item = &[u8]> {
-        self.context.iter().chain(self.post_message(Stage::Sign))
-    }
-
-    /// Returns the message to be verified.
-    pub fn verify_message(&self) -> impl Clone + Iterator<Item = &[u8]> {
-        self.context.iter().chain(self.post_message(Stage::Verify))
-    }
-
-    /// Returns the hash of both messages. This is more efficient than using
-    /// [`sign_message()`](Self::sign_message) and
-    /// [`verify_message()`](Self::verify_message) because both messages share a
-    /// beginning which doesn't need to be hashed twice.
-    pub fn hash<KEH: Default + Clone + FixedOutput + Update>(&self) -> HashOutput<KEH> {
-        let mut context = KEH::default();
-        context.update_iter(self.context.iter());
-
-        let sign = context.clone().chain_iter(self.post_message(Stage::Sign));
-        let verify = context.chain_iter(self.post_message(Stage::Verify));
-
-        HashOutput { sign, verify }
-    }
-
-    fn post_message(&self, stage: Stage) -> impl Clone + Iterator<Item = &[u8]> {
-        let transcript = match (self.role, stage) {
-            (Role::Server, Stage::Sign) => Role::Server,
-            (Role::Server, Stage::Verify) => Role::Client,
-            (Role::Client, Stage::Sign) => Role::Client,
-            (Role::Client, Stage::Verify) => Role::Server,
-        };
-
-        Some(self.identifiers.client.iter())
-            .filter(|_| matches!(transcript, Role::Client))
-            .into_iter()
-            .flatten()
-            .chain(self.cache.credential_request.iter())
-            .chain(self.cache.ke1_message.iter())
-            .chain(
-                Some(self.identifiers.server.iter())
-                    .filter(|_| matches!(transcript, Role::Server))
-                    .into_iter()
-                    .flatten(),
-            )
-            .chain(self.cache.credential_response.iter())
-            .chain([self.cache.server_nonce.as_slice(), &self.cache.server_e_pk])
-            .chain(
-                Some(self.cache.server_mac.as_slice())
-                    .filter(|_| matches!(transcript, Role::Client)),
-            )
-    }
-
-    /// Create a [`CachedMessage`], which can be saved in
-    /// [`SignatureProtocol::VerifyState`] and re-create a [`Message`]
-    /// again with [`MessageBuilder::build()`].
-    pub fn to_cached(&self) -> CachedMessage<CS, KE> {
-        self.cache.clone()
-    }
-}
-
-#[cfg_attr(
-    feature = "serde",
-    derive(serde::Deserialize, serde::Serialize),
-    serde(bound = "")
-)]
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, Zeroize)]
-enum Role {
-    Server,
-    Client,
-}
-
-enum Stage {
-    Sign,
-    Verify,
-}
-
-/// Returned by [`Message::hash()`] containing the hash of the messages to be
-/// signed and verified.
-pub struct HashOutput<H> {
-    /// The hash of the message to be signed.
-    pub sign: H,
-    /// The hash of the message to be verified.
-    pub verify: H,
-}
-
-impl<'a, CS: CipherSuite> MessageBuilder<'a, CS> {
-    /// Re-create a [`Message`] again. [`CachedMessage`] can be created by
-    /// [`Message::to_cached()`] and stored in
-    /// [`SignatureProtocol::VerifyState`].
-    pub fn build<KE: Group>(self, cache: CachedMessage<CS, KE>) -> Message<'a, CS, KE> {
-        Message {
-            role: self.role,
-            context: self.context.clone(),
-            identifiers: self.identifiers.clone(),
-            cache,
-        }
-    }
-}
-
-impl<CS: CipherSuite, KE: Group> Deserialize for CachedMessage<CS, KE> {
-    fn deserialize_take(input: &mut &[u8]) -> Result<Self, ProtocolError> {
-        Ok(Self {
-            credential_request: CredentialRequestParts::deserialize_take(input)?,
-            ke1_message: Ke1MessageIter::deserialize_take(input)?,
-            credential_response: CredentialResponseParts::deserialize_take(input)?,
-            server_nonce: input.take_array("server nonce")?,
-            server_e_pk: input.take_array("serialized server ephemeral key")?,
-            server_mac: input.take_array("server mac")?,
-        })
-    }
-}
-
-/// Length of [`CachedMessage`].
-type CachedMessageLen<CS: CipherSuite, KE: Group> = Sum<
-    Sum<
-        Sum<
-            Sum<
-                Sum<CredentialRequestPartsLen<CS>, Ke1MessageIterLen<KE>>,
-                CredentialResponsePartsLen<CS>,
-            >,
-            NonceLen,
-        >,
-        KE::PkLen,
-    >,
-    OutputSize<KeHash<CS>>,
->;
-
-impl<CS: CipherSuite, KE: Group> Serialize for CachedMessage<CS, KE>
-where
-    CredentialRequestPartsLen<CS>: ArrayLength<u8> + Add<Ke1MessageIterLen<KE>>,
-    Sum<CredentialRequestPartsLen<CS>, Ke1MessageIterLen<KE>>:
-        ArrayLength<u8> + Add<CredentialResponsePartsLen<CS>>,
-    Sum<Sum<CredentialRequestPartsLen<CS>, Ke1MessageIterLen<KE>>, CredentialResponsePartsLen<CS>>:
-        ArrayLength<u8> + Add<NonceLen>,
-    Sum<
-        Sum<
-            Sum<CredentialRequestPartsLen<CS>, Ke1MessageIterLen<KE>>,
-            CredentialResponsePartsLen<CS>,
-        >,
-        NonceLen,
-    >: ArrayLength<u8> + Add<KE::PkLen>,
-    Sum<
-        Sum<
-            Sum<
-                Sum<CredentialRequestPartsLen<CS>, Ke1MessageIterLen<KE>>,
-                CredentialResponsePartsLen<CS>,
-            >,
-            NonceLen,
-        >,
-        KE::PkLen,
-    >: ArrayLength<u8> + Add<OutputSize<KeHash<CS>>>,
-    CachedMessageLen<CS, KE>: ArrayLength<u8>,
-    // Ke1MessageIter
-    NonceLen: Add<KE::PkLen>,
-    Ke1MessageIterLen<KE>: ArrayLength<u8>,
-    // CredentialResponseParts
-    <OprfGroup<CS> as voprf::Group>::ElemLen: Add<NonceLen>,
-    Sum<<OprfGroup<CS> as voprf::Group>::ElemLen, NonceLen>:
-        ArrayLength<u8> + Add<MaskedResponseLen<CS>>,
-    CredentialResponsePartsLen<CS>: ArrayLength<u8>,
-{
-    type Len = CachedMessageLen<CS, KE>;
-
-    fn serialize(&self) -> GenericArray<u8, Self::Len> {
-        self.credential_request
-            .serialize()
-            .concat(self.ke1_message.serialize())
-            .concat(self.credential_response.serialize())
-            .concat(self.server_nonce)
-            .concat(self.server_e_pk.clone())
-            .concat(self.server_mac.clone())
-    }
 }
 
 fn transcript<CS: CipherSuite, KE: Group>(
@@ -716,6 +502,7 @@ where
 {
     fn deserialize_take(input: &mut &[u8]) -> Result<Self, ProtocolError> {
         Ok(Self {
+            client_s_pk: PublicKey::deserialize_take(input)?,
             session_key: input.take_array("session key")?,
             verify_state: SIG::VerifyState::deserialize_take(input)?,
             expected_mac: input.take_array("expected mac")?,
@@ -723,25 +510,30 @@ where
     }
 }
 
-type Ke2StateLen<CS, SIG: SignatureProtocol, KE> =
-    Sum<Sum<OutputSize<KeHash<CS>>, VerifyStateLen<CS, SIG, KE>>, OutputSize<KeHash<CS>>>;
+type Ke2StateLen<CS, SIG: SignatureProtocol, KE> = Sum<
+    Sum<Sum<<SIG::Group as Group>::PkLen, OutputSize<KeHash<CS>>>, VerifyStateLen<CS, SIG, KE>>,
+    OutputSize<KeHash<CS>>,
+>;
 
 type VerifyStateLen<CS, SIG: SignatureProtocol, KE> = <SIG::VerifyState<CS, KE> as Serialize>::Len;
 
 impl<CS: CipherSuite, SIG: SignatureProtocol, KE: Group> Serialize for Ke2State<CS, SIG, KE>
 where
     SIG::VerifyState<CS, KE>: Serialize,
-    // Ke2State: (Hash + VerifyState) + Hash
-    OutputSize<KeHash<CS>>: ArrayLength<u8> + Add<VerifyStateLen<CS, SIG, KE>>,
-    Sum<OutputSize<KeHash<CS>>, VerifyStateLen<CS, SIG, KE>>:
+    // Ke2State: ((SigPk + Hash) + VerifyState) + Hash
+    <SIG::Group as Group>::PkLen: Add<OutputSize<KeHash<CS>>>,
+    Sum<<SIG::Group as Group>::PkLen, OutputSize<KeHash<CS>>>:
+        ArrayLength<u8> + Add<VerifyStateLen<CS, SIG, KE>>,
+    Sum<Sum<<SIG::Group as Group>::PkLen, OutputSize<KeHash<CS>>>, VerifyStateLen<CS, SIG, KE>>:
         ArrayLength<u8> + Add<OutputSize<KeHash<CS>>>,
     Ke2StateLen<CS, SIG, KE>: ArrayLength<u8>,
 {
     type Len = Ke2StateLen<CS, SIG, KE>;
 
     fn serialize(&self) -> GenericArray<u8, Self::Len> {
-        self.session_key
-            .clone()
+        self.client_s_pk
+            .serialize()
+            .concat(self.session_key.clone())
             .concat(self.verify_state.serialize())
             .concat(self.expected_mac.clone())
     }
@@ -822,6 +614,7 @@ where
 //===================== //
 //////////////////////////
 
+use super::traits::SerializedIdentifier;
 #[cfg(test)]
 use crate::serialization::AssertZeroized;
 
@@ -853,15 +646,18 @@ where
 #[cfg(test)]
 impl<CS: CipherSuite, SIG: SignatureProtocol, KE: Group> AssertZeroized for Ke2State<CS, SIG, KE>
 where
+    <SIG::Group as Group>::Pk: AssertZeroized,
     SIG::VerifyState<CS, KE>: AssertZeroized,
 {
     fn assert_zeroized(&self) {
         let Self {
+            client_s_pk,
             session_key,
             verify_state,
             expected_mac,
         } = self;
 
+        client_s_pk.assert_zeroized();
         verify_state.assert_zeroized();
 
         for byte in session_key.iter().chain(expected_mac) {

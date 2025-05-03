@@ -24,7 +24,7 @@ use crate::key_exchange::traits::{Deserialize, Serialize};
 /// HashEdDSA for [`SigmaI`](crate::SigmaI).
 ///
 /// The ["verification state"](Self::VerifyState) is the pre-hash for the
-/// [verification message](Message::verify_message).
+/// message to be verified.
 pub struct HashEddsa<G>(PhantomData<G>);
 
 impl<G: HashEddsaImpl> SignatureProtocol for HashEddsa<G> {

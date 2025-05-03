@@ -19,19 +19,19 @@ use super::{Message, MessageBuilder, SignatureProtocol};
 use crate::ciphersuite::CipherSuite;
 use crate::errors::ProtocolError;
 use crate::key_exchange::group::Group;
+use crate::key_exchange::sigma_i::CachedMessage;
 use crate::key_exchange::traits::{Deserialize, Serialize};
 
 /// PureEdDSA for [`SigmaI`](crate::SigmaI).
 ///
-/// The ["verification state"](Self::VerifyState) is the [verification
-/// message](Message::verify_message). A [`super::CachedMessage`] is expected,
+/// The ["verification state"](Self::VerifyState) is a [`CachedMessage`],
 /// created by calling [`Message::to_cached()`].
 pub struct PureEddsa<G>(PhantomData<G>);
 
 impl<G: PureEddsaImpl> SignatureProtocol for PureEddsa<G> {
     type Group = G;
     type Signature = G::Signature;
-    type VerifyState<CS: CipherSuite, KE: Group> = G::VerifyState<CS, KE>;
+    type VerifyState<CS: CipherSuite, KE: Group> = CachedMessage<CS, KE>;
 
     fn sign<'a, R: CryptoRng + RngCore, CS: CipherSuite, KE: Group>(
         sk: &G::Sk,
@@ -56,17 +56,16 @@ pub(in super::super) mod implementation {
 
     pub trait PureEddsaImpl: Group + Sized {
         type Signature: Clone + Deserialize + Serialize + Zeroize;
-        type VerifyState<CS: CipherSuite, KE: Group>: Clone + Zeroize;
 
         fn sign<CS: CipherSuite, KE: Group>(
             sk: &Self::Sk,
             message: &Message<CS, KE>,
-        ) -> (Self::Signature, Self::VerifyState<CS, KE>);
+        ) -> (Self::Signature, CachedMessage<CS, KE>);
 
         fn verify<CS: CipherSuite, KE: Group>(
             pk: &Self::Pk,
             message_builder: MessageBuilder<'_, CS>,
-            state: Self::VerifyState<CS, KE>,
+            state: CachedMessage<CS, KE>,
             signature: &Self::Signature,
         ) -> Result<(), ProtocolError>;
     }

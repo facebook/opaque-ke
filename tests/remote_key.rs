@@ -45,7 +45,7 @@ use opaque_ke::key_exchange::sigma_i::ecdsa::{self, Ecdsa, PreHash};
 #[cfg(all(feature = "ristretto255", feature = "ed25519"))]
 use opaque_ke::key_exchange::sigma_i::pure_eddsa::PureEddsa;
 #[cfg(feature = "ecdsa")]
-use opaque_ke::key_exchange::sigma_i::{CachedMessage, Message, SigmaI};
+use opaque_ke::key_exchange::sigma_i::{CachedMessage, HashOutput, Message, SigmaI};
 use opaque_ke::key_exchange::tripledh::TripleDh;
 use opaque_ke::key_exchange::KeyExchange;
 use opaque_ke::keypair::{KeyPair, PublicKey};
@@ -493,11 +493,7 @@ impl Pkcs11KeyExchange<SigmaI<Ecdsa<NistP256, Sha256>, NistP256, Sha256>> for Re
         _: &PublicKey<NistP256>,
         message: &Message<CS, NistP256>,
     ) -> (ecdsa::Signature<NistP256>, PreHash<Sha256>) {
-        pkcs_11_ecdsa_sign::<NistP256, Sha256>(
-            self.0,
-            message.sign_message(),
-            message.verify_message(),
-        )
+        pkcs_11_ecdsa_sign::<NistP256, Sha256>(self.0, message.hash())
     }
 }
 
@@ -508,11 +504,7 @@ impl Pkcs11KeyExchange<SigmaI<Ecdsa<NistP384, Sha384>, NistP384, Sha384>> for Re
         _: &PublicKey<NistP384>,
         message: &Message<CS, NistP384>,
     ) -> (ecdsa::Signature<NistP384>, PreHash<Sha384>) {
-        pkcs_11_ecdsa_sign::<NistP384, Sha384>(
-            self.0,
-            message.sign_message(),
-            message.verify_message(),
-        )
+        pkcs_11_ecdsa_sign::<NistP384, Sha384>(self.0, message.hash())
     }
 }
 
@@ -616,27 +608,14 @@ where
 }
 
 #[cfg(feature = "ecdsa")]
-fn pkcs_11_ecdsa_sign<'a, G: CurveArithmetic + PrimeCurve, H: Clone + Digest>(
+fn pkcs_11_ecdsa_sign<G: CurveArithmetic + PrimeCurve, H: Clone + Digest>(
     sk: ObjectHandle,
-    sign_message: impl Iterator<Item = &'a [u8]>,
-    verify_message: impl Iterator<Item = &'a [u8]>,
+    hashes: HashOutput<H>,
 ) -> (ecdsa::Signature<G>, PreHash<H>)
 where
     SignatureSize<G>: ArrayLength<u8>,
 {
-    let mut sign_hash = H::new();
-    let mut verify_hash = H::new();
-
-    for bytes in sign_message {
-        sign_hash.update(bytes);
-    }
-
-    for bytes in verify_message {
-        verify_hash.update(bytes);
-    }
-
-    let sign_pre_hash = sign_hash.finalize();
-    let verify_pre_hash = verify_hash.finalize();
+    let sign_pre_hash = hashes.sign.finalize();
 
     let session = SESSION.lock().unwrap();
     let signature = session.sign(&Mechanism::Ecdsa, sk, &sign_pre_hash).unwrap();
@@ -644,7 +623,10 @@ where
 
     let signature = ::ecdsa::Signature::from_slice(&signature).unwrap();
 
-    (ecdsa::Signature(signature), PreHash(verify_pre_hash))
+    (
+        ecdsa::Signature(signature),
+        PreHash(hashes.verify.finalize()),
+    )
 }
 
 #[cfg(all(feature = "ristretto255", feature = "ed25519"))]

@@ -72,7 +72,7 @@ where
         credential_request: CredentialRequestParts<CS>,
         ke1_message: Self::KE1Message,
         credential_response: CredentialResponseParts<CS>,
-        client_s_pk: &PublicKey<Self::Group>,
+        client_s_pk: PublicKey<Self::Group>,
         identifiers: SerializedIdentifiers<'a, Self::Group>,
         context: SerializedContext<'a>,
     ) -> Result<Self::KE2Builder<'a, CS>, ProtocolError>;
@@ -114,8 +114,7 @@ where
     fn finish_ke<CS: CipherSuite<KeyExchange = Self>>(
         ke3_message: Self::KE3Message,
         ke2_state: &Self::KE2State<CS>,
-        client_s_pk: &PublicKey<Self::Group>,
-        identifiers: SerializedIdentifiers<'_, Self::Group>,
+        identifiers: Identifiers<'_>,
         context: SerializedContext<'_>,
     ) -> Result<Output<Self::Hash>, ProtocolError>;
 }
@@ -285,36 +284,29 @@ impl<'a, G: Group> SerializedIdentifiers<'a, G> {
         client_s_pk: GenericArray<u8, G::PkLen>,
         server_s_pk: GenericArray<u8, G::PkLen>,
     ) -> Result<Self, ProtocolError> {
-        let client = if let Some(client) = ids.client {
-            SerializedIdentifier::from(client)?
-        } else {
-            SerializedIdentifier::from_owned(client_s_pk)?
-        };
-        let server = if let Some(server) = ids.server {
-            SerializedIdentifier::from(server)?
-        } else {
-            SerializedIdentifier::from_owned(server_s_pk)?
-        };
+        let client = SerializedIdentifier::from_identifier(ids.client, client_s_pk)?;
+        let server = SerializedIdentifier::from_identifier(ids.server, server_s_pk)?;
 
         Ok(Self { client, server })
     }
 }
 
 impl<'a, G: Group> SerializedIdentifier<'a, G> {
-    // Variation of `serialize` that takes a borrowed `input
-    fn from(input: &'a [u8]) -> Result<Self, ProtocolError> {
-        Ok(SerializedIdentifier {
-            length: i2osp::<U2>(input.len())?,
-            identifier: Identifier::Borrowed(input),
-        })
-    }
-
-    // Variation of `serialize` that takes an owned `input`
-    fn from_owned(input: GenericArray<u8, G::PkLen>) -> Result<Self, ProtocolError> {
-        Ok(SerializedIdentifier {
-            length: i2osp::<U2>(input.len())?,
-            identifier: Identifier::Owned(input),
-        })
+    pub fn from_identifier(
+        id: Option<&'a [u8]>,
+        s_pk: GenericArray<u8, G::PkLen>,
+    ) -> Result<Self, ProtocolError> {
+        if let Some(id) = id {
+            Ok(SerializedIdentifier {
+                length: i2osp::<U2>(id.len())?,
+                identifier: Identifier::Borrowed(id),
+            })
+        } else {
+            Ok(SerializedIdentifier {
+                length: i2osp::<U2>(s_pk.len())?,
+                identifier: Identifier::Owned(s_pk),
+            })
+        }
     }
 
     pub(crate) fn iter(&self) -> impl Clone + Iterator<Item = &[u8]> {

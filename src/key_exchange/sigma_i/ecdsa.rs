@@ -35,7 +35,7 @@ use crate::serialization::SliceExt;
 /// ECDSA for [`SigmaI`](crate::SigmaI).
 ///
 /// The ["verification state"](Self::VerifyState) is the pre-hash for the
-/// [verification message](Message::verify_message).
+/// message to be verified.
 pub struct Ecdsa<G, H>(PhantomData<(G, H)>);
 
 impl<G, H> SignatureProtocol for Ecdsa<G, H>

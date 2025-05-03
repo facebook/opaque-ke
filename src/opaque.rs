@@ -139,10 +139,8 @@ pub struct ClientLogin<CS: CipherSuite> {
     ))
 )]
 #[derive_where(Clone, ZeroizeOnDrop)]
-#[derive_where(Debug, Eq, Hash, PartialEq; <KeGroup<CS> as Group>::Pk, <CS::KeyExchange as KeyExchange>::KE2State<CS>)]
+#[derive_where(Debug, Eq, Hash, PartialEq; <CS::KeyExchange as KeyExchange>::KE2State<CS>)]
 pub struct ServerLogin<CS: CipherSuite> {
-    client_s_pk: PublicKey<KeGroup<CS>>,
-    server_s_pk: GenericArray<u8, <KeGroup<CS> as Group>::PkLen>,
     ke2_state: <CS::KeyExchange as KeyExchange>::KE2State<CS>,
 }
 
@@ -609,24 +607,13 @@ impl<CS: CipherSuite> ClientLogin<CS> {
     }
 }
 
-pub(crate) type ServerLoginLen<CS: CipherSuite> =
-    Sum<Sum<<KeGroup<CS> as Group>::PkLen, <KeGroup<CS> as Group>::PkLen>, Ke2StateLen<CS>>;
-
 impl<CS: CipherSuite> ServerLogin<CS> {
     /// Serialization into bytes
-    pub fn serialize(&self) -> GenericArray<u8, ServerLoginLen<CS>>
+    pub fn serialize(&self) -> GenericArray<u8, Ke2StateLen<CS>>
     where
         <CS::KeyExchange as KeyExchange>::KE2State<CS>: Serialize,
-        // ServerLogin: Pk + Pk + Ke2State
-        <KeGroup<CS> as Group>::PkLen: Add<<KeGroup<CS> as Group>::PkLen>,
-        Sum<<KeGroup<CS> as Group>::PkLen, <KeGroup<CS> as Group>::PkLen>:
-            ArrayLength<u8> + Add<Ke2StateLen<CS>>,
-        ServerLoginLen<CS>: ArrayLength<u8>,
     {
-        self.client_s_pk
-            .serialize()
-            .concat(self.server_s_pk.clone())
-            .concat(self.ke2_state.serialize())
+        self.ke2_state.serialize()
     }
 
     /// Deserialization from bytes
@@ -635,8 +622,6 @@ impl<CS: CipherSuite> ServerLogin<CS> {
         <CS::KeyExchange as KeyExchange>::KE2State<CS>: Deserialize,
     {
         Ok(Self {
-            client_s_pk: PublicKey::deserialize_take(&mut bytes)?,
-            server_s_pk: bytes.take_array("server static public key")?,
             ke2_state:
                 <<CS::KeyExchange as KeyExchange>::KE2State<CS> as Deserialize>::deserialize_take(
                     &mut bytes,
@@ -705,14 +690,12 @@ impl<CS: CipherSuite> ServerLogin<CS> {
             credential_request.to_parts(),
             credential_request.ke1_message.clone(),
             credential_response,
-            &client_s_pk,
+            client_s_pk,
             identifiers,
             context,
         )?;
 
         Ok(ServerLoginBuilder {
-            client_s_pk,
-            server_s_pk: serialized_server_s_pk,
             server_s_sk: server_setup.keypair().private().clone(),
             evaluation_element,
             masking_nonce: Zeroizing::new(masking_nonce),
@@ -766,8 +749,6 @@ impl<CS: CipherSuite> ServerLogin<CS> {
         Ok(ServerLoginStartResult {
             message: credential_response,
             state: Self {
-                client_s_pk: builder.client_s_pk,
-                server_s_pk: builder.server_s_pk,
                 ke2_state: result.0,
             },
             #[cfg(test)]
@@ -813,18 +794,12 @@ impl<CS: CipherSuite> ServerLogin<CS> {
         message: CredentialFinalization<CS>,
         parameters: ServerLoginParameters,
     ) -> Result<ServerLoginFinishResult<CS>, ProtocolError> {
-        let identifiers = SerializedIdentifiers::<KeGroup<CS>>::from_identifiers(
-            parameters.identifiers,
-            self.client_s_pk.serialize(),
-            self.server_s_pk.clone(),
-        )?;
         let context = SerializedContext::from(parameters.context)?;
 
         let session_key = <CS::KeyExchange as KeyExchange>::finish_ke(
             message.ke3_message,
             &self.ke2_state,
-            &self.client_s_pk,
-            identifiers,
+            parameters.identifiers,
             context,
         )?;
 
@@ -1259,17 +1234,8 @@ where
     <CS::KeyExchange as KeyExchange>::KE2State<CS>: AssertZeroized,
 {
     fn assert_zeroized(&self) {
-        let Self {
-            client_s_pk,
-            server_s_pk,
-            ke2_state,
-        } = self;
+        let Self { ke2_state } = self;
 
-        client_s_pk.assert_zeroized();
         ke2_state.assert_zeroized();
-
-        for byte in server_s_pk {
-            assert_eq!(byte, &0);
-        }
     }
 }

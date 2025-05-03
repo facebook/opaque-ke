@@ -136,12 +136,11 @@ impl SigningKey {
 
 impl PureEddsaImpl for Ed25519 {
     type Signature = Signature;
-    type VerifyState<CS: CipherSuite, KE: Group> = CachedMessage<CS, KE>;
 
     fn sign<CS: CipherSuite, KE: Group>(
         sk: &Self::Sk,
         message: &Message<CS, KE>,
-    ) -> (Self::Signature, Self::VerifyState<CS, KE>) {
+    ) -> (Self::Signature, CachedMessage<CS, KE>) {
         (sign(sk, false, message.sign_message()), message.to_cached())
     }
 
@@ -150,7 +149,7 @@ impl PureEddsaImpl for Ed25519 {
     fn verify<CS: CipherSuite, KE: Group>(
         pk: &Self::Pk,
         message_builder: MessageBuilder<'_, CS>,
-        state: Self::VerifyState<CS, KE>,
+        state: CachedMessage<CS, KE>,
         signature: &Self::Signature,
     ) -> Result<(), ProtocolError> {
         verify(
