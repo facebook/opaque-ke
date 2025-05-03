@@ -13,7 +13,7 @@ use core::ops::Add;
 
 use derive_where::derive_where;
 use digest::core_api::BlockSizeUser;
-use digest::{Digest, Mac, Output, OutputSizeUser, Update};
+use digest::{Digest, Mac, Output, OutputSizeUser};
 use generic_array::sequence::Concat;
 use generic_array::typenum::{IsLess, Le, NonZero, Sum, U256};
 use generic_array::{ArrayLength, GenericArray};
@@ -22,7 +22,7 @@ use rand::{CryptoRng, RngCore};
 use subtle::{ConstantTimeEq, CtOption};
 use zeroize::{Zeroize, ZeroizeOnDrop};
 
-use crate::ciphersuite::{CipherSuite, KeGroup, KeHash};
+use crate::ciphersuite::{CipherSuite, KeGroup};
 use crate::errors::{InternalError, ProtocolError};
 use crate::hash::{Hash, OutputSize, ProxyHash};
 use crate::key_exchange::group::Group;
@@ -33,7 +33,7 @@ use crate::key_exchange::traits::{
     GenerateKe3Result, KeyExchange, Sealed, Serialize, SerializedContext, SerializedIdentifiers,
 };
 use crate::keypair::{KeyPair, PrivateKey, PublicKey};
-use crate::serialization::{SliceExt, UpdateExt};
+use crate::serialization::SliceExt;
 
 ////////////////////////////
 // High-level API Structs //
@@ -151,21 +151,7 @@ where
     fn generate_ke1<R: RngCore + CryptoRng>(
         rng: &mut R,
     ) -> Result<(Self::KE1State, Self::KE1Message), ProtocolError> {
-        let client_e_kp = KeyPair::<G>::derive_random(rng);
-        let client_nonce = shared::generate_nonce::<R>(rng);
-
-        let ke1_message = Ke1Message {
-            client_nonce,
-            client_e_pk: client_e_kp.public().clone(),
-        };
-
-        Ok((
-            Ke1State {
-                client_e_sk: client_e_kp.private().clone(),
-                client_nonce,
-            },
-            ke1_message,
-        ))
+        shared::generate_ke1(rng)
     }
 
     fn ke2_builder<'a, CS: CipherSuite<KeyExchange = Self>, R: RngCore + CryptoRng>(
@@ -180,14 +166,17 @@ where
         let server_e = KeyPair::<G>::derive_random(rng);
         let server_nonce = shared::generate_nonce::<R>(rng);
 
-        let transcript_hasher = transcript(
+        let ke1_message_iter = ke1_message.to_iter();
+        let server_e_pk = server_e.public().serialize();
+
+        let transcript_hasher = shared::transcript(
             &context,
             &identifiers,
             &credential_request,
-            &ke1_message,
+            &ke1_message_iter,
             &credential_response,
             server_nonce,
-            server_e.public(),
+            &server_e_pk,
         );
 
         let shared_secret_1 = server_e
@@ -279,14 +268,14 @@ where
         identifiers: SerializedIdentifiers<'_, KeGroup<CS>>,
         context: SerializedContext<'_>,
     ) -> Result<GenerateKe3Result<Self>, ProtocolError> {
-        let mut transcript_hasher = transcript(
+        let mut transcript_hasher = shared::transcript(
             &context,
             &identifiers,
             &credential_request,
-            &ke1_message,
+            &ke1_message.to_iter(),
             &credential_response,
             ke2_message.server_nonce,
-            &ke2_message.server_e_pk,
+            &ke2_message.server_e_pk.serialize(),
         );
 
         let shared_secret_1 = ke1_state
@@ -352,31 +341,6 @@ where
     <H::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
     Le<<H::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
 {
-}
-
-////////////////////////////////////////////////
-// Helper functions and Trait Implementations //
-// ========================================== //
-////////////////////////////////////////////////
-
-fn transcript<CS: CipherSuite>(
-    context: &SerializedContext<'_>,
-    identifiers: &SerializedIdentifiers<'_, KeGroup<CS>>,
-    credential_request: &CredentialRequestParts<CS>,
-    ke1_message: &Ke1Message<KeGroup<CS>>,
-    credential_response: &CredentialResponseParts<CS>,
-    server_nonce: GenericArray<u8, NonceLen>,
-    server_e_pk: &PublicKey<KeGroup<CS>>,
-) -> KeHash<CS> {
-    KeHash::<CS>::new()
-        .chain_iter(context.iter())
-        .chain_iter(identifiers.client.iter())
-        .chain_iter(credential_request.iter())
-        .chain_iter(ke1_message.to_iter().iter())
-        .chain_iter(identifiers.server.iter())
-        .chain_iter(credential_response.iter())
-        .chain(server_nonce)
-        .chain(server_e_pk.serialize())
 }
 
 ////////////////////////////////////////////////

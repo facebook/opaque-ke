@@ -10,19 +10,23 @@ use core::ops::Add;
 
 use derive_where::derive_where;
 use digest::core_api::BlockSizeUser;
-use digest::{Output, OutputSizeUser};
+use digest::{Digest, Output, OutputSizeUser, Update};
 use generic_array::sequence::Concat;
 use generic_array::typenum::{IsLess, Le, NonZero, Sum, Unsigned, U1, U2, U256, U32};
 use generic_array::{ArrayLength, GenericArray};
 use hkdf::{Hkdf, HkdfExtract};
 use rand::{CryptoRng, RngCore};
 
+use crate::ciphersuite::{CipherSuite, KeGroup, KeHash};
 use crate::errors::{InternalError, ProtocolError};
 use crate::hash::{Hash, OutputSize, ProxyHash};
 use crate::key_exchange::group::Group;
-use crate::key_exchange::traits::{Deserialize, Serialize};
-use crate::keypair::{PrivateKey, PublicKey};
-use crate::serialization::{i2osp, SliceExt};
+use crate::key_exchange::traits::{
+    CredentialRequestParts, CredentialResponseParts, Deserialize, Serialize, SerializedContext,
+    SerializedIdentifiers,
+};
+use crate::keypair::{KeyPair, PrivateKey, PublicKey};
+use crate::serialization::{i2osp, SliceExt, UpdateExt};
 
 ///////////////
 // Constants //
@@ -96,11 +100,51 @@ pub(super) struct DerivedKeys<H: OutputSizeUser> {
 
 // Helper functions
 
+pub(super) fn generate_ke1<R: RngCore + CryptoRng, G: Group>(
+    rng: &mut R,
+) -> Result<(Ke1State<G>, Ke1Message<G>), ProtocolError> {
+    let client_e_kp = KeyPair::<G>::derive_random(rng);
+    let client_nonce = generate_nonce::<R>(rng);
+
+    let ke1_message = Ke1Message {
+        client_nonce,
+        client_e_pk: client_e_kp.public().clone(),
+    };
+
+    Ok((
+        Ke1State {
+            client_e_sk: client_e_kp.private().clone(),
+            client_nonce,
+        },
+        ke1_message,
+    ))
+}
+
 // Generate a random nonce up to NonceLen::USIZE bytes.
 pub(super) fn generate_nonce<R: RngCore + CryptoRng>(rng: &mut R) -> GenericArray<u8, NonceLen> {
     let mut nonce_bytes = GenericArray::default();
     rng.fill_bytes(&mut nonce_bytes);
     nonce_bytes
+}
+
+pub(super) fn transcript<CS: CipherSuite, KE: Group>(
+    context: &SerializedContext<'_>,
+    identifiers: &SerializedIdentifiers<'_, KeGroup<CS>>,
+    credential_request: &CredentialRequestParts<CS>,
+    ke1_message: &Ke1MessageIter<KE>,
+    credential_response: &CredentialResponseParts<CS>,
+    server_nonce: GenericArray<u8, NonceLen>,
+    server_e_pk: &GenericArray<u8, KE::PkLen>,
+) -> KeHash<CS> {
+    KeHash::<CS>::new()
+        .chain_iter(context.iter())
+        .chain_iter(identifiers.client.iter())
+        .chain_iter(credential_request.iter())
+        .chain_iter(ke1_message.iter())
+        .chain_iter(identifiers.server.iter())
+        .chain_iter(credential_response.iter())
+        .chain(server_nonce)
+        .chain(server_e_pk)
 }
 
 // Internal function which takes computed shared secrets, along with some

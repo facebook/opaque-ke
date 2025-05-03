@@ -21,7 +21,7 @@ use core::ops::Add;
 
 use derive_where::derive_where;
 use digest::core_api::BlockSizeUser;
-use digest::{Digest, Mac, Output, OutputSizeUser, Update};
+use digest::{Digest, Mac, Output, OutputSizeUser};
 use generic_array::sequence::Concat;
 use generic_array::typenum::{IsLess, Le, NonZero, Sum, U256};
 use generic_array::{ArrayLength, GenericArray};
@@ -37,11 +37,12 @@ use crate::envelope::NonceLen;
 use crate::errors::{InternalError, ProtocolError};
 use crate::hash::{Hash, OutputSize, ProxyHash};
 use crate::key_exchange::group::Group;
-use crate::key_exchange::shared::{derive_keys, generate_nonce, Ke1MessageIter};
+use crate::key_exchange::shared::{derive_keys, generate_ke1, generate_nonce, transcript};
 pub use crate::key_exchange::shared::{DiffieHellman, Ke1Message, Ke1State};
 use crate::key_exchange::traits::{
     CredentialRequestParts, CredentialResponseParts, Deserialize, GenerateKe2Result,
-    GenerateKe3Result, KeyExchange, Sealed, Serialize, SerializedContext, SerializedIdentifiers,
+    GenerateKe3Result, KeyExchange, Sealed, Serialize, SerializedContext, SerializedIdentifier,
+    SerializedIdentifiers,
 };
 use crate::keypair::{KeyPair, PrivateKey, PublicKey};
 use crate::opaque::Identifiers;
@@ -226,21 +227,7 @@ where
     fn generate_ke1<R: RngCore + CryptoRng>(
         rng: &mut R,
     ) -> Result<(Self::KE1State, Self::KE1Message), ProtocolError> {
-        let client_e_kp = KeyPair::<KE>::derive_random(rng);
-        let client_nonce = generate_nonce::<R>(rng);
-
-        let ke1_message = Ke1Message {
-            client_nonce,
-            client_e_pk: client_e_kp.public().clone(),
-        };
-
-        Ok((
-            Ke1State {
-                client_e_sk: client_e_kp.private().clone(),
-                client_nonce,
-            },
-            ke1_message,
-        ))
+        generate_ke1(rng)
     }
 
     fn ke2_builder<'a, CS: CipherSuite<KeyExchange = Self>, R: RngCore + CryptoRng>(
@@ -476,26 +463,6 @@ where
 {
 }
 
-fn transcript<CS: CipherSuite, KE: Group>(
-    context: &SerializedContext<'_>,
-    identifiers: &SerializedIdentifiers<'_, KeGroup<CS>>,
-    credential_request: &CredentialRequestParts<CS>,
-    ke1_message: &Ke1MessageIter<KE>,
-    credential_response: &CredentialResponseParts<CS>,
-    server_nonce: GenericArray<u8, NonceLen>,
-    server_e_pk: &GenericArray<u8, KE::PkLen>,
-) -> KeHash<CS> {
-    KeHash::<CS>::new()
-        .chain_iter(context.iter())
-        .chain_iter(identifiers.client.iter())
-        .chain_iter(credential_request.iter())
-        .chain_iter(ke1_message.iter())
-        .chain_iter(identifiers.server.iter())
-        .chain_iter(credential_response.iter())
-        .chain(server_nonce)
-        .chain(server_e_pk)
-}
-
 impl<CS: CipherSuite, SIG: SignatureProtocol, KE: Group> Deserialize for Ke2State<CS, SIG, KE>
 where
     SIG::VerifyState<CS, KE>: Deserialize,
@@ -614,7 +581,8 @@ where
 //===================== //
 //////////////////////////
 
-use super::traits::SerializedIdentifier;
+#[cfg(test)]
+use crate::key_exchange::shared::Ke1MessageIter;
 #[cfg(test)]
 use crate::serialization::AssertZeroized;
 
