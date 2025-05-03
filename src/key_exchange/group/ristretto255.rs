@@ -22,8 +22,7 @@ use voprf::Mode;
 
 use super::{Group, STR_OPAQUE_DERIVE_AUTH_KEY_PAIR};
 use crate::errors::{InternalError, ProtocolError};
-use crate::key_exchange::sigma_i::SharedSecret;
-use crate::key_exchange::tripledh::DiffieHellman;
+use crate::key_exchange::shared::DiffieHellman;
 use crate::serialization::SliceExt;
 
 /// Implementation for Ristretto255.
@@ -160,14 +159,6 @@ impl voprf::Group for Ristretto255 {
 
 impl DiffieHellman<Ristretto255> for Scalar {
     fn diffie_hellman(self, pk: RistrettoPoint) -> GenericArray<u8, U32> {
-        Ristretto255::serialize_pk(pk * self)
-    }
-}
-
-impl SharedSecret<Ristretto255> for Scalar {
-    type Len = U32;
-
-    fn shared_secret(self, pk: RistrettoPoint) -> GenericArray<u8, U32> {
         Ristretto255::serialize_pk(pk * self)
     }
 }

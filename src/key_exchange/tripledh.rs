@@ -27,7 +27,7 @@ use crate::errors::{InternalError, ProtocolError};
 use crate::hash::{Hash, OutputSize, ProxyHash};
 use crate::key_exchange::group::Group;
 use crate::key_exchange::shared::{self, NonceLen};
-pub use crate::key_exchange::shared::{Ke1Message, Ke1State};
+pub use crate::key_exchange::shared::{DiffieHellman, Ke1Message, Ke1State};
 use crate::key_exchange::traits::{
     CredentialRequestParts, CredentialResponseParts, Deserialize, GenerateKe2Result,
     GenerateKe3Result, KeyExchange, Sealed, Serialize, SerializedContext, SerializedIdentifiers,
@@ -122,12 +122,6 @@ where
     Le<<H::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
 {
     mac: Output<H>,
-}
-
-/// Trait required by [`Group::Sk`] to be compatible with [`TripleDh`].
-pub trait DiffieHellman<G: Group> {
-    /// Diffie-Hellman key exchange.
-    fn diffie_hellman(self, pk: G::Pk) -> GenericArray<u8, G::PkLen>;
 }
 
 ////////////////////////////////

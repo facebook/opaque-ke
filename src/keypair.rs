@@ -18,8 +18,8 @@ use rand::{CryptoRng, RngCore};
 use crate::ciphersuite::CipherSuite;
 use crate::errors::ProtocolError;
 use crate::key_exchange::group::Group;
-use crate::key_exchange::sigma_i::{Message, MessageBuilder, SharedSecret, SignatureProtocol};
-use crate::key_exchange::tripledh::DiffieHellman;
+use crate::key_exchange::shared::DiffieHellman;
+use crate::key_exchange::sigma_i::{Message, MessageBuilder, SignatureProtocol};
 use crate::serialization::SliceExt;
 
 /// A Keypair trait with public-private verification
@@ -116,19 +116,6 @@ where
     /// Diffie-Hellman key exchange implementation
     pub(crate) fn ke_diffie_hellman(&self, pk: &PublicKey<G>) -> GenericArray<u8, G::PkLen> {
         self.0.diffie_hellman(pk.0)
-    }
-}
-
-impl<G: Group> PrivateKey<G>
-where
-    G::Sk: SharedSecret<G>,
-{
-    /// Key-exchange implementation
-    pub(crate) fn ke_shared_secret(
-        &self,
-        pk: &PublicKey<G>,
-    ) -> GenericArray<u8, <G::Sk as SharedSecret<G>>::Len> {
-        self.0.shared_secret(pk.0)
     }
 }
 

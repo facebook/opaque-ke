@@ -19,8 +19,7 @@ use zeroize::Zeroize;
 
 use super::Group;
 use crate::errors::{InternalError, ProtocolError};
-use crate::key_exchange::sigma_i::SharedSecret;
-use crate::key_exchange::tripledh::DiffieHellman;
+use crate::key_exchange::shared::DiffieHellman;
 use crate::serialization::SliceExt;
 
 /// Implementation for Curve25519.
@@ -87,14 +86,6 @@ pub struct Scalar([u8; 32]);
 
 impl DiffieHellman<Curve25519> for Scalar {
     fn diffie_hellman(self, pk: MontgomeryPoint) -> GenericArray<u8, U32> {
-        Curve25519::serialize_pk(pk.mul_clamped(self.0))
-    }
-}
-
-impl SharedSecret<Curve25519> for Scalar {
-    type Len = U32;
-
-    fn shared_secret(self, pk: MontgomeryPoint) -> GenericArray<u8, U32> {
         Curve25519::serialize_pk(pk.mul_clamped(self.0))
     }
 }

@@ -35,7 +35,7 @@ use crate::errors::{InternalError, ProtocolError};
 use crate::hash::{Hash, OutputSize, ProxyHash};
 use crate::key_exchange::group::Group;
 use crate::key_exchange::shared::{derive_keys, generate_nonce, Ke1MessageIter, Ke1MessageIterLen};
-pub use crate::key_exchange::shared::{Ke1Message, Ke1State};
+pub use crate::key_exchange::shared::{DiffieHellman, Ke1Message, Ke1State};
 use crate::key_exchange::traits::{
     CredentialRequestParts, CredentialRequestPartsLen, CredentialResponseParts,
     CredentialResponsePartsLen, Deserialize, GenerateKe2Result, GenerateKe3Result, KeyExchange,
@@ -131,16 +131,6 @@ pub struct MessageBuilder<'a, CS: CipherSuite> {
     role: Role,
     context: SerializedContext<'a>,
     identifiers: SerializedIdentifiers<'a, KeGroup<CS>>,
-}
-
-/// Shared secret computation implementation.
-pub trait SharedSecret<KE: Group> {
-    /// Length of the shared secret.
-    type Len: ArrayLength<u8>;
-
-    /// Returns a shared secret computed between the private key and the given
-    /// public key.
-    fn shared_secret(self, pk: KE::Pk) -> GenericArray<u8, Self::Len>;
 }
 
 /// Builder for the second key exchange message
@@ -259,7 +249,7 @@ pub struct Ke3Message<SIG: SignatureProtocol, KEH: OutputSizeUser> {
 
 impl<SIG: SignatureProtocol, KE: 'static + Group, KEH: Hash> KeyExchange for SigmaI<SIG, KE, KEH>
 where
-    KE::Sk: SharedSecret<KE>,
+    KE::Sk: DiffieHellman<KE>,
     KEH::Core: ProxyHash,
     <KEH::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
     Le<<KEH::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
@@ -323,7 +313,7 @@ where
 
         let shared_secret = server_e
             .private()
-            .ke_shared_secret(&ke1_message.client_e_pk);
+            .ke_diffie_hellman(&ke1_message.client_e_pk);
 
         let derived_keys = derive_keys::<KEH>(
             iter::once(shared_secret.as_slice()),
@@ -431,7 +421,7 @@ where
 
         let shared_secret = ke1_state
             .client_e_sk
-            .ke_shared_secret(&ke2_message.server_e_pk);
+            .ke_diffie_hellman(&ke2_message.server_e_pk);
 
         let derived_keys = derive_keys::<KEH>(
             iter::once(shared_secret.as_slice()),

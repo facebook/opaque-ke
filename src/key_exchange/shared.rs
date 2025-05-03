@@ -42,6 +42,12 @@ static STR_OPAQUE: &[u8] = b"OPAQUE-";
 // ====================== //
 ////////////////////////////
 
+/// Trait required by [`Group::Sk`] to be compatible with [`TripleDh`].
+pub trait DiffieHellman<G: Group> {
+    /// Diffie-Hellman key exchange.
+    fn diffie_hellman(self, pk: G::Pk) -> GenericArray<u8, G::PkLen>;
+}
+
 /// The client state produced after the first key exchange message
 #[cfg_attr(
     feature = "serde",

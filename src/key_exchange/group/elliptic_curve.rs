@@ -25,8 +25,7 @@ use zeroize::Zeroize;
 
 use super::{Group, STR_OPAQUE_DERIVE_AUTH_KEY_PAIR};
 use crate::errors::{InternalError, ProtocolError};
-use crate::key_exchange::sigma_i::SharedSecret;
-use crate::key_exchange::tripledh::DiffieHellman;
+use crate::key_exchange::shared::DiffieHellman;
 use crate::serialization::SliceExt;
 
 impl<G> Group for G
@@ -134,21 +133,6 @@ where
         self,
         pk: NonIdentity<G>,
     ) -> GenericArray<u8, <FieldBytesSize<G> as ModulusSize>::CompressedPointSize> {
-        GenericArray::clone_from_slice((pk.0 * self).to_encoded_point(true).as_bytes())
-    }
-}
-
-impl<G> SharedSecret<G> for NonZeroScalar<G>
-where
-    G: CurveArithmetic + voprf::CipherSuite<Group = G> + voprf::Group<Scalar = Scalar<G>>,
-    FieldBytesSize<G>: ModulusSize,
-    ProjectivePoint<G>: GroupEncoding<
-            Repr = GenericArray<u8, <FieldBytesSize<G> as ModulusSize>::CompressedPointSize>,
-        > + ToEncodedPoint<G>,
-{
-    type Len = <FieldBytesSize<G> as ModulusSize>::CompressedPointSize;
-
-    fn shared_secret(self, pk: NonIdentity<G>) -> GenericArray<u8, Self::Len> {
         GenericArray::clone_from_slice((pk.0 * self).to_encoded_point(true).as_bytes())
     }
 }
