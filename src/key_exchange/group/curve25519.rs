@@ -74,7 +74,6 @@ impl Group for Curve25519 {
                 let scalar = scalar::clamp_integer(bytes.into());
                 (scalar == *bytes).then_some(scalar)
             })
-            .filter(|scalar| scalar != &curve25519_dalek::Scalar::ZERO.to_bytes())
             .map(Scalar)
             .ok_or(ProtocolError::SerializationError)
     }
@@ -110,4 +109,15 @@ impl AssertZeroized for Scalar {
     fn assert_zeroized(&self) {
         assert_eq!(*self, Scalar(<_>::default()));
     }
+}
+
+#[test]
+fn non_zero_scalar() {
+    use std::vec;
+
+    use crate::tests::mock_rng::CycleRng;
+
+    let mut rng = CycleRng::new(vec![0]);
+    let sk = Curve25519::random_sk(&mut rng);
+    assert_ne!(sk.0, curve25519_dalek::Scalar::ZERO.to_bytes());
 }
