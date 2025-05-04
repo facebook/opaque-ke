@@ -355,7 +355,7 @@ mod tests {
     use rand::rngs::OsRng;
 
     use super::*;
-    use crate::ciphersuite::{KeGroup, KeHash};
+    use crate::ciphersuite::{KeGroup, OprfHash};
     use crate::serialization::AssertZeroized;
     use crate::{
         CipherSuite, ClientLogin, ClientLoginFinishParameters, ClientLoginFinishResult,
@@ -517,7 +517,7 @@ mod tests {
 
     #[test]
     fn remote_seed() {
-        let mut oprf_seed = RemoteSeed::<KeHash<Default>>(GenericArray::default());
+        let mut oprf_seed = RemoteSeed::<OprfHash<Default>>(GenericArray::default());
         OsRng.fill_bytes(&mut oprf_seed.0);
 
         let sk = PrivateKey(KeGroup::<Default>::random_sk(&mut OsRng));
@@ -535,7 +535,7 @@ mod tests {
         } = ClientRegistration::<Default>::start(&mut OsRng, PASSWORD.as_bytes()).unwrap();
         let km = server_setup.key_material_info(&[]);
         let mut ikm = GenericArray::default();
-        Hkdf::<KeHash<Default>>::from_prk(&km.ikm.0)
+        Hkdf::<OprfHash<Default>>::from_prk(&km.ikm.0)
             .unwrap()
             .expand_multi_info(&km.info, &mut ikm)
             .unwrap();
@@ -557,7 +557,7 @@ mod tests {
         } = ClientLogin::<Default>::start(&mut OsRng, PASSWORD.as_bytes()).unwrap();
         let km = server_setup.key_material_info(&[]);
         let mut ikm = GenericArray::default();
-        Hkdf::<KeHash<Default>>::from_prk(&km.ikm.0)
+        Hkdf::<OprfHash<Default>>::from_prk(&km.ikm.0)
             .unwrap()
             .expand_multi_info(&km.info, &mut ikm)
             .unwrap();
