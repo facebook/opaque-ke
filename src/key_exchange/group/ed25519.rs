@@ -373,8 +373,7 @@ impl AssertZeroized for SigningKey {
 mod test {
     use std::iter;
 
-    use ecdsa::signature::{Signer, Verifier};
-    use ed25519_dalek::{SigningKey, VerifyingKey};
+    use ed25519_dalek::{Signer, SigningKey, Verifier, VerifyingKey};
     use rand::rngs::OsRng;
 
     use super::*;
