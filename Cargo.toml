@@ -3,6 +3,7 @@ authors = ["Kevin Lewi <klewi@fb.com>", "François Garillot <fga@fb.com>"]
 categories = ["no-std"]
 description = "An implementation of the OPAQUE password-authenticated key exchange protocol"
 edition = "2021"
+exclude = ["/src/tests/"]
 keywords = ["cryptography", "crypto", "opaque", "passwords", "authentication"]
 license = "Apache-2.0 OR MIT"
 name = "opaque-ke"
