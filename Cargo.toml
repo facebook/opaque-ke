@@ -17,7 +17,7 @@ argon2 = ["dep:argon2"]
 curve25519 = ["dep:curve25519-dalek"]
 default = ["ristretto255", "serde"]
 ecdsa = ["dep:ecdsa", "dep:rfc6979"]
-ed25519 = ["dep:ed25519-dalek"]
+ed25519 = ["dep:curve25519-dalek", "dep:ed25519-dalek"]
 ristretto255 = ["dep:curve25519-dalek", "voprf/ristretto255-ciphersuite"]
 serde = [
   "dep:serde",
