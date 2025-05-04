@@ -33,6 +33,8 @@ use crate::serialization::SliceExt;
 )]
 #[derive_where(Clone)]
 #[derive_where(Eq, Hash, Ord, PartialEq, PartialOrd; G::Pk, SK)]
+// `NonZeroScalar` doesn't implement `Debug`.
+// TODO: remove after `elliptic-curve` bump to v0.14.
 #[cfg_attr(not(test), derive_where(Debug; G::Pk, SK))]
 #[cfg_attr(test, derive_where(Debug), derive_where(skip_inner(Debug)))]
 pub struct KeyPair<G: Group, SK: Clone = PrivateKey<G>> {

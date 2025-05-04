@@ -107,8 +107,8 @@ pub struct SigningKey {
     sk: SecretKey,
     verifying_key: VerifyingKey,
     // `ed25519_dalek::ExpandedSecret` doesn't implement traits we need. See
-    // https://github.com/dalek-cryptography/curve25519-dalek/pull/748 and
-    // https://github.com/dalek-cryptography/curve25519-dalek/pull/747
+    // TODO: remove after https://github.com/dalek-cryptography/curve25519-dalek/pull/748 and
+    // https://github.com/dalek-cryptography/curve25519-dalek/pull/747.
     scalar: Scalar,
     hash_prefix: [u8; 32],
 }
