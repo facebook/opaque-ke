@@ -94,6 +94,32 @@ pub struct VerifyingKey {
     compressed: CompressedEdwardsY,
 }
 
+#[cfg(feature = "serde")]
+impl<'de> serde::Deserialize<'de> for VerifyingKey {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        use serde::de::Error;
+
+        Ed25519::deserialize_take_pk(
+            &mut (GenericArray::<_, <Ed25519 as Group>::PkLen>::deserialize(deserializer)?
+                .as_slice()),
+        )
+        .map_err(D::Error::custom)
+    }
+}
+
+#[cfg(feature = "serde")]
+impl serde::Serialize for VerifyingKey {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        Ed25519::serialize_pk(*self).serialize(serializer)
+    }
+}
+
 /// Ed25519 siging key.
 // We store the `ExpandedSecret` in memory to avoid computing it on demand and then discarding it
 // again.
@@ -130,6 +156,32 @@ impl SigningKey {
             scalar,
             hash_prefix,
         }
+    }
+}
+
+#[cfg(feature = "serde")]
+impl<'de> serde::Deserialize<'de> for SigningKey {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        use serde::de::Error;
+
+        Ed25519::deserialize_take_sk(
+            &mut (GenericArray::<_, <Ed25519 as Group>::SkLen>::deserialize(deserializer)?
+                .as_slice()),
+        )
+        .map_err(D::Error::custom)
+    }
+}
+
+#[cfg(feature = "serde")]
+impl serde::Serialize for SigningKey {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        Ed25519::serialize_sk(*self).serialize(serializer)
     }
 }
 

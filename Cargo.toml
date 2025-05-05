@@ -24,6 +24,7 @@ serde = [
   "curve25519-dalek?/serde",
   "ecdsa?/serde",
   "ed25519-dalek?/serde",
+  "elliptic-curve/serde",
   "generic-array/serde",
   "voprf/serde",
   "zeroize/serde",
