@@ -22,7 +22,7 @@ use crate::ciphersuite::{CipherSuite, KeGroup, OprfHash};
 use crate::errors::{InternalError, ProtocolError};
 use crate::hash::OutputSize;
 use crate::key_exchange::group::Group;
-use crate::key_exchange::traits::SerializedIdentifiers;
+use crate::key_exchange::SerializedIdentifiers;
 use crate::keypair::{KeyPair, PrivateKey, PublicKey};
 use crate::opaque::Identifiers;
 use crate::serialization::{GenericArrayExt, SliceExt, UpdateExt};

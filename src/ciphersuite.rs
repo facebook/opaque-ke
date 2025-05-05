@@ -18,7 +18,7 @@ use generic_array::ArrayLength;
 use crate::envelope::NonceLen;
 use crate::hash::{Hash, OutputSize, ProxyHash};
 use crate::key_exchange::group::Group;
-use crate::key_exchange::traits::KeyExchange;
+use crate::key_exchange::KeyExchange;
 use crate::ksf::Ksf;
 use crate::opaque::MaskedResponseLen;
 

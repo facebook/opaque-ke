@@ -35,6 +35,11 @@ use zeroize::Zeroize;
 
 use self::message::Role;
 pub use self::message::{CachedMessage, HashOutput, Message, MessageBuilder, VerifyMessage};
+use super::{
+    Deserialize, GenerateKe1Result, GenerateKe2Result, GenerateKe3Result, KeyExchange, Serialize,
+    SerializedContext, SerializedCredentialRequest, SerializedCredentialResponse,
+    SerializedIdentifier, SerializedIdentifiers,
+};
 use crate::ciphersuite::{CipherSuite, KeGroup, KeHash};
 use crate::envelope::NonceLen;
 use crate::errors::{InternalError, ProtocolError};
@@ -42,11 +47,6 @@ use crate::hash::{Hash, OutputSize, ProxyHash};
 use crate::key_exchange::group::Group;
 use crate::key_exchange::shared::{derive_keys, generate_ke1, generate_nonce, transcript};
 pub use crate::key_exchange::shared::{DiffieHellman, Ke1Message, Ke1State};
-use crate::key_exchange::traits::{
-    Deserialize, GenerateKe1Result, GenerateKe2Result, GenerateKe3Result, KeyExchange, Sealed,
-    Serialize, SerializedContext, SerializedCredentialRequest, SerializedCredentialResponse,
-    SerializedIdentifier, SerializedIdentifiers,
-};
 use crate::keypair::{KeyPair, PrivateKey, PublicKey};
 use crate::opaque::Identifiers;
 use crate::serialization::{SliceExt, UpdateExt};
@@ -466,14 +466,6 @@ where
         .into_option()
         .ok_or(ProtocolError::InvalidLoginError)
     }
-}
-
-impl<SIG: SignatureProtocol, KE: 'static + Group, KEH: Hash> Sealed for SigmaI<SIG, KE, KEH>
-where
-    KEH::Core: ProxyHash,
-    <KEH::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
-    Le<<KEH::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
-{
 }
 
 impl<CS: CipherSuite, SIG: SignatureProtocol, KE: Group> Deserialize for Ke2State<CS, SIG, KE>

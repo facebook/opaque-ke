@@ -27,7 +27,7 @@ use crate::errors::{InternalError, ProtocolError};
 use crate::hash::OutputSize;
 use crate::key_exchange::group::Group;
 use crate::key_exchange::shared::NonceLen;
-use crate::key_exchange::traits::{
+use crate::key_exchange::{
     Deserialize, Ke1MessageLen, Ke1StateLen, Ke2StateLen, KeyExchange, Serialize,
     SerializedContext, SerializedCredentialResponse, SerializedIdentifiers,
 };

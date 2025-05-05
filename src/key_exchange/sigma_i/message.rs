@@ -12,7 +12,7 @@ use crate::errors::ProtocolError;
 use crate::hash::OutputSize;
 use crate::key_exchange::group::Group;
 use crate::key_exchange::shared::{Ke1MessageIter, Ke1MessageIterLen, NonceLen};
-use crate::key_exchange::traits::{
+use crate::key_exchange::{
     Deserialize, Serialize, SerializedContext, SerializedCredentialRequest,
     SerializedCredentialRequestLen, SerializedCredentialResponse, SerializedCredentialResponseLen,
     SerializedIdentifier, SerializedIdentifiers,
