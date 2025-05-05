@@ -96,9 +96,6 @@ pub enum ProtocolError<T = Infallible> {
     /** This error occurs when the client detects that the server has
     reflected the OPRF value (beta == alpha) */
     ReflectedValueError,
-    /** Identity group element was encountered during deserialization, which is
-    invalid */
-    IdentityGroupElementError,
     /// Custom [`SecretKey`](crate::keypair::PrivateKeySerialization) error type
     Custom(T),
 }
@@ -122,7 +119,6 @@ impl<T: Debug> Debug for ProtocolError<T> {
                 .field("actual_len", actual_len)
                 .finish(),
             Self::ReflectedValueError => f.debug_tuple("ReflectedValueError").finish(),
-            Self::IdentityGroupElementError => f.debug_tuple("IdentityGroupElementError").finish(),
             Self::Custom(custom) => f.debug_tuple("Custom").field(custom).finish(),
         }
     }
@@ -164,41 +160,6 @@ impl ProtocolError {
                 actual_len,
             },
             Self::ReflectedValueError => ProtocolError::ReflectedValueError,
-            Self::IdentityGroupElementError => ProtocolError::IdentityGroupElementError,
         }
-    }
-}
-
-pub(crate) mod utils {
-    use super::*;
-
-    pub fn check_slice_size<'a>(
-        slice: &'a [u8],
-        expected_len: usize,
-        arg_name: &'static str,
-    ) -> Result<&'a [u8], ProtocolError> {
-        if slice.len() != expected_len {
-            return Err(ProtocolError::SizeError {
-                name: arg_name,
-                len: expected_len,
-                actual_len: slice.len(),
-            });
-        }
-        Ok(slice)
-    }
-
-    pub fn check_slice_size_atleast<'a>(
-        slice: &'a [u8],
-        expected_len: usize,
-        arg_name: &'static str,
-    ) -> Result<&'a [u8], ProtocolError> {
-        if slice.len() < expected_len {
-            return Err(ProtocolError::SizeError {
-                name: arg_name,
-                len: expected_len,
-                actual_len: slice.len(),
-            });
-        }
-        Ok(slice)
     }
 }
