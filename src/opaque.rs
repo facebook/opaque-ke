@@ -62,8 +62,11 @@ const STR_OPAQUE_DERIVE_KEY_PAIR: &[u8; 20] = b"OPAQUE-DeriveKeyPair";
     feature = "serde",
     derive(serde::Deserialize, serde::Serialize),
     serde(bound(
-        deserialize = "SK: serde::Deserialize<'de>, OS: serde::Deserialize<'de>",
-        serialize = "SK: serde::Serialize, OS: serde::Serialize"
+        deserialize = "<KeGroup<CS> as Group>::Pk: serde::Deserialize<'de>, <KeGroup<CS> as \
+                       Group>::Sk: serde::Deserialize<'de>, SK: serde::Deserialize<'de>, OS: \
+                       serde::Deserialize<'de>",
+        serialize = "<KeGroup<CS> as Group>::Pk: serde::Serialize, <KeGroup<CS> as Group>::Sk: \
+                     serde::Serialize, SK: serde::Serialize, OS: serde::Serialize"
     ))
 )]
 #[derive_where(Clone)]
@@ -99,7 +102,10 @@ pub struct ClientRegistration<CS: CipherSuite> {
 #[cfg_attr(
     feature = "serde",
     derive(serde::Deserialize, serde::Serialize),
-    serde(bound = "")
+    serde(bound(
+        deserialize = "<KeGroup<CS> as Group>::Pk: serde::Deserialize<'de>",
+        serialize = "<KeGroup<CS> as Group>::Pk: serde::Serialize"
+    ))
 )]
 #[derive_where(Clone, ZeroizeOnDrop)]
 #[derive_where(Debug, Eq, Hash, Ord, PartialEq, PartialOrd; <KeGroup<CS> as Group>::Pk)]

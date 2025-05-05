@@ -80,6 +80,7 @@ impl Group for Curve25519 {
 }
 
 /// Curve25519 scalar.
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, Zeroize)]
 pub struct Scalar([u8; 32]);
 
