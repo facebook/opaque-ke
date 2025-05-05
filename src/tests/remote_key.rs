@@ -17,6 +17,7 @@ use cryptoki::mechanism::Mechanism;
 use cryptoki::object::{Attribute, AttributeType, KeyType, ObjectClass, ObjectHandle};
 use cryptoki::session::{Session, UserType};
 use cryptoki::types::AuthPin;
+use digest::OutputSizeUser;
 use elliptic_curve::group::Curve;
 use elliptic_curve::pkcs8::der::asn1::{OctetString, OctetStringRef};
 use elliptic_curve::pkcs8::der::{Decode, Encode};
@@ -24,7 +25,7 @@ use elliptic_curve::pkcs8::{AssociatedOid, ObjectIdentifier};
 use elliptic_curve::point::{AffineCoordinates, DecompressPoint};
 use elliptic_curve::sec1::{ModulusSize, Tag, ToEncodedPoint};
 use elliptic_curve::{AffinePoint, CurveArithmetic, FieldBytesSize, Group, ProjectivePoint};
-use generic_array::typenum::Sum;
+use generic_array::typenum::{Sum, Unsigned};
 use generic_array::{ArrayLength, GenericArray};
 use p256::NistP256;
 use p384::NistP384;
@@ -32,7 +33,7 @@ use p521::NistP521;
 use rand::rngs::OsRng;
 use subtle::{Choice, ConditionallySelectable, ConstantTimeEq};
 
-use crate::ciphersuite::OprfHash;
+use crate::ciphersuite::{OprfGroup, OprfHash};
 use crate::envelope::NonceLen;
 use crate::hash::OutputSize;
 use crate::key_exchange::group::KeGroup;
@@ -60,7 +61,11 @@ fn p256() {
         type Ksf = Identity;
     }
 
-    test::<Suite>(Mechanism::EccKeyPairGen, NistP256::OID);
+    test::<Suite>(
+        Mechanism::EccKeyPairGen,
+        NistP256::OID,
+        Mechanism::Sha256Hmac,
+    );
 }
 
 #[test]
@@ -74,7 +79,11 @@ fn p384() {
         type Ksf = Identity;
     }
 
-    test::<Suite>(Mechanism::EccKeyPairGen, NistP384::OID);
+    test::<Suite>(
+        Mechanism::EccKeyPairGen,
+        NistP384::OID,
+        Mechanism::Sha384Hmac,
+    );
 }
 
 #[test]
@@ -88,7 +97,11 @@ fn p521() {
         type Ksf = Identity;
     }
 
-    test::<Suite>(Mechanism::EccKeyPairGen, NistP521::OID);
+    test::<Suite>(
+        Mechanism::EccKeyPairGen,
+        NistP521::OID,
+        Mechanism::Sha512Hmac,
+    );
 }
 
 #[test]
@@ -108,6 +121,7 @@ fn curve25519() {
         // implementation. See https://github.com/softhsm/SoftHSMv2/issues/647.
         Mechanism::EccEdwardsKeyPairGen,
         ObjectIdentifier::new("1.3.101.110").unwrap(),
+        Mechanism::Sha512Hmac,
     );
 }
 
@@ -122,8 +136,11 @@ trait Pkcs11DiffieHellman<KG: KeGroup> {
     ) -> GenericArray<u8, KG::PkLen>;
 }
 
-fn test<CS: CipherSuite<KeyExchange = TripleDh>>(mechanism: Mechanism, oid: ObjectIdentifier)
-where
+fn test<CS: CipherSuite<KeyExchange = TripleDh>>(
+    dh_mechanism: Mechanism,
+    oid: ObjectIdentifier,
+    hmac_mechanism: Mechanism,
+) where
     RemoteKey: Pkcs11DiffieHellman<CS::KeGroup>,
     <CS::KeGroup as KeGroup>::Sk: DiffieHellman<CS::KeGroup>,
     // MaskedResponse: (Nonce + Hash) + KePk
@@ -147,10 +164,11 @@ where
     Sum<NonceLen, <CS::KeGroup as KeGroup>::PkLen>: ArrayLength<u8> + Add<OutputSize<OprfHash<CS>>>,
     Sum<Sum<NonceLen, <CS::KeGroup as KeGroup>::PkLen>, OutputSize<OprfHash<CS>>>: ArrayLength<u8>,
 {
-    let (remote_key, pk) = pkcs11_generate_key_pair(mechanism, oid);
+    let (remote_key, pk) = pkcs11_generate_key_pair(dh_mechanism, oid);
 
     let keypair = KeyPair::new(RemoteKey(remote_key), pk);
-    let server_setup = ServerSetup::new_with_key_pair(&mut OsRng, keypair);
+    let oprf_seed = pkcs11_generate_oprf_seed(<OprfHash<CS> as OutputSizeUser>::OutputSize::U64);
+    let server_setup = ServerSetup::new_with_key_pair_and_seed(&mut OsRng, keypair, oprf_seed);
 
     const PASSWORD: &str = "password";
 
@@ -158,7 +176,13 @@ where
         message,
         state: client,
     } = ClientRegistration::<CS>::start(&mut OsRng, PASSWORD.as_bytes()).unwrap();
-    let message = ServerRegistration::start(&server_setup, message, &[])
+    let key_material_info = server_setup.key_material_info(&[]);
+    let key_material = pkcs11_hkdf::<CS>(
+        key_material_info.ikm,
+        hmac_mechanism,
+        Vec::from_iter(key_material_info.info.into_iter().flatten().copied()),
+    );
+    let message = ServerRegistration::start_with_key_material(&server_setup, key_material, message)
         .unwrap()
         .message;
     let message = client
@@ -176,12 +200,18 @@ where
         message,
         state: client,
     } = ClientLogin::<CS>::start(&mut OsRng, PASSWORD.as_bytes()).unwrap();
-    let builder = ServerLogin::builder(
+    let key_material_info = server_setup.key_material_info(&[]);
+    let key_material = pkcs11_hkdf::<CS>(
+        key_material_info.ikm,
+        hmac_mechanism,
+        Vec::from_iter(key_material_info.info.into_iter().flatten().copied()),
+    );
+    let builder = ServerLogin::builder_with_key_material(
         &mut OsRng,
         &server_setup,
+        key_material,
         Some(file),
         message,
-        &[],
         ServerLoginStartParameters::default(),
     )
     .unwrap();
@@ -263,6 +293,53 @@ fn pkcs11_generate_key_pair<KG: KeGroup>(
     let pk = PublicKey::deserialize(pk.as_bytes()).unwrap();
 
     (remote_key, pk)
+}
+
+fn pkcs11_generate_oprf_seed(length: u64) -> ObjectHandle {
+    SESSION
+        .lock()
+        .unwrap()
+        .generate_key(
+            &Mechanism::GenericSecretKeyGen,
+            &[Attribute::Token(false), Attribute::ValueLen(length.into())],
+        )
+        .unwrap()
+}
+
+// SoftHSM, nor any other popular HSM at the time of writing, supports HKDF. So
+// we instead implement HKDF by hand on top of the HSMs HMAC, which is supported
+// by almost all HSMs and still protects the OPRF seed.
+fn pkcs11_hkdf<CS: CipherSuite>(
+    hmac: ObjectHandle,
+    mechanism: Mechanism,
+    info: Vec<u8>,
+) -> GenericArray<u8, <OprfGroup<CS> as voprf::Group>::ScalarLen> {
+    let mut okm = GenericArray::default();
+    let mut prev: Option<Vec<u8>> = None;
+    let chunk_len = <OprfHash<CS> as OutputSizeUser>::OutputSize::USIZE;
+
+    if okm.len() > chunk_len * 255 {
+        panic!("invalid length");
+    }
+
+    let session = SESSION.lock().unwrap();
+
+    for (block_n, block) in (0..).zip(okm.chunks_mut(chunk_len)) {
+        let mut data = Vec::new();
+
+        if let Some(ref prev) = prev {
+            data.extend(prev.as_slice())
+        };
+
+        data.extend(&info);
+        data.extend(&[block_n + 1]);
+
+        let output = session.sign(&mechanism, hmac, &data).unwrap();
+        block.copy_from_slice(&output[..block.len()]);
+        prev = Some(output);
+    }
+
+    okm
 }
 
 impl Pkcs11DiffieHellman<NistP256> for RemoteKey {

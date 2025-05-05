@@ -23,20 +23,20 @@ use crate::key_exchange::tripledh::DiffieHellman;
     feature = "serde",
     derive(serde::Deserialize, serde::Serialize),
     serde(bound(
-        deserialize = "S: serde::Deserialize<'de>",
-        serialize = "S: serde::Serialize"
+        deserialize = "SK: serde::Deserialize<'de>",
+        serialize = "SK: serde::Serialize"
     ))
 )]
 #[derive_where(Clone)]
-#[derive_where(Debug, Eq, Hash, Ord, PartialEq, PartialOrd; KG::Pk, S)]
-pub struct KeyPair<KG: KeGroup, S: Clone = PrivateKey<KG>> {
+#[derive_where(Debug, Eq, Hash, Ord, PartialEq, PartialOrd; KG::Pk, SK)]
+pub struct KeyPair<KG: KeGroup, SK: Clone = PrivateKey<KG>> {
     pk: PublicKey<KG>,
-    sk: S,
+    sk: SK,
 }
 
-impl<KG: KeGroup, S: Clone> KeyPair<KG, S> {
+impl<KG: KeGroup, SK: Clone> KeyPair<KG, SK> {
     /// Creates a new [`KeyPair`] from the given keys.
-    pub fn new(sk: S, pk: PublicKey<KG>) -> Self {
+    pub fn new(sk: SK, pk: PublicKey<KG>) -> Self {
         Self { pk, sk }
     }
 
@@ -46,7 +46,7 @@ impl<KG: KeGroup, S: Clone> KeyPair<KG, S> {
     }
 
     /// The private key component
-    pub fn private(&self) -> &S {
+    pub fn private(&self) -> &SK {
         &self.sk
     }
 }
@@ -171,9 +171,9 @@ impl<'de, KG: KeGroup> serde::Deserialize<'de> for PrivateKey<KG> {
 
 #[cfg(feature = "serde")]
 impl<KG: KeGroup> serde::Serialize for PrivateKey<KG> {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    fn serialize<SK>(&self, serializer: SK) -> Result<SK::Ok, SK::Error>
     where
-        S: serde::Serializer,
+        SK: serde::Serializer,
     {
         KG::serialize_sk(self.0).serialize(serializer)
     }
@@ -217,9 +217,9 @@ impl<'de, KG: KeGroup> serde::Deserialize<'de> for PublicKey<KG> {
 
 #[cfg(feature = "serde")]
 impl<KG: KeGroup> serde::Serialize for PublicKey<KG> {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    fn serialize<SK>(&self, serializer: SK) -> Result<SK::Ok, SK::Error>
     where
-        S: serde::Serializer,
+        SK: serde::Serializer,
     {
         KG::serialize_pk(self.0).serialize(serializer)
     }
