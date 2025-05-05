@@ -42,10 +42,7 @@ digest = "0.10"
 displaydoc = { version = "0.2", default-features = false }
 ecdsa = { version = "0.16", default-features = false, features = [
   "arithmetic",
-  "digest",
   "hazmat",
-  "signing",
-  "verifying",
 ], optional = true }
 ed25519-dalek = { version = "2", default-features = false, features = [
   "digest",
