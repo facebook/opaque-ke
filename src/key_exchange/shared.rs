@@ -17,14 +17,14 @@ use generic_array::{ArrayLength, GenericArray};
 use hkdf::{Hkdf, HkdfExtract};
 use rand::{CryptoRng, RngCore};
 
+use super::{
+    Deserialize, GenerateKe1Result, KeyExchange, Serialize, SerializedContext,
+    SerializedCredentialRequest, SerializedCredentialResponse, SerializedIdentifiers,
+};
 use crate::ciphersuite::{CipherSuite, KeGroup, KeHash};
 use crate::errors::{InternalError, ProtocolError};
 use crate::hash::{Hash, OutputSize, ProxyHash};
 use crate::key_exchange::group::Group;
-use crate::key_exchange::traits::{
-    Deserialize, GenerateKe1Result, KeyExchange, Serialize, SerializedContext,
-    SerializedCredentialRequest, SerializedCredentialResponse, SerializedIdentifiers,
-};
 use crate::keypair::{KeyPair, PrivateKey, PublicKey};
 use crate::serialization::{i2osp, SliceExt, UpdateExt};
 

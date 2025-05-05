@@ -1349,9 +1349,9 @@ mod tests;
 
 // Exports
 
-pub use ciphersuite::CipherSuite;
 pub use rand;
 
+pub use crate::ciphersuite::CipherSuite;
 #[cfg(feature = "curve25519")]
 pub use crate::key_exchange::group::curve25519::Curve25519;
 #[cfg(feature = "ed25519")]
