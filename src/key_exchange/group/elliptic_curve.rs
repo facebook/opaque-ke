@@ -6,101 +6,157 @@
 // of this source tree. You may select, at your option, one of the above-listed
 // licenses.
 
-use digest::core_api::BlockSizeUser;
-use digest::{FixedOutput, HashMarker};
-use elliptic_curve::group::cofactor::CofactorGroup;
-use elliptic_curve::hash2curve::{ExpandMsgXmd, FromOkm, GroupDigest};
-use elliptic_curve::sec1::{FromEncodedPoint, ModulusSize, ToEncodedPoint};
+//! Implementation for EC curves via [`elliptic_curve`] traits.
+
+use core::fmt::{self, Debug, Formatter};
+
+use derive_where::derive_where;
+use elliptic_curve::group::GroupEncoding;
+use elliptic_curve::ops::MulByGenerator;
+use elliptic_curve::sec1::{ModulusSize, ToEncodedPoint};
 use elliptic_curve::{
-    AffinePoint, Field, FieldBytesSize, Group, ProjectivePoint, PublicKey, Scalar, SecretKey,
+    point, CurveArithmetic, FieldBytesSize, Group as _, NonZeroScalar, ProjectivePoint, Scalar,
+    SecretKey,
 };
-use generic_array::typenum::{IsLess, IsLessOrEqual, U256};
 use generic_array::GenericArray;
 use rand::{CryptoRng, RngCore};
+use voprf::Mode;
+use zeroize::Zeroize;
 
-use super::KeGroup;
+use super::{Group, STR_OPAQUE_DERIVE_AUTH_KEY_PAIR};
 use crate::errors::{InternalError, ProtocolError};
-use crate::key_exchange::tripledh::DiffieHellman;
+use crate::key_exchange::shared::DiffieHellman;
+use crate::serialization::SliceExt;
 
-impl<G> KeGroup for G
+impl<G> Group for G
 where
-    G: GroupDigest,
+    Self: CurveArithmetic + voprf::CipherSuite<Group = Self> + voprf::Group<Scalar = Scalar<Self>>,
     FieldBytesSize<Self>: ModulusSize,
-    AffinePoint<Self>: FromEncodedPoint<Self> + ToEncodedPoint<Self>,
-    ProjectivePoint<Self>: CofactorGroup + ToEncodedPoint<Self>,
-    Scalar<Self>: FromOkm,
+    ProjectivePoint<Self>: GroupEncoding<
+            Repr = GenericArray<u8, <FieldBytesSize<Self> as ModulusSize>::CompressedPointSize>,
+        > + ToEncodedPoint<Self>,
 {
-    type Pk = ProjectivePoint<Self>;
+    type Pk = NonIdentity<Self>;
 
     type PkLen = <FieldBytesSize<Self> as ModulusSize>::CompressedPointSize;
 
-    type Sk = Scalar<Self>;
+    type Sk = NonZeroScalar<Self>;
 
     type SkLen = FieldBytesSize<Self>;
 
     fn serialize_pk(pk: Self::Pk) -> GenericArray<u8, Self::PkLen> {
-        GenericArray::clone_from_slice(pk.to_encoded_point(true).as_bytes())
+        GenericArray::clone_from_slice(pk.0.to_encoded_point(true).as_bytes())
     }
 
-    fn deserialize_pk(bytes: &[u8]) -> Result<Self::Pk, ProtocolError> {
-        PublicKey::<Self>::from_sec1_bytes(bytes)
-            .map(|public_key| public_key.to_projective())
-            .map_err(|_| ProtocolError::SerializationError)
+    fn deserialize_take_pk(bytes: &mut &[u8]) -> Result<Self::Pk, ProtocolError> {
+        point::NonIdentity::<ProjectivePoint<Self>>::from_bytes(&bytes.take_array("public key")?)
+            .into_option()
+            .map(NonIdentity)
+            .ok_or(ProtocolError::SerializationError)
     }
 
     fn random_sk<R: RngCore + CryptoRng>(rng: &mut R) -> Self::Sk {
-        *SecretKey::<Self>::random(rng).to_nonzero_scalar()
+        SecretKey::<Self>::random(rng).to_nonzero_scalar()
     }
 
-    // Implements the `HashToScalar()` function from
-    // <https://www.ietf.org/archive/id/draft-irtf-cfrg-voprf-19.html#section-4>
-    fn hash_to_scalar<H>(input: &[&[u8]], dst: &[&[u8]]) -> Result<Self::Sk, InternalError>
-    where
-        H: BlockSizeUser + Default + FixedOutput + HashMarker,
-        H::OutputSize: IsLess<U256> + IsLessOrEqual<H::BlockSize>,
-    {
-        Self::hash_to_scalar::<ExpandMsgXmd<H>>(input, dst)
-            .map_err(|_| InternalError::HashToScalar)
-            .and_then(|scalar| {
-                if bool::from(scalar.is_zero()) {
-                    Err(InternalError::HashToScalar)
-                } else {
-                    Ok(scalar)
-                }
+    fn derive_scalar(seed: GenericArray<u8, Self::SkLen>) -> Result<Self::Sk, InternalError> {
+        voprf::derive_key::<Self>(&seed, &STR_OPAQUE_DERIVE_AUTH_KEY_PAIR, Mode::Oprf)
+            .map(|scalar| {
+                NonZeroScalar::new(scalar).expect("`voprf::derive_key()` returned a zero scalar")
             })
+            .map_err(InternalError::from)
     }
 
     fn public_key(sk: Self::Sk) -> Self::Pk {
-        ProjectivePoint::<Self>::generator() * sk
-    }
-
-    fn is_zero_scalar(scalar: Self::Sk) -> subtle::Choice {
-        scalar.is_zero()
+        // Non-panicking version in https://github.com/RustCrypto/traits/pull/1833.
+        NonIdentity(
+            point::NonIdentity::new(ProjectivePoint::<Self>::mul_by_generator(&*sk))
+                .expect("multiplying with a non-zero scalar can never yield the identity element"),
+        )
     }
 
     fn serialize_sk(sk: Self::Sk) -> GenericArray<u8, Self::SkLen> {
         sk.into()
     }
 
-    fn deserialize_sk(bytes: &[u8]) -> Result<Self::Sk, ProtocolError> {
-        SecretKey::<Self>::from_slice(bytes)
-            .map(|secret_key| *secret_key.to_nonzero_scalar())
+    fn deserialize_take_sk(bytes: &mut &[u8]) -> Result<Self::Sk, ProtocolError> {
+        SecretKey::<Self>::from_bytes(&bytes.take_array("secret key")?)
+            .map(|secret_key| secret_key.to_nonzero_scalar())
             .map_err(|_| ProtocolError::SerializationError)
     }
 }
 
-impl<G> DiffieHellman<G> for Scalar<G>
+/// Wrapper around [`NonIdentity`](point::NonIdentity) to implement [`Zeroize`].
+// TODO: remove after https://github.com/RustCrypto/traits/pull/1832.
+#[derive_where(Clone, Copy)]
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Deserialize, serde::Serialize),
+    serde(bound(
+        deserialize = "point::NonIdentity<ProjectivePoint<G>>: serde::Deserialize<'de>",
+        serialize = "point::NonIdentity<ProjectivePoint<G>>: serde::Serialize"
+    ))
+)]
+pub struct NonIdentity<G: CurveArithmetic>(pub point::NonIdentity<ProjectivePoint<G>>);
+
+impl<G: CurveArithmetic> Debug for NonIdentity<G> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        f.debug_tuple("NonIdentity")
+            .field(&self.0.to_point())
+            .finish()
+    }
+}
+
+impl<G: CurveArithmetic> PartialEq for NonIdentity<G> {
+    fn eq(&self, other: &Self) -> bool {
+        self.0.to_point().eq(&other.0.to_point())
+    }
+}
+
+impl<G: CurveArithmetic> Eq for NonIdentity<G> {}
+
+impl<G: CurveArithmetic> Zeroize for NonIdentity<G> {
+    fn zeroize(&mut self) {
+        self.0 = point::NonIdentity::new(ProjectivePoint::<G>::generator()).unwrap();
+    }
+}
+
+impl<G> DiffieHellman<G> for NonZeroScalar<G>
 where
-    G: GroupDigest,
+    G: CurveArithmetic + voprf::CipherSuite<Group = G> + voprf::Group<Scalar = Scalar<G>>,
     FieldBytesSize<G>: ModulusSize,
-    AffinePoint<G>: FromEncodedPoint<G> + ToEncodedPoint<G>,
-    ProjectivePoint<G>: CofactorGroup + ToEncodedPoint<G>,
-    Scalar<G>: FromOkm,
+    ProjectivePoint<G>: GroupEncoding<
+            Repr = GenericArray<u8, <FieldBytesSize<G> as ModulusSize>::CompressedPointSize>,
+        > + ToEncodedPoint<G>,
 {
     fn diffie_hellman(
         self,
-        pk: ProjectivePoint<G>,
+        pk: NonIdentity<G>,
     ) -> GenericArray<u8, <FieldBytesSize<G> as ModulusSize>::CompressedPointSize> {
-        GenericArray::clone_from_slice((pk * self).to_encoded_point(true).as_bytes())
+        GenericArray::clone_from_slice((pk.0 * self).to_encoded_point(true).as_bytes())
+    }
+}
+
+//////////////////////////
+// Test Implementations //
+//===================== //
+//////////////////////////
+
+#[cfg(test)]
+use crate::serialization::AssertZeroized;
+
+#[cfg(test)]
+impl<G: CurveArithmetic> AssertZeroized for NonIdentity<G> {
+    fn assert_zeroized(&self) {
+        assert_eq!(self.0.to_point(), ProjectivePoint::<G>::generator());
+    }
+}
+
+#[cfg(test)]
+impl<G: CurveArithmetic> AssertZeroized for NonZeroScalar<G> {
+    fn assert_zeroized(&self) {
+        use elliptic_curve::Field;
+
+        assert_eq!(**self, Scalar::<G>::ONE);
     }
 }
