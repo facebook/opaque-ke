@@ -29,8 +29,9 @@ use crate::key_exchange::group::Group;
 use crate::key_exchange::shared::{self, NonceLen};
 pub use crate::key_exchange::shared::{DiffieHellman, Ke1Message, Ke1State};
 use crate::key_exchange::traits::{
-    CredentialRequestParts, CredentialResponseParts, Deserialize, GenerateKe2Result,
-    GenerateKe3Result, KeyExchange, Sealed, Serialize, SerializedContext, SerializedIdentifiers,
+    Deserialize, GenerateKe1Result, GenerateKe2Result, GenerateKe3Result, KeyExchange, Sealed,
+    Serialize, SerializedContext, SerializedCredentialRequest, SerializedCredentialResponse,
+    SerializedIdentifiers,
 };
 use crate::keypair::{KeyPair, PrivateKey, PublicKey};
 use crate::opaque::Identifiers;
@@ -151,15 +152,15 @@ where
 
     fn generate_ke1<R: RngCore + CryptoRng>(
         rng: &mut R,
-    ) -> Result<(Self::KE1State, Self::KE1Message), ProtocolError> {
+    ) -> Result<GenerateKe1Result<Self>, ProtocolError> {
         shared::generate_ke1(rng)
     }
 
     fn ke2_builder<'a, CS: CipherSuite<KeyExchange = Self>, R: RngCore + CryptoRng>(
         rng: &mut R,
-        credential_request: CredentialRequestParts<CS>,
+        credential_request: SerializedCredentialRequest<CS>,
         ke1_message: Self::KE1Message,
-        credential_response: CredentialResponseParts<CS>,
+        credential_response: SerializedCredentialResponse<CS>,
         client_s_pk: PublicKey<G>,
         identifiers: SerializedIdentifiers<'_, KeGroup<CS>>,
         context: SerializedContext<'a>,
@@ -240,30 +241,30 @@ where
         );
         let expected_mac = mac_hasher.finalize().into_bytes();
 
-        Ok((
-            Ke2State {
+        Ok(GenerateKe2Result {
+            state: Ke2State {
                 session_key: derived_keys.session_key,
                 expected_mac,
             },
-            Ke2Message {
+            message: Ke2Message {
                 server_nonce: builder.server_nonce,
                 server_e_pk: builder.server_e_pk.clone(),
                 mac,
             },
             #[cfg(test)]
-            derived_keys.handshake_secret,
+            handshake_secret: derived_keys.handshake_secret,
             #[cfg(test)]
-            derived_keys.km2,
-        ))
+            km2: derived_keys.km2,
+        })
     }
 
     fn generate_ke3<CS: CipherSuite<KeyExchange = Self>, R: CryptoRng + RngCore>(
         _: &mut R,
-        credential_request: CredentialRequestParts<CS>,
+        credential_request: SerializedCredentialRequest<CS>,
         ke1_message: Self::KE1Message,
-        credential_response: CredentialResponseParts<CS>,
-        ke2_message: Self::KE2Message,
+        credential_response: SerializedCredentialResponse<CS>,
         ke1_state: &Self::KE1State,
+        ke2_message: Self::KE2Message,
         server_s_pk: PublicKey<G>,
         client_s_sk: PrivateKey<G>,
         identifiers: SerializedIdentifiers<'_, KeGroup<CS>>,
@@ -309,21 +310,21 @@ where
             Hmac::<H>::new_from_slice(&derived_keys.km3).map_err(|_| InternalError::HmacError)?;
         Mac::update(&mut client_mac, &transcript_hasher.finalize());
 
-        Ok((
-            derived_keys.session_key,
-            Ke3Message {
+        Ok(GenerateKe3Result {
+            session_key: derived_keys.session_key,
+            message: Ke3Message {
                 mac: client_mac.finalize().into_bytes(),
             },
             #[cfg(test)]
-            derived_keys.handshake_secret,
+            handshake_secret: derived_keys.handshake_secret,
             #[cfg(test)]
-            derived_keys.km3,
-        ))
+            km3: derived_keys.km3,
+        })
     }
 
     fn finish_ke<CS: CipherSuite>(
-        ke3_message: Self::KE3Message,
         ke2_state: &Self::KE2State<CS>,
+        ke3_message: Self::KE3Message,
         _: Identifiers<'_>,
         _: SerializedContext<'_>,
     ) -> Result<Output<H>, ProtocolError> {

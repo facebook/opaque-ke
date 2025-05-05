@@ -22,8 +22,8 @@ use crate::errors::{InternalError, ProtocolError};
 use crate::hash::{Hash, OutputSize, ProxyHash};
 use crate::key_exchange::group::Group;
 use crate::key_exchange::traits::{
-    CredentialRequestParts, CredentialResponseParts, Deserialize, Serialize, SerializedContext,
-    SerializedIdentifiers,
+    Deserialize, GenerateKe1Result, KeyExchange, Serialize, SerializedContext,
+    SerializedCredentialRequest, SerializedCredentialResponse, SerializedIdentifiers,
 };
 use crate::keypair::{KeyPair, PrivateKey, PublicKey};
 use crate::serialization::{i2osp, SliceExt, UpdateExt};
@@ -100,9 +100,13 @@ pub(super) struct DerivedKeys<H: OutputSizeUser> {
 
 // Helper functions
 
-pub(super) fn generate_ke1<R: RngCore + CryptoRng, G: Group>(
+pub(super) fn generate_ke1<
+    R: RngCore + CryptoRng,
+    KE: KeyExchange<KE1State = Ke1State<G>, KE1Message = Ke1Message<G>>,
+    G: Group,
+>(
     rng: &mut R,
-) -> Result<(Ke1State<G>, Ke1Message<G>), ProtocolError> {
+) -> Result<GenerateKe1Result<KE>, ProtocolError> {
     let client_e_kp = KeyPair::<G>::derive_random(rng);
     let client_nonce = generate_nonce::<R>(rng);
 
@@ -111,13 +115,13 @@ pub(super) fn generate_ke1<R: RngCore + CryptoRng, G: Group>(
         client_e_pk: client_e_kp.public().clone(),
     };
 
-    Ok((
-        Ke1State {
+    Ok(GenerateKe1Result {
+        state: Ke1State {
             client_e_sk: client_e_kp.private().clone(),
             client_nonce,
         },
-        ke1_message,
-    ))
+        message: ke1_message,
+    })
 }
 
 // Generate a random nonce up to NonceLen::USIZE bytes.
@@ -130,9 +134,9 @@ pub(super) fn generate_nonce<R: RngCore + CryptoRng>(rng: &mut R) -> GenericArra
 pub(super) fn transcript<CS: CipherSuite, KE: Group>(
     context: &SerializedContext<'_>,
     identifiers: &SerializedIdentifiers<'_, KeGroup<CS>>,
-    credential_request: &CredentialRequestParts<CS>,
+    credential_request: &SerializedCredentialRequest<CS>,
     ke1_message: &Ke1MessageIter<KE>,
-    credential_response: &CredentialResponseParts<CS>,
+    credential_response: &SerializedCredentialResponse<CS>,
     server_nonce: GenericArray<u8, NonceLen>,
     server_e_pk: &GenericArray<u8, KE::PkLen>,
 ) -> KeHash<CS> {

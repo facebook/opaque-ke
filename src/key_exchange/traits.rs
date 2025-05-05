@@ -64,14 +64,14 @@ where
     #[doc(hidden)]
     fn generate_ke1<R: RngCore + CryptoRng>(
         rng: &mut R,
-    ) -> Result<(Self::KE1State, Self::KE1Message), ProtocolError>;
+    ) -> Result<GenerateKe1Result<Self>, ProtocolError>;
 
     #[doc(hidden)]
     fn ke2_builder<'a, CS: CipherSuite<KeyExchange = Self>, R: RngCore + CryptoRng>(
         rng: &mut R,
-        credential_request: CredentialRequestParts<CS>,
+        credential_request: SerializedCredentialRequest<CS>,
         ke1_message: Self::KE1Message,
-        credential_response: CredentialResponseParts<CS>,
+        credential_response: SerializedCredentialResponse<CS>,
         client_s_pk: PublicKey<Self::Group>,
         identifiers: SerializedIdentifiers<'a, Self::Group>,
         context: SerializedContext<'a>,
@@ -99,11 +99,11 @@ where
     #[allow(clippy::too_many_arguments)]
     fn generate_ke3<CS: CipherSuite<KeyExchange = Self>, R: CryptoRng + RngCore>(
         rng: &mut R,
-        credential_request: CredentialRequestParts<CS>,
+        credential_request: SerializedCredentialRequest<CS>,
         ke1_message: Self::KE1Message,
-        credential_response: CredentialResponseParts<CS>,
-        ke2_message: Self::KE2Message,
+        credential_response: SerializedCredentialResponse<CS>,
         ke1_state: &Self::KE1State,
+        ke2_message: Self::KE2Message,
         server_s_pk: PublicKey<Self::Group>,
         client_s_sk: PrivateKey<Self::Group>,
         identifiers: SerializedIdentifiers<'_, Self::Group>,
@@ -112,8 +112,8 @@ where
 
     #[doc(hidden)]
     fn finish_ke<CS: CipherSuite<KeyExchange = Self>>(
-        ke3_message: Self::KE3Message,
         ke2_state: &Self::KE2State<CS>,
+        ke3_message: Self::KE3Message,
         identifiers: Identifiers<'_>,
         context: SerializedContext<'_>,
     ) -> Result<Output<Self::Hash>, ProtocolError>;
@@ -127,11 +127,11 @@ pub(super) trait Sealed {}
     serde(bound = "")
 )]
 #[derive_where(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, Zeroize)]
-pub struct CredentialRequestParts<CS: CipherSuite>(
+pub struct SerializedCredentialRequest<CS: CipherSuite>(
     GenericArray<u8, <OprfGroup<CS> as voprf::Group>::ElemLen>,
 );
 
-impl<CS: CipherSuite> CredentialRequestParts<CS> {
+impl<CS: CipherSuite> SerializedCredentialRequest<CS> {
     pub(crate) fn new(blinded_element: &BlindedElement<CS::OprfCs>) -> Self {
         Self(blinded_element.serialize())
     }
@@ -145,10 +145,10 @@ impl<CS: CipherSuite> CredentialRequestParts<CS> {
     }
 }
 
-pub type CredentialRequestPartsLen<CS: CipherSuite> = <OprfGroup<CS> as voprf::Group>::ElemLen;
+pub type SerializedCredentialRequestLen<CS: CipherSuite> = <OprfGroup<CS> as voprf::Group>::ElemLen;
 
-impl<CS: CipherSuite> Serialize for CredentialRequestParts<CS> {
-    type Len = CredentialRequestPartsLen<CS>;
+impl<CS: CipherSuite> Serialize for SerializedCredentialRequest<CS> {
+    type Len = SerializedCredentialRequestLen<CS>;
 
     fn serialize(&self) -> GenericArray<u8, Self::Len> {
         self.0.clone()
@@ -161,13 +161,13 @@ impl<CS: CipherSuite> Serialize for CredentialRequestParts<CS> {
     serde(bound = "")
 )]
 #[derive_where(Clone, Debug, Eq, Hash, PartialEq, Zeroize)]
-pub struct CredentialResponseParts<CS: CipherSuite> {
+pub struct SerializedCredentialResponse<CS: CipherSuite> {
     evaluation_element: GenericArray<u8, <OprfGroup<CS> as voprf::Group>::ElemLen>,
     masking_nonce: GenericArray<u8, NonceLen>,
     masked_response: MaskedResponse<CS>,
 }
 
-impl<CS: CipherSuite> CredentialResponseParts<CS> {
+impl<CS: CipherSuite> SerializedCredentialResponse<CS> {
     pub(crate) fn new(
         evaluation_element: &EvaluationElement<CS::OprfCs>,
         masking_nonce: GenericArray<u8, NonceLen>,
@@ -195,17 +195,17 @@ impl<CS: CipherSuite> CredentialResponseParts<CS> {
     }
 }
 
-pub type CredentialResponsePartsLen<CS: CipherSuite> =
+pub type SerializedCredentialResponseLen<CS: CipherSuite> =
     Sum<Sum<<OprfGroup<CS> as voprf::Group>::ElemLen, NonceLen>, MaskedResponseLen<CS>>;
 
-impl<CS: CipherSuite> Serialize for CredentialResponseParts<CS>
+impl<CS: CipherSuite> Serialize for SerializedCredentialResponse<CS>
 where
     <OprfGroup<CS> as voprf::Group>::ElemLen: Add<NonceLen>,
     Sum<<OprfGroup<CS> as voprf::Group>::ElemLen, NonceLen>:
         ArrayLength<u8> + Add<MaskedResponseLen<CS>>,
-    CredentialResponsePartsLen<CS>: ArrayLength<u8>,
+    SerializedCredentialResponseLen<CS>: ArrayLength<u8>,
 {
-    type Len = CredentialResponsePartsLen<CS>;
+    type Len = SerializedCredentialResponseLen<CS>;
 
     fn serialize(&self) -> GenericArray<u8, Self::Len> {
         self.evaluation_element
@@ -330,27 +330,28 @@ pub trait Serialize {
     fn serialize(&self) -> GenericArray<u8, Self::Len>;
 }
 
-#[cfg(not(test))]
-pub type GenerateKe2Result<CS: CipherSuite> = (
-    <CS::KeyExchange as KeyExchange>::KE2State<CS>,
-    <CS::KeyExchange as KeyExchange>::KE2Message,
-);
-#[cfg(test)]
-pub type GenerateKe2Result<CS: CipherSuite> = (
-    <CS::KeyExchange as KeyExchange>::KE2State<CS>,
-    <CS::KeyExchange as KeyExchange>::KE2Message,
-    Output<KeHash<CS>>,
-    Output<KeHash<CS>>,
-);
-#[cfg(not(test))]
-pub type GenerateKe3Result<K: KeyExchange> = (Output<K::Hash>, K::KE3Message);
-#[cfg(test)]
-pub type GenerateKe3Result<K: KeyExchange> = (
-    Output<K::Hash>,
-    K::KE3Message,
-    Output<K::Hash>,
-    Output<K::Hash>,
-);
+pub struct GenerateKe1Result<KE: KeyExchange + ?Sized> {
+    pub state: KE::KE1State,
+    pub message: KE::KE1Message,
+}
+
+pub struct GenerateKe2Result<CS: CipherSuite> {
+    pub state: <CS::KeyExchange as KeyExchange>::KE2State<CS>,
+    pub message: <CS::KeyExchange as KeyExchange>::KE2Message,
+    #[cfg(test)]
+    pub handshake_secret: Output<KeHash<CS>>,
+    #[cfg(test)]
+    pub km2: Output<KeHash<CS>>,
+}
+
+pub struct GenerateKe3Result<KE: KeyExchange + ?Sized> {
+    pub session_key: Output<KE::Hash>,
+    pub message: KE::KE3Message,
+    #[cfg(test)]
+    pub handshake_secret: Output<KE::Hash>,
+    #[cfg(test)]
+    pub km3: Output<KE::Hash>,
+}
 
 pub type Ke1StateLen<CS: CipherSuite> =
     <<CS::KeyExchange as KeyExchange>::KE1State as Serialize>::Len;
@@ -372,7 +373,7 @@ pub type Ke3MessageLen<CS: CipherSuite> =
 use crate::serialization::AssertZeroized;
 
 #[cfg(test)]
-impl<CS: CipherSuite> AssertZeroized for CredentialRequestParts<CS> {
+impl<CS: CipherSuite> AssertZeroized for SerializedCredentialRequest<CS> {
     fn assert_zeroized(&self) {
         let Self(blinded_element) = self;
 
@@ -383,7 +384,7 @@ impl<CS: CipherSuite> AssertZeroized for CredentialRequestParts<CS> {
 }
 
 #[cfg(test)]
-impl<CS: CipherSuite> AssertZeroized for CredentialResponseParts<CS> {
+impl<CS: CipherSuite> AssertZeroized for SerializedCredentialResponse<CS> {
     fn assert_zeroized(&self) {
         let Self {
             evaluation_element,
