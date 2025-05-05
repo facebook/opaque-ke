@@ -90,7 +90,9 @@ pub trait SignatureProtocol {
     /// The [`Group`] used to generate and derive keys.
     type Group: Group;
     /// The signature.
-    type Signature: Clone + Deserialize + Serialize + Zeroize;
+    type Signature: Clone + Zeroize;
+    /// Length of a serialized [`Signature`](Self::Signature).
+    type SignatureLen: ArrayLength<u8>;
     /// The state required to run the verification. This is used to cache the
     /// pre-hash for curves that support that, otherwise the [`Message`] to
     /// verify is stored via [`CachedMessage`].
@@ -125,6 +127,14 @@ pub trait SignatureProtocol {
         state: Self::VerifyState<CS, KE>,
         signature: &Self::Signature,
     ) -> Result<(), ProtocolError>;
+
+    /// Serialize [`Signature`](Self::Signature) into a fixed-sized byte array.
+    fn serialize_signature(signature: &Self::Signature) -> GenericArray<u8, Self::SignatureLen>;
+
+    /// Deserialize [`Signature`](Self::Signature) from the given `bytes`.
+    ///
+    /// The deserialized bytes must be taken from `bytes`.
+    fn deserialize_take_signature(bytes: &mut &[u8]) -> Result<Self::Signature, ProtocolError>;
 }
 
 /// Builder for the second key exchange message
@@ -516,7 +526,7 @@ where
         Ok(Self {
             server_nonce: input.take_array("server nonce")?,
             server_e_pk: PublicKey::deserialize_take(input)?,
-            signature: SIG::Signature::deserialize_take(input)?,
+            signature: SIG::deserialize_take_signature(input)?,
             mac: input.take_array("mac")?,
         })
     }
@@ -529,19 +539,16 @@ where
     Le<<KEH::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
     // Ke2Message: ((Nonce + KePk) + Signature) + Hash
     NonceLen: Add<KE::PkLen>,
-    Sum<NonceLen, KE::PkLen>: ArrayLength<u8> + Add<<SIG::Signature as Serialize>::Len>,
-    Sum<Sum<NonceLen, KE::PkLen>, <SIG::Signature as Serialize>::Len>:
-        ArrayLength<u8> + Add<OutputSize<KEH>>,
-    Sum<Sum<Sum<NonceLen, KE::PkLen>, <SIG::Signature as Serialize>::Len>, OutputSize<KEH>>:
-        ArrayLength<u8>,
+    Sum<NonceLen, KE::PkLen>: ArrayLength<u8> + Add<SIG::SignatureLen>,
+    Sum<Sum<NonceLen, KE::PkLen>, SIG::SignatureLen>: ArrayLength<u8> + Add<OutputSize<KEH>>,
+    Sum<Sum<Sum<NonceLen, KE::PkLen>, SIG::SignatureLen>, OutputSize<KEH>>: ArrayLength<u8>,
 {
-    type Len =
-        Sum<Sum<Sum<NonceLen, KE::PkLen>, <SIG::Signature as Serialize>::Len>, OutputSize<KEH>>;
+    type Len = Sum<Sum<Sum<NonceLen, KE::PkLen>, SIG::SignatureLen>, OutputSize<KEH>>;
 
     fn serialize(&self) -> GenericArray<u8, Self::Len> {
         self.server_nonce
             .concat(self.server_e_pk.serialize())
-            .concat(self.signature.serialize())
+            .concat(SIG::serialize_signature(&self.signature))
             .concat(self.mac.clone())
     }
 }
@@ -554,7 +561,7 @@ where
 {
     fn deserialize_take(input: &mut &[u8]) -> Result<Self, ProtocolError> {
         Ok(Self {
-            signature: SIG::Signature::deserialize_take(input)?,
+            signature: SIG::deserialize_take_signature(input)?,
             mac: input.take_array("mac")?,
         })
     }
@@ -566,13 +573,13 @@ where
     <KEH::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
     Le<<KEH::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
     // Ke2Message: Signature + Hash
-    <SIG::Signature as Serialize>::Len: Add<OutputSize<KEH>>,
-    Sum<<SIG::Signature as Serialize>::Len, OutputSize<KEH>>: ArrayLength<u8>,
+    SIG::SignatureLen: Add<OutputSize<KEH>>,
+    Sum<SIG::SignatureLen, OutputSize<KEH>>: ArrayLength<u8>,
 {
-    type Len = Sum<<SIG::Signature as Serialize>::Len, OutputSize<KEH>>;
+    type Len = Sum<SIG::SignatureLen, OutputSize<KEH>>;
 
     fn serialize(&self) -> GenericArray<u8, Self::Len> {
-        self.signature.serialize().concat(self.mac.clone())
+        SIG::serialize_signature(&self.signature).concat(self.mac.clone())
     }
 }
 

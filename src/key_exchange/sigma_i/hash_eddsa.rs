@@ -11,6 +11,7 @@
 
 use core::marker::PhantomData;
 
+use generic_array::GenericArray;
 use rand::{CryptoRng, RngCore};
 use zeroize::Zeroize;
 
@@ -19,7 +20,6 @@ use super::{Message, MessageBuilder, SignatureProtocol};
 use crate::ciphersuite::CipherSuite;
 use crate::errors::ProtocolError;
 use crate::key_exchange::group::Group;
-use crate::key_exchange::traits::{Deserialize, Serialize};
 
 /// HashEdDSA for [`SigmaI`](crate::SigmaI).
 ///
@@ -30,6 +30,7 @@ pub struct HashEddsa<G>(PhantomData<G>);
 impl<G: HashEddsaImpl> SignatureProtocol for HashEddsa<G> {
     type Group = G;
     type Signature = G::Signature;
+    type SignatureLen = G::SignatureLen;
     type VerifyState<CS: CipherSuite, KE: Group> = G::VerifyState<CS, KE>;
 
     fn sign<'a, R: CryptoRng + RngCore, CS: CipherSuite, KE: Group>(
@@ -48,13 +49,24 @@ impl<G: HashEddsaImpl> SignatureProtocol for HashEddsa<G> {
     ) -> Result<(), ProtocolError> {
         G::verify(pk, state, signature)
     }
+
+    fn serialize_signature(signature: &Self::Signature) -> GenericArray<u8, Self::SignatureLen> {
+        G::serialize_signature(signature)
+    }
+
+    fn deserialize_take_signature(bytes: &mut &[u8]) -> Result<Self::Signature, ProtocolError> {
+        G::deserialize_take_signature(bytes)
+    }
 }
 
 pub(in super::super) mod implementation {
+    use generic_array::ArrayLength;
+
     use super::*;
 
     pub trait HashEddsaImpl: Group {
-        type Signature: Clone + Deserialize + Serialize + Zeroize;
+        type Signature: Clone + Zeroize;
+        type SignatureLen: ArrayLength<u8>;
         type VerifyState<CS: CipherSuite, KE: Group>: Clone + Zeroize;
 
         fn sign<CS: CipherSuite, KE: Group>(
@@ -67,5 +79,10 @@ pub(in super::super) mod implementation {
             state: Self::VerifyState<CS, KE>,
             signature: &Self::Signature,
         ) -> Result<(), ProtocolError>;
+
+        fn deserialize_take_signature(bytes: &mut &[u8]) -> Result<Self::Signature, ProtocolError>;
+
+        fn serialize_signature(signature: &Self::Signature)
+            -> GenericArray<u8, Self::SignatureLen>;
     }
 }

@@ -29,7 +29,6 @@ use crate::errors::ProtocolError;
 use crate::key_exchange::group::elliptic_curve::NonIdentity;
 use crate::key_exchange::group::Group;
 pub use crate::key_exchange::sigma_i::shared::PreHash;
-use crate::key_exchange::traits::{Deserialize, Serialize};
 use crate::serialization::SliceExt;
 
 /// ECDSA for [`SigmaI`](crate::SigmaI).
@@ -50,6 +49,7 @@ where
 {
     type Group = G;
     type Signature = Signature<G>;
+    type SignatureLen = SignatureSize<G>;
     type VerifyState<CS: CipherSuite, KE: Group> = PreHash<H>;
 
     // We use a manual implementation of `RandomizedPrehashSigner` to use the same
@@ -75,6 +75,16 @@ where
         signature: &Self::Signature,
     ) -> Result<(), ProtocolError> {
         verify(pk, &state.0, &signature.0)
+    }
+
+    fn serialize_signature(signature: &Self::Signature) -> GenericArray<u8, Self::SignatureLen> {
+        signature.0.to_bytes()
+    }
+
+    fn deserialize_take_signature(bytes: &mut &[u8]) -> Result<Self::Signature, ProtocolError> {
+        ecdsa::Signature::from_bytes(&bytes.take_array("signature")?)
+            .map(Signature)
+            .map_err(|_| ProtocolError::SerializationError)
     }
 }
 
@@ -131,28 +141,6 @@ where
 pub struct Signature<G: CurveArithmetic + PrimeCurve>(pub ecdsa::Signature<G>)
 where
     SignatureSize<G>: ArrayLength<u8>;
-
-impl<G: CurveArithmetic + PrimeCurve> Deserialize for Signature<G>
-where
-    SignatureSize<G>: ArrayLength<u8>,
-{
-    fn deserialize_take(input: &mut &[u8]) -> Result<Self, ProtocolError> {
-        ecdsa::Signature::from_bytes(&input.take_array("signature")?)
-            .map(Signature)
-            .map_err(|_| ProtocolError::SerializationError)
-    }
-}
-
-impl<G: CurveArithmetic + PrimeCurve> Serialize for Signature<G>
-where
-    SignatureSize<G>: ArrayLength<u8>,
-{
-    type Len = SignatureSize<G>;
-
-    fn serialize(&self) -> GenericArray<u8, Self::Len> {
-        self.0.to_bytes()
-    }
-}
 
 impl<G: CurveArithmetic + PrimeCurve> Zeroize for Signature<G>
 where

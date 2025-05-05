@@ -30,7 +30,6 @@ use crate::key_exchange::sigma_i::hash_eddsa::implementation::HashEddsaImpl;
 use crate::key_exchange::sigma_i::pure_eddsa::implementation::PureEddsaImpl;
 pub use crate::key_exchange::sigma_i::shared::PreHash;
 use crate::key_exchange::sigma_i::{CachedMessage, Message, MessageBuilder};
-use crate::key_exchange::traits::{Deserialize, Serialize};
 use crate::serialization::{SliceExt, UpdateExt};
 
 /// Implementation for Ed25519.
@@ -136,6 +135,7 @@ impl SigningKey {
 
 impl PureEddsaImpl for Ed25519 {
     type Signature = Signature;
+    type SignatureLen = U64;
 
     fn sign<CS: CipherSuite, KE: Group>(
         sk: &Self::Sk,
@@ -159,10 +159,19 @@ impl PureEddsaImpl for Ed25519 {
             signature,
         )
     }
+
+    fn deserialize_take_signature(bytes: &mut &[u8]) -> Result<Self::Signature, ProtocolError> {
+        Signature::deserialize_take(bytes)
+    }
+
+    fn serialize_signature(signature: &Self::Signature) -> GenericArray<u8, Self::SignatureLen> {
+        signature.serialize()
+    }
 }
 
 impl HashEddsaImpl for Ed25519 {
     type Signature = Signature;
+    type SignatureLen = U64;
     type VerifyState<CS: CipherSuite, KE: Group> = PreHash<Sha512>;
 
     fn sign<CS: CipherSuite, KE: Group>(
@@ -185,6 +194,14 @@ impl HashEddsaImpl for Ed25519 {
         signature: &Self::Signature,
     ) -> Result<(), ProtocolError> {
         verify(pk, true, iter::once(state.0.as_slice()), signature)
+    }
+
+    fn deserialize_take_signature(bytes: &mut &[u8]) -> Result<Self::Signature, ProtocolError> {
+        Signature::deserialize_take(bytes)
+    }
+
+    fn serialize_signature(signature: &Self::Signature) -> GenericArray<u8, Self::SignatureLen> {
+        signature.serialize()
     }
 }
 
@@ -276,18 +293,20 @@ impl Signature {
     pub fn from_slice(mut bytes: &[u8]) -> Result<Self, ProtocolError> {
         Self::deserialize_take(&mut bytes)
     }
-}
 
-impl Deserialize for Signature {
-    fn deserialize_take(input: &mut &[u8]) -> Result<Self, ProtocolError> {
+    fn deserialize_take(bytes: &mut &[u8]) -> Result<Self, ProtocolError> {
         #[allow(non_snake_case)]
-        let R = CompressedEdwardsY(input.take_array("signature R")?.into());
+        let R = CompressedEdwardsY(bytes.take_array("signature R")?.into());
 
-        let s = Scalar::from_canonical_bytes(input.take_array("signature s")?.into())
+        let s = Scalar::from_canonical_bytes(bytes.take_array("signature s")?.into())
             .into_option()
             .ok_or(ProtocolError::SerializationError)?;
 
-        Ok(Signature { R, s })
+        Ok(Self { R, s })
+    }
+
+    fn serialize(&self) -> GenericArray<u8, U64> {
+        GenericArray::from(self.R.0).concat(GenericArray::from(self.s.to_bytes()))
     }
 }
 
@@ -306,21 +325,13 @@ impl<'de> serde::Deserialize<'de> for Signature {
     }
 }
 
-impl Serialize for Signature {
-    type Len = U64;
-
-    fn serialize(&self) -> GenericArray<u8, Self::Len> {
-        GenericArray::from(self.R.0).concat(GenericArray::from(self.s.to_bytes()))
-    }
-}
-
 #[cfg(feature = "serde")]
 impl serde::Serialize for Signature {
     fn serialize<SK>(&self, serializer: SK) -> Result<SK::Ok, SK::Error>
     where
         SK: serde::Serializer,
     {
-        <Signature as Serialize>::serialize(self).serialize(serializer)
+        self.serialize().serialize(serializer)
     }
 }
 

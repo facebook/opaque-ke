@@ -11,6 +11,7 @@
 
 use core::marker::PhantomData;
 
+use generic_array::GenericArray;
 use rand::{CryptoRng, RngCore};
 use zeroize::Zeroize;
 
@@ -20,7 +21,6 @@ use crate::ciphersuite::CipherSuite;
 use crate::errors::ProtocolError;
 use crate::key_exchange::group::Group;
 use crate::key_exchange::sigma_i::CachedMessage;
-use crate::key_exchange::traits::{Deserialize, Serialize};
 
 /// PureEdDSA for [`SigmaI`](crate::SigmaI).
 ///
@@ -31,6 +31,7 @@ pub struct PureEddsa<G>(PhantomData<G>);
 impl<G: PureEddsaImpl> SignatureProtocol for PureEddsa<G> {
     type Group = G;
     type Signature = G::Signature;
+    type SignatureLen = G::SignatureLen;
     type VerifyState<CS: CipherSuite, KE: Group> = CachedMessage<CS, KE>;
 
     fn sign<'a, R: CryptoRng + RngCore, CS: CipherSuite, KE: Group>(
@@ -49,13 +50,24 @@ impl<G: PureEddsaImpl> SignatureProtocol for PureEddsa<G> {
     ) -> Result<(), ProtocolError> {
         G::verify(pk, message_builder, state, signature)
     }
+
+    fn deserialize_take_signature(bytes: &mut &[u8]) -> Result<Self::Signature, ProtocolError> {
+        G::deserialize_take_signature(bytes)
+    }
+
+    fn serialize_signature(signature: &Self::Signature) -> GenericArray<u8, Self::SignatureLen> {
+        G::serialize_signature(signature)
+    }
 }
 
 pub(in super::super) mod implementation {
+    use generic_array::ArrayLength;
+
     use super::*;
 
     pub trait PureEddsaImpl: Group {
-        type Signature: Clone + Deserialize + Serialize + Zeroize;
+        type Signature: Clone + Zeroize;
+        type SignatureLen: ArrayLength<u8>;
 
         fn sign<CS: CipherSuite, KE: Group>(
             sk: &Self::Sk,
@@ -68,5 +80,10 @@ pub(in super::super) mod implementation {
             state: CachedMessage<CS, KE>,
             signature: &Self::Signature,
         ) -> Result<(), ProtocolError>;
+
+        fn deserialize_take_signature(bytes: &mut &[u8]) -> Result<Self::Signature, ProtocolError>;
+
+        fn serialize_signature(signature: &Self::Signature)
+            -> GenericArray<u8, Self::SignatureLen>;
     }
 }
