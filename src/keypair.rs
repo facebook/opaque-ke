@@ -199,7 +199,7 @@ impl<G: Group> serde::Serialize for PrivateKey<G> {
 /// Wrapper around a Key to enforce that it's a public one.
 #[derive_where(Clone, ZeroizeOnDrop)]
 #[derive_where(Debug, Eq, Hash, Ord, PartialEq, PartialOrd; G::Pk)]
-pub struct PublicKey<G: Group>(G::Pk);
+pub struct PublicKey<G: Group + ?Sized>(G::Pk);
 
 impl<G: Group> PublicKey<G> {
     /// Convert from bytes

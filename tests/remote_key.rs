@@ -205,7 +205,7 @@ struct RemoteKey(ObjectHandle);
 
 trait Pkcs11PublicKey
 where
-    Self: Group + Sized,
+    Self: Group,
 {
     fn pkcs11_public_key(data: &[u8]) -> PublicKey<Self>;
 }

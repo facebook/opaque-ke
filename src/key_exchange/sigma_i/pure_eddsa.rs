@@ -54,7 +54,7 @@ impl<G: PureEddsaImpl> SignatureProtocol for PureEddsa<G> {
 pub(in super::super) mod implementation {
     use super::*;
 
-    pub trait PureEddsaImpl: Group + Sized {
+    pub trait PureEddsaImpl: Group {
         type Signature: Clone + Deserialize + Serialize + Zeroize;
 
         fn sign<CS: CipherSuite, KE: Group>(
