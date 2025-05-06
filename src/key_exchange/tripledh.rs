@@ -33,6 +33,7 @@ use crate::key_exchange::traits::{
     GenerateKe3Result, KeyExchange, Sealed, Serialize, SerializedContext, SerializedIdentifiers,
 };
 use crate::keypair::{KeyPair, PrivateKey, PublicKey};
+use crate::opaque::Identifiers;
 use crate::serialization::SliceExt;
 
 ////////////////////////////
@@ -480,7 +481,6 @@ where
 
 #[cfg(test)]
 use crate::serialization::AssertZeroized;
-use crate::Identifiers;
 
 #[cfg(test)]
 impl<H: OutputSizeUser> AssertZeroized for Ke2State<H> {
