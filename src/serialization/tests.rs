@@ -557,7 +557,7 @@ fn sigma_i_ecdsa_credential_response_roundtrip() -> Result<(), ProtocolError> {
         CredentialResponseLen<CS>: ArrayLength<u8>,
     {
         let pt = random_point::<CS>();
-        let pt_bytes = KeGroup::<CS>::serialize_pk(pt);
+        let pt_bytes = KeGroup::<CS>::serialize_pk(&pt);
 
         let mut rng = OsRng;
 

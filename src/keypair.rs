@@ -126,7 +126,7 @@ where
 {
     /// Diffie-Hellman key exchange implementation
     pub(crate) fn ke_diffie_hellman(&self, pk: &PublicKey<G>) -> GenericArray<u8, G::PkLen> {
-        self.0.diffie_hellman(pk.0)
+        self.0.diffie_hellman(&pk.0)
     }
 }
 
@@ -206,12 +206,12 @@ impl<G: Group> PublicKey<G> {
 
     /// Convert to bytes
     pub fn serialize(&self) -> GenericArray<u8, G::PkLen> {
-        G::serialize_pk(self.0)
+        G::serialize_pk(&self.0)
     }
 
     /// Returns the inner [`Group::Pk`].
-    pub fn to_group_type(&self) -> G::Pk {
-        self.0
+    pub fn to_group_type(&self) -> &G::Pk {
+        &self.0
     }
 }
 

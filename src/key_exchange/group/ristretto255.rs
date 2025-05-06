@@ -37,7 +37,7 @@ impl Group for Ristretto255 {
     type Sk = NonZeroScalar;
     type SkLen = U32;
 
-    fn serialize_pk(pk: Self::Pk) -> GenericArray<u8, Self::PkLen> {
+    fn serialize_pk(pk: &Self::Pk) -> GenericArray<u8, Self::PkLen> {
         pk.0.compress().to_bytes().into()
     }
 
@@ -81,8 +81,8 @@ impl Group for Ristretto255 {
 }
 
 impl DiffieHellman<Ristretto255> for NonZeroScalar {
-    fn diffie_hellman(self, pk: NonIdentity) -> GenericArray<u8, U32> {
-        Ristretto255::serialize_pk(NonIdentity(pk.0 * self.0))
+    fn diffie_hellman(self, pk: &NonIdentity) -> GenericArray<u8, U32> {
+        Ristretto255::serialize_pk(&NonIdentity(pk.0 * self.0))
     }
 }
 
