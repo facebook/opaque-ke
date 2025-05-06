@@ -27,7 +27,7 @@ const STR_OPAQUE_DERIVE_AUTH_KEY_PAIR: [u8; 33] = *b"OPAQUE-DeriveDiffieHellmanK
 /// A group representation for use in the key exchange
 pub trait Group {
     /// Public key
-    type Pk: Copy;
+    type Pk: Clone;
     /// Length of the public key
     type PkLen: ArrayLength<u8>;
     /// Secret key
@@ -36,7 +36,7 @@ pub trait Group {
     type SkLen: ArrayLength<u8>;
 
     /// Serializes `self`
-    fn serialize_pk(pk: Self::Pk) -> GenericArray<u8, Self::PkLen>;
+    fn serialize_pk(pk: &Self::Pk) -> GenericArray<u8, Self::PkLen>;
 
     /// Return a public key from its fixed-length bytes representation
     ///

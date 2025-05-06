@@ -42,7 +42,7 @@ where
 
     type SkLen = FieldBytesSize<Self>;
 
-    fn serialize_pk(pk: Self::Pk) -> GenericArray<u8, Self::PkLen> {
+    fn serialize_pk(pk: &Self::Pk) -> GenericArray<u8, Self::PkLen> {
         GenericArray::clone_from_slice(pk.0.to_encoded_point(true).as_bytes())
     }
 
@@ -94,7 +94,7 @@ where
 {
     fn diffie_hellman(
         self,
-        pk: NonIdentity<G>,
+        pk: &NonIdentity<G>,
     ) -> GenericArray<u8, <FieldBytesSize<G> as ModulusSize>::CompressedPointSize> {
         GenericArray::clone_from_slice((pk.0 * self).to_encoded_point(true).as_bytes())
     }
