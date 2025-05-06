@@ -23,16 +23,14 @@ struct Default;
 #[cfg(feature = "ristretto255")]
 impl CipherSuite for Default {
     type OprfCs = opaque_ke::Ristretto255;
-    type KeGroup = opaque_ke::Ristretto255;
-    type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDh;
+    type KeyExchange = opaque_ke::TripleDh<opaque_ke::Ristretto255, sha2::Sha512>;
     type Ksf = opaque_ke::ksf::Identity;
 }
 
 #[cfg(not(feature = "ristretto255"))]
 impl CipherSuite for Default {
     type OprfCs = p256::NistP256;
-    type KeGroup = p256::NistP256;
-    type KeyExchange = opaque_ke::key_exchange::tripledh::TripleDh;
+    type KeyExchange = opaque_ke::TripleDh<p256::NistP256, sha2::Sha256>;
     type Ksf = opaque_ke::ksf::Identity;
 }
 
@@ -187,7 +185,7 @@ fn server_login_start_real(c: &mut Criterion) {
                 Some(password_file.clone()),
                 client_login_start_result.clone().message,
                 username,
-                ServerLoginStartParameters::default(),
+                ServerLoginParameters::default(),
             )
             .unwrap();
         })
@@ -209,7 +207,7 @@ fn server_login_start_fake(c: &mut Criterion) {
                 None,
                 client_login_start_result.clone().message,
                 username,
-                ServerLoginStartParameters::default(),
+                ServerLoginParameters::default(),
             )
             .unwrap();
         })
@@ -246,7 +244,7 @@ fn client_login_finish(c: &mut Criterion) {
         Some(password_file),
         client_login_start_result.clone().message,
         username,
-        ServerLoginStartParameters::default(),
+        ServerLoginParameters::default(),
     )
     .unwrap();
 
@@ -256,6 +254,7 @@ fn client_login_finish(c: &mut Criterion) {
                 .clone()
                 .state
                 .finish(
+                    &mut rng,
                     password,
                     server_login_start.clone().message,
                     ClientLoginFinishParameters::default(),
@@ -295,12 +294,13 @@ fn server_login_finish(c: &mut Criterion) {
         Some(password_file),
         client_login_start_result.clone().message,
         username,
-        ServerLoginStartParameters::default(),
+        ServerLoginParameters::default(),
     )
     .unwrap();
     let client_login_finish_result = client_login_start_result
         .state
         .finish(
+            &mut rng,
             password,
             server_login_start_result.clone().message,
             ClientLoginFinishParameters::default(),
@@ -312,7 +312,10 @@ fn server_login_finish(c: &mut Criterion) {
             server_login_start_result
                 .clone()
                 .state
-                .finish(client_login_finish_result.clone().message)
+                .finish(
+                    client_login_finish_result.clone().message,
+                    ServerLoginParameters::default(),
+                )
                 .unwrap();
         })
     });
