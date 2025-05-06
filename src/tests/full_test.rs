@@ -15,232 +15,177 @@ use std::{format, println, ptr, vec};
 
 use digest::Output;
 use generic_array::typenum::{Sum, Unsigned};
-use generic_array::ArrayLength;
+use generic_array::{ArrayLength, GenericArray};
 use rand::rngs::OsRng;
 use serde_json::Value;
 use subtle::ConstantTimeEq;
-use voprf::Group;
+use voprf::Group as _;
 
-use crate::ciphersuite::{CipherSuite, OprfGroup, OprfHash};
+use crate::ciphersuite::{CipherSuite, KeGroup, OprfGroup, OprfHash};
 use crate::envelope::EnvelopeLen;
 use crate::errors::*;
 use crate::hash::OutputSize;
-use crate::key_exchange::group::KeGroup;
-use crate::key_exchange::traits::{Ke1MessageLen, Ke1StateLen, Ke2MessageLen};
-use crate::key_exchange::tripledh::{DiffieHellman, NonceLen, TripleDh};
+use crate::key_exchange::group::Group;
+use crate::key_exchange::shared::NonceLen;
+use crate::key_exchange::traits::{
+    Deserialize, Ke1MessageLen, Ke1StateLen, Ke2MessageLen, KeyExchange, Serialize,
+};
 use crate::ksf::Identity;
 use crate::messages::{
     CredentialRequestLen, CredentialResponseLen, CredentialResponseWithoutKeLen,
     RegistrationResponseLen, RegistrationUploadLen,
 };
 use crate::opaque::*;
+use crate::serialization::AssertZeroized;
 use crate::tests::mock_rng::CycleRng;
 use crate::*;
 
 // Tests
 // =====
 
-#[cfg(feature = "ristretto255")]
-struct Ristretto255;
+macro_rules! ciphersuite_types {
+    ($(#[$attr:meta])* $name:ident, $oprf:ty, $ke:ty, $par:tt) => {
+        $(#[$attr])*
+        struct $name;
 
-#[cfg(feature = "ristretto255")]
-impl CipherSuite for Ristretto255 {
-    type OprfCs = crate::Ristretto255;
-    type KeGroup = crate::Ristretto255;
-    type KeyExchange = TripleDh;
-    type Ksf = Identity;
+        $(#[$attr])*
+        impl CipherSuite for $name {
+            type OprfCs = $oprf;
+            type KeyExchange = $ke;
+            type Ksf = Identity;
+        }
+    };
 }
 
-#[cfg(feature = "ristretto255")]
-struct Ristretto255P256;
-
-#[cfg(feature = "ristretto255")]
-impl CipherSuite for Ristretto255P256 {
-    type OprfCs = p256::NistP256;
-    type KeGroup = crate::Ristretto255;
-    type KeyExchange = TripleDh;
-    type Ksf = Identity;
+macro_rules! generate {
+    ($(#[$attr:meta])* $name:ident, $oprf:ty, $ke:ty, ($output:ident)) => {
+        paste::paste! {
+            $(#[$attr])*
+            {
+                let parameters = generate_parameters::<$name>()?;
+                $(
+                    $output.push_str(&format!("#[{}]\n", stringify!($attr)));
+                )*
+                $output.push_str(&format!(
+                    "pub static {}: &str = r#\"\n{}\"#;\n",
+                    stringify!([<TEST_VECTOR_ $name:snake:upper>]),
+                    stringify_test_vectors(&parameters)
+                ));
+            }
+        }
+    };
 }
 
-#[cfg(feature = "ristretto255")]
-struct Ristretto255P384;
-
-#[cfg(feature = "ristretto255")]
-impl CipherSuite for Ristretto255P384 {
-    type OprfCs = p384::NistP384;
-    type KeGroup = crate::Ristretto255;
-    type KeyExchange = TripleDh;
-    type Ksf = Identity;
+macro_rules! run_all {
+    ($(#[$attr:meta])* $name:ident, $oprf:ty, $ke:ty, ($fn:ident $(, $par:expr)*)) => {
+        paste::paste! {
+            $(#[$attr])*
+            $fn::<$name>(super::full_test_vectors::[<TEST_VECTOR_ $name:snake:upper>] $(, $par)*)?;
+        }
+    };
 }
 
-#[cfg(feature = "ristretto255")]
-struct Ristretto255P521;
-
-#[cfg(feature = "ristretto255")]
-impl CipherSuite for Ristretto255P521 {
-    type OprfCs = p521::NistP521;
-    type KeGroup = crate::Ristretto255;
-    type KeyExchange = TripleDh;
-    type Ksf = Identity;
+macro_rules! oprf_ciphersuites {
+    ($macro:ident!$par:tt => [$($(#[$ke_attr:meta])* [$ke_name:ident, $ke:ty$(,)?]),+$(,)?]) => {
+        $(
+            oprf_ciphersuites!(
+                $macro!$par =>
+                $(#[$ke_attr])* [$ke_name, $ke],
+                [
+                    #[cfg(feature = "ristretto255")] [
+                        Ristretto255, crate::Ristretto255,
+                    ],
+                    [P256, p256::NistP256],
+                    [P384, p384::NistP384],
+                    [P521, p521::NistP521],
+                ],
+            );
+        )+
+    };
+    (
+        $macro:ident!$par:tt =>
+        #[$ke_attr_1:meta] #[$ke_attr_2:meta] [$ke_name:ident, $ke:ty],
+        [$($(#[$oprf_attr:meta])? [$oprf_name:ident, $oprf:ty$(,)?]),+$(,)?],
+    ) => {
+        paste::paste! {
+            $($macro!(#[$ke_attr_1] #[$ke_attr_2] $(#[$oprf_attr])? [<$oprf_name $ke_name>], $oprf, $ke, $par);)+
+        }
+    };
+    (
+        $macro:ident!$par:tt =>
+        #[$ke_attr:meta] [$ke_name:ident, $ke:ty],
+        [$($(#[$oprf_attr:meta])? [$oprf_name:ident, $oprf:ty$(,)?]),+$(,)?],
+    ) => {
+        paste::paste! {
+            $($macro!(#[$ke_attr] $(#[$oprf_attr])? [<$oprf_name $ke_name>], $oprf, $ke, $par);)+
+        }
+    };
+    (
+        $macro:ident!$par:tt =>
+        [$ke_name:ident, $ke:ty],
+        [$($(#[$oprf_attr:meta])? [$oprf_name:ident, $oprf:ty$(,)?]),+$(,)?],
+    ) => {
+        paste::paste! {
+            $($macro!($(#[$oprf_attr])? [<$oprf_name $ke_name>], $oprf, $ke, $par);)+
+        }
+    }
 }
 
-struct P256;
-
-impl CipherSuite for P256 {
-    type OprfCs = p256::NistP256;
-    type KeGroup = p256::NistP256;
-    type KeyExchange = TripleDh;
-    type Ksf = Identity;
+macro_rules! triple_dh_ciphersuites {
+    ($macro:ident!$par:tt) => {
+        oprf_ciphersuites!(
+            $macro!$par => [
+                #[cfg(feature = "ristretto255")] [
+                    TripleDhRistretto255, TripleDh<crate::Ristretto255, sha2::Sha512>,
+                ],
+                [TripleDhP256, TripleDh<p256::NistP256, sha2::Sha256>],
+                [TripleDhP384, TripleDh<p384::NistP384, sha2::Sha384>],
+                [TripleDhP521, TripleDh<p521::NistP521, sha2::Sha512>],
+                #[cfg(feature = "curve25519")] [
+                    TripleDhCurve25519, TripleDh<crate::Curve25519, sha2::Sha512>,
+                ],
+            ]
+        );
+    };
 }
 
-struct P256P384;
-
-impl CipherSuite for P256P384 {
-    type OprfCs = p384::NistP384;
-    type KeGroup = p256::NistP256;
-    type KeyExchange = TripleDh;
-    type Ksf = Identity;
+macro_rules! sigma_i_ciphersuites {
+    ($macro:ident!$par:tt) => {
+        sigma_i_ciphersuites!(
+            $macro!$par => [
+                #[cfg(feature = "ecdsa")] [P256, Ecdsa<p256::NistP256, sha2::Sha256>],
+                #[cfg(feature = "ecdsa")] [P384, Ecdsa<p384::NistP384, sha2::Sha384>],
+                #[cfg(feature = "ed25519")] [Ed25519, PureEddsa<Ed25519>],
+                #[cfg(feature = "ed25519")] [Ed25519Ph, HashEddsa<Ed25519>],
+            ],
+        );
+    };
+    (
+        $macro:ident!$par:tt =>
+        [$($(#[$sig_attr:meta])? [$sig_name:ident, $sig:ty]),+$(,)?],
+    ) => {
+        paste::paste! {
+            $(
+                oprf_ciphersuites!(
+                    $macro!$par => [
+                        $(#[$sig_attr])? #[cfg(feature = "ristretto255")] [
+                            [<SigmaI $sig_name Ristretto255>], SigmaI<$sig, crate::Ristretto255, sha2::Sha512>,
+                        ],
+                        $(#[$sig_attr])? [[<SigmaI $sig_name P256>], SigmaI<$sig, p256::NistP256, sha2::Sha256>],
+                        $(#[$sig_attr])? [[<SigmaI $sig_name P384>], SigmaI<$sig, p384::NistP384, sha2::Sha384>],
+                        $(#[$sig_attr])? [[<SigmaI $sig_name P521>], SigmaI<$sig, p521::NistP521, sha2::Sha512>],
+                        $(#[$sig_attr])? #[cfg(feature = "curve25519")] [
+                            [<SigmaI $sig_name Curve25519>], SigmaI<$sig, crate::Curve25519, sha2::Sha512>,
+                        ],
+                    ]
+                );
+            )+
+        }
+    };
 }
 
-struct P256P521;
-
-impl CipherSuite for P256P521 {
-    type OprfCs = p521::NistP521;
-    type KeGroup = p256::NistP256;
-    type KeyExchange = TripleDh;
-    type Ksf = Identity;
-}
-
-#[cfg(feature = "ristretto255")]
-struct P256Ristretto255;
-
-#[cfg(feature = "ristretto255")]
-impl CipherSuite for P256Ristretto255 {
-    type OprfCs = crate::Ristretto255;
-    type KeGroup = p256::NistP256;
-    type KeyExchange = TripleDh;
-    type Ksf = Identity;
-}
-
-struct P384;
-
-impl CipherSuite for P384 {
-    type OprfCs = p384::NistP384;
-    type KeGroup = p384::NistP384;
-    type KeyExchange = TripleDh;
-    type Ksf = Identity;
-}
-
-struct P384P256;
-
-impl CipherSuite for P384P256 {
-    type OprfCs = p256::NistP256;
-    type KeGroup = p384::NistP384;
-    type KeyExchange = TripleDh;
-    type Ksf = Identity;
-}
-
-struct P384P521;
-
-impl CipherSuite for P384P521 {
-    type OprfCs = p521::NistP521;
-    type KeGroup = p384::NistP384;
-    type KeyExchange = TripleDh;
-    type Ksf = Identity;
-}
-
-#[cfg(feature = "ristretto255")]
-struct P384Ristretto255;
-
-#[cfg(feature = "ristretto255")]
-impl CipherSuite for P384Ristretto255 {
-    type OprfCs = crate::Ristretto255;
-    type KeGroup = p384::NistP384;
-    type KeyExchange = TripleDh;
-    type Ksf = Identity;
-}
-
-struct P521;
-
-impl CipherSuite for P521 {
-    type OprfCs = p521::NistP521;
-    type KeGroup = p521::NistP521;
-    type KeyExchange = TripleDh;
-    type Ksf = Identity;
-}
-
-struct P521P256;
-
-impl CipherSuite for P521P256 {
-    type OprfCs = p256::NistP256;
-    type KeGroup = p521::NistP521;
-    type KeyExchange = TripleDh;
-    type Ksf = Identity;
-}
-
-struct P521P384;
-
-impl CipherSuite for P521P384 {
-    type OprfCs = p384::NistP384;
-    type KeGroup = p521::NistP521;
-    type KeyExchange = TripleDh;
-    type Ksf = Identity;
-}
-
-#[cfg(feature = "ristretto255")]
-struct P521Ristretto255;
-
-#[cfg(feature = "ristretto255")]
-impl CipherSuite for P521Ristretto255 {
-    type OprfCs = crate::Ristretto255;
-    type KeGroup = p521::NistP521;
-    type KeyExchange = TripleDh;
-    type Ksf = Identity;
-}
-
-#[cfg(all(feature = "curve25519", feature = "ristretto255"))]
-struct Curve25519Ristretto255;
-
-#[cfg(all(feature = "curve25519", feature = "ristretto255"))]
-impl CipherSuite for Curve25519Ristretto255 {
-    type OprfCs = crate::Ristretto255;
-    type KeGroup = crate::Curve25519;
-    type KeyExchange = TripleDh;
-    type Ksf = Identity;
-}
-
-#[cfg(feature = "curve25519")]
-struct Curve25519P256;
-
-#[cfg(feature = "curve25519")]
-impl CipherSuite for Curve25519P256 {
-    type OprfCs = p256::NistP256;
-    type KeGroup = crate::Curve25519;
-    type KeyExchange = TripleDh;
-    type Ksf = Identity;
-}
-
-#[cfg(feature = "curve25519")]
-struct Curve25519P384;
-
-#[cfg(feature = "curve25519")]
-impl CipherSuite for Curve25519P384 {
-    type OprfCs = p384::NistP384;
-    type KeGroup = crate::Curve25519;
-    type KeyExchange = TripleDh;
-    type Ksf = Identity;
-}
-
-#[cfg(feature = "curve25519")]
-struct Curve25519P521;
-
-#[cfg(feature = "curve25519")]
-impl CipherSuite for Curve25519P521 {
-    type OprfCs = p521::NistP521;
-    type KeGroup = crate::Curve25519;
-    type KeyExchange = TripleDh;
-    type Ksf = Identity;
-}
+triple_dh_ciphersuites!(ciphersuite_types!());
+sigma_i_ciphersuites!(ciphersuite_types!());
 
 pub struct TestVectorParameters {
     pub client_s_pk: Vec<u8>,
@@ -263,6 +208,8 @@ pub struct TestVectorParameters {
     pub envelope_nonce: Vec<u8>,
     pub client_nonce: Vec<u8>,
     pub server_nonce: Vec<u8>,
+    pub server_sig_rng: Vec<u8>,
+    pub client_sig_rng: Vec<u8>,
     pub context: Vec<u8>,
     pub registration_request: Vec<u8>,
     pub registration_response: Vec<u8>,
@@ -280,44 +227,6 @@ pub struct TestVectorParameters {
 
 static STR_PASSWORD: &str = "password";
 static STR_CREDENTIAL_IDENTIFIER: &str = "credential_identifier";
-
-macro_rules! run_all {
-    ($name:ident $(, $par:expr)*) => {
-        use super::full_test_vectors;
-
-        #[cfg(feature = "ristretto255")]
-        $name::<Ristretto255>(full_test_vectors::TEST_VECTOR_RISTRETTO255 $(, $par)*)?;
-        #[cfg(feature = "ristretto255")]
-        $name::<Ristretto255P256>(full_test_vectors::TEST_VECTOR_RISTRETTO255_P256 $(, $par)*)?;
-        #[cfg(feature = "ristretto255")]
-        $name::<Ristretto255P384>(full_test_vectors::TEST_VECTOR_RISTRETTO255_P384 $(, $par)*)?;
-        #[cfg(feature = "ristretto255")]
-        $name::<Ristretto255P521>(full_test_vectors::TEST_VECTOR_RISTRETTO255_P521 $(, $par)*)?;
-        $name::<P256>(full_test_vectors::TEST_VECTOR_P256 $(, $par)*)?;
-        $name::<P256P384>(full_test_vectors::TEST_VECTOR_P256_P384 $(, $par)*)?;
-        $name::<P256P521>(full_test_vectors::TEST_VECTOR_P256_P521 $(, $par)*)?;
-        #[cfg(feature = "ristretto255")]
-        $name::<P256Ristretto255>(full_test_vectors::TEST_VECTOR_P256_RISTRETTO255 $(, $par)*)?;
-        $name::<P384>(full_test_vectors::TEST_VECTOR_P384 $(, $par)*)?;
-        $name::<P384P256>(full_test_vectors::TEST_VECTOR_P384_P256 $(, $par)*)?;
-        $name::<P384P521>(full_test_vectors::TEST_VECTOR_P384_P521 $(, $par)*)?;
-        #[cfg(feature = "ristretto255")]
-        $name::<P384Ristretto255>(full_test_vectors::TEST_VECTOR_P384_RISTRETTO255 $(, $par)*)?;
-        $name::<P521>(full_test_vectors::TEST_VECTOR_P521 $(, $par)*)?;
-        $name::<P521P256>(full_test_vectors::TEST_VECTOR_P521_P256 $(, $par)*)?;
-        $name::<P521P384>(full_test_vectors::TEST_VECTOR_P521_P384 $(, $par)*)?;
-        #[cfg(feature = "ristretto255")]
-        $name::<P521Ristretto255>(full_test_vectors::TEST_VECTOR_P521_RISTRETTO255 $(, $par)*)?;
-        #[cfg(feature = "curve25519")]
-        $name::<Curve25519P256>(full_test_vectors::TEST_VECTOR_CURVE25519_P256 $(, $par)*)?;
-        #[cfg(feature = "curve25519")]
-        $name::<Curve25519P384>(full_test_vectors::TEST_VECTOR_CURVE25519_P384 $(, $par)*)?;
-        #[cfg(feature = "curve25519")]
-        $name::<Curve25519P521>(full_test_vectors::TEST_VECTOR_CURVE25519_P521 $(, $par)*)?;
-        #[cfg(all(feature = "curve25519", feature = "ristretto255"))]
-        $name::<Curve25519Ristretto255>(full_test_vectors::TEST_VECTOR_CURVE25519_RISTRETTO255 $(, $par)*)?;
-    };
-}
 
 fn decode(values: &Value, key: &str) -> Option<Vec<u8>> {
     values[key].as_str().and_then(|s| hex::decode(s).ok())
@@ -345,6 +254,8 @@ fn populate_test_vectors(values: &Value) -> TestVectorParameters {
         envelope_nonce: decode(values, "envelope_nonce").unwrap(),
         client_nonce: decode(values, "client_nonce").unwrap(),
         server_nonce: decode(values, "server_nonce").unwrap(),
+        server_sig_rng: decode(values, "server_sig_rng").unwrap(),
+        client_sig_rng: decode(values, "client_sig_rng").unwrap(),
         context: decode(values, "context").unwrap(),
         registration_request: decode(values, "registration_request").unwrap(),
         registration_response: decode(values, "registration_response").unwrap(),
@@ -474,6 +385,20 @@ fn stringify_test_vectors(p: &TestVectorParameters) -> String {
         )
         .as_str(),
     );
+    s.push_str(
+        format!(
+            "    \"server_sig_rng\": \"{}\",\n",
+            hex::encode(&p.server_sig_rng)
+        )
+        .as_str(),
+    );
+    s.push_str(
+        format!(
+            "    \"client_sig_rng\": \"{}\",\n",
+            hex::encode(&p.client_sig_rng)
+        )
+        .as_str(),
+    );
     s.push_str(format!("    \"context\": \"{}\",\n", hex::encode(&p.context)).as_str());
     s.push_str(
         format!(
@@ -553,45 +478,37 @@ fn stringify_test_vectors(p: &TestVectorParameters) -> String {
 
 fn generate_parameters<CS: CipherSuite>() -> Result<TestVectorParameters, ProtocolError>
 where
+    <CS::KeyExchange as KeyExchange>::KE2State<CS>: Serialize,
+    <CS::KeyExchange as KeyExchange>::KE3Message: Serialize,
     // ClientRegistration: KgSk + KgPk
-    <OprfGroup<CS> as Group>::ScalarLen: Add<<OprfGroup<CS> as Group>::ElemLen>,
+    <OprfGroup<CS> as voprf::Group>::ScalarLen: Add<<OprfGroup<CS> as voprf::Group>::ElemLen>,
     ClientRegistrationLen<CS>: ArrayLength<u8>,
     // RegistrationResponse: KgPk + KePk
-    <OprfGroup<CS> as Group>::ElemLen: Add<<CS::KeGroup as KeGroup>::PkLen>,
+    <OprfGroup<CS> as voprf::Group>::ElemLen: Add<<KeGroup<CS> as Group>::PkLen>,
     RegistrationResponseLen<CS>: ArrayLength<u8>,
-    // Envelope: Nonce + Hash
-    NonceLen: Add<OutputSize<OprfHash<CS>>>,
-    EnvelopeLen<CS>: ArrayLength<u8>,
     // RegistrationUpload: (KePk + Hash) + Envelope
-    <CS::KeGroup as KeGroup>::PkLen: Add<OutputSize<OprfHash<CS>>>,
-    Sum<<CS::KeGroup as KeGroup>::PkLen, OutputSize<OprfHash<CS>>>:
+    <KeGroup<CS> as Group>::PkLen: Add<OutputSize<OprfHash<CS>>>,
+    Sum<<KeGroup<CS> as Group>::PkLen, OutputSize<OprfHash<CS>>>:
         ArrayLength<u8> + Add<EnvelopeLen<CS>>,
     RegistrationUploadLen<CS>: ArrayLength<u8>,
     // ServerRegistration = RegistrationUpload
-    // Ke1Message: Nonce + KePk
-    NonceLen: Add<<CS::KeGroup as KeGroup>::PkLen>,
-    Ke1MessageLen<CS>: ArrayLength<u8>,
     // CredentialRequest: KgPk + Ke1Message
-    <OprfGroup<CS> as Group>::ElemLen: Add<Ke1MessageLen<CS>>,
+    <CS::KeyExchange as KeyExchange>::KE1Message: Serialize,
+    <OprfGroup<CS> as voprf::Group>::ElemLen: Add<Ke1MessageLen<CS>>,
     CredentialRequestLen<CS>: ArrayLength<u8>,
     // ClientLogin: KgSk + CredentialRequest + Ke1State
-    <OprfGroup<CS> as Group>::ScalarLen: Add<CredentialRequestLen<CS>>,
-    Sum<<OprfGroup<CS> as Group>::ScalarLen, CredentialRequestLen<CS>>:
+    <OprfGroup<CS> as voprf::Group>::ScalarLen: Add<CredentialRequestLen<CS>>,
+    <CS::KeyExchange as KeyExchange>::KE1State: Serialize,
+    Sum<<OprfGroup<CS> as voprf::Group>::ScalarLen, CredentialRequestLen<CS>>:
         ArrayLength<u8> + Add<Ke1StateLen<CS>>,
     ClientLoginLen<CS>: ArrayLength<u8>,
-    // MaskedResponse: (Nonce + Hash) + KePk
-    NonceLen: Add<OutputSize<OprfHash<CS>>>,
-    Sum<NonceLen, OutputSize<OprfHash<CS>>>: ArrayLength<u8> + Add<<CS::KeGroup as KeGroup>::PkLen>,
-    MaskedResponseLen<CS>: ArrayLength<u8>,
     // CredentialResponseWithoutKeLen: (KgPk + Nonce) + MaskedResponse
-    <OprfGroup<CS> as Group>::ElemLen: Add<NonceLen>,
-    Sum<<OprfGroup<CS> as Group>::ElemLen, NonceLen>: ArrayLength<u8> + Add<MaskedResponseLen<CS>>,
+    <OprfGroup<CS> as voprf::Group>::ElemLen: Add<NonceLen>,
+    Sum<<OprfGroup<CS> as voprf::Group>::ElemLen, NonceLen>:
+        ArrayLength<u8> + Add<MaskedResponseLen<CS>>,
     CredentialResponseWithoutKeLen<CS>: ArrayLength<u8>,
-    // Ke2Message: (Nonce + KePk) + Hash
-    NonceLen: Add<<CS::KeGroup as KeGroup>::PkLen>,
-    Sum<NonceLen, <CS::KeGroup as KeGroup>::PkLen>: ArrayLength<u8> + Add<OutputSize<OprfHash<CS>>>,
-    Ke2MessageLen<CS>: ArrayLength<u8>,
     // CredentialResponse: CredentialResponseWithoutKeLen + Ke2Message
+    <CS::KeyExchange as KeyExchange>::KE2Message: Serialize,
     CredentialResponseWithoutKeLen<CS>: Add<Ke2MessageLen<CS>>,
     CredentialResponseLen<CS>: ArrayLength<u8>,
 {
@@ -602,11 +519,11 @@ where
     let mut rng = OsRng;
 
     // Inputs
-    let server_s_kp = KeyPair::<CS::KeGroup>::generate_random::<CS::OprfCs, _>(&mut rng);
-    let server_e_kp = KeyPair::<CS::KeGroup>::generate_random::<CS::OprfCs, _>(&mut rng);
-    let client_s_kp = KeyPair::<CS::KeGroup>::generate_random::<CS::OprfCs, _>(&mut rng);
-    let client_e_kp = KeyPair::<CS::KeGroup>::generate_random::<CS::OprfCs, _>(&mut rng);
-    let fake_kp = KeyPair::<CS::KeGroup>::generate_random::<CS::OprfCs, _>(&mut rng);
+    let server_s_kp = KeyPair::<KeGroup<CS>>::derive_random(&mut rng);
+    let server_e_kp = KeyPair::<KeGroup<CS>>::derive_random(&mut rng);
+    let client_s_kp = KeyPair::<KeGroup<CS>>::derive_random(&mut rng);
+    let client_e_kp = KeyPair::<KeGroup<CS>>::derive_random(&mut rng);
+    let fake_kp = KeyPair::<KeGroup<CS>>::derive_random(&mut rng);
     let credential_identifier = b"credIdentifier";
     let id_u = b"idU";
     let id_s = b"idS";
@@ -624,6 +541,10 @@ where
     rng.fill_bytes(&mut client_nonce);
     let mut server_nonce = [0u8; NonceLen::USIZE];
     rng.fill_bytes(&mut server_nonce);
+    let mut server_sig_rng = GenericArray::<u8, <KeGroup<CS> as Group>::SkLen>::default();
+    rng.fill_bytes(&mut server_sig_rng);
+    let mut client_sig_rng = GenericArray::<u8, <KeGroup<CS> as Group>::SkLen>::default();
+    rng.fill_bytes(&mut client_sig_rng);
 
     let fake_sk: Vec<u8> = fake_kp.private().serialize().to_vec();
     let server_setup = ServerSetup::<CS>::deserialize(
@@ -636,7 +557,7 @@ where
     )
     .unwrap();
 
-    let blinding_factor = <OprfGroup<CS> as Group>::random_scalar(&mut rng);
+    let blinding_factor = <OprfGroup<CS> as voprf::Group>::random_scalar(&mut rng);
     let blinding_factor_bytes = OprfGroup::<CS>::serialize_scalar(blinding_factor);
 
     let mut blinding_factor_registration_rng = CycleRng::new(blinding_factor_bytes.to_vec());
@@ -706,6 +627,7 @@ where
             masking_nonce.to_vec(),
             server_e_kp.private().serialize().to_vec(),
             server_nonce.to_vec(),
+            server_sig_rng.to_vec(),
         ]
         .concat(),
     );
@@ -715,7 +637,7 @@ where
         Some(password_file),
         client_login_start_result.message,
         credential_identifier,
-        ServerLoginStartParameters {
+        ServerLoginParameters {
             context: Some(context),
             identifiers: Identifiers {
                 client: Some(id_u),
@@ -730,6 +652,7 @@ where
     let client_login_finish_result = client_login_start_result
         .state
         .finish(
+            &mut CycleRng::new(client_sig_rng.to_vec()),
             password,
             server_login_start_result.message,
             ClientLoginFinishParameters::new(
@@ -765,6 +688,8 @@ where
         envelope_nonce: envelope_nonce.to_vec(),
         client_nonce: client_nonce.to_vec(),
         server_nonce: server_nonce.to_vec(),
+        server_sig_rng: server_sig_rng.to_vec(),
+        client_sig_rng: client_sig_rng.to_vec(),
         context: context.to_vec(),
         registration_request: registration_request_bytes.to_vec(),
         registration_response: registration_response_bytes.to_vec(),
@@ -797,158 +722,14 @@ fn generate_test_vectors() -> Result<(), ProtocolError> {
         // licenses.\n\
         //\n\
         // To regenerate these test vectors, run:\n\
-        // FULL_TEST_VECTORS_FILE=src/tests/full_test_vectors.rs cargo test --features ristretto255,curve25519 -- generate_test_vectors\n\
+        // FULL_TEST_VECTORS_FILE=src/tests/full_test_vectors.rs cargo test --features curve25519,ecdsa,ed25519 -- generate_test_vectors\n\
+        \n\
+        #![allow(clippy::duplicated_attributes)]\n\
         \n",
     );
 
-    #[cfg(feature = "ristretto255")]
-    {
-        let parameters = generate_parameters::<Ristretto255>()?;
-        output.push_str("#[cfg(feature = \"ristretto255\")]\n");
-        output.push_str(&format!(
-            "pub static TEST_VECTOR_RISTRETTO255: &str = r#\"\n{}\"#;\n",
-            stringify_test_vectors(&parameters)
-        ));
-
-        let parameters = generate_parameters::<Ristretto255P256>()?;
-        output.push_str("#[cfg(feature = \"ristretto255\")]\n");
-        output.push_str(&format!(
-            "pub static TEST_VECTOR_RISTRETTO255_P256: &str = r#\"\n{}\"#;\n",
-            stringify_test_vectors(&parameters)
-        ));
-
-        let parameters = generate_parameters::<Ristretto255P384>()?;
-        output.push_str("#[cfg(feature = \"ristretto255\")]\n");
-        output.push_str(&format!(
-            "pub static TEST_VECTOR_RISTRETTO255_P384: &str = r#\"\n{}\"#;\n",
-            stringify_test_vectors(&parameters)
-        ));
-
-        let parameters = generate_parameters::<Ristretto255P521>()?;
-        output.push_str("#[cfg(feature = \"ristretto255\")]\n");
-        output.push_str(&format!(
-            "pub static TEST_VECTOR_RISTRETTO255_P521: &str = r#\"\n{}\"#;\n",
-            stringify_test_vectors(&parameters)
-        ));
-    }
-
-    let parameters = generate_parameters::<P256>()?;
-    output.push_str(&format!(
-        "pub static TEST_VECTOR_P256: &str = r#\"\n{}\"#;\n",
-        stringify_test_vectors(&parameters)
-    ));
-
-    let parameters = generate_parameters::<P256P384>()?;
-    output.push_str(&format!(
-        "pub static TEST_VECTOR_P256_P384: &str = r#\"\n{}\"#;\n",
-        stringify_test_vectors(&parameters)
-    ));
-
-    let parameters = generate_parameters::<P256P521>()?;
-    output.push_str(&format!(
-        "pub static TEST_VECTOR_P256_P521: &str = r#\"\n{}\"#;\n",
-        stringify_test_vectors(&parameters)
-    ));
-
-    #[cfg(feature = "ristretto255")]
-    {
-        let parameters = generate_parameters::<P256Ristretto255>()?;
-        output.push_str("#[cfg(feature = \"ristretto255\")]\n");
-        output.push_str(&format!(
-            "pub static TEST_VECTOR_P256_RISTRETTO255: &str = r#\"\n{}\"#;\n",
-            stringify_test_vectors(&parameters)
-        ));
-    }
-
-    let parameters = generate_parameters::<P384>()?;
-    output.push_str(&format!(
-        "pub static TEST_VECTOR_P384: &str = r#\"\n{}\"#;\n",
-        stringify_test_vectors(&parameters)
-    ));
-
-    let parameters = generate_parameters::<P384P256>()?;
-    output.push_str(&format!(
-        "pub static TEST_VECTOR_P384_P256: &str = r#\"\n{}\"#;\n",
-        stringify_test_vectors(&parameters)
-    ));
-
-    let parameters = generate_parameters::<P384P521>()?;
-    output.push_str(&format!(
-        "pub static TEST_VECTOR_P384_P521: &str = r#\"\n{}\"#;\n",
-        stringify_test_vectors(&parameters)
-    ));
-
-    #[cfg(feature = "ristretto255")]
-    {
-        let parameters = generate_parameters::<P384Ristretto255>()?;
-        output.push_str("#[cfg(feature = \"ristretto255\")]\n");
-        output.push_str(&format!(
-            "pub static TEST_VECTOR_P384_RISTRETTO255: &str = r#\"\n{}\"#;\n",
-            stringify_test_vectors(&parameters)
-        ));
-    }
-
-    let parameters = generate_parameters::<P521>()?;
-    output.push_str(&format!(
-        "pub static TEST_VECTOR_P521: &str = r#\"\n{}\"#;\n",
-        stringify_test_vectors(&parameters)
-    ));
-
-    let parameters = generate_parameters::<P521P256>()?;
-    output.push_str(&format!(
-        "pub static TEST_VECTOR_P521_P256: &str = r#\"\n{}\"#;\n",
-        stringify_test_vectors(&parameters)
-    ));
-
-    let parameters = generate_parameters::<P521P384>()?;
-    output.push_str(&format!(
-        "pub static TEST_VECTOR_P521_P384: &str = r#\"\n{}\"#;\n",
-        stringify_test_vectors(&parameters)
-    ));
-
-    #[cfg(feature = "ristretto255")]
-    {
-        let parameters = generate_parameters::<P521Ristretto255>()?;
-        output.push_str("#[cfg(feature = \"ristretto255\")]\n");
-        output.push_str(&format!(
-            "pub static TEST_VECTOR_P521_RISTRETTO255: &str = r#\"\n{}\"#;\n",
-            stringify_test_vectors(&parameters)
-        ));
-    }
-
-    #[cfg(feature = "curve25519")]
-    {
-        let parameters = generate_parameters::<Curve25519P256>()?;
-        output.push_str("#[cfg(feature = \"curve25519\")]\n");
-        output.push_str(&format!(
-            "pub static TEST_VECTOR_CURVE25519_P256: &str = r#\"\n{}\"#;\n",
-            stringify_test_vectors(&parameters)
-        ));
-
-        let parameters = generate_parameters::<Curve25519P384>()?;
-        output.push_str("#[cfg(feature = \"curve25519\")]\n");
-        output.push_str(&format!(
-            "pub static TEST_VECTOR_CURVE25519_P384: &str = r#\"\n{}\"#;\n",
-            stringify_test_vectors(&parameters)
-        ));
-
-        let parameters = generate_parameters::<Curve25519P521>()?;
-        output.push_str("#[cfg(feature = \"curve25519\")]\n");
-        output.push_str(&format!(
-            "pub static TEST_VECTOR_CURVE25519_P521: &str = r#\"\n{}\"#;\n",
-            stringify_test_vectors(&parameters)
-        ));
-
-        #[cfg(feature = "ristretto255")]
-        {
-            let parameters = generate_parameters::<Curve25519Ristretto255>()?;
-            output.push_str("#[cfg(all(feature = \"curve25519\", feature = \"ristretto255\"))]\n");
-            output.push_str(&format!(
-                "pub static TEST_VECTOR_CURVE25519_RISTRETTO255: &str = r#\"\n{}\"#;\n",
-                stringify_test_vectors(&parameters)
-            ));
-        }
-    }
+    triple_dh_ciphersuites!(generate!(output));
+    sigma_i_ciphersuites!(generate!(output));
 
     if let Ok(path) = std::env::var("FULL_TEST_VECTORS_FILE") {
         std::fs::write(path, output).unwrap();
@@ -964,7 +745,7 @@ fn test_registration_request() -> Result<(), ProtocolError> {
     fn inner<CS: CipherSuite>(test_vector: &str) -> Result<(), ProtocolError>
     where
         // ClientRegistration: KgSk + KgPk
-        <OprfGroup<CS> as Group>::ScalarLen: Add<<OprfGroup<CS> as Group>::ElemLen>,
+        <OprfGroup<CS> as voprf::Group>::ScalarLen: Add<<OprfGroup<CS> as voprf::Group>::ElemLen>,
         ClientRegistrationLen<CS>: ArrayLength<u8>,
     {
         let parameters = populate_test_vectors(&serde_json::from_str(test_vector).unwrap());
@@ -982,7 +763,8 @@ fn test_registration_request() -> Result<(), ProtocolError> {
         Ok(())
     }
 
-    run_all!(inner);
+    triple_dh_ciphersuites!(run_all!(inner));
+    sigma_i_ciphersuites!(run_all!(inner));
 
     Ok(())
 }
@@ -1013,7 +795,8 @@ fn test_serialization() -> Result<(), ProtocolError> {
         Ok(())
     }
 
-    run_all!(inner);
+    triple_dh_ciphersuites!(run_all!(inner));
+    sigma_i_ciphersuites!(run_all!(inner));
 
     Ok(())
 }
@@ -1023,7 +806,7 @@ fn test_registration_response() -> Result<(), ProtocolError> {
     fn inner<CS: CipherSuite>(test_vector: &str) -> Result<(), ProtocolError>
     where
         // RegistrationResponse: KgPk + KePk
-        <OprfGroup<CS> as Group>::ElemLen: Add<<CS::KeGroup as KeGroup>::PkLen>,
+        <OprfGroup<CS> as voprf::Group>::ElemLen: Add<<KeGroup<CS> as Group>::PkLen>,
         RegistrationResponseLen<CS>: ArrayLength<u8>,
     {
         let parameters = populate_test_vectors(
@@ -1051,7 +834,8 @@ fn test_registration_response() -> Result<(), ProtocolError> {
         Ok(())
     }
 
-    run_all!(inner);
+    triple_dh_ciphersuites!(run_all!(inner));
+    sigma_i_ciphersuites!(run_all!(inner));
 
     Ok(())
 }
@@ -1060,12 +844,9 @@ fn test_registration_response() -> Result<(), ProtocolError> {
 fn test_registration_upload() -> Result<(), ProtocolError> {
     fn inner<CS: CipherSuite>(test_vector: &str) -> Result<(), ProtocolError>
     where
-        // Envelope: Nonce + Hash
-        NonceLen: Add<OutputSize<OprfHash<CS>>>,
-        EnvelopeLen<CS>: ArrayLength<u8>,
         // RegistrationUpload: (KePk + Hash) + Envelope
-        <CS::KeGroup as KeGroup>::PkLen: Add<OutputSize<OprfHash<CS>>>,
-        Sum<<CS::KeGroup as KeGroup>::PkLen, OutputSize<OprfHash<CS>>>:
+        <KeGroup<CS> as Group>::PkLen: Add<OutputSize<OprfHash<CS>>>,
+        Sum<<KeGroup<CS> as Group>::PkLen, OutputSize<OprfHash<CS>>>:
             ArrayLength<u8> + Add<EnvelopeLen<CS>>,
         RegistrationUploadLen<CS>: ArrayLength<u8>,
     {
@@ -1102,7 +883,8 @@ fn test_registration_upload() -> Result<(), ProtocolError> {
         Ok(())
     }
 
-    run_all!(inner);
+    triple_dh_ciphersuites!(run_all!(inner));
+    sigma_i_ciphersuites!(run_all!(inner));
 
     Ok(())
 }
@@ -1111,12 +893,9 @@ fn test_registration_upload() -> Result<(), ProtocolError> {
 fn test_password_file() -> Result<(), ProtocolError> {
     fn inner<CS: CipherSuite>(test_vector: &str) -> Result<(), ProtocolError>
     where
-        // Envelope: Nonce + Hash
-        NonceLen: Add<OutputSize<OprfHash<CS>>>,
-        EnvelopeLen<CS>: ArrayLength<u8>,
         // RegistrationUpload: (KePk + Hash) + Envelope
-        <CS::KeGroup as KeGroup>::PkLen: Add<OutputSize<OprfHash<CS>>>,
-        Sum<<CS::KeGroup as KeGroup>::PkLen, OutputSize<OprfHash<CS>>>:
+        <KeGroup<CS> as Group>::PkLen: Add<OutputSize<OprfHash<CS>>>,
+        Sum<<KeGroup<CS> as Group>::PkLen, OutputSize<OprfHash<CS>>>:
             ArrayLength<u8> + Add<EnvelopeLen<CS>>,
         RegistrationUploadLen<CS>: ArrayLength<u8>,
         // ServerRegistration = RegistrationUpload
@@ -1134,7 +913,8 @@ fn test_password_file() -> Result<(), ProtocolError> {
         Ok(())
     }
 
-    run_all!(inner);
+    triple_dh_ciphersuites!(run_all!(inner));
+    sigma_i_ciphersuites!(run_all!(inner));
 
     Ok(())
 }
@@ -1144,11 +924,13 @@ fn test_credential_request() -> Result<(), ProtocolError> {
     fn inner<CS: CipherSuite>(test_vector: &str) -> Result<(), ProtocolError>
     where
         // CredentialRequest: KgPk + Ke1Message
-        <OprfGroup<CS> as Group>::ElemLen: Add<Ke1MessageLen<CS>>,
+        <CS::KeyExchange as KeyExchange>::KE1Message: Serialize,
+        <OprfGroup<CS> as voprf::Group>::ElemLen: Add<Ke1MessageLen<CS>>,
         CredentialRequestLen<CS>: ArrayLength<u8>,
         // ClientLogin: KgSk + CredentialRequest + Ke1State
-        <OprfGroup<CS> as Group>::ScalarLen: Add<CredentialRequestLen<CS>>,
-        Sum<<OprfGroup<CS> as Group>::ScalarLen, CredentialRequestLen<CS>>:
+        <OprfGroup<CS> as voprf::Group>::ScalarLen: Add<CredentialRequestLen<CS>>,
+        <CS::KeyExchange as KeyExchange>::KE1State: Serialize,
+        Sum<<OprfGroup<CS> as voprf::Group>::ScalarLen, CredentialRequestLen<CS>>:
             ArrayLength<u8> + Add<Ke1StateLen<CS>>,
         ClientLoginLen<CS>: ArrayLength<u8>,
     {
@@ -1174,7 +956,8 @@ fn test_credential_request() -> Result<(), ProtocolError> {
         Ok(())
     }
 
-    run_all!(inner);
+    triple_dh_ciphersuites!(run_all!(inner));
+    sigma_i_ciphersuites!(run_all!(inner));
 
     Ok(())
 }
@@ -1183,17 +966,15 @@ fn test_credential_request() -> Result<(), ProtocolError> {
 fn test_credential_response() -> Result<(), ProtocolError> {
     fn inner<CS: CipherSuite>(test_vector: &str) -> Result<(), ProtocolError>
     where
-        // MaskedResponse: (Nonce + Hash) + KePk
-        NonceLen: Add<OutputSize<OprfHash<CS>>>,
-        Sum<NonceLen, OutputSize<OprfHash<CS>>>:
-            ArrayLength<u8> + Add<<CS::KeGroup as KeGroup>::PkLen>,
-        MaskedResponseLen<CS>: ArrayLength<u8>,
+        <CS::KeyExchange as KeyExchange>::KE1Message: Deserialize,
+        <CS::KeyExchange as KeyExchange>::KE2State<CS>: Serialize,
         // CredentialResponseWithoutKeLen: (KgPk + Nonce) + MaskedResponse
-        <OprfGroup<CS> as Group>::ElemLen: Add<NonceLen>,
-        Sum<<OprfGroup<CS> as Group>::ElemLen, NonceLen>:
+        <OprfGroup<CS> as voprf::Group>::ElemLen: Add<NonceLen>,
+        Sum<<OprfGroup<CS> as voprf::Group>::ElemLen, NonceLen>:
             ArrayLength<u8> + Add<MaskedResponseLen<CS>>,
         CredentialResponseWithoutKeLen<CS>: ArrayLength<u8>,
         // CredentialResponse: CredentialResponseWithoutKeLen + Ke2Message
+        <CS::KeyExchange as KeyExchange>::KE2Message: Serialize,
         CredentialResponseWithoutKeLen<CS>: Add<Ke2MessageLen<CS>>,
         CredentialResponseLen<CS>: ArrayLength<u8>,
     {
@@ -1214,6 +995,7 @@ fn test_credential_response() -> Result<(), ProtocolError> {
                 parameters.masking_nonce,
                 parameters.server_e_sk,
                 parameters.server_nonce,
+                parameters.server_sig_rng,
             ]
             .concat(),
         );
@@ -1223,7 +1005,7 @@ fn test_credential_response() -> Result<(), ProtocolError> {
             Some(ServerRegistration::deserialize(&parameters.password_file)?),
             CredentialRequest::<CS>::deserialize(&parameters.credential_request)?,
             &parameters.credential_identifier,
-            ServerLoginStartParameters {
+            ServerLoginParameters {
                 context: Some(&parameters.context),
                 identifiers: Identifiers {
                     client: Some(&parameters.id_u),
@@ -1242,7 +1024,8 @@ fn test_credential_response() -> Result<(), ProtocolError> {
         Ok(())
     }
 
-    run_all!(inner);
+    triple_dh_ciphersuites!(run_all!(inner));
+    sigma_i_ciphersuites!(run_all!(inner));
 
     Ok(())
 }
@@ -1251,16 +1034,16 @@ fn test_credential_response() -> Result<(), ProtocolError> {
 fn test_credential_finalization() -> Result<(), ProtocolError> {
     fn inner<CS: CipherSuite>(test_vector: &str) -> Result<(), ProtocolError>
     where
-        // MaskedResponse: (Nonce + Hash) + KePk
-        NonceLen: Add<OutputSize<OprfHash<CS>>>,
-        Sum<NonceLen, OutputSize<OprfHash<CS>>>:
-            ArrayLength<u8> + Add<<CS::KeGroup as KeGroup>::PkLen>,
-        MaskedResponseLen<CS>: ArrayLength<u8>,
+        <CS::KeyExchange as KeyExchange>::KE1Message: Deserialize + Serialize,
+        <CS::KeyExchange as KeyExchange>::KE1State: Deserialize + Serialize,
+        <CS::KeyExchange as KeyExchange>::KE2Message: Deserialize + Serialize,
+        <CS::KeyExchange as KeyExchange>::KE3Message: Serialize,
     {
         let parameters = populate_test_vectors(&serde_json::from_str(test_vector).unwrap());
 
         let client_login_finish_result =
             ClientLogin::<CS>::deserialize(&parameters.client_login_state)?.finish(
+                &mut CycleRng::new(parameters.client_sig_rng),
                 &parameters.password,
                 CredentialResponse::<CS>::deserialize(&parameters.credential_response)?,
                 ClientLoginFinishParameters::new(
@@ -1293,20 +1076,32 @@ fn test_credential_finalization() -> Result<(), ProtocolError> {
         Ok(())
     }
 
-    run_all!(inner);
+    triple_dh_ciphersuites!(run_all!(inner));
+    sigma_i_ciphersuites!(run_all!(inner));
 
     Ok(())
 }
 
 #[test]
 fn test_server_login_finish() -> Result<(), ProtocolError> {
-    fn inner<CS: CipherSuite>(test_vector: &str) -> Result<(), ProtocolError> {
+    fn inner<CS: CipherSuite>(test_vector: &str) -> Result<(), ProtocolError>
+    where
+        <CS::KeyExchange as KeyExchange>::KE2State<CS>: Deserialize,
+        <CS::KeyExchange as KeyExchange>::KE3Message: Deserialize,
+    {
         let parameters = populate_test_vectors(&serde_json::from_str(test_vector).unwrap());
 
         let server_login_result = ServerLogin::<CS>::deserialize(&parameters.server_login_state)?
-            .finish(CredentialFinalization::deserialize(
-            &parameters.credential_finalization,
-        )?)?;
+            .finish(
+            CredentialFinalization::deserialize(&parameters.credential_finalization)?,
+            ServerLoginParameters {
+                context: Some(&parameters.context),
+                identifiers: Identifiers {
+                    client: Some(&parameters.id_u),
+                    server: Some(&parameters.id_s),
+                },
+            },
+        )?;
 
         assert_eq!(
             hex::encode(parameters.session_key),
@@ -1316,7 +1111,8 @@ fn test_server_login_finish() -> Result<(), ProtocolError> {
         Ok(())
     }
 
-    run_all!(inner);
+    triple_dh_ciphersuites!(run_all!(inner));
+    sigma_i_ciphersuites!(run_all!(inner));
 
     Ok(())
 }
@@ -1325,13 +1121,7 @@ fn test_complete_flow<CS: CipherSuite>(
     _test_vector: &str,
     registration_password: &[u8],
     login_password: &[u8],
-) -> Result<(), ProtocolError>
-where
-    // MaskedResponse: (Nonce + Hash) + KePk
-    NonceLen: Add<OutputSize<OprfHash<CS>>>,
-    Sum<NonceLen, OutputSize<OprfHash<CS>>>: ArrayLength<u8> + Add<<CS::KeGroup as KeGroup>::PkLen>,
-    MaskedResponseLen<CS>: ArrayLength<u8>,
-{
+) -> Result<(), ProtocolError> {
     let credential_identifier = b"credentialIdentifier";
     let mut client_rng = OsRng;
     let mut server_rng = OsRng;
@@ -1357,10 +1147,11 @@ where
         Some(p_file),
         client_login_start_result.message,
         credential_identifier,
-        ServerLoginStartParameters::default(),
+        ServerLoginParameters::default(),
     )?;
 
     let client_login_result = client_login_start_result.state.finish(
+        &mut client_rng,
         login_password,
         server_login_start_result.message,
         ClientLoginFinishParameters::default(),
@@ -1368,9 +1159,10 @@ where
 
     if hex::encode(registration_password) == hex::encode(login_password) {
         let client_login_finish_result = client_login_result?;
-        let server_login_finish_result = server_login_start_result
-            .state
-            .finish(client_login_finish_result.message)?;
+        let server_login_finish_result = server_login_start_result.state.finish(
+            client_login_finish_result.message,
+            ServerLoginParameters::default(),
+        )?;
 
         assert_eq!(
             hex::encode(&server_login_finish_result.session_key),
@@ -1392,13 +1184,31 @@ where
 
 #[test]
 fn test_complete_flow_success() -> Result<(), ProtocolError> {
-    run_all!(test_complete_flow, b"good password", b"good password");
+    triple_dh_ciphersuites!(run_all!(
+        test_complete_flow,
+        b"good password",
+        b"good password"
+    ));
+    sigma_i_ciphersuites!(run_all!(
+        test_complete_flow,
+        b"good password",
+        b"good password"
+    ));
     Ok(())
 }
 
 #[test]
 fn test_complete_flow_fail() -> Result<(), ProtocolError> {
-    run_all!(test_complete_flow, b"good password", b"bad password");
+    triple_dh_ciphersuites!(run_all!(
+        test_complete_flow,
+        b"good password",
+        b"bad password"
+    ));
+    sigma_i_ciphersuites!(run_all!(
+        test_complete_flow,
+        b"good password",
+        b"bad password"
+    ));
     Ok(())
 }
 
@@ -1413,14 +1223,13 @@ fn test_zeroize_client_registration_start() -> Result<(), ProtocolError> {
 
         let mut state = client_registration_start_result.state;
         unsafe { ptr::drop_in_place(&mut state) };
-        for byte in state.to_vec() {
-            assert_eq!(byte, 0);
-        }
+        state.assert_zeroized();
 
         Ok(())
     }
 
-    run_all!(inner);
+    triple_dh_ciphersuites!(run_all!(inner));
+    sigma_i_ciphersuites!(run_all!(inner));
 
     Ok(())
 }
@@ -1447,14 +1256,13 @@ fn test_zeroize_client_registration_finish() -> Result<(), ProtocolError> {
 
         let mut state = client_registration_finish_result.state;
         unsafe { ptr::drop_in_place(&mut state) };
-        for byte in state.to_vec() {
-            assert_eq!(byte, 0);
-        }
+        state.assert_zeroized();
 
         Ok(())
     }
 
-    run_all!(inner);
+    triple_dh_ciphersuites!(run_all!(inner));
+    sigma_i_ciphersuites!(run_all!(inner));
 
     Ok(())
 }
@@ -1463,12 +1271,10 @@ fn test_zeroize_client_registration_finish() -> Result<(), ProtocolError> {
 fn test_zeroize_server_registration_finish() -> Result<(), ProtocolError> {
     fn inner<CS: CipherSuite>(_test_vector: &str) -> Result<(), ProtocolError>
     where
-        // Envelope: Nonce + Hash
-        NonceLen: Add<OutputSize<OprfHash<CS>>>,
-        EnvelopeLen<CS>: ArrayLength<u8>,
+        <KeGroup<CS> as Group>::Pk: AssertZeroized,
         // RegistrationUpload: (KePk + Hash) + Envelope
-        <CS::KeGroup as KeGroup>::PkLen: Add<OutputSize<OprfHash<CS>>>,
-        Sum<<CS::KeGroup as KeGroup>::PkLen, OutputSize<OprfHash<CS>>>:
+        <KeGroup<CS> as Group>::PkLen: Add<OutputSize<OprfHash<CS>>>,
+        Sum<<KeGroup<CS> as Group>::PkLen, OutputSize<OprfHash<CS>>>:
             ArrayLength<u8> + Add<EnvelopeLen<CS>>,
         RegistrationUploadLen<CS>: ArrayLength<u8>,
         // ServerRegistration = RegistrationUpload
@@ -1492,61 +1298,38 @@ fn test_zeroize_server_registration_finish() -> Result<(), ProtocolError> {
         let p_file = ServerRegistration::finish(client_registration_finish_result.message);
 
         let mut state = p_file;
-        util::drop_manually(&mut state);
-        util::test_zeroized(&mut state.0.envelope.mode);
-        util::test_zeroized(&mut state.0.masking_key);
+        unsafe { ptr::drop_in_place(&mut state) };
+        state.assert_zeroized();
 
         Ok(())
     }
 
-    run_all!(inner);
+    triple_dh_ciphersuites!(run_all!(inner));
+    sigma_i_ciphersuites!(run_all!(inner));
 
     Ok(())
 }
 
 #[test]
 fn test_zeroize_client_login_start() -> Result<(), ProtocolError> {
-    fn inner<CS: CipherSuite<KeyExchange = TripleDh>>(
-        _test_vector: &str,
-    ) -> Result<(), ProtocolError>
+    fn inner<CS: CipherSuite>(_test_vector: &str) -> Result<(), ProtocolError>
     where
-        <CS::KeGroup as KeGroup>::Sk: DiffieHellman<CS::KeGroup>,
-        // CredentialRequest: KgPk + Ke1Message
-        <OprfGroup<CS> as Group>::ElemLen: Add<Sum<NonceLen, <CS::KeGroup as KeGroup>::PkLen>>,
-        CredentialRequestLen<CS>: ArrayLength<u8>,
-        // Ke1State: KeSk + Nonce
-        <CS::KeGroup as KeGroup>::SkLen: Add<NonceLen>,
-        Sum<<CS::KeGroup as KeGroup>::SkLen, NonceLen>: ArrayLength<u8>,
-        // Ke1Message: Nonce + KePk
-        NonceLen: Add<<CS::KeGroup as KeGroup>::PkLen>,
-        Sum<NonceLen, <CS::KeGroup as KeGroup>::PkLen>: ArrayLength<u8>,
-        // Ke2State: (Hash + Hash) + Hash
-        OutputSize<OprfHash<CS>>: Add<OutputSize<OprfHash<CS>>>,
-        Sum<OutputSize<OprfHash<CS>>, OutputSize<OprfHash<CS>>>:
-            ArrayLength<u8> + Add<OutputSize<OprfHash<CS>>>,
-        Sum<Sum<OutputSize<OprfHash<CS>>, OutputSize<OprfHash<CS>>>, OutputSize<OprfHash<CS>>>:
-            ArrayLength<u8>,
-        // Ke2Message: (Nonce + KePk) + Hash
-        NonceLen: Add<<CS::KeGroup as KeGroup>::PkLen>,
-        Sum<NonceLen, <CS::KeGroup as KeGroup>::PkLen>:
-            ArrayLength<u8> + Add<OutputSize<OprfHash<CS>>>,
-        Sum<Sum<NonceLen, <CS::KeGroup as KeGroup>::PkLen>, OutputSize<OprfHash<CS>>>:
-            ArrayLength<u8>,
+        <CS::KeyExchange as KeyExchange>::KE1State: AssertZeroized,
+        <CS::KeyExchange as KeyExchange>::KE1Message: AssertZeroized,
     {
         let mut client_rng = OsRng;
         let client_login_start_result =
             ClientLogin::<CS>::start(&mut client_rng, STR_PASSWORD.as_bytes())?;
 
         let mut state = client_login_start_result.state;
-        util::drop_manually(&mut state);
-        util::test_zeroized(&mut state.oprf_client);
-        util::test_zeroized(&mut state.ke1_state);
-        util::test_zeroized(&mut state.credential_request.ke1_message.client_nonce);
+        unsafe { ptr::drop_in_place(&mut state) };
+        state.assert_zeroized();
 
         Ok(())
     }
 
-    run_all!(inner);
+    triple_dh_ciphersuites!(run_all!(inner));
+    sigma_i_ciphersuites!(run_all!(inner));
 
     Ok(())
 }
@@ -1555,11 +1338,8 @@ fn test_zeroize_client_login_start() -> Result<(), ProtocolError> {
 fn test_zeroize_server_login_start() -> Result<(), ProtocolError> {
     fn inner<CS: CipherSuite>(_test_vector: &str) -> Result<(), ProtocolError>
     where
-        // MaskedResponse: (Nonce + Hash) + KePk
-        NonceLen: Add<OutputSize<OprfHash<CS>>>,
-        Sum<NonceLen, OutputSize<OprfHash<CS>>>:
-            ArrayLength<u8> + Add<<CS::KeGroup as KeGroup>::PkLen>,
-        MaskedResponseLen<CS>: ArrayLength<u8>,
+        <KeGroup<CS> as Group>::Pk: AssertZeroized,
+        <CS::KeyExchange as KeyExchange>::KE2State<CS>: Serialize + AssertZeroized,
     {
         let mut client_rng = OsRng;
         let mut server_rng = OsRng;
@@ -1586,56 +1366,28 @@ fn test_zeroize_server_login_start() -> Result<(), ProtocolError> {
             Some(p_file),
             client_login_start_result.message,
             STR_CREDENTIAL_IDENTIFIER.as_bytes(),
-            ServerLoginStartParameters::default(),
+            ServerLoginParameters::default(),
         )?;
 
         let mut state = server_login_start_result.state;
         unsafe { ptr::drop_in_place(&mut state) };
-        for byte in state.serialize() {
-            assert_eq!(byte, 0);
-        }
+        state.assert_zeroized();
 
         Ok(())
     }
 
-    run_all!(inner);
+    triple_dh_ciphersuites!(run_all!(inner));
+    sigma_i_ciphersuites!(run_all!(inner));
 
     Ok(())
 }
 
 #[test]
 fn test_zeroize_client_login_finish() -> Result<(), ProtocolError> {
-    fn inner<CS: CipherSuite<KeyExchange = TripleDh>>(
-        _test_vector: &str,
-    ) -> Result<(), ProtocolError>
+    fn inner<CS: CipherSuite>(_test_vector: &str) -> Result<(), ProtocolError>
     where
-        <CS::KeGroup as KeGroup>::Sk: DiffieHellman<CS::KeGroup>,
-        // MaskedResponse: (Nonce + Hash) + KePk
-        NonceLen: Add<OutputSize<OprfHash<CS>>>,
-        Sum<NonceLen, OutputSize<OprfHash<CS>>>:
-            ArrayLength<u8> + Add<<CS::KeGroup as KeGroup>::PkLen>,
-        MaskedResponseLen<CS>: ArrayLength<u8>,
-        // CredentialRequest: KgPk + Ke1Message
-        <OprfGroup<CS> as Group>::ElemLen: Add<Sum<NonceLen, <CS::KeGroup as KeGroup>::PkLen>>,
-        CredentialRequestLen<CS>: ArrayLength<u8>,
-        // Ke1State: KeSk + Nonce
-        <CS::KeGroup as KeGroup>::SkLen: Add<NonceLen>,
-        Sum<<CS::KeGroup as KeGroup>::SkLen, NonceLen>: ArrayLength<u8>,
-        // Ke1Message: Nonce + KePk
-        NonceLen: Add<<CS::KeGroup as KeGroup>::PkLen>,
-        Sum<NonceLen, <CS::KeGroup as KeGroup>::PkLen>: ArrayLength<u8>,
-        // Ke2State: (Hash + Hash) + Hash
-        OutputSize<OprfHash<CS>>: Add<OutputSize<OprfHash<CS>>>,
-        Sum<OutputSize<OprfHash<CS>>, OutputSize<OprfHash<CS>>>:
-            ArrayLength<u8> + Add<OutputSize<OprfHash<CS>>>,
-        Sum<Sum<OutputSize<OprfHash<CS>>, OutputSize<OprfHash<CS>>>, OutputSize<OprfHash<CS>>>:
-            ArrayLength<u8>,
-        // Ke2Message: (Nonce + KePk) + Hash
-        NonceLen: Add<<CS::KeGroup as KeGroup>::PkLen>,
-        Sum<NonceLen, <CS::KeGroup as KeGroup>::PkLen>:
-            ArrayLength<u8> + Add<OutputSize<OprfHash<CS>>>,
-        Sum<Sum<NonceLen, <CS::KeGroup as KeGroup>::PkLen>, OutputSize<OprfHash<CS>>>:
-            ArrayLength<u8>,
+        <CS::KeyExchange as KeyExchange>::KE1State: AssertZeroized,
+        <CS::KeyExchange as KeyExchange>::KE1Message: AssertZeroized,
     {
         let mut client_rng = OsRng;
         let mut server_rng = OsRng;
@@ -1662,24 +1414,24 @@ fn test_zeroize_client_login_finish() -> Result<(), ProtocolError> {
             Some(p_file),
             client_login_start_result.message,
             STR_CREDENTIAL_IDENTIFIER.as_bytes(),
-            ServerLoginStartParameters::default(),
+            ServerLoginParameters::default(),
         )?;
         let client_login_finish_result = client_login_start_result.state.finish(
+            &mut client_rng,
             STR_PASSWORD.as_bytes(),
             server_login_start_result.message,
             ClientLoginFinishParameters::default(),
         )?;
 
         let mut state = client_login_finish_result.state;
-        util::drop_manually(&mut state);
-        util::test_zeroized(&mut state.oprf_client);
-        util::test_zeroized(&mut state.ke1_state);
-        util::test_zeroized(&mut state.credential_request.ke1_message.client_nonce);
+        unsafe { ptr::drop_in_place(&mut state) };
+        state.assert_zeroized();
 
         Ok(())
     }
 
-    run_all!(inner);
+    triple_dh_ciphersuites!(run_all!(inner));
+    sigma_i_ciphersuites!(run_all!(inner));
 
     Ok(())
 }
@@ -1688,11 +1440,8 @@ fn test_zeroize_client_login_finish() -> Result<(), ProtocolError> {
 fn test_zeroize_server_login_finish() -> Result<(), ProtocolError> {
     fn inner<CS: CipherSuite>(_test_vector: &str) -> Result<(), ProtocolError>
     where
-        // MaskedResponse: (Nonce + Hash) + KePk
-        NonceLen: Add<OutputSize<OprfHash<CS>>>,
-        Sum<NonceLen, OutputSize<OprfHash<CS>>>:
-            ArrayLength<u8> + Add<<CS::KeGroup as KeGroup>::PkLen>,
-        MaskedResponseLen<CS>: ArrayLength<u8>,
+        <KeGroup<CS> as Group>::Pk: AssertZeroized,
+        <CS::KeyExchange as KeyExchange>::KE2State<CS>: Serialize + AssertZeroized,
     {
         let mut client_rng = OsRng;
         let mut server_rng = OsRng;
@@ -1719,27 +1468,28 @@ fn test_zeroize_server_login_finish() -> Result<(), ProtocolError> {
             Some(p_file),
             client_login_start_result.message,
             STR_CREDENTIAL_IDENTIFIER.as_bytes(),
-            ServerLoginStartParameters::default(),
+            ServerLoginParameters::default(),
         )?;
         let client_login_finish_result = client_login_start_result.state.finish(
+            &mut client_rng,
             STR_PASSWORD.as_bytes(),
             server_login_start_result.message,
             ClientLoginFinishParameters::default(),
         )?;
-        let server_login_finish_result = server_login_start_result
-            .state
-            .finish(client_login_finish_result.message)?;
+        let server_login_finish_result = server_login_start_result.state.finish(
+            client_login_finish_result.message,
+            ServerLoginParameters::default(),
+        )?;
 
         let mut state = server_login_finish_result.state;
         unsafe { ptr::drop_in_place(&mut state) };
-        for byte in state.serialize() {
-            assert_eq!(byte, 0);
-        }
+        state.assert_zeroized();
 
         Ok(())
     }
 
-    run_all!(inner);
+    triple_dh_ciphersuites!(run_all!(inner));
+    sigma_i_ciphersuites!(run_all!(inner));
 
     Ok(())
 }
@@ -1778,7 +1528,8 @@ fn test_scalar_always_nonzero() -> Result<(), ProtocolError> {
         Ok(())
     }
 
-    run_all!(inner);
+    triple_dh_ciphersuites!(run_all!(inner));
+    sigma_i_ciphersuites!(run_all!(inner));
 
     Ok(())
 }
@@ -1822,21 +1573,15 @@ fn test_reflected_value_error_registration() -> Result<(), ProtocolError> {
         Ok(())
     }
 
-    run_all!(inner);
+    triple_dh_ciphersuites!(run_all!(inner));
+    sigma_i_ciphersuites!(run_all!(inner));
 
     Ok(())
 }
 
 #[test]
 fn test_reflected_value_error_login() -> Result<(), ProtocolError> {
-    fn inner<CS: CipherSuite>(_test_vector: &str) -> Result<(), ProtocolError>
-    where
-        // MaskedResponse: (Nonce + Hash) + KePk
-        NonceLen: Add<OutputSize<OprfHash<CS>>>,
-        Sum<NonceLen, OutputSize<OprfHash<CS>>>:
-            ArrayLength<u8> + Add<<CS::KeGroup as KeGroup>::PkLen>,
-        MaskedResponseLen<CS>: ArrayLength<u8>,
-    {
+    fn inner<CS: CipherSuite>(_test_vector: &str) -> Result<(), ProtocolError> {
         let credential_identifier = b"credentialIdentifier";
         let password = b"password";
         let mut client_rng = OsRng;
@@ -1867,7 +1612,7 @@ fn test_reflected_value_error_login() -> Result<(), ProtocolError> {
             Some(p_file),
             client_login_start_result.message,
             credential_identifier,
-            ServerLoginStartParameters::default(),
+            ServerLoginParameters::default(),
         )?;
 
         let reflected_credential_response = server_login_start_result
@@ -1875,6 +1620,7 @@ fn test_reflected_value_error_login() -> Result<(), ProtocolError> {
             .set_evaluation_element_for_testing(alpha);
 
         let client_login_result = client_login_start_result.state.finish(
+            &mut client_rng,
             password,
             reflected_credential_response,
             ClientLoginFinishParameters::default(),
@@ -1887,7 +1633,8 @@ fn test_reflected_value_error_login() -> Result<(), ProtocolError> {
         Ok(())
     }
 
-    run_all!(inner);
+    triple_dh_ciphersuites!(run_all!(inner));
+    sigma_i_ciphersuites!(run_all!(inner));
 
     Ok(())
 }
