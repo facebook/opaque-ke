@@ -190,7 +190,7 @@ impl<G: Group> PrivateKeySerialization<G> for PrivateKey<G> {
         serialize = "G::Pk: serde::Serialize"
     ))
 )]
-#[derive_where(Clone, ZeroizeOnDrop)]
+#[derive_where(Clone)]
 #[derive_where(Debug, Eq, Hash, Ord, PartialEq, PartialOrd; G::Pk)]
 pub struct PublicKey<G: Group + ?Sized>(G::Pk);
 

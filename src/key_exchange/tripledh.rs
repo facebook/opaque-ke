@@ -109,6 +109,7 @@ where
     Le<<H::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
 {
     server_nonce: GenericArray<u8, NonceLen>,
+    #[derive_where(skip(Zeroize))]
     server_e_pk: PublicKey<G>,
     mac: Output<H>,
 }
@@ -375,6 +376,8 @@ where
     }
 }
 
+/// TODO: implement via derive after hash crates get `Zeroize` support in
+/// `digest` v11.
 impl<G: Group, H: Hash> Drop for Ke2Builder<G, H>
 where
     H::Core: ProxyHash,
@@ -382,21 +385,17 @@ where
     Le<<H::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
 {
     fn drop(&mut self) {
-        struct AssertZeroizeOnDrop<'a, T: ZeroizeOnDrop>(#[allow(unused)] &'a T);
-
         let Self {
             server_nonce,
             transcript_hasher,
-            client_e_pk,
-            server_e_pk,
+            client_e_pk: _,
+            server_e_pk: _,
             shared_secret_1,
             shared_secret_3,
         } = self;
 
         server_nonce.zeroize();
         transcript_hasher.reset();
-        let _ = AssertZeroizeOnDrop(client_e_pk);
-        let _ = AssertZeroizeOnDrop(server_e_pk);
         shared_secret_1.zeroize();
         shared_secret_3.zeroize();
     }

@@ -15,13 +15,11 @@ use elliptic_curve::group::GroupEncoding;
 use elliptic_curve::ops::MulByGenerator;
 use elliptic_curve::sec1::{ModulusSize, ToEncodedPoint};
 use elliptic_curve::{
-    CurveArithmetic, FieldBytesSize, Group as _, NonZeroScalar, ProjectivePoint, Scalar, SecretKey,
-    point,
+    CurveArithmetic, FieldBytesSize, NonZeroScalar, ProjectivePoint, Scalar, SecretKey, point,
 };
 use generic_array::GenericArray;
 use rand::{CryptoRng, RngCore};
 use voprf::Mode;
-use zeroize::Zeroize;
 
 use super::{Group, STR_OPAQUE_DERIVE_AUTH_KEY_PAIR};
 use crate::errors::{InternalError, ProtocolError};
@@ -102,8 +100,8 @@ where
     }
 }
 
-/// Wrapper around [`NonIdentity`](point::NonIdentity) to implement [`Zeroize`].
-// TODO: remove after https://github.com/RustCrypto/traits/pull/1832.
+/// Wrapper around [`NonIdentity`](point::NonIdentity) to [`Eq`].
+// TODO: remove after https://github.com/RustCrypto/traits/pull/1834.
 #[derive_where(Clone, Copy)]
 #[cfg_attr(
     feature = "serde",
@@ -133,9 +131,3 @@ impl<G: CurveArithmetic> PartialEq for NonIdentity<G> {
 }
 
 impl<G: CurveArithmetic> Eq for NonIdentity<G> {}
-
-impl<G: CurveArithmetic> Zeroize for NonIdentity<G> {
-    fn zeroize(&mut self) {
-        self.0 = point::NonIdentity::new(ProjectivePoint::<G>::generator()).unwrap();
-    }
-}
