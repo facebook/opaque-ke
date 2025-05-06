@@ -50,7 +50,7 @@ static STR_OPAQUE: &[u8] = b"OPAQUE-";
 /// [`TripleDh`](crate::TripleDh) and [`SigmaI`](crate::SigmaI).
 pub trait DiffieHellman<G: Group> {
     /// Diffie-Hellman key exchange.
-    fn diffie_hellman(self, pk: &G::Pk) -> GenericArray<u8, G::PkLen>;
+    fn diffie_hellman(&self, pk: &G::Pk) -> GenericArray<u8, G::PkLen>;
 }
 
 /// The client state produced after the first key exchange message

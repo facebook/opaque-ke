@@ -38,7 +38,7 @@ where
 
     type PkLen = <FieldBytesSize<Self> as ModulusSize>::CompressedPointSize;
 
-    type Sk = NonZeroScalar<Self>;
+    type Sk = SecretKey<Self>;
 
     type SkLen = FieldBytesSize<Self>;
 
@@ -54,7 +54,7 @@ where
     }
 
     fn random_sk<R: RngCore + CryptoRng>(rng: &mut R) -> Self::Sk {
-        SecretKey::<Self>::random(rng).to_nonzero_scalar()
+        SecretKey::<Self>::random(rng)
     }
 
     fn derive_scalar(seed: GenericArray<u8, Self::SkLen>) -> Result<Self::Sk, InternalError> {
@@ -62,29 +62,31 @@ where
             .map(|scalar| {
                 NonZeroScalar::new(scalar).expect("`voprf::derive_key()` returned a zero scalar")
             })
+            .map(SecretKey::from)
             .map_err(InternalError::from)
     }
 
-    fn public_key(sk: Self::Sk) -> Self::Pk {
+    fn public_key(sk: &Self::Sk) -> Self::Pk {
         // Non-panicking version in https://github.com/RustCrypto/traits/pull/1833.
         NonIdentity(
-            point::NonIdentity::new(ProjectivePoint::<Self>::mul_by_generator(&*sk))
-                .expect("multiplying with a non-zero scalar can never yield the identity element"),
+            point::NonIdentity::new(ProjectivePoint::<Self>::mul_by_generator(
+                &sk.to_nonzero_scalar(),
+            ))
+            .expect("multiplying with a non-zero scalar can never yield the identity element"),
         )
     }
 
-    fn serialize_sk(sk: Self::Sk) -> GenericArray<u8, Self::SkLen> {
-        sk.into()
+    fn serialize_sk(sk: &Self::Sk) -> GenericArray<u8, Self::SkLen> {
+        sk.to_bytes()
     }
 
     fn deserialize_take_sk(bytes: &mut &[u8]) -> Result<Self::Sk, ProtocolError> {
         SecretKey::<Self>::from_bytes(&bytes.take_array("secret key")?)
-            .map(|secret_key| secret_key.to_nonzero_scalar())
             .map_err(|_| ProtocolError::SerializationError)
     }
 }
 
-impl<G> DiffieHellman<G> for NonZeroScalar<G>
+impl<G> DiffieHellman<G> for SecretKey<G>
 where
     G: CurveArithmetic + voprf::CipherSuite<Group = G> + voprf::Group<Scalar = Scalar<G>>,
     FieldBytesSize<G>: ModulusSize,
@@ -93,10 +95,14 @@ where
         > + ToEncodedPoint<G>,
 {
     fn diffie_hellman(
-        self,
+        &self,
         pk: &NonIdentity<G>,
     ) -> GenericArray<u8, <FieldBytesSize<G> as ModulusSize>::CompressedPointSize> {
-        GenericArray::clone_from_slice((pk.0 * self).to_encoded_point(true).as_bytes())
+        GenericArray::clone_from_slice(
+            (pk.0 * self.to_nonzero_scalar())
+                .to_encoded_point(true)
+                .as_bytes(),
+        )
     }
 }
 
