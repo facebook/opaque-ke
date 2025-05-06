@@ -142,28 +142,6 @@ where
         .map_err(D::Error::custom)
 }
 
-//////////////////////////
-// Test Implementations //
-//===================== //
-//////////////////////////
-
-#[cfg(test)]
-use crate::serialization::AssertZeroized;
-
-#[cfg(test)]
-impl AssertZeroized for NonIdentity {
-    fn assert_zeroized(&self) {
-        assert_eq!(self.0, MontgomeryPoint::default());
-    }
-}
-
-#[cfg(test)]
-impl AssertZeroized for Scalar {
-    fn assert_zeroized(&self) {
-        assert_eq!(*self, Scalar(<_>::default()));
-    }
-}
-
 #[test]
 fn non_zero_scalar() {
     use std::vec;

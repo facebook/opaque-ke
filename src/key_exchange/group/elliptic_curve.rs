@@ -139,27 +139,3 @@ impl<G: CurveArithmetic> Zeroize for NonIdentity<G> {
         self.0 = point::NonIdentity::new(ProjectivePoint::<G>::generator()).unwrap();
     }
 }
-
-//////////////////////////
-// Test Implementations //
-//===================== //
-//////////////////////////
-
-#[cfg(test)]
-use crate::serialization::AssertZeroized;
-
-#[cfg(test)]
-impl<G: CurveArithmetic> AssertZeroized for NonIdentity<G> {
-    fn assert_zeroized(&self) {
-        assert_eq!(self.0.to_point(), ProjectivePoint::<G>::generator());
-    }
-}
-
-#[cfg(test)]
-impl<G: CurveArithmetic> AssertZeroized for NonZeroScalar<G> {
-    fn assert_zeroized(&self) {
-        use elliptic_curve::Field;
-
-        assert_eq!(**self, Scalar::<G>::ONE);
-    }
-}

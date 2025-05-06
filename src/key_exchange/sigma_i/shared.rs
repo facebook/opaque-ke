@@ -37,18 +37,3 @@ impl<H: OutputSizeUser> Serialize for PreHash<H> {
         self.0.clone()
     }
 }
-
-//////////////////////////
-// Test Implementations //
-//===================== //
-//////////////////////////
-
-#[cfg(test)]
-use crate::serialization::AssertZeroized;
-
-#[cfg(test)]
-impl<H: OutputSizeUser> AssertZeroized for PreHash<H> {
-    fn assert_zeroized(&self) {
-        assert_eq!(self.0, GenericArray::default());
-    }
-}

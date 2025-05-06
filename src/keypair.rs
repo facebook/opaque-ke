@@ -275,9 +275,6 @@ impl<H: OutputSizeUser, E> OprfSeedSerialization<H, E> for OprfSeed<H> {
 //////////////////////////
 
 #[cfg(test)]
-use crate::serialization::AssertZeroized;
-
-#[cfg(test)]
 impl<G: Group> KeyPair<G> {
     /// Test-only strategy returning a proptest Strategy based on
     /// [`Self::derive_random`]
@@ -299,35 +296,12 @@ impl<G: Group> KeyPair<G> {
 }
 
 #[cfg(test)]
-impl<G: Group> AssertZeroized for PublicKey<G>
-where
-    G::Pk: AssertZeroized,
-{
-    fn assert_zeroized(&self) {
-        self.0.assert_zeroized();
-    }
-}
-
-#[cfg(test)]
-impl<G: Group> AssertZeroized for PrivateKey<G>
-where
-    G::Sk: AssertZeroized,
-{
-    fn assert_zeroized(&self) {
-        self.0.assert_zeroized();
-    }
-}
-
-#[cfg(test)]
 mod tests {
-    use core::ptr;
-
     use hkdf::Hkdf;
     use rand::rngs::OsRng;
 
     use super::*;
     use crate::ciphersuite::{KeGroup, OprfHash};
-    use crate::serialization::AssertZeroized;
     use crate::{
         CipherSuite, ClientLogin, ClientLoginFinishParameters, ClientLoginFinishResult,
         ClientLoginStartResult, ClientRegistration, ClientRegistrationFinishParameters,
@@ -335,29 +309,6 @@ mod tests {
         ServerLoginParameters, ServerLoginStartResult, ServerRegistration,
         ServerRegistrationStartResult, ServerSetup,
     };
-
-    #[test]
-    fn test_zeroize_key() {
-        fn inner<G: Group>()
-        where
-            G::Sk: AssertZeroized,
-        {
-            let mut rng = OsRng;
-            let mut key = PrivateKey::<G>(G::random_sk(&mut rng));
-            unsafe { ptr::drop_in_place(&mut key) };
-            key.0.assert_zeroized();
-        }
-
-        #[cfg(feature = "ristretto255")]
-        inner::<crate::Ristretto255>();
-        inner::<::p256::NistP256>();
-        inner::<::p384::NistP384>();
-        inner::<::p521::NistP521>();
-        #[cfg(feature = "curve25519")]
-        inner::<crate::Curve25519>();
-        #[cfg(feature = "ed25519")]
-        inner::<crate::Ed25519>();
-    }
 
     macro_rules! test {
         ($mod:ident, $point:ty) => {

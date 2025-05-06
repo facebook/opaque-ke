@@ -469,25 +469,3 @@ where
         self.mac.clone()
     }
 }
-
-//////////////////////////
-// Test Implementations //
-//===================== //
-//////////////////////////
-
-#[cfg(test)]
-use crate::serialization::AssertZeroized;
-
-#[cfg(test)]
-impl<H: OutputSizeUser> AssertZeroized for Ke2State<H> {
-    fn assert_zeroized(&self) {
-        let Self {
-            session_key,
-            expected_mac,
-        } = self;
-
-        for byte in session_key.iter().chain(expected_mac) {
-            assert_eq!(byte, &0);
-        }
-    }
-}

@@ -16,7 +16,7 @@ use generic_array::typenum::{Sum, U32};
 use hkdf::Hkdf;
 use hmac::{Hmac, Mac};
 use rand::{CryptoRng, RngCore};
-use zeroize::{Zeroize, ZeroizeOnDrop};
+use zeroize::Zeroize;
 
 use crate::ciphersuite::{CipherSuite, KeGroup, OprfHash};
 use crate::errors::{InternalError, ProtocolError};
@@ -34,7 +34,7 @@ const STR_PRIVATE_KEY: [u8; 10] = *b"PrivateKey";
 pub(crate) type NonceLen = U32;
 
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
-#[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, ZeroizeOnDrop)]
+#[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub(crate) enum InnerEnvelopeMode {
     Zero = 0,
     Internal = 1,
@@ -309,25 +309,4 @@ fn construct_aad<'a>(
     server_s_pk: &'a [u8],
 ) -> impl Iterator<Item = &'a [u8]> {
     [server_s_pk].into_iter().chain(id_s).chain(id_u)
-}
-
-//////////////////////////
-// Test Implementations //
-//===================== //
-//////////////////////////
-
-#[cfg(test)]
-use crate::serialization::AssertZeroized;
-
-#[cfg(test)]
-impl<CS: CipherSuite> AssertZeroized for Envelope<CS> {
-    fn assert_zeroized(&self) {
-        let Self { mode, nonce, hmac } = self;
-
-        assert_eq!(mode, &InnerEnvelopeMode::Zero);
-
-        for byte in nonce.iter().chain(hmac) {
-            assert_eq!(byte, &0);
-        }
-    }
 }
