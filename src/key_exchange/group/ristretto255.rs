@@ -11,7 +11,7 @@
 pub use curve25519_dalek;
 use curve25519_dalek::constants::RISTRETTO_BASEPOINT_POINT;
 use curve25519_dalek::ristretto::{CompressedRistretto, RistrettoPoint};
-use curve25519_dalek::scalar::Scalar;
+use curve25519_dalek::scalar;
 use curve25519_dalek::traits::Identity;
 use digest::core_api::BlockSizeUser;
 use digest::{FixedOutput, HashMarker};
@@ -19,6 +19,7 @@ use generic_array::typenum::{IsLess, IsLessOrEqual, U256, U32};
 use generic_array::GenericArray;
 use rand::{CryptoRng, RngCore};
 use voprf::Mode;
+use zeroize::ZeroizeOnDrop;
 
 use super::{Group, STR_OPAQUE_DERIVE_AUTH_KEY_PAIR};
 use crate::errors::{InternalError, ProtocolError};
@@ -50,36 +51,43 @@ impl Group for Ristretto255 {
 
     fn random_sk<R: RngCore + CryptoRng>(rng: &mut R) -> Self::Sk {
         loop {
-            let scalar = Scalar::random(rng);
+            let scalar = scalar::Scalar::random(rng);
 
-            if scalar != Scalar::ZERO {
-                break scalar;
+            if scalar != scalar::Scalar::ZERO {
+                break Scalar(scalar);
             }
         }
     }
 
     fn derive_scalar(seed: GenericArray<u8, Self::SkLen>) -> Result<Self::Sk, InternalError> {
         voprf::derive_key::<Self>(&seed, &STR_OPAQUE_DERIVE_AUTH_KEY_PAIR, Mode::Oprf)
+            .map(Scalar)
             .map_err(InternalError::from)
     }
 
-    fn public_key(sk: Self::Sk) -> Self::Pk {
-        RISTRETTO_BASEPOINT_POINT * sk
+    fn public_key(sk: &Self::Sk) -> Self::Pk {
+        RISTRETTO_BASEPOINT_POINT * sk.0
     }
 
-    fn serialize_sk(sk: Self::Sk) -> GenericArray<u8, Self::SkLen> {
-        sk.to_bytes().into()
+    fn serialize_sk(sk: &Self::Sk) -> GenericArray<u8, Self::SkLen> {
+        sk.0.to_bytes().into()
     }
 
     fn deserialize_take_sk(bytes: &mut &[u8]) -> Result<Self::Sk, ProtocolError> {
         bytes
             .take_array::<U32>("secret key")
             .ok()
-            .and_then(|bytes| Scalar::from_canonical_bytes(bytes.into()).into())
-            .filter(|scalar| scalar != &Scalar::ZERO)
+            .and_then(|bytes| scalar::Scalar::from_canonical_bytes(bytes.into()).into())
+            .filter(|scalar| scalar != &scalar::Scalar::ZERO)
+            .map(Scalar)
             .ok_or(ProtocolError::SerializationError)
     }
 }
+
+/// Ristrettp255 scalar.
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
+#[derive(Clone, Eq, Hash, PartialEq, ZeroizeOnDrop)]
+pub struct Scalar(scalar::Scalar);
 
 impl voprf::CipherSuite for Ristretto255 {
     const ID: &'static str = voprf::Ristretto255::ID;
@@ -158,7 +166,7 @@ impl voprf::Group for Ristretto255 {
 }
 
 impl DiffieHellman<Ristretto255> for Scalar {
-    fn diffie_hellman(self, pk: &RistrettoPoint) -> GenericArray<u8, U32> {
-        Ristretto255::serialize_pk(&(pk * self))
+    fn diffie_hellman(&self, pk: &RistrettoPoint) -> GenericArray<u8, U32> {
+        Ristretto255::serialize_pk(&(pk * self.0))
     }
 }

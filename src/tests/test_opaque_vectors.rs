@@ -100,7 +100,7 @@ fn populate_test_vectors<CS: CipherSuite>(values: &Value) -> OpaqueTestVectorPar
         dummy_private_key: {
             match decode(values, "client_private_key") {
                 Some(value) => value,
-                None => KeGroup::<CS>::serialize_sk(KeGroup::<CS>::random_sk(&mut OsRng)).to_vec(),
+                None => KeGroup::<CS>::serialize_sk(&KeGroup::<CS>::random_sk(&mut OsRng)).to_vec(),
             }
         },
         dummy_masking_key: {

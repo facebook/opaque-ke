@@ -15,7 +15,7 @@ use curve25519_dalek::traits::Identity;
 use generic_array::typenum::U32;
 use generic_array::GenericArray;
 use rand::{CryptoRng, RngCore};
-use zeroize::Zeroize;
+use zeroize::ZeroizeOnDrop;
 
 use super::Group;
 use crate::errors::{InternalError, ProtocolError};
@@ -58,11 +58,11 @@ impl Group for Curve25519 {
         Ok(Scalar(scalar::clamp_integer(seed.into())))
     }
 
-    fn public_key(sk: Self::Sk) -> Self::Pk {
+    fn public_key(sk: &Self::Sk) -> Self::Pk {
         MontgomeryPoint::mul_base_clamped(sk.0)
     }
 
-    fn serialize_sk(sk: Self::Sk) -> GenericArray<u8, Self::SkLen> {
+    fn serialize_sk(sk: &Self::Sk) -> GenericArray<u8, Self::SkLen> {
         sk.0.into()
     }
 
@@ -81,11 +81,11 @@ impl Group for Curve25519 {
 
 /// Curve25519 scalar.
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, Zeroize)]
+#[derive(Clone, Eq, Hash, PartialEq, ZeroizeOnDrop)]
 pub struct Scalar([u8; 32]);
 
 impl DiffieHellman<Curve25519> for Scalar {
-    fn diffie_hellman(self, pk: &MontgomeryPoint) -> GenericArray<u8, U32> {
+    fn diffie_hellman(&self, pk: &MontgomeryPoint) -> GenericArray<u8, U32> {
         Curve25519::serialize_pk(&pk.mul_clamped(self.0))
     }
 }
