@@ -16,7 +16,7 @@ use generic_array::GenericArray;
 use generic_array::typenum::U32;
 use rand::{CryptoRng, RngCore};
 use subtle::ConstantTimeEq;
-use zeroize::Zeroize;
+use zeroize::ZeroizeOnDrop;
 
 use super::Group;
 use crate::errors::{InternalError, ProtocolError};
@@ -56,11 +56,11 @@ impl Group for Curve25519 {
         Ok(Scalar(scalar::clamp_integer(seed.into())))
     }
 
-    fn public_key(sk: Self::Sk) -> Self::Pk {
+    fn public_key(sk: &Self::Sk) -> Self::Pk {
         NonIdentity(MontgomeryPoint::mul_base_clamped(sk.0))
     }
 
-    fn serialize_sk(sk: Self::Sk) -> GenericArray<u8, Self::SkLen> {
+    fn serialize_sk(sk: &Self::Sk) -> GenericArray<u8, Self::SkLen> {
         sk.0.into()
     }
 
@@ -72,14 +72,14 @@ impl Group for Curve25519 {
 }
 
 impl DiffieHellman<Curve25519> for Scalar {
-    fn diffie_hellman(self, pk: &NonIdentity) -> GenericArray<u8, U32> {
+    fn diffie_hellman(&self, pk: &NonIdentity) -> GenericArray<u8, U32> {
         Curve25519::serialize_pk(&NonIdentity(pk.0.mul_clamped(self.0)))
     }
 }
 
 /// Non-identity point wrapper for [`MontgomeryPoint`].
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, Zeroize)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct NonIdentity(
     #[cfg_attr(feature = "serde", serde(deserialize_with = "serde_deserialize_pk"))]
     MontgomeryPoint,
@@ -113,7 +113,7 @@ where
 
 /// Curve25519 scalar.
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, Zeroize)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq, ZeroizeOnDrop)]
 pub struct Scalar(
     #[cfg_attr(feature = "serde", serde(deserialize_with = "serde_deserialize_sk"))] [u8; 32],
 );

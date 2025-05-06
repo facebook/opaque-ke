@@ -18,7 +18,7 @@ pub mod ristretto255;
 
 use generic_array::{ArrayLength, GenericArray};
 use rand::{CryptoRng, RngCore};
-use zeroize::Zeroize;
+use zeroize::ZeroizeOnDrop;
 
 use crate::errors::{InternalError, ProtocolError};
 
@@ -31,7 +31,7 @@ pub trait Group {
     /// Length of the public key
     type PkLen: ArrayLength<u8>;
     /// Secret key
-    type Sk: Copy + Zeroize;
+    type Sk: Clone + ZeroizeOnDrop;
     /// Length of the secret key
     type SkLen: ArrayLength<u8>;
 
@@ -50,10 +50,10 @@ pub trait Group {
     fn derive_scalar(seed: GenericArray<u8, Self::SkLen>) -> Result<Self::Sk, InternalError>;
 
     /// Return a public key from its secret key
-    fn public_key(sk: Self::Sk) -> Self::Pk;
+    fn public_key(sk: &Self::Sk) -> Self::Pk;
 
     /// Serializes `self`
-    fn serialize_sk(sk: Self::Sk) -> GenericArray<u8, Self::SkLen>;
+    fn serialize_sk(sk: &Self::Sk) -> GenericArray<u8, Self::SkLen>;
 
     /// Return a public key from its fixed-length bytes representation
     ///

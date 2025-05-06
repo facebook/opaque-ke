@@ -19,7 +19,7 @@ use generic_array::GenericArray;
 use generic_array::typenum::{IsLess, IsLessOrEqual, U32, U256};
 use rand::{CryptoRng, RngCore};
 use voprf::Mode;
-use zeroize::Zeroize;
+use zeroize::ZeroizeOnDrop;
 
 use super::{Group, STR_OPAQUE_DERIVE_AUTH_KEY_PAIR};
 use crate::errors::{InternalError, ProtocolError};
@@ -64,11 +64,11 @@ impl Group for Ristretto255 {
             .map_err(InternalError::from)
     }
 
-    fn public_key(sk: Self::Sk) -> Self::Pk {
+    fn public_key(sk: &Self::Sk) -> Self::Pk {
         NonIdentity(RISTRETTO_BASEPOINT_POINT * sk.0)
     }
 
-    fn serialize_sk(sk: Self::Sk) -> GenericArray<u8, Self::SkLen> {
+    fn serialize_sk(sk: &Self::Sk) -> GenericArray<u8, Self::SkLen> {
         sk.0.to_bytes().into()
     }
 
@@ -81,14 +81,14 @@ impl Group for Ristretto255 {
 }
 
 impl DiffieHellman<Ristretto255> for NonZeroScalar {
-    fn diffie_hellman(self, pk: &NonIdentity) -> GenericArray<u8, U32> {
+    fn diffie_hellman(&self, pk: &NonIdentity) -> GenericArray<u8, U32> {
         Ristretto255::serialize_pk(&NonIdentity(pk.0 * self.0))
     }
 }
 
 /// Non-identity point wrapper for [`RistrettoPoint`].
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Zeroize)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct NonIdentity(
     #[cfg_attr(feature = "serde", serde(deserialize_with = "serde_deserialize_pk"))] RistrettoPoint,
 );
@@ -119,7 +119,7 @@ where
 
 /// Non-zero scalar wrapper for [`Scalar`]
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, Zeroize)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq, ZeroizeOnDrop)]
 pub struct NonZeroScalar(
     #[cfg_attr(feature = "serde", serde(deserialize_with = "serde_deserialize_sk"))] Scalar,
 );

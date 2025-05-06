@@ -62,7 +62,7 @@ impl<G: Group, SK: Clone> KeyPair<G, SK> {
 impl<G: Group> KeyPair<G> {
     pub(crate) fn random<R: RngCore + CryptoRng>(rng: &mut R) -> Self {
         let sk = G::random_sk(rng);
-        let pk = G::public_key(sk);
+        let pk = G::public_key(&sk);
         Self {
             pk: PublicKey(pk),
             sk: PrivateKey(sk),
@@ -74,7 +74,7 @@ impl<G: Group> KeyPair<G> {
         let mut scalar_bytes = GenericArray::<_, <G as Group>::SkLen>::default();
         rng.fill_bytes(&mut scalar_bytes);
         let sk = G::derive_scalar(scalar_bytes).unwrap();
-        let pk = G::public_key(sk);
+        let pk = G::public_key(&sk);
         Self {
             pk: PublicKey(pk),
             sk: PrivateKey(sk),
@@ -102,12 +102,12 @@ impl<G: Group> PrivateKey<G> {
 
     /// Returns public key from private key
     pub fn public_key(&self) -> PublicKey<G> {
-        PublicKey(G::public_key(self.0))
+        PublicKey(G::public_key(&self.0))
     }
 
     /// Serializes this private key to a fixed-length byte array.
     pub fn serialize(&self) -> GenericArray<u8, G::SkLen> {
-        G::serialize_sk(self.0)
+        G::serialize_sk(&self.0)
     }
 
     /// Creates a [`PrivateKey`] from the given bytes.

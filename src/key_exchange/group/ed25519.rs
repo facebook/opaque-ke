@@ -21,7 +21,7 @@ use generic_array::GenericArray;
 use generic_array::sequence::Concat;
 use generic_array::typenum::{U32, U64};
 use rand::{CryptoRng, RngCore};
-use zeroize::Zeroize;
+use zeroize::{Zeroize, ZeroizeOnDrop};
 
 use super::Group;
 use crate::ciphersuite::CipherSuite;
@@ -62,11 +62,11 @@ impl Group for Ed25519 {
         Ok(SigningKey::from_bytes(seed.into()))
     }
 
-    fn public_key(sk: Self::Sk) -> Self::Pk {
+    fn public_key(sk: &Self::Sk) -> Self::Pk {
         sk.verifying_key
     }
 
-    fn serialize_sk(sk: Self::Sk) -> GenericArray<u8, Self::SkLen> {
+    fn serialize_sk(sk: &Self::Sk) -> GenericArray<u8, Self::SkLen> {
         sk.sk.into()
     }
 
@@ -300,7 +300,7 @@ impl serde::Serialize for VerifyingKey {
 /// Ed25519 signing key.
 // We store the `ExpandedSecret` in memory to avoid computing it on demand and then discarding it
 // again.
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Zeroize)]
+#[derive(Clone, Debug, Eq, PartialEq, ZeroizeOnDrop)]
 pub struct SigningKey {
     // `ed25519_dalek::SigningKey` doesn't implement `Zeroize`. See
     // https://github.com/dalek-cryptography/curve25519-dalek/pull/747
@@ -459,7 +459,7 @@ mod test {
         let verifying_key = VerifyingKey::from(&signing_key);
         verifying_key.verify(&message, &signature).unwrap();
 
-        let custom_pk = Ed25519::public_key(custom_sk);
+        let custom_pk = Ed25519::public_key(&custom_sk);
         verify(
             &custom_pk,
             false,
@@ -495,7 +495,7 @@ mod test {
             .verify_prehashed(message, None, &signature)
             .unwrap();
 
-        let custom_pk = Ed25519::public_key(custom_sk);
+        let custom_pk = Ed25519::public_key(&custom_sk);
         verify(
             &custom_pk,
             true,
