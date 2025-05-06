@@ -33,6 +33,7 @@ use crate::key_exchange::traits::{
     GenerateKe3Result, KeyExchange, Sealed, Serialize, SerializedContext, SerializedIdentifiers,
 };
 use crate::keypair::{KeyPair, PrivateKey, PublicKey};
+use crate::opaque::Identifiers;
 use crate::serialization::SliceExt;
 
 ////////////////////////////
@@ -473,28 +474,5 @@ where
 
     fn serialize(&self) -> GenericArray<u8, Self::Len> {
         self.mac.clone()
-    }
-}
-
-//////////////////////////
-// Test Implementations //
-//===================== //
-//////////////////////////
-
-#[cfg(test)]
-use crate::serialization::AssertZeroized;
-use crate::Identifiers;
-
-#[cfg(test)]
-impl<H: OutputSizeUser> AssertZeroized for Ke2State<H> {
-    fn assert_zeroized(&self) {
-        let Self {
-            session_key,
-            expected_mac,
-        } = self;
-
-        for byte in session_key.iter().chain(expected_mac) {
-            assert_eq!(byte, &0);
-        }
     }
 }

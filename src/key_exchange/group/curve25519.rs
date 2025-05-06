@@ -90,28 +90,6 @@ impl DiffieHellman<Curve25519> for Scalar {
     }
 }
 
-//////////////////////////
-// Test Implementations //
-//===================== //
-//////////////////////////
-
-#[cfg(test)]
-use crate::serialization::AssertZeroized;
-
-#[cfg(test)]
-impl AssertZeroized for MontgomeryPoint {
-    fn assert_zeroized(&self) {
-        assert_eq!(*self, MontgomeryPoint::default());
-    }
-}
-
-#[cfg(test)]
-impl AssertZeroized for Scalar {
-    fn assert_zeroized(&self) {
-        assert_eq!(*self, Scalar(<_>::default()));
-    }
-}
-
 #[test]
 fn non_zero_scalar() {
     use std::vec;

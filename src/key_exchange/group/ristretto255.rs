@@ -162,25 +162,3 @@ impl DiffieHellman<Ristretto255> for Scalar {
         Ristretto255::serialize_pk(pk * self)
     }
 }
-
-//////////////////////////
-// Test Implementations //
-//===================== //
-//////////////////////////
-
-#[cfg(test)]
-use crate::serialization::AssertZeroized;
-
-#[cfg(test)]
-impl AssertZeroized for RistrettoPoint {
-    fn assert_zeroized(&self) {
-        assert_eq!(*self, RistrettoPoint::default());
-    }
-}
-
-#[cfg(test)]
-impl AssertZeroized for Scalar {
-    fn assert_zeroized(&self) {
-        assert_eq!(*self, Scalar::default());
-    }
-}

@@ -136,27 +136,3 @@ where
         GenericArray::clone_from_slice((pk.0 * self).to_encoded_point(true).as_bytes())
     }
 }
-
-//////////////////////////
-// Test Implementations //
-//===================== //
-//////////////////////////
-
-#[cfg(test)]
-use crate::serialization::AssertZeroized;
-
-#[cfg(test)]
-impl<G: CurveArithmetic> AssertZeroized for NonIdentity<G> {
-    fn assert_zeroized(&self) {
-        assert_eq!(self.0.to_point(), ProjectivePoint::<G>::generator());
-    }
-}
-
-#[cfg(test)]
-impl<G: CurveArithmetic> AssertZeroized for NonZeroScalar<G> {
-    fn assert_zeroized(&self) {
-        use elliptic_curve::Field;
-
-        assert_eq!(**self, Scalar::<G>::ONE);
-    }
-}
