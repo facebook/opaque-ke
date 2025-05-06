@@ -36,7 +36,7 @@ impl Group for Ristretto255 {
     type Sk = Scalar;
     type SkLen = U32;
 
-    fn serialize_pk(pk: Self::Pk) -> GenericArray<u8, Self::PkLen> {
+    fn serialize_pk(pk: &Self::Pk) -> GenericArray<u8, Self::PkLen> {
         pk.compress().to_bytes().into()
     }
 
@@ -158,7 +158,7 @@ impl voprf::Group for Ristretto255 {
 }
 
 impl DiffieHellman<Ristretto255> for Scalar {
-    fn diffie_hellman(self, pk: RistrettoPoint) -> GenericArray<u8, U32> {
-        Ristretto255::serialize_pk(pk * self)
+    fn diffie_hellman(self, pk: &RistrettoPoint) -> GenericArray<u8, U32> {
+        Ristretto255::serialize_pk(&(pk * self))
     }
 }

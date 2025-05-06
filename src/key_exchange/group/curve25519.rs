@@ -32,7 +32,7 @@ impl Group for Curve25519 {
     type Sk = Scalar;
     type SkLen = U32;
 
-    fn serialize_pk(pk: Self::Pk) -> GenericArray<u8, Self::PkLen> {
+    fn serialize_pk(pk: &Self::Pk) -> GenericArray<u8, Self::PkLen> {
         pk.to_bytes().into()
     }
 
@@ -85,8 +85,8 @@ impl Group for Curve25519 {
 pub struct Scalar([u8; 32]);
 
 impl DiffieHellman<Curve25519> for Scalar {
-    fn diffie_hellman(self, pk: MontgomeryPoint) -> GenericArray<u8, U32> {
-        Curve25519::serialize_pk(pk.mul_clamped(self.0))
+    fn diffie_hellman(self, pk: &MontgomeryPoint) -> GenericArray<u8, U32> {
+        Curve25519::serialize_pk(&pk.mul_clamped(self.0))
     }
 }
 

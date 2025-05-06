@@ -41,7 +41,7 @@ impl Group for Ed25519 {
     type Sk = SigningKey;
     type SkLen = U32;
 
-    fn serialize_pk(pk: Self::Pk) -> GenericArray<u8, Self::PkLen> {
+    fn serialize_pk(pk: &Self::Pk) -> GenericArray<u8, Self::PkLen> {
         pk.compressed.0.into()
     }
 
@@ -116,7 +116,7 @@ impl serde::Serialize for VerifyingKey {
     where
         S: serde::Serializer,
     {
-        Ed25519::serialize_pk(*self).serialize(serializer)
+        Ed25519::serialize_pk(self).serialize(serializer)
     }
 }
 
