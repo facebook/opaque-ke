@@ -155,7 +155,9 @@ pub trait SignatureProtocol {
 pub struct Ke2Builder<'a, CS: CipherSuite, KE: Group> {
     transcript: Message<'a, CS, KE>,
     server_nonce: GenericArray<u8, NonceLen>,
+    #[derive_where(skip(Zeroize))]
     client_s_pk: PublicKey<KeGroup<CS>>,
+    #[derive_where(skip(Zeroize))]
     server_e_pk: PublicKey<KE>,
     expected_mac: Output<KeHash<CS>>,
     session_key: Output<KeHash<CS>>,
@@ -179,6 +181,7 @@ pub struct Ke2Builder<'a, CS: CipherSuite, KE: Group> {
 #[derive_where(Clone, ZeroizeOnDrop)]
 #[derive_where(Debug, Eq, Hash, PartialEq; <SIG::Group as Group>::Pk, SIG::VerifyState<CS, KE>)]
 pub struct Ke2State<CS: CipherSuite, SIG: SignatureProtocol, KE: Group> {
+    #[derive_where(skip(Zeroize))]
     client_s_pk: PublicKey<SIG::Group>,
     session_key: Output<KeHash<CS>>,
     verify_state: SIG::VerifyState<CS, KE>,
@@ -203,6 +206,7 @@ where
     Le<<KEH::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
 {
     server_nonce: GenericArray<u8, NonceLen>,
+    #[derive_where(skip(Zeroize))]
     server_e_pk: PublicKey<KE>,
     signature: SIG::Signature,
     mac: Output<KEH>,

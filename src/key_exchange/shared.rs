@@ -82,6 +82,7 @@ pub struct Ke1State<G: Group> {
 #[derive_where(Debug, Eq, Hash, Ord, PartialEq, PartialOrd; G::Pk)]
 pub struct Ke1Message<G: Group> {
     pub(super) client_nonce: GenericArray<u8, NonceLen>,
+    #[derive_where(skip(Zeroize))]
     pub(super) client_e_pk: PublicKey<G>,
 }
 
