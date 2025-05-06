@@ -34,6 +34,9 @@ where
             Repr = GenericArray<u8, <FieldBytesSize<Self> as ModulusSize>::CompressedPointSize>,
         > + ToEncodedPoint<Self>,
 {
+    // We don't use `elliptic_curve::PublicKey` because it stores its internals in a
+    // format ideal for serialization and not computation. This is inconsistent with
+    // our other implementations.
     type Pk = NonIdentity<Self>;
 
     type PkLen = <FieldBytesSize<Self> as ModulusSize>::CompressedPointSize;
