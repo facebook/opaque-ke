@@ -223,25 +223,3 @@ impl voprf::Group for Ristretto255 {
         <voprf::Ristretto255 as voprf::Group>::deserialize_scalar(scalar_bits)
     }
 }
-
-//////////////////////////
-// Test Implementations //
-//===================== //
-//////////////////////////
-
-#[cfg(test)]
-use crate::serialization::AssertZeroized;
-
-#[cfg(test)]
-impl AssertZeroized for NonIdentity {
-    fn assert_zeroized(&self) {
-        assert_eq!(self.0, RistrettoPoint::default());
-    }
-}
-
-#[cfg(test)]
-impl AssertZeroized for NonZeroScalar {
-    fn assert_zeroized(&self) {
-        assert_eq!(self.0, Scalar::default());
-    }
-}
