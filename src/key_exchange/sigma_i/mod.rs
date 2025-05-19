@@ -7,6 +7,9 @@
 // licenses.
 
 //! An implementation of the SIGMA-I key exchange protocol
+//!
+//! ⚠️ **Warning**: This implementation has not been audited. Use at your own
+//! risk!
 
 #[cfg(feature = "ecdsa")]
 pub mod ecdsa;
