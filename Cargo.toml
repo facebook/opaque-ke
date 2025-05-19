@@ -3,6 +3,7 @@ authors = ["Kevin Lewi <klewi@fb.com>", "François Garillot <fga@fb.com>"]
 categories = ["no-std"]
 description = "An implementation of the OPAQUE password-authenticated key exchange protocol"
 edition = "2021"
+exclude = ["/src/tests/"]
 keywords = ["cryptography", "crypto", "opaque", "passwords", "authentication"]
 license = "Apache-2.0 OR MIT"
 name = "opaque-ke"
@@ -14,12 +15,15 @@ version = "3.0.0"
 [features]
 argon2 = ["dep:argon2"]
 curve25519 = ["dep:curve25519-dalek"]
-default = ["ristretto255-voprf", "serde"]
-ristretto255 = ["dep:curve25519-dalek", "voprf/ristretto255"]
-ristretto255-voprf = ["ristretto255", "voprf/ristretto255-ciphersuite"]
+default = ["ristretto255", "serde"]
+ecdsa = ["dep:ecdsa", "dep:rfc6979"]
+ed25519 = ["dep:curve25519-dalek", "dep:ed25519-dalek"]
+ristretto255 = ["dep:curve25519-dalek", "voprf/ristretto255-ciphersuite"]
 serde = [
   "dep:serde",
   "curve25519-dalek?/serde",
+  "ecdsa?/serde",
+  "ed25519-dalek?/serde",
   "generic-array/serde",
   "voprf/serde",
   "zeroize/serde",
@@ -33,14 +37,23 @@ argon2 = { version = "0.5", default-features = false, features = [
 curve25519-dalek = { version = "4", default-features = false, features = [
   "zeroize",
 ], optional = true }
-derive-where = { version = "1.3", features = ["zeroize-on-drop"] }
+derive-where = { version = "1.4", features = ["zeroize-on-drop"] }
 digest = "0.10"
 displaydoc = { version = "0.2", default-features = false }
+ecdsa = { version = "0.16", default-features = false, features = [
+  "arithmetic",
+  "hazmat",
+], optional = true }
+ed25519-dalek = { version = "2", default-features = false, features = [
+  "digest",
+  "hazmat",
+], optional = true }
 elliptic-curve = { version = "0.13", features = ["hash2curve", "sec1"] }
 generic-array = "0.14"
 hkdf = "0.12"
 hmac = "0.12"
 rand = { version = "0.8", default-features = false }
+rfc6979 = { version = "0.4", optional = true }
 serde = { version = "1", default-features = false, features = [
   "derive",
 ], optional = true }
@@ -60,6 +73,7 @@ cryptoki = "0.9"
 elliptic-curve = { version = "0.13", features = ["alloc", "pkcs8"] }
 hex = "0.4"
 p256 = { version = "0.13", default-features = false, features = [
+  "ecdsa",
   "hash2curve",
   "pkcs8",
   "voprf",
@@ -74,9 +88,11 @@ p521 = { version = "0.13.3", default-features = false, features = [
   "pkcs8",
   "voprf",
 ] }
+paste = "1"
 proptest = "1"
 rand = "0.8"
 regex = "1"
+sha2 = { version = "0.10", default-features = false }
 thiserror = "2"
 # MSRV
 rustyline = "15"

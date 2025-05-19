@@ -12,6 +12,4 @@ mod full_test_vectors;
 pub mod mock_rng;
 mod opaque_vectors;
 mod parser;
-#[cfg(test_hsm)]
-mod remote_key;
 mod test_opaque_vectors;

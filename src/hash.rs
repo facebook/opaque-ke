@@ -13,7 +13,7 @@ use digest::core_api::{BlockSizeUser, BufferKindUser, CoreProxy, FixedOutputCore
 use digest::{FixedOutputReset, HashMarker, OutputSizeUser};
 use generic_array::typenum::{IsLess, Le, NonZero, U256};
 
-pub(crate) type OutputSize<D> = <<D as CoreProxy>::Core as OutputSizeUser>::OutputSize;
+pub(crate) type OutputSize<H> = <<H as CoreProxy>::Core as OutputSizeUser>::OutputSize;
 
 /// Trait to simplify requirements for [`Hash`].
 pub trait ProxyHash:
