@@ -50,14 +50,17 @@ static STR_OPAQUE: &[u8] = b"OPAQUE-";
 /// [`TripleDh`](crate::TripleDh) and [`SigmaI`](crate::SigmaI).
 pub trait DiffieHellman<G: Group> {
     /// Diffie-Hellman key exchange.
-    fn diffie_hellman(self, pk: G::Pk) -> GenericArray<u8, G::PkLen>;
+    fn diffie_hellman(&self, pk: &G::Pk) -> GenericArray<u8, G::PkLen>;
 }
 
 /// The client state produced after the first key exchange message
 #[cfg_attr(
     feature = "serde",
     derive(serde::Deserialize, serde::Serialize),
-    serde(bound = "")
+    serde(bound(
+        deserialize = "G::Sk: serde::Deserialize<'de>",
+        serialize = "G::Sk: serde::Serialize"
+    ))
 )]
 #[derive_where(Clone, ZeroizeOnDrop)]
 #[derive_where(Debug, Eq, Hash, Ord, PartialEq, PartialOrd; G::Sk)]
@@ -70,12 +73,16 @@ pub struct Ke1State<G: Group> {
 #[cfg_attr(
     feature = "serde",
     derive(serde::Deserialize, serde::Serialize),
-    serde(bound = "")
+    serde(bound(
+        deserialize = "G::Pk: serde::Deserialize<'de>",
+        serialize = "G::Pk: serde::Serialize"
+    ))
 )]
 #[derive_where(Clone, ZeroizeOnDrop)]
 #[derive_where(Debug, Eq, Hash, Ord, PartialEq, PartialOrd; G::Pk)]
 pub struct Ke1Message<G: Group> {
     pub(super) client_nonce: GenericArray<u8, NonceLen>,
+    #[derive_where(skip(Zeroize))]
     pub(super) client_e_pk: PublicKey<G>,
 }
 
@@ -333,59 +340,5 @@ where
 {
     pub(crate) fn serialize(&self) -> GenericArray<u8, Ke1MessageIterLen<G>> {
         self.client_nonce.concat(self.client_e_pk.clone())
-    }
-}
-
-//////////////////////////
-// Test Implementations //
-//===================== //
-//////////////////////////
-
-#[cfg(test)]
-use crate::serialization::AssertZeroized;
-
-#[cfg(test)]
-impl<G: Group> AssertZeroized for Ke1State<G>
-where
-    G::Sk: AssertZeroized,
-{
-    fn assert_zeroized(&self) {
-        let Self {
-            client_e_sk,
-            client_nonce,
-        } = self;
-
-        client_e_sk.assert_zeroized();
-        assert_eq!(client_nonce, &GenericArray::default());
-    }
-}
-
-#[cfg(test)]
-impl<G: Group> AssertZeroized for Ke1Message<G>
-where
-    G::Pk: AssertZeroized,
-{
-    fn assert_zeroized(&self) {
-        let Self {
-            client_nonce,
-            client_e_pk,
-        } = self;
-
-        assert_eq!(client_nonce, &GenericArray::default());
-        client_e_pk.assert_zeroized();
-    }
-}
-
-#[cfg(test)]
-impl<G: Group> AssertZeroized for Ke1MessageIter<G> {
-    fn assert_zeroized(&self) {
-        let Self {
-            client_nonce,
-            client_e_pk,
-        } = self;
-
-        for byte in client_nonce.iter().chain(client_e_pk) {
-            assert_eq!(byte, &0);
-        }
     }
 }

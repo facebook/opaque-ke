@@ -144,14 +144,20 @@ pub trait SignatureProtocol {
 #[cfg_attr(
     feature = "serde",
     derive(serde::Deserialize, serde::Serialize),
-    serde(bound(deserialize = "'de: 'a", serialize = ""))
+    serde(bound(
+        deserialize = "'de: 'a, <KeGroup<CS> as Group>::Pk: serde::Deserialize<'de>, KE::Pk: \
+                       serde::Deserialize<'de>",
+        serialize = "<KeGroup<CS> as Group>::Pk: serde::Serialize, KE::Pk: serde::Serialize"
+    ))
 )]
 #[derive_where(Clone, ZeroizeOnDrop)]
-#[derive_where(Debug, Eq, Hash, PartialEq; PublicKey<KeGroup<CS>>, PublicKey<KE>)]
+#[derive_where(Debug, Eq, Hash, PartialEq; <KeGroup<CS> as Group>::Pk, KE::Pk)]
 pub struct Ke2Builder<'a, CS: CipherSuite, KE: Group> {
     transcript: Message<'a, CS, KE>,
     server_nonce: GenericArray<u8, NonceLen>,
+    #[derive_where(skip(Zeroize))]
     client_s_pk: PublicKey<KeGroup<CS>>,
+    #[derive_where(skip(Zeroize))]
     server_e_pk: PublicKey<KE>,
     expected_mac: Output<KeHash<CS>>,
     session_key: Output<KeHash<CS>>,
@@ -166,13 +172,16 @@ pub struct Ke2Builder<'a, CS: CipherSuite, KE: Group> {
     feature = "serde",
     derive(serde::Deserialize, serde::Serialize),
     serde(bound(
-        deserialize = "SIG::VerifyState<CS, KE>: serde::Deserialize<'de>",
-        serialize = "SIG::VerifyState<CS, KE>: serde::Serialize"
+        deserialize = "<SIG::Group as Group>::Pk: serde::Deserialize<'de>, SIG::VerifyState<CS, \
+                       KE>: serde::Deserialize<'de>",
+        serialize = "<SIG::Group as Group>::Pk: serde::Serialize, SIG::VerifyState<CS, KE>: \
+                     serde::Serialize"
     ))
 )]
 #[derive_where(Clone, ZeroizeOnDrop)]
 #[derive_where(Debug, Eq, Hash, PartialEq; <SIG::Group as Group>::Pk, SIG::VerifyState<CS, KE>)]
 pub struct Ke2State<CS: CipherSuite, SIG: SignatureProtocol, KE: Group> {
+    #[derive_where(skip(Zeroize))]
     client_s_pk: PublicKey<SIG::Group>,
     session_key: Output<KeHash<CS>>,
     verify_state: SIG::VerifyState<CS, KE>,
@@ -184,8 +193,8 @@ pub struct Ke2State<CS: CipherSuite, SIG: SignatureProtocol, KE: Group> {
     feature = "serde",
     derive(serde::Deserialize, serde::Serialize),
     serde(bound(
-        deserialize = "SIG::Signature: serde::Deserialize<'de>",
-        serialize = "SIG::Signature: serde::Serialize"
+        deserialize = "KE::Pk: serde::Deserialize<'de>, SIG::Signature: serde::Deserialize<'de>",
+        serialize = "KE::Pk: serde::Serialize, SIG::Signature: serde::Serialize"
     ))
 )]
 #[derive_where(Clone, ZeroizeOnDrop)]
@@ -197,6 +206,7 @@ where
     Le<<KEH::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
 {
     server_nonce: GenericArray<u8, NonceLen>,
+    #[derive_where(skip(Zeroize))]
     server_e_pk: PublicKey<KE>,
     signature: SIG::Signature,
     mac: Output<KEH>,
@@ -583,63 +593,5 @@ where
 
     fn serialize(&self) -> GenericArray<u8, Self::Len> {
         SIG::serialize_signature(&self.signature).concat(self.mac.clone())
-    }
-}
-
-//////////////////////////
-// Test Implementations //
-//===================== //
-//////////////////////////
-
-#[cfg(test)]
-use crate::key_exchange::shared::Ke1MessageIter;
-#[cfg(test)]
-use crate::serialization::AssertZeroized;
-
-#[cfg(test)]
-impl<CS: CipherSuite, KE: Group> AssertZeroized for CachedMessage<CS, KE>
-where
-    Ke1MessageIter<KE>: AssertZeroized,
-{
-    fn assert_zeroized(&self) {
-        let Self {
-            credential_request,
-            ke1_message,
-            credential_response,
-            server_nonce,
-            server_e_pk,
-            server_mac,
-        } = self;
-
-        credential_request.assert_zeroized();
-        ke1_message.assert_zeroized();
-        credential_response.assert_zeroized();
-
-        for byte in server_nonce.iter().chain(server_e_pk).chain(server_mac) {
-            assert_eq!(byte, &0);
-        }
-    }
-}
-
-#[cfg(test)]
-impl<CS: CipherSuite, SIG: SignatureProtocol, KE: Group> AssertZeroized for Ke2State<CS, SIG, KE>
-where
-    <SIG::Group as Group>::Pk: AssertZeroized,
-    SIG::VerifyState<CS, KE>: AssertZeroized,
-{
-    fn assert_zeroized(&self) {
-        let Self {
-            client_s_pk,
-            session_key,
-            verify_state,
-            expected_mac,
-        } = self;
-
-        client_s_pk.assert_zeroized();
-        verify_state.assert_zeroized();
-
-        for byte in session_key.iter().chain(expected_mac) {
-            assert_eq!(byte, &0);
-        }
     }
 }

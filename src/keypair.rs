@@ -27,8 +27,8 @@ use crate::serialization::SliceExt;
     feature = "serde",
     derive(serde::Deserialize, serde::Serialize),
     serde(bound(
-        deserialize = "SK: serde::Deserialize<'de>",
-        serialize = "SK: serde::Serialize"
+        deserialize = "G::Pk: serde::Deserialize<'de>, SK: serde::Deserialize<'de>",
+        serialize = "G::Pk: serde::Serialize, SK: serde::Serialize"
     ))
 )]
 #[derive_where(Clone)]
@@ -62,7 +62,7 @@ impl<G: Group, SK: Clone> KeyPair<G, SK> {
 impl<G: Group> KeyPair<G> {
     pub(crate) fn random<R: RngCore + CryptoRng>(rng: &mut R) -> Self {
         let sk = G::random_sk(rng);
-        let pk = G::public_key(sk);
+        let pk = G::public_key(&sk);
         Self {
             pk: PublicKey(pk),
             sk: PrivateKey(sk),
@@ -74,7 +74,7 @@ impl<G: Group> KeyPair<G> {
         let mut scalar_bytes = GenericArray::<_, <G as Group>::SkLen>::default();
         rng.fill_bytes(&mut scalar_bytes);
         let sk = G::derive_scalar(scalar_bytes).unwrap();
-        let pk = G::public_key(sk);
+        let pk = G::public_key(&sk);
         Self {
             pk: PublicKey(pk),
             sk: PrivateKey(sk),
@@ -83,6 +83,14 @@ impl<G: Group> KeyPair<G> {
 }
 
 /// Wrapper around a Key to enforce that it's a private one.
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Deserialize, serde::Serialize),
+    serde(bound(
+        deserialize = "G::Sk: serde::Deserialize<'de>",
+        serialize = "G::Sk: serde::Serialize"
+    ))
+)]
 #[derive_where(Clone, ZeroizeOnDrop)]
 #[derive_where(Debug, Eq, Hash, Ord, PartialEq, PartialOrd; G::Sk)]
 pub struct PrivateKey<G: Group>(G::Sk);
@@ -94,11 +102,11 @@ impl<G: Group> PrivateKey<G> {
 
     /// Returns public key from private key
     pub fn public_key(&self) -> PublicKey<G> {
-        PublicKey(G::public_key(self.0))
+        PublicKey(G::public_key(&self.0))
     }
 
     pub(crate) fn serialize(&self) -> GenericArray<u8, G::SkLen> {
-        G::serialize_sk(self.0)
+        G::serialize_sk(&self.0)
     }
 
     /// Creates a [`PrivateKey`] from the given bytes.
@@ -117,7 +125,7 @@ where
 {
     /// Diffie-Hellman key exchange implementation
     pub(crate) fn ke_diffie_hellman(&self, pk: &PublicKey<G>) -> GenericArray<u8, G::PkLen> {
-        self.0.diffie_hellman(pk.0)
+        self.0.diffie_hellman(&pk.0)
     }
 }
 
@@ -170,34 +178,16 @@ impl<G: Group> PrivateKeySerialization<G> for PrivateKey<G> {
     }
 }
 
-#[cfg(feature = "serde")]
-impl<'de, G: Group> serde::Deserialize<'de> for PrivateKey<G> {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        use serde::de::Error;
-
-        G::deserialize_take_sk(
-            &mut (GenericArray::<_, G::SkLen>::deserialize(deserializer)?.as_slice()),
-        )
-        .map(Self)
-        .map_err(D::Error::custom)
-    }
-}
-
-#[cfg(feature = "serde")]
-impl<G: Group> serde::Serialize for PrivateKey<G> {
-    fn serialize<SK>(&self, serializer: SK) -> Result<SK::Ok, SK::Error>
-    where
-        SK: serde::Serializer,
-    {
-        G::serialize_sk(self.0).serialize(serializer)
-    }
-}
-
 /// Wrapper around a Key to enforce that it's a public one.
-#[derive_where(Clone, ZeroizeOnDrop)]
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Deserialize, serde::Serialize),
+    serde(bound(
+        deserialize = "G::Pk: serde::Deserialize<'de>",
+        serialize = "G::Pk: serde::Serialize"
+    ))
+)]
+#[derive_where(Clone)]
 #[derive_where(Debug, Eq, Hash, Ord, PartialEq, PartialOrd; G::Pk)]
 pub struct PublicKey<G: Group + ?Sized>(G::Pk);
 
@@ -213,12 +203,12 @@ impl<G: Group> PublicKey<G> {
 
     /// Convert to bytes
     pub fn serialize(&self) -> GenericArray<u8, G::PkLen> {
-        G::serialize_pk(self.0)
+        G::serialize_pk(&self.0)
     }
 
     /// Returns the inner [`Group::Pk`].
-    pub fn to_group_type(&self) -> G::Pk {
-        self.0
+    pub fn to_group_type(&self) -> &G::Pk {
+        &self.0
     }
 }
 
@@ -231,32 +221,6 @@ impl<G: Group> PublicKey<G> {
         signature: &SIG::Signature,
     ) -> Result<(), ProtocolError> {
         SIG::verify(&self.0, message_builder, state, signature)
-    }
-}
-
-#[cfg(feature = "serde")]
-impl<'de, G: Group> serde::Deserialize<'de> for PublicKey<G> {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        use serde::de::Error;
-
-        G::deserialize_take_pk(
-            &mut (GenericArray::<_, G::PkLen>::deserialize(deserializer)?.as_slice()),
-        )
-        .map(Self)
-        .map_err(D::Error::custom)
-    }
-}
-
-#[cfg(feature = "serde")]
-impl<G: Group> serde::Serialize for PublicKey<G> {
-    fn serialize<SK>(&self, serializer: SK) -> Result<SK::Ok, SK::Error>
-    where
-        SK: serde::Serializer,
-    {
-        G::serialize_pk(self.0).serialize(serializer)
     }
 }
 
@@ -306,9 +270,6 @@ impl<H: OutputSizeUser, E> OprfSeedSerialization<H, E> for OprfSeed<H> {
 //////////////////////////
 
 #[cfg(test)]
-use crate::serialization::AssertZeroized;
-
-#[cfg(test)]
 impl<G: Group> KeyPair<G> {
     /// Test-only strategy returning a proptest Strategy based on
     /// [`Self::derive_random`]
@@ -330,35 +291,12 @@ impl<G: Group> KeyPair<G> {
 }
 
 #[cfg(test)]
-impl<G: Group> AssertZeroized for PublicKey<G>
-where
-    G::Pk: AssertZeroized,
-{
-    fn assert_zeroized(&self) {
-        self.0.assert_zeroized();
-    }
-}
-
-#[cfg(test)]
-impl<G: Group> AssertZeroized for PrivateKey<G>
-where
-    G::Sk: AssertZeroized,
-{
-    fn assert_zeroized(&self) {
-        self.0.assert_zeroized();
-    }
-}
-
-#[cfg(test)]
 mod tests {
-    use core::ptr;
-
     use hkdf::Hkdf;
     use rand::rngs::OsRng;
 
     use super::*;
     use crate::ciphersuite::{KeGroup, OprfHash};
-    use crate::serialization::AssertZeroized;
     use crate::{
         CipherSuite, ClientLogin, ClientLoginFinishParameters, ClientLoginFinishResult,
         ClientLoginStartResult, ClientRegistration, ClientRegistrationFinishParameters,
@@ -366,29 +304,6 @@ mod tests {
         ServerLoginParameters, ServerLoginStartResult, ServerRegistration,
         ServerRegistrationStartResult, ServerSetup,
     };
-
-    #[test]
-    fn test_zeroize_key() {
-        fn inner<G: Group>()
-        where
-            G::Sk: AssertZeroized,
-        {
-            let mut rng = OsRng;
-            let mut key = PrivateKey::<G>(G::random_sk(&mut rng));
-            unsafe { ptr::drop_in_place(&mut key) };
-            key.0.assert_zeroized();
-        }
-
-        #[cfg(feature = "ristretto255")]
-        inner::<crate::Ristretto255>();
-        inner::<::p256::NistP256>();
-        inner::<::p384::NistP384>();
-        inner::<::p521::NistP521>();
-        #[cfg(feature = "curve25519")]
-        inner::<crate::Curve25519>();
-        #[cfg(feature = "ed25519")]
-        inner::<crate::Ed25519>();
-    }
 
     macro_rules! test {
         ($mod:ident, $point:ty) => {

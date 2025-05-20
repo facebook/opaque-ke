@@ -58,7 +58,10 @@ pub struct RegistrationRequest<CS: CipherSuite> {
 #[cfg_attr(
     feature = "serde",
     derive(serde::Deserialize, serde::Serialize),
-    serde(bound = "")
+    serde(bound(
+        deserialize = "<KeGroup<CS> as Group>::Pk: serde::Deserialize<'de>",
+        serialize = "<KeGroup<CS> as Group>::Pk: serde::Serialize"
+    ))
 )]
 #[derive_where(Clone)]
 #[derive_where(Debug, Eq, Hash, Ord, PartialEq, PartialOrd; voprf::EvaluationElement<CS::OprfCs>, <KeGroup<CS> as Group>::Pk)]
@@ -74,7 +77,10 @@ pub struct RegistrationResponse<CS: CipherSuite> {
 #[cfg_attr(
     feature = "serde",
     derive(serde::Deserialize, serde::Serialize),
-    serde(bound = "")
+    serde(bound(
+        deserialize = "<KeGroup<CS> as Group>::Pk: serde::Deserialize<'de>",
+        serialize = "<KeGroup<CS> as Group>::Pk: serde::Serialize"
+    ))
 )]
 #[derive_where(Clone, ZeroizeOnDrop)]
 #[derive_where(Debug, Eq, Hash, Ord, PartialEq, PartialOrd; <KeGroup<CS> as Group>::Pk)]
@@ -85,6 +91,7 @@ pub struct RegistrationUpload<CS: CipherSuite> {
     /// The masking key used to mask the envelope
     pub(crate) masking_key: Output<OprfHash<CS>>,
     /// The user's public key
+    #[derive_where(skip(Zeroize))]
     pub(crate) client_s_pk: PublicKey<KeGroup<CS>>,
 }
 

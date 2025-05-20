@@ -120,11 +120,6 @@ where
 }
 
 #[cfg(test)]
-pub(crate) trait AssertZeroized {
-    fn assert_zeroized(&self);
-}
-
-#[cfg(test)]
 mod tests;
 
 #[cfg(test)]
