@@ -75,7 +75,7 @@ pub struct ServerSetup<
 > {
     oprf_seed: OS,
     keypair: KeyPair<KeGroup<CS>, SK>,
-    pub(crate) fake_keypair: KeyPair<KeGroup<CS>>,
+    pub(crate) dummy_pk: PublicKey<KeGroup<CS>>,
 }
 
 /// The state elements the client holds to register itself
@@ -165,7 +165,7 @@ pub type ServerSetupLen<
     CS: CipherSuite,
     SK: PrivateKeySerialization<KeGroup<CS>>,
     OS: OprfSeedSerialization<OprfHash<CS>, SK::Error>,
-> = Sum<Sum<OS::Len, SK::Len>, <KeGroup<CS> as Group>::SkLen>;
+> = Sum<Sum<OS::Len, SK::Len>, <KeGroup<CS> as Group>::PkLen>;
 
 impl<CS: CipherSuite, SK: Clone, OS: Clone> ServerSetup<CS, SK, OS> {
     /// Create [`ServerSetup`] with the given keypair and OPRF seed.
@@ -181,7 +181,7 @@ impl<CS: CipherSuite, SK: Clone, OS: Clone> ServerSetup<CS, SK, OS> {
         Self {
             oprf_seed,
             keypair,
-            fake_keypair: KeyPair::<KeGroup<CS>>::random(rng),
+            dummy_pk: KeyPair::<KeGroup<CS>>::random(rng).public().clone(),
         }
     }
 
@@ -203,15 +203,15 @@ impl<CS: CipherSuite, SK: Clone, OS: Clone> ServerSetup<CS, SK, OS> {
     where
         SK: PrivateKeySerialization<KeGroup<CS>>,
         OS: OprfSeedSerialization<OprfHash<CS>, SK::Error>,
-        // ServerSetup: Hash + KeSk + KeSk
+        // ServerSetup: Hash + KeSk + KePk
         OS::Len: Add<SK::Len>,
-        Sum<OS::Len, SK::Len>: ArrayLength<u8> + Add<<KeGroup<CS> as Group>::SkLen>,
+        Sum<OS::Len, SK::Len>: ArrayLength<u8> + Add<<KeGroup<CS> as Group>::PkLen>,
         ServerSetupLen<CS, SK, OS>: ArrayLength<u8>,
     {
         self.oprf_seed
             .serialize()
             .concat(SK::serialize_key_pair(&self.keypair))
-            .concat(self.fake_keypair.private().serialize())
+            .concat(self.dummy_pk.serialize())
     }
 
     /// Deserialization from bytes
@@ -223,7 +223,7 @@ impl<CS: CipherSuite, SK: Clone, OS: Clone> ServerSetup<CS, SK, OS> {
         Ok(Self {
             oprf_seed: OS::deserialize_take(&mut input)?,
             keypair: SK::deserialize_take_key_pair(&mut input)?,
-            fake_keypair: PrivateKey::deserialize_take_key_pair(&mut input)
+            dummy_pk: PublicKey::deserialize_take(&mut input)
                 .map_err(ProtocolError::into_custom)?,
         })
     }
