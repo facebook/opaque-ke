@@ -23,9 +23,7 @@ use crate::errors::*;
 use crate::hash::OutputSize;
 use crate::key_exchange::group::Group;
 use crate::key_exchange::shared::NonceLen;
-use crate::key_exchange::traits::{
-    Deserialize, Ke1MessageLen, Ke2MessageLen, KeyExchange, Serialize,
-};
+use crate::key_exchange::{Deserialize, Ke1MessageLen, Ke2MessageLen, KeyExchange, Serialize};
 use crate::ksf::Identity;
 use crate::messages::{
     CredentialRequestLen, CredentialResponseLen, CredentialResponseWithoutKeLen,
