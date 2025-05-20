@@ -11,10 +11,11 @@
 pub use curve25519_dalek;
 use curve25519_dalek::montgomery::MontgomeryPoint;
 use curve25519_dalek::scalar;
-use curve25519_dalek::traits::Identity;
+use curve25519_dalek::traits::IsIdentity;
 use generic_array::GenericArray;
 use generic_array::typenum::U32;
 use rand::{CryptoRng, RngCore};
+use subtle::ConstantTimeEq;
 use zeroize::Zeroize;
 
 use super::Group;
@@ -27,22 +28,19 @@ pub struct Curve25519;
 
 /// The implementation of such a subgroup for Curve25519
 impl Group for Curve25519 {
-    type Pk = MontgomeryPoint;
+    type Pk = NonIdentity;
     type PkLen = U32;
     type Sk = Scalar;
     type SkLen = U32;
 
     fn serialize_pk(pk: Self::Pk) -> GenericArray<u8, Self::PkLen> {
-        pk.to_bytes().into()
+        pk.0.to_bytes().into()
     }
 
     fn deserialize_take_pk(bytes: &mut &[u8]) -> Result<Self::Pk, ProtocolError> {
         bytes
             .take_array::<U32>("public key")
-            .ok()
-            .map(|array| MontgomeryPoint(array.into()))
-            .filter(|pk| pk != &MontgomeryPoint::identity())
-            .ok_or(ProtocolError::SerializationError)
+            .and_then(|bytes| NonIdentity::from_bytes(bytes.into()))
     }
 
     fn random_sk<R: RngCore + CryptoRng>(rng: &mut R) -> Self::Sk {
@@ -59,7 +57,7 @@ impl Group for Curve25519 {
     }
 
     fn public_key(sk: Self::Sk) -> Self::Pk {
-        MontgomeryPoint::mul_base_clamped(sk.0)
+        NonIdentity(MontgomeryPoint::mul_base_clamped(sk.0))
     }
 
     fn serialize_sk(sk: Self::Sk) -> GenericArray<u8, Self::SkLen> {
@@ -69,25 +67,79 @@ impl Group for Curve25519 {
     fn deserialize_take_sk(bytes: &mut &[u8]) -> Result<Self::Sk, ProtocolError> {
         bytes
             .take_array::<U32>("secret key")
-            .ok()
-            .and_then(|bytes| {
-                let scalar = scalar::clamp_integer(bytes.into());
-                (scalar == *bytes).then_some(scalar)
-            })
-            .map(Scalar)
-            .ok_or(ProtocolError::SerializationError)
+            .and_then(|bytes| Scalar::from_bytes(bytes.into()))
     }
+}
+
+impl DiffieHellman<Curve25519> for Scalar {
+    fn diffie_hellman(self, pk: NonIdentity) -> GenericArray<u8, U32> {
+        Curve25519::serialize_pk(NonIdentity(pk.0.mul_clamped(self.0)))
+    }
+}
+
+/// Non-identity point wrapper for [`MontgomeryPoint`].
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, Zeroize)]
+pub struct NonIdentity(
+    #[cfg_attr(feature = "serde", serde(deserialize_with = "serde_deserialize_pk"))]
+    MontgomeryPoint,
+);
+
+impl NonIdentity {
+    fn from_bytes(bytes: [u8; 32]) -> Result<Self, ProtocolError> {
+        let point = MontgomeryPoint(bytes);
+
+        if point.is_identity() {
+            Err(ProtocolError::SerializationError)
+        } else {
+            Ok(NonIdentity(point))
+        }
+    }
+}
+
+#[cfg(feature = "serde")]
+fn serde_deserialize_pk<'de, D>(deserializer: D) -> Result<MontgomeryPoint, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    use serde::de::{Deserialize, Error};
+
+    let point = MontgomeryPoint::deserialize(deserializer)?;
+
+    NonIdentity::from_bytes(point.0)
+        .map(|point| point.0)
+        .map_err(Error::custom)
 }
 
 /// Curve25519 scalar.
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, Zeroize)]
-pub struct Scalar([u8; 32]);
+pub struct Scalar(
+    #[cfg_attr(feature = "serde", serde(deserialize_with = "serde_deserialize_sk"))] [u8; 32],
+);
 
-impl DiffieHellman<Curve25519> for Scalar {
-    fn diffie_hellman(self, pk: MontgomeryPoint) -> GenericArray<u8, U32> {
-        Curve25519::serialize_pk(pk.mul_clamped(self.0))
+impl Scalar {
+    fn from_bytes(bytes: [u8; 32]) -> Result<Self, ProtocolError> {
+        let scalar = scalar::clamp_integer(bytes);
+
+        if scalar.ct_eq(&bytes).into() {
+            Ok(Self(scalar))
+        } else {
+            Err(ProtocolError::SerializationError)
+        }
     }
+}
+
+#[cfg(feature = "serde")]
+fn serde_deserialize_sk<'de, D>(deserializer: D) -> Result<[u8; 32], D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    use serde::de::{Deserialize, Error};
+
+    Scalar::from_bytes(<[u8; 32]>::deserialize(deserializer)?)
+        .map(|scalar| scalar.0)
+        .map_err(D::Error::custom)
 }
 
 //////////////////////////
@@ -99,9 +151,9 @@ impl DiffieHellman<Curve25519> for Scalar {
 use crate::serialization::AssertZeroized;
 
 #[cfg(test)]
-impl AssertZeroized for MontgomeryPoint {
+impl AssertZeroized for NonIdentity {
     fn assert_zeroized(&self) {
-        assert_eq!(*self, MontgomeryPoint::default());
+        assert_eq!(self.0, MontgomeryPoint::default());
     }
 }
 
