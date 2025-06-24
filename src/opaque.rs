@@ -27,9 +27,9 @@ use crate::errors::{InternalError, ProtocolError};
 use crate::hash::OutputSize;
 use crate::key_exchange::group::Group;
 use crate::key_exchange::shared::NonceLen;
-use crate::key_exchange::traits::{
-    CredentialResponseParts, Deserialize, Ke1MessageLen, Ke1StateLen, Ke2StateLen, KeyExchange,
-    Serialize, SerializedContext, SerializedIdentifiers,
+use crate::key_exchange::{
+    Deserialize, Ke1MessageLen, Ke1StateLen, Ke2StateLen, KeyExchange, Serialize,
+    SerializedContext, SerializedCredentialResponse, SerializedIdentifiers,
 };
 use crate::keypair::{
     KeyPair, OprfSeed, OprfSeedSerialization, PrivateKey, PrivateKeySerialization, PublicKey,
@@ -503,18 +503,18 @@ impl<CS: CipherSuite> ClientLogin<CS> {
         password: &[u8],
     ) -> Result<ClientLoginStartResult<CS>, ProtocolError> {
         let blind_result = blind::<CS, _>(rng, password)?;
-        let (ke1_state, ke1_message) = CS::KeyExchange::generate_ke1(rng)?;
+        let ke1_result = CS::KeyExchange::generate_ke1(rng)?;
 
         let credential_request = CredentialRequest {
             blinded_element: blind_result.message,
-            ke1_message,
+            ke1_message: ke1_result.message,
         };
 
         Ok(ClientLoginStartResult {
             message: credential_request.clone(),
             state: Self {
                 oprf_client: blind_result.state,
-                ke1_state,
+                ke1_state: ke1_result.state,
                 credential_request,
             },
         })
@@ -582,8 +582,8 @@ impl<CS: CipherSuite> ClientLogin<CS> {
             self.credential_request.to_parts(),
             self.credential_request.ke1_message.clone(),
             credential_response.to_parts(),
-            credential_response.ke2_message,
             &self.ke1_state,
+            credential_response.ke2_message,
             server_s_pk.clone(),
             opened_envelope.client_static_keypair.private().clone(),
             opened_envelope.identifiers,
@@ -592,17 +592,17 @@ impl<CS: CipherSuite> ClientLogin<CS> {
 
         Ok(ClientLoginFinishResult {
             message: CredentialFinalization {
-                ke3_message: result.1,
+                ke3_message: result.message,
             },
-            session_key: result.0,
+            session_key: result.session_key,
             export_key: opened_envelope.export_key,
             server_s_pk,
             #[cfg(test)]
             state: self,
             #[cfg(test)]
-            handshake_secret: result.2,
+            handshake_secret: result.handshake_secret,
             #[cfg(test)]
-            client_mac_key: result.3,
+            client_mac_key: result.km3,
         })
     }
 }
@@ -679,7 +679,7 @@ impl<CS: CipherSuite> ServerLogin<CS> {
         let server = voprf::OprfServer::new_with_key(&oprf_key).map_err(ProtocolError::from)?;
         let evaluation_element = server.blind_evaluate(&credential_request.blinded_element);
 
-        let credential_response = CredentialResponseParts::new(
+        let credential_response = SerializedCredentialResponse::new(
             &evaluation_element,
             masking_nonce,
             masked_response.clone(),
@@ -743,18 +743,18 @@ impl<CS: CipherSuite> ServerLogin<CS> {
             evaluation_element: builder.evaluation_element.clone(),
             masking_nonce: *builder.masking_nonce.deref(),
             masked_response: builder.masked_response.clone(),
-            ke2_message: result.1,
+            ke2_message: result.message,
         };
 
         Ok(ServerLoginStartResult {
             message: credential_response,
             state: Self {
-                ke2_state: result.0,
+                ke2_state: result.state,
             },
             #[cfg(test)]
-            handshake_secret: result.2,
+            handshake_secret: result.handshake_secret,
             #[cfg(test)]
-            server_mac_key: result.3,
+            server_mac_key: result.km2,
             #[cfg(test)]
             oprf_key: builder.oprf_key.deref().clone(),
         })
@@ -797,8 +797,8 @@ impl<CS: CipherSuite> ServerLogin<CS> {
         let context = SerializedContext::from(parameters.context)?;
 
         let session_key = <CS::KeyExchange as KeyExchange>::finish_ke(
-            message.ke3_message,
             &self.ke2_state,
+            message.ke3_message,
             parameters.identifiers,
             context,
         )?;

@@ -25,9 +25,9 @@ use crate::errors::ProtocolError;
 use crate::hash::OutputSize;
 use crate::key_exchange::group::Group;
 use crate::key_exchange::shared::NonceLen;
-use crate::key_exchange::traits::{
-    CredentialRequestParts, CredentialResponseParts, Deserialize, Ke1MessageLen, Ke2MessageLen,
-    Ke3MessageLen, KeyExchange, Serialize,
+use crate::key_exchange::{
+    Deserialize, Ke1MessageLen, Ke2MessageLen, Ke3MessageLen, KeyExchange, Serialize,
+    SerializedCredentialRequest, SerializedCredentialResponse,
 };
 use crate::keypair::PublicKey;
 use crate::opaque::{
@@ -359,8 +359,8 @@ impl<CS: CipherSuite> CredentialRequest<CS> {
         })
     }
 
-    pub(crate) fn to_parts(&self) -> CredentialRequestParts<CS> {
-        CredentialRequestParts::new(&self.blinded_element)
+    pub(crate) fn to_parts(&self) -> SerializedCredentialRequest<CS> {
+        SerializedCredentialRequest::new(&self.blinded_element)
     }
 
     /// Only used for testing purposes
@@ -415,8 +415,8 @@ impl<CS: CipherSuite> CredentialResponse<CS> {
         })
     }
 
-    pub(crate) fn to_parts(&self) -> CredentialResponseParts<CS> {
-        CredentialResponseParts::new(
+    pub(crate) fn to_parts(&self) -> SerializedCredentialResponse<CS> {
+        SerializedCredentialResponse::new(
             &self.evaluation_element,
             self.masking_nonce,
             self.masked_response.clone(),

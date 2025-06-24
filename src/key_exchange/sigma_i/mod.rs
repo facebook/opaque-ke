@@ -35,6 +35,11 @@ use zeroize::Zeroize;
 
 use self::message::Role;
 pub use self::message::{CachedMessage, HashOutput, Message, MessageBuilder, VerifyMessage};
+use super::{
+    Deserialize, GenerateKe1Result, GenerateKe2Result, GenerateKe3Result, KeyExchange, Serialize,
+    SerializedContext, SerializedCredentialRequest, SerializedCredentialResponse,
+    SerializedIdentifier, SerializedIdentifiers,
+};
 use crate::ciphersuite::{CipherSuite, KeGroup, KeHash};
 use crate::envelope::NonceLen;
 use crate::errors::{InternalError, ProtocolError};
@@ -42,11 +47,6 @@ use crate::hash::{Hash, OutputSize, ProxyHash};
 use crate::key_exchange::group::Group;
 use crate::key_exchange::shared::{derive_keys, generate_ke1, generate_nonce, transcript};
 pub use crate::key_exchange::shared::{DiffieHellman, Ke1Message, Ke1State};
-use crate::key_exchange::traits::{
-    CredentialRequestParts, CredentialResponseParts, Deserialize, GenerateKe2Result,
-    GenerateKe3Result, KeyExchange, Sealed, Serialize, SerializedContext, SerializedIdentifier,
-    SerializedIdentifiers,
-};
 use crate::keypair::{KeyPair, PrivateKey, PublicKey};
 use crate::opaque::Identifiers;
 use crate::serialization::{SliceExt, UpdateExt};
@@ -156,9 +156,9 @@ pub struct Ke2Builder<'a, CS: CipherSuite, KE: Group> {
     expected_mac: Output<KeHash<CS>>,
     session_key: Output<KeHash<CS>>,
     #[cfg(test)]
-    km3: Output<KeHash<CS>>,
-    #[cfg(test)]
     handshake_secret: Output<KeHash<CS>>,
+    #[cfg(test)]
+    km2: Output<KeHash<CS>>,
 }
 
 /// The server state produced after the second key exchange message
@@ -239,15 +239,15 @@ where
 
     fn generate_ke1<R: RngCore + CryptoRng>(
         rng: &mut R,
-    ) -> Result<(Self::KE1State, Self::KE1Message), ProtocolError> {
+    ) -> Result<GenerateKe1Result<Self>, ProtocolError> {
         generate_ke1(rng)
     }
 
     fn ke2_builder<'a, CS: CipherSuite<KeyExchange = Self>, R: RngCore + CryptoRng>(
         rng: &mut R,
-        credential_request: CredentialRequestParts<CS>,
+        credential_request: SerializedCredentialRequest<CS>,
         ke1_message: Self::KE1Message,
-        credential_response: CredentialResponseParts<CS>,
+        credential_response: SerializedCredentialResponse<CS>,
         client_s_pk: PublicKey<Self::Group>,
         identifiers: SerializedIdentifiers<'a, KeGroup<CS>>,
         context: SerializedContext<'a>,
@@ -309,9 +309,9 @@ where
             expected_mac: client_mac,
             session_key: derived_keys.session_key,
             #[cfg(test)]
-            km3: derived_keys.km3,
-            #[cfg(test)]
             handshake_secret: derived_keys.handshake_secret,
+            #[cfg(test)]
+            km2: derived_keys.km2,
         })
     }
 
@@ -333,33 +333,33 @@ where
         builder: Self::KE2Builder<'_, CS>,
         input: Self::KE2BuilderInput<CS>,
     ) -> Result<GenerateKe2Result<CS>, ProtocolError> {
-        Ok((
-            Ke2State {
+        Ok(GenerateKe2Result {
+            state: Ke2State {
                 client_s_pk: builder.client_s_pk.clone(),
                 session_key: builder.session_key.clone(),
                 verify_state: input.1,
                 expected_mac: builder.expected_mac.clone(),
             },
-            Ke2Message {
+            message: Ke2Message {
                 server_nonce: builder.server_nonce,
                 server_e_pk: builder.server_e_pk.clone(),
                 signature: input.0,
                 mac: builder.transcript.cache.server_mac.clone(),
             },
             #[cfg(test)]
-            builder.handshake_secret.clone(),
+            handshake_secret: builder.handshake_secret.clone(),
             #[cfg(test)]
-            builder.km3.clone(),
-        ))
+            km2: builder.km2.clone(),
+        })
     }
 
     fn generate_ke3<CS: CipherSuite<KeyExchange = Self>, R: CryptoRng + RngCore>(
         rng: &mut R,
-        credential_request: CredentialRequestParts<CS>,
+        credential_request: SerializedCredentialRequest<CS>,
         ke1_message: Self::KE1Message,
-        credential_response: CredentialResponseParts<CS>,
-        ke2_message: Self::KE2Message,
+        credential_response: SerializedCredentialResponse<CS>,
         ke1_state: &Self::KE1State,
+        ke2_message: Self::KE2Message,
         server_s_pk: PublicKey<Self::Group>,
         client_s_sk: PrivateKey<Self::Group>,
         identifiers: SerializedIdentifiers<'_, KeGroup<CS>>,
@@ -427,22 +427,22 @@ where
             &ke2_message.signature,
         )?;
 
-        Ok((
-            derived_keys.session_key,
-            Ke3Message {
+        Ok(GenerateKe3Result {
+            session_key: derived_keys.session_key,
+            message: Ke3Message {
                 signature,
                 mac: client_mac,
             },
             #[cfg(test)]
-            derived_keys.handshake_secret,
+            handshake_secret: derived_keys.handshake_secret,
             #[cfg(test)]
-            derived_keys.km3,
-        ))
+            km3: derived_keys.km3,
+        })
     }
 
     fn finish_ke<CS: CipherSuite<KeyExchange = Self>>(
-        ke3_message: Self::KE3Message,
         ke2_state: &Self::KE2State<CS>,
+        ke3_message: Self::KE3Message,
         identifiers: Identifiers<'_>,
         context: SerializedContext<'_>,
     ) -> Result<Output<KEH>, ProtocolError> {
@@ -466,14 +466,6 @@ where
         .into_option()
         .ok_or(ProtocolError::InvalidLoginError)
     }
-}
-
-impl<SIG: SignatureProtocol, KE: 'static + Group, KEH: Hash> Sealed for SigmaI<SIG, KE, KEH>
-where
-    KEH::Core: ProxyHash,
-    <KEH::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
-    Le<<KEH::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
-{
 }
 
 impl<CS: CipherSuite, SIG: SignatureProtocol, KE: Group> Deserialize for Ke2State<CS, SIG, KE>

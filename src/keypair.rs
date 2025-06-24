@@ -97,7 +97,8 @@ impl<G: Group> PrivateKey<G> {
         PublicKey(G::public_key(self.0))
     }
 
-    pub(crate) fn serialize(&self) -> GenericArray<u8, G::SkLen> {
+    /// Serializes this private key to a fixed-length byte array.
+    pub fn serialize(&self) -> GenericArray<u8, G::SkLen> {
         G::serialize_sk(self.0)
     }
 
@@ -149,8 +150,10 @@ pub trait PrivateKeySerialization<G: Group>: Clone {
     fn serialize_key_pair(key_pair: &KeyPair<G, Self>) -> GenericArray<u8, Self::Len>;
 
     /// Deserialization from bytes
+    ///
+    /// The deserialized bytes must be taken from `bytes`.
     fn deserialize_take_key_pair(
-        input: &mut &[u8],
+        bytes: &mut &[u8],
     ) -> Result<KeyPair<G, Self>, ProtocolError<Self::Error>>;
 }
 
@@ -281,7 +284,9 @@ pub trait OprfSeedSerialization<H, E>: Sized {
     fn serialize(&self) -> GenericArray<u8, Self::Len>;
 
     /// Deserialization from bytes
-    fn deserialize_take(input: &mut &[u8]) -> Result<Self, ProtocolError<E>>;
+    ///
+    /// The deserialized bytes must be taken from `bytes`.
+    fn deserialize_take(bytes: &mut &[u8]) -> Result<Self, ProtocolError<E>>;
 }
 
 impl<H: OutputSizeUser, E> OprfSeedSerialization<H, E> for OprfSeed<H> {

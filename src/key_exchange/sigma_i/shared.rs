@@ -11,7 +11,7 @@ use digest::{Output, OutputSizeUser};
 use generic_array::{ArrayLength, GenericArray};
 
 use crate::errors::ProtocolError;
-use crate::key_exchange::traits::{Deserialize, Serialize};
+use crate::key_exchange::{Deserialize, Serialize};
 use crate::serialization::SliceExt;
 
 /// Pre-hash of the message to be verified.
