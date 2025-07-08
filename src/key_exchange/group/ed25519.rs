@@ -297,7 +297,7 @@ impl serde::Serialize for VerifyingKey {
     }
 }
 
-/// Ed25519 siging key.
+/// Ed25519 signing key.
 // We store the `ExpandedSecret` in memory to avoid computing it on demand and then discarding it
 // again.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Zeroize)]
