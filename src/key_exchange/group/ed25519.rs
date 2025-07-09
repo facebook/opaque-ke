@@ -17,9 +17,9 @@ use digest::Digest;
 pub use ed25519_dalek;
 use ed25519_dalek::hazmat::ExpandedSecretKey;
 use ed25519_dalek::{SecretKey, Sha512};
+use generic_array::GenericArray;
 use generic_array::sequence::Concat;
 use generic_array::typenum::{U32, U64};
-use generic_array::GenericArray;
 use rand::{CryptoRng, RngCore};
 use zeroize::Zeroize;
 

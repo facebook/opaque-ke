@@ -83,6 +83,6 @@ pub(in super::super) mod implementation {
         fn deserialize_take_signature(bytes: &mut &[u8]) -> Result<Self::Signature, ProtocolError>;
 
         fn serialize_signature(signature: &Self::Signature)
-            -> GenericArray<u8, Self::SignatureLen>;
+        -> GenericArray<u8, Self::SignatureLen>;
     }
 }

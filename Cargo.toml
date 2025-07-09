@@ -2,14 +2,14 @@
 authors = ["Kevin Lewi <klewi@fb.com>", "François Garillot <fga@fb.com>"]
 categories = ["no-std"]
 description = "An implementation of the OPAQUE password-authenticated key exchange protocol"
-edition = "2021"
+edition = "2024"
 exclude = ["/src/tests/"]
 keywords = ["cryptography", "crypto", "opaque", "passwords", "authentication"]
 license = "Apache-2.0 OR MIT"
 name = "opaque-ke"
 readme = "README.md"
 repository = "https://github.com/facebook/opaque-ke"
-rust-version = "1.83"
+rust-version = "1.85"
 version = "3.0.0"
 
 [features]

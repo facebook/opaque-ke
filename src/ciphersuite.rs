@@ -12,13 +12,13 @@
 use core::ops::Add;
 
 use digest::core_api::{BlockSizeUser, CoreProxy};
-use generic_array::typenum::{IsLess, Le, NonZero, Sum, U256};
 use generic_array::ArrayLength;
+use generic_array::typenum::{IsLess, Le, NonZero, Sum, U256};
 
 use crate::envelope::NonceLen;
 use crate::hash::{Hash, OutputSize, ProxyHash};
-use crate::key_exchange::group::Group;
 use crate::key_exchange::KeyExchange;
+use crate::key_exchange::group::Group;
 use crate::ksf::Ksf;
 use crate::opaque::MaskedResponseLen;
 

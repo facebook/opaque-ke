@@ -319,8 +319,8 @@ impl<G: Group> KeyPair<G> {
     /// [`Self::derive_random`]
     fn uniform_keypair_strategy() -> proptest::prelude::BoxedStrategy<Self> {
         use proptest::prelude::*;
-        use rand::rngs::StdRng;
         use rand::SeedableRng;
+        use rand::rngs::StdRng;
 
         // The no_shrink is because keypairs should be fixed -- shrinking would cause a
         // different keypair to be generated, which appears to not be very useful.

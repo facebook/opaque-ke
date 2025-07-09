@@ -10,9 +10,9 @@ use core::convert::TryFrom;
 
 use derive_where::derive_where;
 use digest::Output;
+use generic_array::GenericArray;
 use generic_array::sequence::Concat;
 use generic_array::typenum::{Sum, U32};
-use generic_array::GenericArray;
 use hkdf::Hkdf;
 use hmac::{Hmac, Mac};
 use rand::{CryptoRng, RngCore};
@@ -21,8 +21,8 @@ use zeroize::{Zeroize, ZeroizeOnDrop};
 use crate::ciphersuite::{CipherSuite, KeGroup, OprfHash};
 use crate::errors::{InternalError, ProtocolError};
 use crate::hash::OutputSize;
-use crate::key_exchange::group::Group;
 use crate::key_exchange::SerializedIdentifiers;
+use crate::key_exchange::group::Group;
 use crate::keypair::{KeyPair, PrivateKey, PublicKey};
 use crate::opaque::Identifiers;
 use crate::serialization::{GenericArrayExt, SliceExt, UpdateExt};
@@ -190,7 +190,7 @@ impl<CS: CipherSuite> Envelope<CS> {
     ) -> Result<OpenedEnvelope<'a, CS>, ProtocolError> {
         let client_static_keypair = match self.mode {
             InnerEnvelopeMode::Zero => {
-                return Err(InternalError::IncompatibleEnvelopeModeError.into())
+                return Err(InternalError::IncompatibleEnvelopeModeError.into());
             }
             InnerEnvelopeMode::Internal => {
                 recover_keys_internal::<CS>(randomized_pwd_hasher.clone(), self.nonce)?

@@ -15,8 +15,8 @@ use curve25519_dalek::scalar::Scalar;
 use curve25519_dalek::traits::Identity;
 use digest::core_api::BlockSizeUser;
 use digest::{FixedOutput, HashMarker};
-use generic_array::typenum::{IsLess, IsLessOrEqual, U256, U32};
 use generic_array::GenericArray;
+use generic_array::typenum::{IsLess, IsLessOrEqual, U32, U256};
 use rand::{CryptoRng, RngCore};
 use voprf::Mode;
 

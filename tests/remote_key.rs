@@ -16,30 +16,31 @@ use std::vec::Vec;
 #[cfg(feature = "ecdsa")]
 use ::ecdsa::SignatureSize;
 use cryptoki::context::{CInitializeArgs, Pkcs11};
-use cryptoki::mechanism::elliptic_curve::{EcKdf, Ecdh1DeriveParams};
 use cryptoki::mechanism::Mechanism;
+use cryptoki::mechanism::elliptic_curve::{EcKdf, Ecdh1DeriveParams};
 use cryptoki::object::{Attribute, AttributeType, KeyType, ObjectClass, ObjectHandle};
 use cryptoki::session::{Session, UserType};
 use cryptoki::types::AuthPin;
 #[cfg(feature = "ecdsa")]
 use digest::Digest;
 use digest::OutputSizeUser;
-use elliptic_curve::group::prime::PrimeCurveAffine;
+#[cfg(feature = "ecdsa")]
+use elliptic_curve::PrimeCurve;
 use elliptic_curve::group::Curve;
+use elliptic_curve::group::prime::PrimeCurveAffine;
 use elliptic_curve::pkcs8::der::asn1::{OctetString, OctetStringRef};
 use elliptic_curve::pkcs8::der::{Decode, Encode};
 use elliptic_curve::pkcs8::{AssociatedOid, ObjectIdentifier};
 use elliptic_curve::point::{AffineCoordinates, DecompressPoint};
 use elliptic_curve::sec1::{FromEncodedPoint, ModulusSize, Tag, ToEncodedPoint};
-#[cfg(feature = "ecdsa")]
-use elliptic_curve::PrimeCurve;
 use elliptic_curve::{AffinePoint, CurveArithmetic, FieldBytesSize, Group as _, ProjectivePoint};
 use generic_array::typenum::Unsigned;
 use generic_array::{ArrayLength, GenericArray};
+use opaque_ke::key_exchange::KeyExchange;
+use opaque_ke::key_exchange::group::Group;
 #[cfg(all(feature = "ristretto255", feature = "ed25519"))]
 use opaque_ke::key_exchange::group::ed25519::{self, Ed25519};
 use opaque_ke::key_exchange::group::elliptic_curve::NonIdentity;
-use opaque_ke::key_exchange::group::Group;
 #[cfg(feature = "ecdsa")]
 use opaque_ke::key_exchange::sigma_i::ecdsa::{self, Ecdsa, PreHash};
 #[cfg(all(feature = "ristretto255", feature = "ed25519"))]
@@ -47,7 +48,6 @@ use opaque_ke::key_exchange::sigma_i::pure_eddsa::PureEddsa;
 #[cfg(feature = "ecdsa")]
 use opaque_ke::key_exchange::sigma_i::{CachedMessage, HashOutput, Message, SigmaI};
 use opaque_ke::key_exchange::tripledh::TripleDh;
-use opaque_ke::key_exchange::KeyExchange;
 use opaque_ke::keypair::{KeyPair, PublicKey};
 use opaque_ke::ksf::Identity;
 use opaque_ke::{

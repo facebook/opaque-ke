@@ -13,8 +13,8 @@ use std::vec::Vec;
 use digest::OutputSizeUser;
 use generic_array::typenum::Sum;
 use generic_array::{ArrayLength, GenericArray};
-use rand::rngs::OsRng;
 use rand::RngCore;
+use rand::rngs::OsRng;
 use serde_json::Value;
 
 use crate::ciphersuite::{CipherSuite, KeGroup, OprfGroup, OprfHash};

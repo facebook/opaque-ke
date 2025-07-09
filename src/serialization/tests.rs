@@ -11,12 +11,12 @@ use std::vec;
 use std::vec::Vec;
 
 use digest::Output;
-use generic_array::typenum::{Sum, Unsigned};
 use generic_array::ArrayLength;
+use generic_array::typenum::{Sum, Unsigned};
 use proptest::collection::vec;
 use proptest::prelude::*;
-use rand::rngs::OsRng;
 use rand::RngCore;
+use rand::rngs::OsRng;
 use voprf::Group as _;
 
 use crate::ciphersuite::{CipherSuite, KeGroup, OprfGroup, OprfHash};

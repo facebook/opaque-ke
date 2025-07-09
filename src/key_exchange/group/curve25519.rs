@@ -12,8 +12,8 @@ pub use curve25519_dalek;
 use curve25519_dalek::montgomery::MontgomeryPoint;
 use curve25519_dalek::scalar;
 use curve25519_dalek::traits::Identity;
-use generic_array::typenum::U32;
 use generic_array::GenericArray;
+use generic_array::typenum::U32;
 use rand::{CryptoRng, RngCore};
 use zeroize::Zeroize;
 
