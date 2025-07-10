@@ -18,8 +18,8 @@ use core::iter;
 use core::ops::Add;
 
 use derive_where::derive_where;
-use digest::core_api::{BlockSizeUser, CoreProxy};
 use digest::Output;
+use digest::core_api::{BlockSizeUser, CoreProxy};
 use generic_array::sequence::Concat;
 use generic_array::typenum::{IsLess, Le, NonZero, Sum, U2, U256};
 use generic_array::{ArrayLength, GenericArray};
@@ -36,7 +36,7 @@ use crate::key_exchange::group::Group;
 use crate::key_exchange::shared::{NonceLen, STR_CONTEXT};
 use crate::keypair::{PrivateKey, PublicKey};
 use crate::opaque::{Identifiers, MaskedResponse, MaskedResponseLen};
-use crate::serialization::{i2osp, SliceExt};
+use crate::serialization::{SliceExt, i2osp};
 
 /// The key exchange trait.
 pub trait KeyExchange

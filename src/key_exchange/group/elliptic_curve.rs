@@ -15,8 +15,8 @@ use elliptic_curve::group::GroupEncoding;
 use elliptic_curve::ops::MulByGenerator;
 use elliptic_curve::sec1::{ModulusSize, ToEncodedPoint};
 use elliptic_curve::{
-    point, CurveArithmetic, FieldBytesSize, Group as _, NonZeroScalar, ProjectivePoint, Scalar,
-    SecretKey,
+    CurveArithmetic, FieldBytesSize, Group as _, NonZeroScalar, ProjectivePoint, Scalar, SecretKey,
+    point,
 };
 use generic_array::GenericArray;
 use rand::{CryptoRng, RngCore};

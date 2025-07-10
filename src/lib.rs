@@ -15,7 +15,7 @@
 //!
 //! ### Minimum Supported Rust Version
 //!
-//! Rust **1.83** or higher.
+//! Rust **1.85** or higher.
 //!
 //! # Overview
 //!
@@ -70,8 +70,8 @@
 //! #     type KeyExchange = opaque_ke::TripleDh<p256::NistP256, sha2::Sha256>;
 //! #     type Ksf = opaque_ke::ksf::Identity;
 //! # }
-//! use rand::rngs::OsRng;
 //! use rand::RngCore;
+//! use rand::rngs::OsRng;
 //!
 //! let mut rng = OsRng;
 //! let server_setup = ServerSetup::<Default>::new(&mut rng);
@@ -127,8 +127,8 @@
 //! #     type Ksf = opaque_ke::ksf::Identity;
 //! # }
 //! use opaque_ke::ClientRegistration;
-//! use rand::rngs::OsRng;
 //! use rand::RngCore;
+//! use rand::rngs::OsRng;
 //!
 //! let mut client_rng = OsRng;
 //! let client_registration_start_result =
@@ -1358,11 +1358,11 @@ pub use crate::key_exchange::group::curve25519::Curve25519;
 pub use crate::key_exchange::group::ed25519::Ed25519;
 #[cfg(feature = "ristretto255")]
 pub use crate::key_exchange::group::ristretto255::Ristretto255;
+pub use crate::key_exchange::sigma_i::SigmaI;
 #[cfg(feature = "ecdsa")]
 pub use crate::key_exchange::sigma_i::ecdsa::Ecdsa;
 pub use crate::key_exchange::sigma_i::hash_eddsa::HashEddsa;
 pub use crate::key_exchange::sigma_i::pure_eddsa::PureEddsa;
-pub use crate::key_exchange::sigma_i::SigmaI;
 pub use crate::key_exchange::tripledh::TripleDh;
 pub use crate::messages::{
     CredentialFinalization, CredentialFinalizationLen, CredentialRequest, CredentialRequestLen,

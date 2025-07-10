@@ -27,7 +27,7 @@ opaque-ke = "3"
 
 ### Minimum Supported Rust Version
 
-Rust **1.83** or higher.
+Rust **1.85** or higher.
 
 Audit
 -----

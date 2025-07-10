@@ -32,17 +32,17 @@ use chacha20poly1305::aead::{Aead, KeyInit};
 use chacha20poly1305::{ChaCha20Poly1305, Key, Nonce};
 use generic_array::GenericArray;
 use opaque_ke::ciphersuite::CipherSuite;
-use opaque_ke::rand::rngs::OsRng;
 use opaque_ke::rand::RngCore;
+use opaque_ke::rand::rngs::OsRng;
 use opaque_ke::{
     ClientLogin, ClientLoginFinishParameters, ClientRegistration,
     ClientRegistrationFinishParameters, CredentialFinalization, CredentialRequest,
     CredentialResponse, RegistrationRequest, RegistrationResponse, RegistrationUpload, ServerLogin,
     ServerLoginParameters, ServerRegistration, ServerRegistrationLen, ServerSetup,
 };
+use rustyline::Editor;
 use rustyline::error::ReadlineError;
 use rustyline::history::DefaultHistory;
-use rustyline::Editor;
 
 // The ciphersuite trait allows to specify the underlying primitives that will
 // be used in the OPAQUE protocol

@@ -35,9 +35,9 @@ use opaque_ke::{
     CredentialResponse, RegistrationRequest, RegistrationResponse, RegistrationUpload, ServerLogin,
     ServerLoginParameters, ServerRegistration, ServerRegistrationLen, ServerSetup,
 };
+use rustyline::Editor;
 use rustyline::error::ReadlineError;
 use rustyline::history::DefaultHistory;
-use rustyline::Editor;
 
 // The ciphersuite trait allows to specify the underlying primitives that will
 // be used in the OPAQUE protocol

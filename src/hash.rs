@@ -51,14 +51,14 @@ where
 }
 
 impl<
-        T: Default
-            + HashMarker
-            + OutputSizeUser<OutputSize = OutputSize<Self>>
-            + BlockSizeUser
-            + FixedOutputReset
-            + CoreProxy
-            + Clone,
-    > Hash for T
+    T: Default
+        + HashMarker
+        + OutputSizeUser<OutputSize = OutputSize<Self>>
+        + BlockSizeUser
+        + FixedOutputReset
+        + CoreProxy
+        + Clone,
+> Hash for T
 where
     <Self as CoreProxy>::Core: ProxyHash,
     <<Self as CoreProxy>::Core as BlockSizeUser>::BlockSize: IsLess<U256>,

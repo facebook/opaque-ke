@@ -14,7 +14,7 @@ use core::marker::PhantomData;
 use derive_where::derive_where;
 use digest::core_api::BlockSizeUser;
 use digest::{FixedOutputReset, HashMarker};
-use ecdsa::{hazmat, PrimeCurve, SignatureSize};
+use ecdsa::{PrimeCurve, SignatureSize, hazmat};
 use elliptic_curve::{
     CurveArithmetic, Field, FieldBytes, FieldBytesEncoding, FieldBytesSize, NonZeroScalar,
     PrimeField, Scalar,
@@ -26,8 +26,8 @@ use zeroize::Zeroize;
 use super::{Message, MessageBuilder, SignatureProtocol};
 use crate::ciphersuite::CipherSuite;
 use crate::errors::ProtocolError;
-use crate::key_exchange::group::elliptic_curve::NonIdentity;
 use crate::key_exchange::group::Group;
+use crate::key_exchange::group::elliptic_curve::NonIdentity;
 pub use crate::key_exchange::sigma_i::shared::PreHash;
 use crate::serialization::SliceExt;
 
