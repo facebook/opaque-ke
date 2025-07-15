@@ -144,10 +144,14 @@ pub trait SignatureProtocol {
 #[cfg_attr(
     feature = "serde",
     derive(serde::Deserialize, serde::Serialize),
-    serde(bound(deserialize = "'de: 'a", serialize = ""))
+    serde(bound(
+        deserialize = "'de: 'a, <KeGroup<CS> as Group>::Pk: serde::Deserialize<'de>, KE::Pk: \
+                       serde::Deserialize<'de>",
+        serialize = "<KeGroup<CS> as Group>::Pk: serde::Serialize, KE::Pk: serde::Serialize"
+    ))
 )]
 #[derive_where(Clone, ZeroizeOnDrop)]
-#[derive_where(Debug, Eq, Hash, PartialEq; PublicKey<KeGroup<CS>>, PublicKey<KE>)]
+#[derive_where(Debug, Eq, Hash, PartialEq; <KeGroup<CS> as Group>::Pk, KE::Pk)]
 pub struct Ke2Builder<'a, CS: CipherSuite, KE: Group> {
     transcript: Message<'a, CS, KE>,
     server_nonce: GenericArray<u8, NonceLen>,
@@ -166,8 +170,10 @@ pub struct Ke2Builder<'a, CS: CipherSuite, KE: Group> {
     feature = "serde",
     derive(serde::Deserialize, serde::Serialize),
     serde(bound(
-        deserialize = "SIG::VerifyState<CS, KE>: serde::Deserialize<'de>",
-        serialize = "SIG::VerifyState<CS, KE>: serde::Serialize"
+        deserialize = "<SIG::Group as Group>::Pk: serde::Deserialize<'de>, SIG::VerifyState<CS, \
+                       KE>: serde::Deserialize<'de>",
+        serialize = "<SIG::Group as Group>::Pk: serde::Serialize, SIG::VerifyState<CS, KE>: \
+                     serde::Serialize"
     ))
 )]
 #[derive_where(Clone, ZeroizeOnDrop)]
@@ -184,8 +190,8 @@ pub struct Ke2State<CS: CipherSuite, SIG: SignatureProtocol, KE: Group> {
     feature = "serde",
     derive(serde::Deserialize, serde::Serialize),
     serde(bound(
-        deserialize = "SIG::Signature: serde::Deserialize<'de>",
-        serialize = "SIG::Signature: serde::Serialize"
+        deserialize = "KE::Pk: serde::Deserialize<'de>, SIG::Signature: serde::Deserialize<'de>",
+        serialize = "KE::Pk: serde::Serialize, SIG::Signature: serde::Serialize"
     ))
 )]
 #[derive_where(Clone, ZeroizeOnDrop)]

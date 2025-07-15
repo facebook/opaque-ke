@@ -46,15 +46,9 @@ impl Group for Ed25519 {
     }
 
     fn deserialize_take_pk(bytes: &mut &[u8]) -> Result<Self::Pk, ProtocolError> {
-        let compressed = bytes
-            .take_array("public key")
-            .map(|bytes| CompressedEdwardsY(bytes.into()))?;
+        let bytes = bytes.take_array("public key")?;
 
-        if let Some(point) = compressed.decompress().filter(|point| !point.is_identity()) {
-            Ok(VerifyingKey { point, compressed })
-        } else {
-            Err(ProtocolError::SerializationError)
-        }
+        VerifyingKey::from_bytes(bytes.into())
     }
 
     fn random_sk<R: RngCore + CryptoRng>(rng: &mut R) -> Self::Sk {
@@ -80,56 +74,6 @@ impl Group for Ed25519 {
         Ok(SigningKey::from_bytes(
             bytes.take_array("secret key")?.into(),
         ))
-    }
-}
-
-/// Ed25519 verifying key.
-// `ed25519_dalek::VerifyingKey` doesn't implement `Zeroize`.
-// TODO: remove after https://github.com/dalek-cryptography/curve25519-dalek/pull/747.
-// Required for manual implementation of EdDSA.
-// TODO: remove after https://github.com/dalek-cryptography/curve25519-dalek/pull/556.
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Zeroize)]
-pub struct VerifyingKey {
-    point: EdwardsPoint,
-    compressed: CompressedEdwardsY,
-}
-
-/// Ed25519 siging key.
-// We store the `ExpandedSecret` in memory to avoid computing it on demand and then discarding it
-// again.
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Zeroize)]
-pub struct SigningKey {
-    // `ed25519_dalek::SigningKey` doesn't implement `Zeroize`. See
-    // https://github.com/dalek-cryptography/curve25519-dalek/pull/747
-    // Required for manual implementation of EdDSA.
-    // TODO: remove after https://github.com/dalek-cryptography/curve25519-dalek/pull/556.
-    sk: SecretKey,
-    verifying_key: VerifyingKey,
-    // `ed25519_dalek::ExpandedSecret` doesn't implement traits we need. See
-    // TODO: remove after https://github.com/dalek-cryptography/curve25519-dalek/pull/748 and
-    // https://github.com/dalek-cryptography/curve25519-dalek/pull/747.
-    scalar: Scalar,
-    hash_prefix: [u8; 32],
-}
-
-impl SigningKey {
-    fn from_bytes(sk: [u8; 32]) -> Self {
-        let ExpandedSecretKey {
-            scalar,
-            hash_prefix,
-        } = ExpandedSecretKey::from(&sk);
-        let point = EdwardsPoint::mul_base(&scalar);
-        let verifying_key = VerifyingKey {
-            point,
-            compressed: point.compress(),
-        };
-
-        SigningKey {
-            sk,
-            verifying_key,
-            scalar,
-            hash_prefix,
-        }
     }
 }
 
@@ -278,8 +222,175 @@ fn verify<'a>(
     }
 }
 
+/// Ed25519 verifying key.
+// `ed25519_dalek::VerifyingKey` doesn't implement `Zeroize`.
+// TODO: remove after https://github.com/dalek-cryptography/curve25519-dalek/pull/747.
+// Required for manual implementation of EdDSA.
+// TODO: remove after https://github.com/dalek-cryptography/curve25519-dalek/pull/556.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Zeroize)]
+pub struct VerifyingKey {
+    point: EdwardsPoint,
+    compressed: CompressedEdwardsY,
+}
+
+impl VerifyingKey {
+    fn from_bytes(bytes: [u8; 32]) -> Result<Self, ProtocolError> {
+        let compressed = CompressedEdwardsY(bytes);
+
+        if let Some(point) = compressed.decompress().filter(|point| !point.is_identity()) {
+            Ok(Self { point, compressed })
+        } else {
+            Err(ProtocolError::SerializationError)
+        }
+    }
+}
+
+#[cfg(feature = "serde")]
+impl<'de> serde::Deserialize<'de> for VerifyingKey {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        use core::fmt::{self, Formatter};
+
+        use serde::de::{Deserialize, Deserializer, Error, SeqAccess, Visitor};
+
+        struct VerifyingKeyVisitor;
+
+        impl<'de> Visitor<'de> for VerifyingKeyVisitor {
+            type Value = VerifyingKey;
+
+            fn expecting(&self, formatter: &mut Formatter) -> fmt::Result {
+                Formatter::write_str(formatter, "tuple struct VerifyingKey")
+            }
+
+            fn visit_newtype_struct<D>(self, deserializer: D) -> Result<Self::Value, D::Error>
+            where
+                D: Deserializer<'de>,
+            {
+                let compressed = CompressedEdwardsY::deserialize(deserializer)?;
+                VerifyingKey::from_bytes(compressed.0).map_err(Error::custom)
+            }
+
+            fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
+            where
+                A: SeqAccess<'de>,
+            {
+                let compressed: CompressedEdwardsY = seq.next_element()?.ok_or_else(|| {
+                    Error::invalid_length(0, &"tuple struct VerifyingKey with 1 element")
+                })?;
+                VerifyingKey::from_bytes(compressed.0).map_err(Error::custom)
+            }
+        }
+
+        deserializer.deserialize_newtype_struct("VerifyingKey", VerifyingKeyVisitor)
+    }
+}
+
+#[cfg(feature = "serde")]
+impl serde::Serialize for VerifyingKey {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serializer.serialize_newtype_struct("VerifyingKey", &self.compressed)
+    }
+}
+
+/// Ed25519 signing key.
+// We store the `ExpandedSecret` in memory to avoid computing it on demand and then discarding it
+// again.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Zeroize)]
+pub struct SigningKey {
+    // `ed25519_dalek::SigningKey` doesn't implement `Zeroize`. See
+    // https://github.com/dalek-cryptography/curve25519-dalek/pull/747
+    // Required for manual implementation of EdDSA.
+    // TODO: remove after https://github.com/dalek-cryptography/curve25519-dalek/pull/556.
+    sk: SecretKey,
+    verifying_key: VerifyingKey,
+    // `ed25519_dalek::ExpandedSecret` doesn't implement traits we need. See
+    // TODO: remove after https://github.com/dalek-cryptography/curve25519-dalek/pull/748 and
+    // https://github.com/dalek-cryptography/curve25519-dalek/pull/747.
+    scalar: Scalar,
+    hash_prefix: [u8; 32],
+}
+
+impl SigningKey {
+    fn from_bytes(sk: [u8; 32]) -> Self {
+        let ExpandedSecretKey {
+            scalar,
+            hash_prefix,
+        } = ExpandedSecretKey::from(&sk);
+        let point = EdwardsPoint::mul_base(&scalar);
+        let verifying_key = VerifyingKey {
+            point,
+            compressed: point.compress(),
+        };
+
+        SigningKey {
+            sk,
+            verifying_key,
+            scalar,
+            hash_prefix,
+        }
+    }
+}
+
+#[cfg(feature = "serde")]
+impl<'de> serde::Deserialize<'de> for SigningKey {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        use core::fmt::{self, Formatter};
+
+        use serde::de::{Deserialize, Deserializer, Error, SeqAccess, Visitor};
+
+        struct SigningKeyVisitor;
+
+        impl<'de> Visitor<'de> for SigningKeyVisitor {
+            type Value = SigningKey;
+
+            fn expecting(&self, formatter: &mut Formatter) -> fmt::Result {
+                Formatter::write_str(formatter, "tuple struct SigningKey")
+            }
+
+            fn visit_newtype_struct<D>(self, deserializer: D) -> Result<Self::Value, D::Error>
+            where
+                D: Deserializer<'de>,
+            {
+                let sk = Scalar::deserialize(deserializer)?;
+                Ok(SigningKey::from_bytes(sk.to_bytes()))
+            }
+
+            fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
+            where
+                A: SeqAccess<'de>,
+            {
+                let sk: Scalar = seq.next_element()?.ok_or_else(|| {
+                    Error::invalid_length(0, &"tuple struct SigningKey with 1 element")
+                })?;
+                Ok(SigningKey::from_bytes(sk.to_bytes()))
+            }
+        }
+
+        deserializer.deserialize_newtype_struct("SigningKey", SigningKeyVisitor)
+    }
+}
+
+#[cfg(feature = "serde")]
+impl serde::Serialize for SigningKey {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serializer.serialize_newtype_struct("SigningKey", &self.sk)
+    }
+}
+
 /// Ed25519 Signature.
 // `ed25519_dalek::Signature` doesn't implement validation with Serde de/serialization.
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[allow(non_snake_case)]
 pub struct Signature {
@@ -307,31 +418,6 @@ impl Signature {
 
     fn serialize(&self) -> GenericArray<u8, U64> {
         GenericArray::from(self.R.0).concat(GenericArray::from(self.s.to_bytes()))
-    }
-}
-
-#[cfg(feature = "serde")]
-impl<'de> serde::Deserialize<'de> for Signature {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        use serde::de::Error;
-
-        Signature::deserialize_take(
-            &mut (GenericArray::<_, U64>::deserialize(deserializer)?.as_slice()),
-        )
-        .map_err(D::Error::custom)
-    }
-}
-
-#[cfg(feature = "serde")]
-impl serde::Serialize for Signature {
-    fn serialize<SK>(&self, serializer: SK) -> Result<SK::Ok, SK::Error>
-    where
-        SK: serde::Serializer,
-    {
-        self.serialize().serialize(serializer)
     }
 }
 

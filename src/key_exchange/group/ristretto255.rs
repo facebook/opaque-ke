@@ -12,13 +12,14 @@ pub use curve25519_dalek;
 use curve25519_dalek::constants::RISTRETTO_BASEPOINT_POINT;
 use curve25519_dalek::ristretto::{CompressedRistretto, RistrettoPoint};
 use curve25519_dalek::scalar::Scalar;
-use curve25519_dalek::traits::Identity;
+use curve25519_dalek::traits::IsIdentity;
 use digest::core_api::BlockSizeUser;
 use digest::{FixedOutput, HashMarker};
 use generic_array::GenericArray;
 use generic_array::typenum::{IsLess, IsLessOrEqual, U32, U256};
 use rand::{CryptoRng, RngCore};
 use voprf::Mode;
+use zeroize::Zeroize;
 
 use super::{Group, STR_OPAQUE_DERIVE_AUTH_KEY_PAIR};
 use crate::errors::{InternalError, ProtocolError};
@@ -31,21 +32,20 @@ use crate::serialization::SliceExt;
 pub struct Ristretto255;
 
 impl Group for Ristretto255 {
-    type Pk = RistrettoPoint;
+    type Pk = NonIdentity;
     type PkLen = U32;
-    type Sk = Scalar;
+    type Sk = NonZeroScalar;
     type SkLen = U32;
 
     fn serialize_pk(pk: Self::Pk) -> GenericArray<u8, Self::PkLen> {
-        pk.compress().to_bytes().into()
+        pk.0.compress().to_bytes().into()
     }
 
     fn deserialize_take_pk(bytes: &mut &[u8]) -> Result<Self::Pk, ProtocolError> {
-        CompressedRistretto::from_slice(&bytes.take_array::<U32>("public key")?)
-            .map_err(|_| ProtocolError::SerializationError)?
+        CompressedRistretto(bytes.take_array("public key")?.into())
             .decompress()
-            .filter(|point| point != &RistrettoPoint::identity())
             .ok_or(ProtocolError::SerializationError)
+            .and_then(NonIdentity::from_point)
     }
 
     fn random_sk<R: RngCore + CryptoRng>(rng: &mut R) -> Self::Sk {
@@ -53,32 +53,99 @@ impl Group for Ristretto255 {
             let scalar = Scalar::random(rng);
 
             if scalar != Scalar::ZERO {
-                break scalar;
+                break NonZeroScalar(scalar);
             }
         }
     }
 
     fn derive_scalar(seed: GenericArray<u8, Self::SkLen>) -> Result<Self::Sk, InternalError> {
         voprf::derive_key::<Self>(&seed, &STR_OPAQUE_DERIVE_AUTH_KEY_PAIR, Mode::Oprf)
+            .map(NonZeroScalar)
             .map_err(InternalError::from)
     }
 
     fn public_key(sk: Self::Sk) -> Self::Pk {
-        RISTRETTO_BASEPOINT_POINT * sk
+        NonIdentity(RISTRETTO_BASEPOINT_POINT * sk.0)
     }
 
     fn serialize_sk(sk: Self::Sk) -> GenericArray<u8, Self::SkLen> {
-        sk.to_bytes().into()
+        sk.0.to_bytes().into()
     }
 
     fn deserialize_take_sk(bytes: &mut &[u8]) -> Result<Self::Sk, ProtocolError> {
-        bytes
-            .take_array::<U32>("secret key")
-            .ok()
-            .and_then(|bytes| Scalar::from_canonical_bytes(bytes.into()).into())
-            .filter(|scalar| scalar != &Scalar::ZERO)
+        Scalar::from_canonical_bytes(bytes.take_array("secret key")?.into())
+            .into_option()
             .ok_or(ProtocolError::SerializationError)
+            .and_then(NonZeroScalar::from_scalar)
     }
+}
+
+impl DiffieHellman<Ristretto255> for NonZeroScalar {
+    fn diffie_hellman(self, pk: NonIdentity) -> GenericArray<u8, U32> {
+        Ristretto255::serialize_pk(NonIdentity(pk.0 * self.0))
+    }
+}
+
+/// Non-identity point wrapper for [`RistrettoPoint`].
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Zeroize)]
+pub struct NonIdentity(
+    #[cfg_attr(feature = "serde", serde(deserialize_with = "serde_deserialize_pk"))] RistrettoPoint,
+);
+
+impl NonIdentity {
+    fn from_point(point: RistrettoPoint) -> Result<Self, ProtocolError> {
+        if point.is_identity() {
+            Err(ProtocolError::SerializationError)
+        } else {
+            Ok(NonIdentity(point))
+        }
+    }
+}
+
+#[cfg(feature = "serde")]
+fn serde_deserialize_pk<'de, D>(deserializer: D) -> Result<RistrettoPoint, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    use serde::de::{Deserialize, Error};
+
+    let point = RistrettoPoint::deserialize(deserializer)?;
+
+    NonIdentity::from_point(point)
+        .map(|point| point.0)
+        .map_err(Error::custom)
+}
+
+/// Non-zero scalar wrapper for [`Scalar`]
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, Zeroize)]
+pub struct NonZeroScalar(
+    #[cfg_attr(feature = "serde", serde(deserialize_with = "serde_deserialize_sk"))] Scalar,
+);
+
+impl NonZeroScalar {
+    fn from_scalar(scalar: Scalar) -> Result<Self, ProtocolError> {
+        if scalar == Scalar::ZERO {
+            Err(ProtocolError::SerializationError)
+        } else {
+            Ok(Self(scalar))
+        }
+    }
+}
+
+#[cfg(feature = "serde")]
+fn serde_deserialize_sk<'de, D>(deserializer: D) -> Result<Scalar, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    use serde::de::{Deserialize, Error};
+
+    let scalar = Scalar::deserialize(deserializer)?;
+
+    NonZeroScalar::from_scalar(scalar)
+        .map(|scalar| scalar.0)
+        .map_err(Error::custom)
 }
 
 impl voprf::CipherSuite for Ristretto255 {
@@ -157,12 +224,6 @@ impl voprf::Group for Ristretto255 {
     }
 }
 
-impl DiffieHellman<Ristretto255> for Scalar {
-    fn diffie_hellman(self, pk: RistrettoPoint) -> GenericArray<u8, U32> {
-        Ristretto255::serialize_pk(pk * self)
-    }
-}
-
 //////////////////////////
 // Test Implementations //
 //===================== //
@@ -172,15 +233,15 @@ impl DiffieHellman<Ristretto255> for Scalar {
 use crate::serialization::AssertZeroized;
 
 #[cfg(test)]
-impl AssertZeroized for RistrettoPoint {
+impl AssertZeroized for NonIdentity {
     fn assert_zeroized(&self) {
-        assert_eq!(*self, RistrettoPoint::default());
+        assert_eq!(self.0, RistrettoPoint::default());
     }
 }
 
 #[cfg(test)]
-impl AssertZeroized for Scalar {
+impl AssertZeroized for NonZeroScalar {
     fn assert_zeroized(&self) {
-        assert_eq!(*self, Scalar::default());
+        assert_eq!(self.0, Scalar::default());
     }
 }

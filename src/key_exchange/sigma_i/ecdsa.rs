@@ -136,7 +136,7 @@ where
 #[cfg_attr(
     feature = "serde",
     derive(serde::Deserialize, serde::Serialize),
-    serde(bound = "")
+    serde(bound = "", transparent)
 )]
 pub struct Signature<G: CurveArithmetic + PrimeCurve>(pub ecdsa::Signature<G>)
 where

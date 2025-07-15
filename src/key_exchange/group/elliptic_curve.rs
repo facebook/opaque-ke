@@ -86,16 +86,35 @@ where
     }
 }
 
+impl<G> DiffieHellman<G> for NonZeroScalar<G>
+where
+    G: CurveArithmetic + voprf::CipherSuite<Group = G> + voprf::Group<Scalar = Scalar<G>>,
+    FieldBytesSize<G>: ModulusSize,
+    ProjectivePoint<G>: GroupEncoding<
+            Repr = GenericArray<u8, <FieldBytesSize<G> as ModulusSize>::CompressedPointSize>,
+        > + ToEncodedPoint<G>,
+{
+    fn diffie_hellman(
+        self,
+        pk: NonIdentity<G>,
+    ) -> GenericArray<u8, <FieldBytesSize<G> as ModulusSize>::CompressedPointSize> {
+        GenericArray::clone_from_slice((pk.0 * self).to_encoded_point(true).as_bytes())
+    }
+}
+
 /// Wrapper around [`NonIdentity`](point::NonIdentity) to implement [`Zeroize`].
 // TODO: remove after https://github.com/RustCrypto/traits/pull/1832.
 #[derive_where(Clone, Copy)]
 #[cfg_attr(
     feature = "serde",
     derive(serde::Deserialize, serde::Serialize),
-    serde(bound(
-        deserialize = "point::NonIdentity<ProjectivePoint<G>>: serde::Deserialize<'de>",
-        serialize = "point::NonIdentity<ProjectivePoint<G>>: serde::Serialize"
-    ))
+    serde(
+        bound(
+            deserialize = "point::NonIdentity<ProjectivePoint<G>>: serde::Deserialize<'de>",
+            serialize = "point::NonIdentity<ProjectivePoint<G>>: serde::Serialize"
+        ),
+        transparent
+    )
 )]
 pub struct NonIdentity<G: CurveArithmetic>(pub point::NonIdentity<ProjectivePoint<G>>);
 
@@ -118,22 +137,6 @@ impl<G: CurveArithmetic> Eq for NonIdentity<G> {}
 impl<G: CurveArithmetic> Zeroize for NonIdentity<G> {
     fn zeroize(&mut self) {
         self.0 = point::NonIdentity::new(ProjectivePoint::<G>::generator()).unwrap();
-    }
-}
-
-impl<G> DiffieHellman<G> for NonZeroScalar<G>
-where
-    G: CurveArithmetic + voprf::CipherSuite<Group = G> + voprf::Group<Scalar = Scalar<G>>,
-    FieldBytesSize<G>: ModulusSize,
-    ProjectivePoint<G>: GroupEncoding<
-            Repr = GenericArray<u8, <FieldBytesSize<G> as ModulusSize>::CompressedPointSize>,
-        > + ToEncodedPoint<G>,
-{
-    fn diffie_hellman(
-        self,
-        pk: NonIdentity<G>,
-    ) -> GenericArray<u8, <FieldBytesSize<G> as ModulusSize>::CompressedPointSize> {
-        GenericArray::clone_from_slice((pk.0 * self).to_encoded_point(true).as_bytes())
     }
 }
 
