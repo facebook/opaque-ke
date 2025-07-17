@@ -16,8 +16,8 @@ use digest::core_api::BlockSizeUser;
 use digest::{FixedOutputReset, HashMarker};
 use ecdsa::{PrimeCurve, SignatureSize, hazmat};
 use elliptic_curve::{
-    CurveArithmetic, Field, FieldBytes, FieldBytesEncoding, FieldBytesSize, NonZeroScalar,
-    PrimeField, Scalar,
+    CurveArithmetic, Field, FieldBytes, FieldBytesEncoding, FieldBytesSize, PrimeField, Scalar,
+    SecretKey,
 };
 use generic_array::{ArrayLength, GenericArray};
 use rand::{CryptoRng, RngCore};
@@ -39,7 +39,7 @@ pub struct Ecdsa<G, H>(PhantomData<(G, H)>);
 
 impl<G, H> SignatureProtocol for Ecdsa<G, H>
 where
-    G: CurveArithmetic + Group<Sk = NonZeroScalar<G>, Pk = NonIdentity<G>> + PrimeCurve,
+    G: CurveArithmetic + Group<Sk = SecretKey<G>, Pk = NonIdentity<G>> + PrimeCurve,
     SignatureSize<G>: ArrayLength<u8>,
     H: Clone
         + Default
@@ -88,14 +88,14 @@ where
     }
 }
 
-fn sign<R, C, H>(sk: &NonZeroScalar<C>, rng: &mut R, pre_hash: &[u8]) -> ecdsa::Signature<C>
+fn sign<R, C, H>(sk: &SecretKey<C>, rng: &mut R, pre_hash: &[u8]) -> ecdsa::Signature<C>
 where
     R: CryptoRng + RngCore,
     C: CurveArithmetic + PrimeCurve,
     SignatureSize<C>: ArrayLength<u8>,
     H: Default + BlockSizeUser + FixedOutputReset<OutputSize = FieldBytesSize<C>> + HashMarker,
 {
-    let repr = sk.to_repr();
+    let repr = sk.to_bytes();
     let order = C::ORDER.encode_field_bytes();
     let z =
         hazmat::bits2field::<C>(pre_hash).expect("hash output can not be shorter than a scalar");
@@ -109,7 +109,7 @@ where
         let k =
             Scalar::<C>::from_repr(rfc6979::generate_k::<H, _>(&repr, &order, &z, &ad)).unwrap();
 
-        if let Ok((signature, _)) = hazmat::sign_prehashed::<C, _>(sk, k, &z) {
+        if let Ok((signature, _)) = hazmat::sign_prehashed::<C, _>(&sk.to_nonzero_scalar(), k, &z) {
             break signature;
         }
     }
@@ -175,14 +175,14 @@ fn ecdsa() {
     let hash = Sha256::new_with_prefix(message);
 
     let sk = NistP256::random_sk(&mut OsRng);
-    let signing_key = SigningKey::from(sk);
+    let signing_key = SigningKey::from(sk.clone());
 
     let signature: Signature = signing_key.sign_digest_with_rng(&mut rng, hash.clone());
     let custom_signature = sign::<_, _, Sha256>(&sk, &mut rng, &hash.clone().finalize());
 
     assert_eq!(signature, custom_signature);
 
-    let pk = NistP256::public_key(sk);
+    let pk = NistP256::public_key(&sk);
     let verifying_key = VerifyingKey::from(PublicKey::from(pk.0));
 
     verifying_key

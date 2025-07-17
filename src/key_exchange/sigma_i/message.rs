@@ -192,10 +192,16 @@ impl<CS: CipherSuite, KE: Group> CachedMessage<CS, KE> {
     derive(serde::Deserialize, serde::Serialize),
     serde(bound = "")
 )]
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, Zeroize)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub(super) enum Role {
     Server,
     Client,
+}
+
+impl Zeroize for Role {
+    fn zeroize(&mut self) {
+        *self = Self::Server;
+    }
 }
 
 enum Stage {

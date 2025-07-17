@@ -18,7 +18,7 @@ pub mod ristretto255;
 
 use generic_array::{ArrayLength, GenericArray};
 use rand::{CryptoRng, RngCore};
-use zeroize::Zeroize;
+use zeroize::ZeroizeOnDrop;
 
 use crate::errors::{InternalError, ProtocolError};
 
@@ -27,16 +27,16 @@ const STR_OPAQUE_DERIVE_AUTH_KEY_PAIR: [u8; 33] = *b"OPAQUE-DeriveDiffieHellmanK
 /// A group representation for use in the key exchange
 pub trait Group {
     /// Public key
-    type Pk: Copy + Zeroize;
+    type Pk: Clone;
     /// Length of the public key
     type PkLen: ArrayLength<u8>;
     /// Secret key
-    type Sk: Copy + Zeroize;
+    type Sk: Clone + ZeroizeOnDrop;
     /// Length of the secret key
     type SkLen: ArrayLength<u8>;
 
     /// Serializes `self`
-    fn serialize_pk(pk: Self::Pk) -> GenericArray<u8, Self::PkLen>;
+    fn serialize_pk(pk: &Self::Pk) -> GenericArray<u8, Self::PkLen>;
 
     /// Return a public key from its fixed-length bytes representation
     ///
@@ -50,10 +50,10 @@ pub trait Group {
     fn derive_scalar(seed: GenericArray<u8, Self::SkLen>) -> Result<Self::Sk, InternalError>;
 
     /// Return a public key from its secret key
-    fn public_key(sk: Self::Sk) -> Self::Pk;
+    fn public_key(sk: &Self::Sk) -> Self::Pk;
 
     /// Serializes `self`
-    fn serialize_sk(sk: Self::Sk) -> GenericArray<u8, Self::SkLen>;
+    fn serialize_sk(sk: &Self::Sk) -> GenericArray<u8, Self::SkLen>;
 
     /// Return a public key from its fixed-length bytes representation
     ///

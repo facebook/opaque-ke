@@ -21,7 +21,7 @@ use generic_array::GenericArray;
 use generic_array::sequence::Concat;
 use generic_array::typenum::{U32, U64};
 use rand::{CryptoRng, RngCore};
-use zeroize::Zeroize;
+use zeroize::{Zeroize, ZeroizeOnDrop};
 
 use super::Group;
 use crate::ciphersuite::CipherSuite;
@@ -41,7 +41,7 @@ impl Group for Ed25519 {
     type Sk = SigningKey;
     type SkLen = U32;
 
-    fn serialize_pk(pk: Self::Pk) -> GenericArray<u8, Self::PkLen> {
+    fn serialize_pk(pk: &Self::Pk) -> GenericArray<u8, Self::PkLen> {
         pk.compressed.0.into()
     }
 
@@ -62,11 +62,11 @@ impl Group for Ed25519 {
         Ok(SigningKey::from_bytes(seed.into()))
     }
 
-    fn public_key(sk: Self::Sk) -> Self::Pk {
+    fn public_key(sk: &Self::Sk) -> Self::Pk {
         sk.verifying_key
     }
 
-    fn serialize_sk(sk: Self::Sk) -> GenericArray<u8, Self::SkLen> {
+    fn serialize_sk(sk: &Self::Sk) -> GenericArray<u8, Self::SkLen> {
         sk.sk.into()
     }
 
@@ -300,7 +300,7 @@ impl serde::Serialize for VerifyingKey {
 /// Ed25519 signing key.
 // We store the `ExpandedSecret` in memory to avoid computing it on demand and then discarding it
 // again.
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Zeroize)]
+#[derive(Clone, Debug, Eq, PartialEq, ZeroizeOnDrop)]
 pub struct SigningKey {
     // `ed25519_dalek::SigningKey` doesn't implement `Zeroize`. See
     // https://github.com/dalek-cryptography/curve25519-dalek/pull/747
@@ -428,44 +428,6 @@ impl Zeroize for Signature {
     }
 }
 
-//////////////////////////
-// Test Implementations //
-//===================== //
-//////////////////////////
-
-#[cfg(test)]
-use crate::serialization::AssertZeroized;
-
-#[cfg(test)]
-impl AssertZeroized for VerifyingKey {
-    fn assert_zeroized(&self) {
-        use curve25519_dalek::traits::Identity;
-
-        let Self { point, compressed } = self;
-
-        assert_eq!(point, &EdwardsPoint::identity());
-        assert_eq!(compressed, &EdwardsPoint::identity().compress());
-    }
-}
-
-#[cfg(test)]
-impl AssertZeroized for SigningKey {
-    fn assert_zeroized(&self) {
-        let Self {
-            sk,
-            verifying_key,
-            scalar,
-            hash_prefix,
-        } = self;
-
-        verifying_key.assert_zeroized();
-
-        for byte in sk.iter().chain(scalar.to_bytes().iter()).chain(hash_prefix) {
-            assert_eq!(byte, &0);
-        }
-    }
-}
-
 #[cfg(test)]
 mod test {
     use std::iter;
@@ -497,7 +459,7 @@ mod test {
         let verifying_key = VerifyingKey::from(&signing_key);
         verifying_key.verify(&message, &signature).unwrap();
 
-        let custom_pk = Ed25519::public_key(custom_sk);
+        let custom_pk = Ed25519::public_key(&custom_sk);
         verify(
             &custom_pk,
             false,
@@ -533,7 +495,7 @@ mod test {
             .verify_prehashed(message, None, &signature)
             .unwrap();
 
-        let custom_pk = Ed25519::public_key(custom_sk);
+        let custom_pk = Ed25519::public_key(&custom_sk);
         verify(
             &custom_pk,
             true,

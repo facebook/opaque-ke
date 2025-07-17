@@ -123,7 +123,7 @@ impl CipherSuite for SigmaIEd25519Ph {
 fn random_point<CS: CipherSuite>() -> <KeGroup<CS> as Group>::Pk {
     let mut rng = OsRng;
     let sk = KeGroup::<CS>::random_sk(&mut rng);
-    KeGroup::<CS>::public_key(sk)
+    KeGroup::<CS>::public_key(&sk)
 }
 
 fn random_element<CS: CipherSuite>() -> <OprfGroup<CS> as voprf::Group>::Elem {
@@ -557,7 +557,7 @@ fn sigma_i_ecdsa_credential_response_roundtrip() -> Result<(), ProtocolError> {
         CredentialResponseLen<CS>: ArrayLength<u8>,
     {
         let pt = random_point::<CS>();
-        let pt_bytes = KeGroup::<CS>::serialize_pk(pt);
+        let pt_bytes = KeGroup::<CS>::serialize_pk(&pt);
 
         let mut rng = OsRng;
 
@@ -569,8 +569,8 @@ fn sigma_i_ecdsa_credential_response_roundtrip() -> Result<(), ProtocolError> {
         rng.fill_bytes(&mut masked_response);
 
         let server_e_kp = KeyPair::<KeGroup<CS>>::derive_random(&mut rng);
-        let r = KeGroup::<CS>::serialize_sk(KeGroup::<CS>::random_sk(&mut rng));
-        let s = KeGroup::<CS>::serialize_sk(KeGroup::<CS>::random_sk(&mut rng));
+        let r = KeGroup::<CS>::serialize_sk(&KeGroup::<CS>::random_sk(&mut rng));
+        let s = KeGroup::<CS>::serialize_sk(&KeGroup::<CS>::random_sk(&mut rng));
         let mut mac = Output::<OprfHash<CS>>::default();
         rng.fill_bytes(&mut mac);
         let mut server_nonce = [0u8; NonceLen::USIZE];
@@ -662,8 +662,8 @@ fn sigma_i_ecdsa_credential_finalization_roundtrip() -> Result<(), ProtocolError
     {
         let mut rng = OsRng;
 
-        let r = KeGroup::<CS>::serialize_sk(KeGroup::<CS>::random_sk(&mut rng));
-        let s = KeGroup::<CS>::serialize_sk(KeGroup::<CS>::random_sk(&mut rng));
+        let r = KeGroup::<CS>::serialize_sk(&KeGroup::<CS>::random_sk(&mut rng));
+        let s = KeGroup::<CS>::serialize_sk(&KeGroup::<CS>::random_sk(&mut rng));
 
         let mut mac = Output::<OprfHash<CS>>::default();
         rng.fill_bytes(&mut mac);
@@ -845,8 +845,8 @@ fn sigma_i_ecdsa_ke2_message_roundtrip() -> Result<(), ProtocolError> {
         rng.fill_bytes(&mut mac);
         let mut server_nonce = vec![0u8; NonceLen::USIZE];
         rng.fill_bytes(&mut server_nonce);
-        let r = KeGroup::<CS>::serialize_sk(KeGroup::<CS>::random_sk(&mut rng));
-        let s = KeGroup::<CS>::serialize_sk(KeGroup::<CS>::random_sk(&mut rng));
+        let r = KeGroup::<CS>::serialize_sk(&KeGroup::<CS>::random_sk(&mut rng));
+        let s = KeGroup::<CS>::serialize_sk(&KeGroup::<CS>::random_sk(&mut rng));
 
         let ke2m: Vec<u8> = [
             server_nonce.as_slice(),
@@ -910,8 +910,8 @@ fn sigma_i_ecdsa_ke3_message_roundtrip() -> Result<(), ProtocolError> {
         <CS::KeyExchange as KeyExchange>::KE3Message: Deserialize + Serialize,
     {
         let mut rng = OsRng;
-        let r = KeGroup::<CS>::serialize_sk(KeGroup::<CS>::random_sk(&mut rng));
-        let s = KeGroup::<CS>::serialize_sk(KeGroup::<CS>::random_sk(&mut rng));
+        let r = KeGroup::<CS>::serialize_sk(&KeGroup::<CS>::random_sk(&mut rng));
+        let s = KeGroup::<CS>::serialize_sk(&KeGroup::<CS>::random_sk(&mut rng));
         let mut mac = Output::<OprfHash<CS>>::default();
         rng.fill_bytes(&mut mac);
 

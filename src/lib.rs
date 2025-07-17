@@ -1003,7 +1003,7 @@
 //! # struct YourRemoteKey(<Ristretto255 as Group>::Sk);
 //! # impl YourRemoteKey {
 //! #     fn diffie_hellman(&self, pk: &PublicKey<Ristretto255>) -> Result<GenericArray<u8, <Ristretto255 as Group>::PkLen>, YourRemoteKeyError> {
-//! #         Ok(<<Ristretto255 as Group>::Sk as DiffieHellman<Ristretto255>>::diffie_hellman(self.0, pk.to_group_type()))
+//! #         Ok(<<Ristretto255 as Group>::Sk as DiffieHellman<Ristretto255>>::diffie_hellman(&self.0, pk.to_group_type()))
 //! #     }
 //! # }
 //! use opaque_ke::{ServerLogin, ServerLoginParameters, ServerSetup};
@@ -1025,8 +1025,8 @@
 //! }
 //!
 //! # let sk = Ristretto255::random_sk(&mut OsRng);
-//! # let pk = Ristretto255::public_key(sk);
-//! # let pk = Ristretto255::serialize_pk(pk);
+//! # let pk = Ristretto255::public_key(&sk);
+//! # let pk = Ristretto255::serialize_pk(&pk);
 //! # let public_key = PublicKey::deserialize(&pk).unwrap();
 //! # let remote_key = YourRemoteKey(sk);
 //! # let mut server_rng = OsRng;
@@ -1112,7 +1112,7 @@
 //! # struct YourRemoteKey(<Ristretto255 as Group>::Sk);
 //! # impl YourRemoteKey {
 //! #     fn diffie_hellman(&self, pk: &PublicKey<Ristretto255>) -> Result<GenericArray<u8, <Ristretto255 as Group>::PkLen>, YourRemoteSecretsError> {
-//! #         Ok(<<Ristretto255 as Group>::Sk as DiffieHellman<Ristretto255>>::diffie_hellman(self.0, pk.to_group_type()))
+//! #         Ok(<<Ristretto255 as Group>::Sk as DiffieHellman<Ristretto255>>::diffie_hellman(&self.0, pk.to_group_type()))
 //! #     }
 //! # }
 //! use opaque_ke::{ServerLogin, ServerLoginParameters, ServerRegistration, ServerSetup};
@@ -1135,8 +1135,8 @@
 //! # let mut oprf_seed = YourRemoteSeed(GenericArray::default());
 //! # OsRng.fill_bytes(&mut oprf_seed.0);
 //! # let sk = Ristretto255::random_sk(&mut OsRng);
-//! # let pk = Ristretto255::public_key(sk);
-//! # let pk = Ristretto255::serialize_pk(pk);
+//! # let pk = Ristretto255::public_key(&sk);
+//! # let pk = Ristretto255::serialize_pk(&pk);
 //! # let public_key = PublicKey::deserialize(&pk).unwrap();
 //! # let remote_key = YourRemoteKey(sk);
 //! # let mut server_rng = OsRng;

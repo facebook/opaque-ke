@@ -15,13 +15,11 @@ use elliptic_curve::group::GroupEncoding;
 use elliptic_curve::ops::MulByGenerator;
 use elliptic_curve::sec1::{ModulusSize, ToEncodedPoint};
 use elliptic_curve::{
-    CurveArithmetic, FieldBytesSize, Group as _, NonZeroScalar, ProjectivePoint, Scalar, SecretKey,
-    point,
+    CurveArithmetic, FieldBytesSize, NonZeroScalar, ProjectivePoint, Scalar, SecretKey, point,
 };
 use generic_array::GenericArray;
 use rand::{CryptoRng, RngCore};
 use voprf::Mode;
-use zeroize::Zeroize;
 
 use super::{Group, STR_OPAQUE_DERIVE_AUTH_KEY_PAIR};
 use crate::errors::{InternalError, ProtocolError};
@@ -36,15 +34,18 @@ where
             Repr = GenericArray<u8, <FieldBytesSize<Self> as ModulusSize>::CompressedPointSize>,
         > + ToEncodedPoint<Self>,
 {
+    // We don't use `elliptic_curve::PublicKey` because it stores its internals in a
+    // format ideal for serialization and not computation. This is inconsistent with
+    // our other implementations.
     type Pk = NonIdentity<Self>;
 
     type PkLen = <FieldBytesSize<Self> as ModulusSize>::CompressedPointSize;
 
-    type Sk = NonZeroScalar<Self>;
+    type Sk = SecretKey<Self>;
 
     type SkLen = FieldBytesSize<Self>;
 
-    fn serialize_pk(pk: Self::Pk) -> GenericArray<u8, Self::PkLen> {
+    fn serialize_pk(pk: &Self::Pk) -> GenericArray<u8, Self::PkLen> {
         GenericArray::clone_from_slice(pk.0.to_encoded_point(true).as_bytes())
     }
 
@@ -56,7 +57,7 @@ where
     }
 
     fn random_sk<R: RngCore + CryptoRng>(rng: &mut R) -> Self::Sk {
-        SecretKey::<Self>::random(rng).to_nonzero_scalar()
+        SecretKey::<Self>::random(rng)
     }
 
     fn derive_scalar(seed: GenericArray<u8, Self::SkLen>) -> Result<Self::Sk, InternalError> {
@@ -64,29 +65,31 @@ where
             .map(|scalar| {
                 NonZeroScalar::new(scalar).expect("`voprf::derive_key()` returned a zero scalar")
             })
+            .map(SecretKey::from)
             .map_err(InternalError::from)
     }
 
-    fn public_key(sk: Self::Sk) -> Self::Pk {
+    fn public_key(sk: &Self::Sk) -> Self::Pk {
         // Non-panicking version in https://github.com/RustCrypto/traits/pull/1833.
         NonIdentity(
-            point::NonIdentity::new(ProjectivePoint::<Self>::mul_by_generator(&*sk))
-                .expect("multiplying with a non-zero scalar can never yield the identity element"),
+            point::NonIdentity::new(ProjectivePoint::<Self>::mul_by_generator(
+                &sk.to_nonzero_scalar(),
+            ))
+            .expect("multiplying with a non-zero scalar can never yield the identity element"),
         )
     }
 
-    fn serialize_sk(sk: Self::Sk) -> GenericArray<u8, Self::SkLen> {
-        sk.into()
+    fn serialize_sk(sk: &Self::Sk) -> GenericArray<u8, Self::SkLen> {
+        sk.to_bytes()
     }
 
     fn deserialize_take_sk(bytes: &mut &[u8]) -> Result<Self::Sk, ProtocolError> {
         SecretKey::<Self>::from_bytes(&bytes.take_array("secret key")?)
-            .map(|secret_key| secret_key.to_nonzero_scalar())
             .map_err(|_| ProtocolError::SerializationError)
     }
 }
 
-impl<G> DiffieHellman<G> for NonZeroScalar<G>
+impl<G> DiffieHellman<G> for SecretKey<G>
 where
     G: CurveArithmetic + voprf::CipherSuite<Group = G> + voprf::Group<Scalar = Scalar<G>>,
     FieldBytesSize<G>: ModulusSize,
@@ -95,15 +98,19 @@ where
         > + ToEncodedPoint<G>,
 {
     fn diffie_hellman(
-        self,
-        pk: NonIdentity<G>,
+        &self,
+        pk: &NonIdentity<G>,
     ) -> GenericArray<u8, <FieldBytesSize<G> as ModulusSize>::CompressedPointSize> {
-        GenericArray::clone_from_slice((pk.0 * self).to_encoded_point(true).as_bytes())
+        GenericArray::clone_from_slice(
+            (pk.0 * self.to_nonzero_scalar())
+                .to_encoded_point(true)
+                .as_bytes(),
+        )
     }
 }
 
-/// Wrapper around [`NonIdentity`](point::NonIdentity) to implement [`Zeroize`].
-// TODO: remove after https://github.com/RustCrypto/traits/pull/1832.
+/// Wrapper around [`NonIdentity`](point::NonIdentity) to [`Eq`].
+// TODO: remove after https://github.com/RustCrypto/traits/pull/1834.
 #[derive_where(Clone, Copy)]
 #[cfg_attr(
     feature = "serde",
@@ -133,33 +140,3 @@ impl<G: CurveArithmetic> PartialEq for NonIdentity<G> {
 }
 
 impl<G: CurveArithmetic> Eq for NonIdentity<G> {}
-
-impl<G: CurveArithmetic> Zeroize for NonIdentity<G> {
-    fn zeroize(&mut self) {
-        self.0 = point::NonIdentity::new(ProjectivePoint::<G>::generator()).unwrap();
-    }
-}
-
-//////////////////////////
-// Test Implementations //
-//===================== //
-//////////////////////////
-
-#[cfg(test)]
-use crate::serialization::AssertZeroized;
-
-#[cfg(test)]
-impl<G: CurveArithmetic> AssertZeroized for NonIdentity<G> {
-    fn assert_zeroized(&self) {
-        assert_eq!(self.0.to_point(), ProjectivePoint::<G>::generator());
-    }
-}
-
-#[cfg(test)]
-impl<G: CurveArithmetic> AssertZeroized for NonZeroScalar<G> {
-    fn assert_zeroized(&self) {
-        use elliptic_curve::Field;
-
-        assert_eq!(**self, Scalar::<G>::ONE);
-    }
-}

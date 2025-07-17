@@ -62,7 +62,7 @@ impl<G: Group, SK: Clone> KeyPair<G, SK> {
 impl<G: Group> KeyPair<G> {
     pub(crate) fn random<R: RngCore + CryptoRng>(rng: &mut R) -> Self {
         let sk = G::random_sk(rng);
-        let pk = G::public_key(sk);
+        let pk = G::public_key(&sk);
         Self {
             pk: PublicKey(pk),
             sk: PrivateKey(sk),
@@ -74,7 +74,7 @@ impl<G: Group> KeyPair<G> {
         let mut scalar_bytes = GenericArray::<_, <G as Group>::SkLen>::default();
         rng.fill_bytes(&mut scalar_bytes);
         let sk = G::derive_scalar(scalar_bytes).unwrap();
-        let pk = G::public_key(sk);
+        let pk = G::public_key(&sk);
         Self {
             pk: PublicKey(pk),
             sk: PrivateKey(sk),
@@ -102,12 +102,12 @@ impl<G: Group> PrivateKey<G> {
 
     /// Returns public key from private key
     pub fn public_key(&self) -> PublicKey<G> {
-        PublicKey(G::public_key(self.0))
+        PublicKey(G::public_key(&self.0))
     }
 
     /// Serializes this private key to a fixed-length byte array.
     pub fn serialize(&self) -> GenericArray<u8, G::SkLen> {
-        G::serialize_sk(self.0)
+        G::serialize_sk(&self.0)
     }
 
     /// Creates a [`PrivateKey`] from the given bytes.
@@ -126,7 +126,7 @@ where
 {
     /// Diffie-Hellman key exchange implementation
     pub(crate) fn ke_diffie_hellman(&self, pk: &PublicKey<G>) -> GenericArray<u8, G::PkLen> {
-        self.0.diffie_hellman(pk.0)
+        self.0.diffie_hellman(&pk.0)
     }
 }
 
@@ -190,7 +190,7 @@ impl<G: Group> PrivateKeySerialization<G> for PrivateKey<G> {
         serialize = "G::Pk: serde::Serialize"
     ))
 )]
-#[derive_where(Clone, ZeroizeOnDrop)]
+#[derive_where(Clone)]
 #[derive_where(Debug, Eq, Hash, Ord, PartialEq, PartialOrd; G::Pk)]
 pub struct PublicKey<G: Group + ?Sized>(G::Pk);
 
@@ -206,12 +206,12 @@ impl<G: Group> PublicKey<G> {
 
     /// Convert to bytes
     pub fn serialize(&self) -> GenericArray<u8, G::PkLen> {
-        G::serialize_pk(self.0)
+        G::serialize_pk(&self.0)
     }
 
     /// Returns the inner [`Group::Pk`].
-    pub fn to_group_type(&self) -> G::Pk {
-        self.0
+    pub fn to_group_type(&self) -> &G::Pk {
+        &self.0
     }
 }
 
@@ -275,9 +275,6 @@ impl<H: OutputSizeUser, E> OprfSeedSerialization<H, E> for OprfSeed<H> {
 //////////////////////////
 
 #[cfg(test)]
-use crate::serialization::AssertZeroized;
-
-#[cfg(test)]
 impl<G: Group> KeyPair<G> {
     /// Test-only strategy returning a proptest Strategy based on
     /// [`Self::derive_random`]
@@ -299,35 +296,12 @@ impl<G: Group> KeyPair<G> {
 }
 
 #[cfg(test)]
-impl<G: Group> AssertZeroized for PublicKey<G>
-where
-    G::Pk: AssertZeroized,
-{
-    fn assert_zeroized(&self) {
-        self.0.assert_zeroized();
-    }
-}
-
-#[cfg(test)]
-impl<G: Group> AssertZeroized for PrivateKey<G>
-where
-    G::Sk: AssertZeroized,
-{
-    fn assert_zeroized(&self) {
-        self.0.assert_zeroized();
-    }
-}
-
-#[cfg(test)]
 mod tests {
-    use core::ptr;
-
     use hkdf::Hkdf;
     use rand::rngs::OsRng;
 
     use super::*;
     use crate::ciphersuite::{KeGroup, OprfHash};
-    use crate::serialization::AssertZeroized;
     use crate::{
         CipherSuite, ClientLogin, ClientLoginFinishParameters, ClientLoginFinishResult,
         ClientLoginStartResult, ClientRegistration, ClientRegistrationFinishParameters,
@@ -335,29 +309,6 @@ mod tests {
         ServerLoginParameters, ServerLoginStartResult, ServerRegistration,
         ServerRegistrationStartResult, ServerSetup,
     };
-
-    #[test]
-    fn test_zeroize_key() {
-        fn inner<G: Group>()
-        where
-            G::Sk: AssertZeroized,
-        {
-            let mut rng = OsRng;
-            let mut key = PrivateKey::<G>(G::random_sk(&mut rng));
-            unsafe { ptr::drop_in_place(&mut key) };
-            key.0.assert_zeroized();
-        }
-
-        #[cfg(feature = "ristretto255")]
-        inner::<crate::Ristretto255>();
-        inner::<::p256::NistP256>();
-        inner::<::p384::NistP384>();
-        inner::<::p521::NistP521>();
-        #[cfg(feature = "curve25519")]
-        inner::<crate::Curve25519>();
-        #[cfg(feature = "ed25519")]
-        inner::<crate::Ed25519>();
-    }
 
     macro_rules! test {
         ($mod:ident, $point:ty) => {

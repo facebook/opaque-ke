@@ -91,6 +91,7 @@ pub struct RegistrationUpload<CS: CipherSuite> {
     /// The masking key used to mask the envelope
     pub(crate) masking_key: Output<OprfHash<CS>>,
     /// The user's public key
+    #[derive_where(skip(Zeroize))]
     pub(crate) client_s_pk: PublicKey<KeGroup<CS>>,
 }
 
