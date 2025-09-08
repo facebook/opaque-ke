@@ -9,6 +9,7 @@
 * Ensured that dummy record is always created to avoid timing attack issues
 * Modified the dummy registration file to only contain the public key
   instead of the keypair
+  * **Breaking: existing `ServerSetup`s need to be updated**
 * Added remote OPRF seed support
 * Replace remote private key trait with a state machine, facilitating async support.
 
