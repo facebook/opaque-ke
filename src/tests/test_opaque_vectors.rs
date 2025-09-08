@@ -182,7 +182,7 @@ macro_rules! json_to_test_vectors {
 #[test]
 fn tests() -> Result<(), ProtocolError> {
     let rfc: Value =
-        serde_json::from_str(super::parser::rfc_to_json(super::opaque_vectors::VECTORS).as_str())
+        serde_json::from_str(super::parser::rfc_to_json(super::rfc9807_vectors::VECTORS).as_str())
             .expect("Could not parse json");
 
     #[cfg(feature = "ristretto255")]
@@ -212,6 +212,10 @@ fn tests() -> Result<(), ProtocolError> {
             !(ristretto_real_tvs.is_empty() || ristretto_fake_tvs.is_empty()),
             "Parsing error"
         );
+
+        // There should be 2 real test vectors and 1 fake test vector
+        assert_eq!(ristretto_real_tvs.len(), 2);
+        assert_eq!(ristretto_fake_tvs.len(), 1);
 
         test_registration_request::<Ristretto255Sha512NoKsf>(&ristretto_real_tvs)?;
         test_registration_response::<Ristretto255Sha512NoKsf>(&ristretto_real_tvs)?;
@@ -251,6 +255,10 @@ fn tests() -> Result<(), ProtocolError> {
             "Parsing error"
         );
 
+        // There should be 2 real test vectors and 1 fake test vector
+        assert_eq!(ristretto_real_tvs.len(), 2);
+        assert_eq!(ristretto_fake_tvs.len(), 1);
+
         test_registration_request::<Ristretto255Sha512Curve25519NoKsf>(&ristretto_real_tvs)?;
         test_registration_response::<Ristretto255Sha512Curve25519NoKsf>(&ristretto_real_tvs)?;
         test_registration_upload::<Ristretto255Sha512Curve25519NoKsf>(&ristretto_real_tvs)?;
@@ -285,6 +293,10 @@ fn tests() -> Result<(), ProtocolError> {
         !(p256_real_tvs.is_empty() || p256_fake_tvs.is_empty()),
         "Parsing error"
     );
+
+    // There should be 2 real test vectors and 1 fake test vector
+    assert_eq!(p256_real_tvs.len(), 2);
+    assert_eq!(p256_fake_tvs.len(), 1);
 
     test_registration_request::<P256Sha256NoKsf>(&p256_real_tvs)?;
     test_registration_response::<P256Sha256NoKsf>(&p256_real_tvs)?;

@@ -15,7 +15,7 @@ pub(crate) fn rfc_to_json(input: &str) -> String {
 }
 
 fn parse_vector_types(input: &str) -> String {
-    let re = regex::Regex::new(r" (?P<type>.+?) Test Vectors").unwrap();
+    let re = regex::Regex::new(r"  (?P<type>.+?) Test Vectors").unwrap();
     let mut vector_types = vec![];
 
     let chunks: Vec<&str> = re.split(input).collect();
@@ -24,7 +24,7 @@ fn parse_vector_types(input: &str) -> String {
     for caps in re.captures_iter(input) {
         let vector_type = format!(
             "\"{}\": [\n {} \n]",
-            &caps["type"],
+            &caps["type"].trim(),
             parse_ciphersuites(chunks[count])
         );
         vector_types.push(vector_type);
@@ -36,7 +36,7 @@ fn parse_vector_types(input: &str) -> String {
 
 fn parse_ciphersuites(input: &str) -> String {
     let re = regex::Regex::new(
-        r"#### Configuration\n(.|\n)*?OPRF: (?P<oprf>.*?)\n(.|\n)*?Group: (?P<group>.*?)\n",
+        r" Configuration\n(.|\n)*?OPRF: (?P<oprf>.*?)\n(.|\n)*?Group: (?P<group>.*?)\n",
     )
     .unwrap();
     let mut ciphersuites = vec![];
@@ -74,6 +74,9 @@ fn parse_params(input: &str) -> String {
                 return params.join(",\n");
             }
             Some(line) => {
+                // First, trim out any whitespace
+                let line = line.trim();
+
                 // If line contains :, then
                 if line.contains(':') {
                     // Clear out any existing string and flush to params
@@ -91,6 +94,10 @@ fn parse_params(input: &str) -> String {
                     let s = line.trim().to_string();
                     if s.contains('~') || s.contains('#') {
                         // Ignore comment lines
+                        continue;
+                    }
+                    if s.contains("C.") {
+                        // Ignore section lines
                         continue;
                     }
                     if !s.is_empty() {
