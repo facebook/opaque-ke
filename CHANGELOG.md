@@ -10,6 +10,7 @@
 * Modified the dummy registration file to only contain the public key
   instead of the keypair
 * Added remote OPRF seed support
+* Replace remote private key trait with a state machine, facilitating async support.
 
 
 ## 3.0.0 (October 10, 2024)
