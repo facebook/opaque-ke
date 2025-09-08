@@ -866,11 +866,11 @@ pub struct ClientRegistrationFinishResult<CS: CipherSuite> {
     pub export_key: Output<OprfHash<CS>>,
     /// The server's static public key
     pub server_s_pk: PublicKey<KeGroup<CS>>,
-    /// Instance of the ClientRegistration, only used in tests for checking
+    /// Instance of the `ClientRegistration`, only used in tests for checking
     /// zeroize
     #[cfg(test)]
     pub state: ClientRegistration<CS>,
-    /// AuthKey, only used in tests
+    /// `AuthKey`, only used in tests
     #[cfg(test)]
     pub auth_key: Output<OprfHash<CS>>,
     /// Password derived key, only used in tests
@@ -936,7 +936,7 @@ pub struct ClientLoginFinishResult<CS: CipherSuite> {
     pub export_key: Output<OprfHash<CS>>,
     /// The server's static public key
     pub server_s_pk: PublicKey<KeGroup<CS>>,
-    /// Instance of the ClientLogin, only used in tests for checking zeroize
+    /// Instance of the `ClientLogin`, only used in tests for checking zeroize
     #[cfg(test)]
     pub state: ClientLogin<CS>,
     /// Handshake secret, only used in tests
@@ -954,7 +954,7 @@ pub struct ClientLoginFinishResult<CS: CipherSuite> {
 pub struct ServerLoginFinishResult<CS: CipherSuite> {
     /// The session key between client and server
     pub session_key: Output<KeHash<CS>>,
-    /// Instance of the ClientRegistration, only used in tests for checking
+    /// Instance of the `ClientRegistration`, only used in tests for checking
     /// zeroize
     #[cfg(test)]
     pub state: ServerLogin<CS>,
