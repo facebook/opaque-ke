@@ -10,10 +10,39 @@
 * Modified the dummy registration file to only contain the public key
   instead of the keypair
   * **Breaking: existing `ServerSetup`s need to be updated**
+    ```rust
+    // Given `old` is a `ServerSetup` from `opaque-ke` v3.
+    let old_serialized = old.serialize();
+
+    type OldSeedLen = <<<OldCipherSuite as opaque_ke_3::CipherSuite>::OprfCs as voprf::CipherSuite>::Hash as OutputSizeUser>::OutputSize;
+    type OldSkLen = <<OldCipherSuite as opaque_ke_3::CipherSuite>::KeGroup as opaque_ke_3::key_exchange::group::KeGroup>::SkLen;
+
+    let (old_serialied_rest, old_fake_keypair_serialized): (
+        GenericArray<u8, Sum<OldSeedLen, OldSkLen>>,
+        _,
+    ) = old_serialized.split();
+
+    let old_fake_keypair =
+        KeyPair::<<OldCipherSuite as opaque_ke_3::CipherSuite>::KeGroup>::from_private_key_slice(
+            &old_fake_keypair_serialized,
+        )
+        .unwrap();
+    let old_fake_pk_serialized = old_fake_keypair.public().serialize();
+
+    let new_serialized = old_serialied_rest.concat(old_fake_pk_serialized);
+    // Given `NewCipherSuite` is a `CipherSuite` implementation equivalent to `OldCipherSuite`.
+    ServerSetup::<NewCipherSuite>::deserialize(&new_serialized).unwrap()
+    ```
 * Added remote OPRF seed support
 * Replace remote private key trait with a state machine, facilitating async support.
 * Serde de/serialization formats have been simplified
-  * **Breaking: existing `RegistrationUpload`s may need to be updated**
+  * **Breaking: existing `ServerRegistration`s may need to be updated**
+    ```rust
+    // Given `old` is a `ServerRegistration` from `opaque-ke` v3.
+    let old_serialized = old.serialize();
+    // Given `NewCipherSuite` is a `CipherSuite` implementation equivalent to the old cipher suite.
+    ServerRegistration::<NewCipherSuite>::deserialize(&old_serialized).unwrap()
+    ```
 
 
 ## 3.0.0 (October 10, 2024)
