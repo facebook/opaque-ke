@@ -25,9 +25,9 @@
 use std::collections::HashMap;
 use std::process::exit;
 
-use argon2::Argon2;
-use generic_array::GenericArray;
+use opaque_ke::argon2::Argon2;
 use opaque_ke::ciphersuite::CipherSuite;
+use opaque_ke::generic_array::GenericArray;
 use opaque_ke::rand::rngs::OsRng;
 use opaque_ke::{
     ClientLogin, ClientLoginFinishParameters, ClientRegistration,

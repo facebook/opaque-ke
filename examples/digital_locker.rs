@@ -30,8 +30,8 @@ use std::process::exit;
 
 use chacha20poly1305::aead::{Aead, KeyInit};
 use chacha20poly1305::{ChaCha20Poly1305, Key, Nonce};
-use generic_array::GenericArray;
 use opaque_ke::ciphersuite::CipherSuite;
+use opaque_ke::generic_array::GenericArray;
 use opaque_ke::rand::RngCore;
 use opaque_ke::rand::rngs::OsRng;
 use opaque_ke::{
