@@ -10,6 +10,6 @@ mod full_test;
 #[rustfmt::skip]
 mod full_test_vectors;
 pub mod mock_rng;
-mod opaque_vectors;
 mod parser;
+mod rfc9807_vectors;
 mod test_opaque_vectors;

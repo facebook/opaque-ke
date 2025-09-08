@@ -1,5 +1,17 @@
 # Changelog
 
+## 4.0.0-pre.0 (September 8, 2025)
+* Increased MSRV to 1.83
+* Synced implementation with RFC 9807 (no core protocol changes)
+* Added a SIGMA-I key exchange implementation
+* Removed KeGroup type from the Ciphersuite trait (now part of KeyExchange type)
+  * **Breaking: existing Ciphersuite trait definitions need to be updated**
+* Ensured that dummy record is always created to avoid timing attack issues
+* Modified the dummy registration file to only contain the public key
+  instead of the keypair
+* Added remote OPRF seed support
+
+
 ## 3.0.0 (October 10, 2024)
 * Synced implementation with draft-irtf-cfrg-opaque-16
   * **Breaking: protocol context string changed from `RFCXXXX` to `OPAQUEv1-`**

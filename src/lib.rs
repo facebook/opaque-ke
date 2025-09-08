@@ -9,10 +9,6 @@
 //! An implementation of the OPAQUE augmented password authentication key
 //! exchange protocol
 //!
-//! Note: This implementation is in sync with [draft-irtf-cfrg-opaque-16](https://datatracker.ietf.org/doc/draft-irtf-cfrg-opaque/16/),
-//! but this specification is subject to change, until the final version
-//! published by the IETF.
-//!
 //! ### Minimum Supported Rust Version
 //!
 //! Rust **1.85** or higher.
