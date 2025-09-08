@@ -12,6 +12,8 @@
   * **Breaking: existing `ServerSetup`s need to be updated**
 * Added remote OPRF seed support
 * Replace remote private key trait with a state machine, facilitating async support.
+* Serde de/serialization formats have been simplified
+  * **Breaking: existing `RegistrationUpload`s may need to be updated**
 
 
 ## 3.0.0 (October 10, 2024)
