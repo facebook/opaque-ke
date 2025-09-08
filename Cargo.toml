@@ -50,7 +50,7 @@ ed25519-dalek = { version = "2", default-features = false, features = [
   "hazmat",
 ], optional = true }
 elliptic-curve = { version = "0.13", features = ["hash2curve", "sec1"] }
-generic-array = "0.14"
+generic-array = "1.2"
 hkdf = "0.12"
 hmac = "0.12"
 rand = { version = "0.8", default-features = false }
