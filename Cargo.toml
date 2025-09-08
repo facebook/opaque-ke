@@ -70,7 +70,7 @@ anyhow = "1"
 bincode = "1"
 chacha20poly1305 = "0.10"
 criterion = "0.5"
-cryptoki = "0.9"
+cryptoki = "0.10"
 elliptic-curve = { version = "0.13", features = ["alloc", "pkcs8"] }
 hex = "0.4"
 p256 = { version = "0.13", default-features = false, features = [
