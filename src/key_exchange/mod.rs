@@ -263,7 +263,7 @@ impl<'a> SerializedContext<'a> {
     }
 }
 
-/// Serialized form of [`Identifiers`](crate::Identifiers).
+/// Serialized form of [`Identifiers`].
 #[cfg_attr(
     feature = "serde",
     derive(serde::Deserialize, serde::Serialize),
@@ -277,8 +277,7 @@ pub struct SerializedIdentifiers<'a, G: Group> {
     pub server: SerializedIdentifier<'a, G>,
 }
 
-/// Serialized form of a single identifier from
-/// [`Identifiers`](crate::Identifiers).
+/// Serialized form of a single identifier from [`Identifiers`].
 #[cfg_attr(
     feature = "serde",
     derive(serde::Deserialize, serde::Serialize),

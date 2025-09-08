@@ -115,7 +115,7 @@ pub struct CredentialRequest<CS: CipherSuite> {
     pub(crate) ke1_message: <CS::KeyExchange as KeyExchange>::KE1Message,
 }
 
-/// Builder for [`ServerLogin`](crate::ServerLogin) when using remote keys.
+/// Builder for [`ServerLogin`] when using remote keys.
 #[cfg_attr(
     feature = "serde",
     derive(serde::Deserialize, serde::Serialize),
