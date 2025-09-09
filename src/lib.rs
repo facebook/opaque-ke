@@ -1345,7 +1345,9 @@ mod tests;
 
 // Exports
 
-pub use rand;
+#[cfg(feature = "argon2")]
+pub use argon2;
+pub use {generic_array, rand};
 
 pub use crate::ciphersuite::CipherSuite;
 #[cfg(feature = "curve25519")]
