@@ -10,7 +10,7 @@ name = "opaque-ke"
 readme = "README.md"
 repository = "https://github.com/facebook/opaque-ke"
 rust-version = "1.85"
-version = "3.0.0"
+version = "4.0.0-pre.0"
 
 [features]
 argon2 = ["dep:argon2"]
@@ -73,6 +73,7 @@ criterion = "0.5"
 cryptoki = "0.9"
 elliptic-curve = { version = "0.13", features = ["alloc", "pkcs8"] }
 hex = "0.4"
+opaque-ke-3 = { package = "opaque-ke", version = "=3.0.0" }
 p256 = { version = "0.13", default-features = false, features = [
   "ecdsa",
   "hash2curve",
