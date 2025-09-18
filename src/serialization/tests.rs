@@ -120,6 +120,7 @@ impl CipherSuite for SigmaIEd25519Ph {
     type Ksf = crate::ksf::Identity;
 }
 
+#[cfg(feature = "ecdsa")]
 fn random_point<CS: CipherSuite>() -> <KeGroup<CS> as Group>::Pk {
     let mut rng = OsRng;
     let sk = KeGroup::<CS>::random_sk(&mut rng);
