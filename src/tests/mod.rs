@@ -8,6 +8,7 @@
 
 mod full_test;
 #[rustfmt::skip]
+#[allow(dead_code)]
 mod full_test_vectors;
 pub mod mock_rng;
 mod parser;

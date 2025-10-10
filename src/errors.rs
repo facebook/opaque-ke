@@ -24,6 +24,8 @@ pub enum InternalError {
     HmacError,
     /// Computing the key stretching function failed
     KsfError,
+    /// Error while performing a KEM operation
+    KemError,
     /** This error occurs when the envelope seal open hmac check fails
     HMAC check in seal open failed. */
     SealOpenHmacError,
@@ -43,6 +45,7 @@ impl Debug for InternalError {
             Self::HkdfError => f.debug_tuple("HkdfError").finish(),
             Self::HmacError => f.debug_tuple("HmacError").finish(),
             Self::KsfError => f.debug_tuple("KsfError").finish(),
+            Self::KemError => f.debug_tuple("KemError").finish(),
             Self::SealOpenHmacError => f.debug_tuple("SealOpenHmacError").finish(),
             Self::IncompatibleEnvelopeModeError => {
                 f.debug_tuple("IncompatibleEnvelopeModeError").finish()
