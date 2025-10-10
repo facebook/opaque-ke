@@ -18,6 +18,7 @@ curve25519 = ["dep:curve25519-dalek"]
 default = ["ristretto255", "serde"]
 ecdsa = ["dep:ecdsa", "dep:rfc6979"]
 ed25519 = ["dep:curve25519-dalek", "dep:ed25519-dalek"]
+kem = ["dep:ml-kem"]
 ristretto255 = ["dep:curve25519-dalek", "voprf/ristretto255-ciphersuite"]
 serde = [
   "dep:serde",
@@ -53,6 +54,9 @@ elliptic-curve = { version = "0.13", features = ["hash2curve", "sec1"] }
 generic-array = "=0.14.7" # pinned to avoid deprecation warnings
 hkdf = "0.12"
 hmac = "0.12"
+ml-kem = { version = "0.2", default-features = false, features = [
+  "zeroize",
+], optional = true }
 rand = { version = "0.8", default-features = false }
 rfc6979 = { version = "0.4", optional = true }
 serde = { version = "1", default-features = false, features = [

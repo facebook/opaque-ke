@@ -16,6 +16,8 @@ use std::{format, println, vec};
 use digest::Output;
 use generic_array::typenum::{Sum, Unsigned};
 use generic_array::{ArrayLength, GenericArray};
+#[cfg(feature = "kem")]
+use ml_kem::MlKem768;
 use rand::SeedableRng;
 use rand::rngs::OsRng;
 use rand_chacha::ChaCha20Rng;
@@ -29,6 +31,8 @@ use crate::errors::*;
 use crate::hash::OutputSize;
 use crate::key_exchange::group::Group;
 use crate::key_exchange::shared::NonceLen;
+#[cfg(feature = "kem")]
+use crate::key_exchange::tripledh_kem::TripleDhKem;
 use crate::key_exchange::{
     Deserialize, Ke1MessageLen, Ke1StateLen, Ke2MessageLen, KeyExchange, Serialize,
 };
@@ -156,6 +160,27 @@ macro_rules! triple_dh_ciphersuites {
     };
 }
 
+#[cfg(feature = "kem")]
+macro_rules! triple_dh_kem_ciphersuites {
+    ($macro:ident!$par:tt) => {
+        oprf_ciphersuites!(
+            $macro!$par => [
+                #[cfg(feature = "ristretto255")] [
+                    TripleDhKemRistretto255,
+                    TripleDhKem<crate::Ristretto255, sha2::Sha512, MlKem768>,
+                ],
+                [TripleDhKemP256, TripleDhKem<p256::NistP256, sha2::Sha256, MlKem768>],
+                [TripleDhKemP384, TripleDhKem<p384::NistP384, sha2::Sha384, MlKem768>],
+                [TripleDhKemP521, TripleDhKem<p521::NistP521, sha2::Sha512, MlKem768>],
+                #[cfg(feature = "curve25519")] [
+                    TripleDhKemCurve25519,
+                    TripleDhKem<crate::Curve25519, sha2::Sha512, MlKem768>,
+                ],
+            ]
+        );
+    };
+}
+
 macro_rules! sigma_i_ciphersuites {
     ($macro:ident!$par:tt) => {
         sigma_i_ciphersuites!(
@@ -192,6 +217,8 @@ macro_rules! sigma_i_ciphersuites {
 }
 
 triple_dh_ciphersuites!(ciphersuite_types!());
+#[cfg(feature = "kem")]
+triple_dh_kem_ciphersuites!(ciphersuite_types!());
 sigma_i_ciphersuites!(ciphersuite_types!());
 
 pub struct TestVectorParameters {
@@ -741,6 +768,8 @@ fn generate_test_vectors() -> Result<(), ProtocolError> {
     );
 
     triple_dh_ciphersuites!(generate!(output));
+    #[cfg(feature = "kem")]
+    triple_dh_kem_ciphersuites!(generate!(output));
     sigma_i_ciphersuites!(generate!(output));
 
     if let Ok(path) = std::env::var("FULL_TEST_VECTORS_FILE") {
@@ -776,6 +805,8 @@ fn test_registration_request() -> Result<(), ProtocolError> {
     }
 
     triple_dh_ciphersuites!(run_all!(inner));
+    #[cfg(feature = "kem")]
+    triple_dh_kem_ciphersuites!(run_all!(inner));
     sigma_i_ciphersuites!(run_all!(inner));
 
     Ok(())
@@ -808,6 +839,8 @@ fn test_serialization() -> Result<(), ProtocolError> {
     }
 
     triple_dh_ciphersuites!(run_all!(inner));
+    #[cfg(feature = "kem")]
+    triple_dh_kem_ciphersuites!(run_all!(inner));
     sigma_i_ciphersuites!(run_all!(inner));
 
     Ok(())
@@ -847,6 +880,8 @@ fn test_registration_response() -> Result<(), ProtocolError> {
     }
 
     triple_dh_ciphersuites!(run_all!(inner));
+    #[cfg(feature = "kem")]
+    triple_dh_kem_ciphersuites!(run_all!(inner));
     sigma_i_ciphersuites!(run_all!(inner));
 
     Ok(())
@@ -896,6 +931,8 @@ fn test_registration_upload() -> Result<(), ProtocolError> {
     }
 
     triple_dh_ciphersuites!(run_all!(inner));
+    #[cfg(feature = "kem")]
+    triple_dh_kem_ciphersuites!(run_all!(inner));
     sigma_i_ciphersuites!(run_all!(inner));
 
     Ok(())
@@ -926,6 +963,8 @@ fn test_password_file() -> Result<(), ProtocolError> {
     }
 
     triple_dh_ciphersuites!(run_all!(inner));
+    #[cfg(feature = "kem")]
+    triple_dh_kem_ciphersuites!(run_all!(inner));
     sigma_i_ciphersuites!(run_all!(inner));
 
     Ok(())
@@ -969,6 +1008,8 @@ fn test_credential_request() -> Result<(), ProtocolError> {
     }
 
     triple_dh_ciphersuites!(run_all!(inner));
+    #[cfg(feature = "kem")]
+    triple_dh_kem_ciphersuites!(run_all!(inner));
     sigma_i_ciphersuites!(run_all!(inner));
 
     Ok(())
@@ -1037,6 +1078,8 @@ fn test_credential_response() -> Result<(), ProtocolError> {
     }
 
     triple_dh_ciphersuites!(run_all!(inner));
+    #[cfg(feature = "kem")]
+    triple_dh_kem_ciphersuites!(run_all!(inner));
     sigma_i_ciphersuites!(run_all!(inner));
 
     Ok(())
@@ -1089,6 +1132,8 @@ fn test_credential_finalization() -> Result<(), ProtocolError> {
     }
 
     triple_dh_ciphersuites!(run_all!(inner));
+    #[cfg(feature = "kem")]
+    triple_dh_kem_ciphersuites!(run_all!(inner));
     sigma_i_ciphersuites!(run_all!(inner));
 
     Ok(())
@@ -1124,6 +1169,8 @@ fn test_server_login_finish() -> Result<(), ProtocolError> {
     }
 
     triple_dh_ciphersuites!(run_all!(inner));
+    #[cfg(feature = "kem")]
+    triple_dh_kem_ciphersuites!(run_all!(inner));
     sigma_i_ciphersuites!(run_all!(inner));
 
     Ok(())
@@ -1201,6 +1248,12 @@ fn test_complete_flow_success() -> Result<(), ProtocolError> {
         b"good password",
         b"good password"
     ));
+    #[cfg(feature = "kem")]
+    triple_dh_kem_ciphersuites!(run_all!(
+        test_complete_flow,
+        b"good password",
+        b"good password"
+    ));
     sigma_i_ciphersuites!(run_all!(
         test_complete_flow,
         b"good password",
@@ -1212,6 +1265,12 @@ fn test_complete_flow_success() -> Result<(), ProtocolError> {
 #[test]
 fn test_complete_flow_fail() -> Result<(), ProtocolError> {
     triple_dh_ciphersuites!(run_all!(
+        test_complete_flow,
+        b"good password",
+        b"bad password"
+    ));
+    #[cfg(feature = "kem")]
+    triple_dh_kem_ciphersuites!(run_all!(
         test_complete_flow,
         b"good password",
         b"bad password"
@@ -1259,6 +1318,8 @@ fn test_scalar_always_nonzero() -> Result<(), ProtocolError> {
     }
 
     triple_dh_ciphersuites!(run_all!(inner));
+    #[cfg(feature = "kem")]
+    triple_dh_kem_ciphersuites!(run_all!(inner));
     sigma_i_ciphersuites!(run_all!(inner));
 
     Ok(())
@@ -1304,6 +1365,8 @@ fn test_reflected_value_error_registration() -> Result<(), ProtocolError> {
     }
 
     triple_dh_ciphersuites!(run_all!(inner));
+    #[cfg(feature = "kem")]
+    triple_dh_kem_ciphersuites!(run_all!(inner));
     sigma_i_ciphersuites!(run_all!(inner));
 
     Ok(())
@@ -1364,6 +1427,8 @@ fn test_reflected_value_error_login() -> Result<(), ProtocolError> {
     }
 
     triple_dh_ciphersuites!(run_all!(inner));
+    #[cfg(feature = "kem")]
+    triple_dh_kem_ciphersuites!(run_all!(inner));
     sigma_i_ciphersuites!(run_all!(inner));
 
     Ok(())
