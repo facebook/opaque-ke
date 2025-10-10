@@ -313,7 +313,6 @@ mod tests {
     macro_rules! test {
         ($mod:ident, $point:ty) => {
             mod $mod {
-                use std::format;
 
                 use proptest::prelude::*;
 
