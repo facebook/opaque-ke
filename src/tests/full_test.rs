@@ -16,7 +16,9 @@ use std::{format, println, vec};
 use digest::Output;
 use generic_array::typenum::{Sum, Unsigned};
 use generic_array::{ArrayLength, GenericArray};
+use rand::SeedableRng;
 use rand::rngs::OsRng;
+use rand_chacha::ChaCha20Rng;
 use serde_json::Value;
 use subtle::ConstantTimeEq;
 use voprf::Group as _;
@@ -38,6 +40,12 @@ use crate::messages::{
 use crate::opaque::*;
 use crate::tests::mock_rng::CycleRng;
 use crate::*;
+
+/// Using a fixed (but arbitrary) RNG seed for test vector generation
+const TEST_VECTOR_RNG_SEED: [u8; 32] = [
+    0x6d, 0x4a, 0x9f, 0xb2, 0x31, 0x07, 0x5c, 0xde, 0x82, 0x44, 0x19, 0xae, 0xfa, 0x53, 0x0c, 0x68,
+    0x95, 0x21, 0xe4, 0x7b, 0xcc, 0x10, 0x3f, 0x96, 0xab, 0x5d, 0x74, 0x2e, 0x11, 0x8c, 0xd0, 0x47,
+];
 
 // Tests
 // =====
@@ -520,7 +528,7 @@ where
 
     use crate::keypair::KeyPair;
 
-    let mut rng = OsRng;
+    let mut rng = ChaCha20Rng::from_seed(TEST_VECTOR_RNG_SEED);
 
     // Inputs
     let server_s_kp = KeyPair::<KeGroup<CS>>::derive_random(&mut rng);
