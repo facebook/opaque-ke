@@ -13,7 +13,7 @@ use digest::{FixedOutput, Output, Update};
 use generic_array::sequence::Concat;
 use generic_array::typenum::Sum;
 use generic_array::{ArrayLength, GenericArray};
-use zeroize::{Zeroize, ZeroizeOnDrop};
+use zeroize::Zeroize;
 
 use crate::ciphersuite::{CipherSuite, KeGroup, KeHash, OprfGroup};
 use crate::errors::ProtocolError;
@@ -77,7 +77,7 @@ pub struct VerifyMessage<'a, CS: CipherSuite, KE: Group> {
 /// [`SignatureProtocol::verify()`].
 ///
 /// [`SignatureProtocol::verify()`]: super::SignatureProtocol::verify
-#[derive(Debug, Eq, Hash, PartialEq, ZeroizeOnDrop)]
+#[derive_where(Debug, Eq, Hash, PartialEq, ZeroizeOnDrop)]
 pub struct MessageBuilder<'a, CS: CipherSuite> {
     pub(super) role: Role,
     pub(super) context: SerializedContext<'a>,
