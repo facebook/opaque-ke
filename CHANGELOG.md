@@ -1,6 +1,6 @@
 # Changelog
 
-## 4.0.0-pre.0 (September 8, 2025)
+## 4.0.0 (October 23, 2025)
 * Increased MSRV to 1.83
 * Synced implementation with RFC 9807 (no core protocol changes)
 * Added a SIGMA-I key exchange implementation
