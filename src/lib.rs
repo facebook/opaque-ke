@@ -706,6 +706,38 @@
 //! # Ok::<(), ProtocolError>(())
 //! ```
 //!
+//! ## `TripleDhKem` Key Exchange
+//!
+//! `TripleDhKem` extends the default [`TripleDh`] handshake by mixing a
+//! KEM shared secret into the transcript alongside the three Diffie-Hellman
+//! products. This hybrid exchange offers a post-quantum (PQ) upgrade path while
+//! preserving backwards-compatible session keys and transcript bindings.
+//!
+//! Note that this key exchange does not provide full PQ security
+//! for OPAQUE, as the OPRF used in the protocol is still not PQ-secure.
+//! Morever, we only use ephemeral KEM keys to provide confidentiality,
+//! implicitly delegating the authentication guarantees to the static (and
+//! classical) Diffie-Hellman keys. This is intended as a stopgap measure to
+//! provide some level of confidentiality against passive quantum attackers (as
+//! opposed to active ones). See [RFC 9807, Appendix B](https://www.rfc-editor.org/rfc/rfc9807.html#appendix-B)
+//! for a more detailed discussion of the security guarantees.
+//!
+//! This can be enabled with the `kem` feature to compile the integration with
+//! the [`ml-kem`](https://docs.rs/ml-kem/latest/ml_kem/) crate and instantiating
+//! the ciphersuite as follows:
+//!
+//! ```ignore
+//! use opaque_ke::CipherSuite;
+//!
+//! struct KemSuite;
+//!
+//! impl CipherSuite for KemSuite {
+//!     type OprfCs = opaque_ke::Ristretto255;
+//!     type KeyExchange = opaque_ke::TripleDhKem<opaque_ke::Ristretto255, sha2::Sha512, opaque_ke::ml_kem::MlKem768>;
+//!     type Ksf = opaque_ke::ksf::Identity;
+//! }
+//! ```
+//!
 //! ## Custom Identifiers
 //!
 //! Typically when applications use OPAQUE to authenticate a client to a server,
@@ -1314,6 +1346,10 @@
 //! - The `ed25519` feature enables using [`Ed25519`]s with [`PureEddsa`] and
 //!   [`HashEddsa`] for [`SigmaI`]s signature algorithm.
 //!
+//! - The `kem` feature enables the [`TripleDhKem`] key exchange, adding support
+//!   for KEM-based handshakes backed by the `ml-kem` crate. Disabling the
+//!   feature removes those types and their associated tests from the build.
+//!
 //! [`alloc`]: https://doc.rust-lang.org/alloc
 //! [curve25519-dalek]: https://docs.rs/curve25519-dalek/4/curve25519_dalek/index.html#backends
 
@@ -1362,6 +1398,8 @@ pub use crate::key_exchange::sigma_i::ecdsa::Ecdsa;
 pub use crate::key_exchange::sigma_i::hash_eddsa::HashEddsa;
 pub use crate::key_exchange::sigma_i::pure_eddsa::PureEddsa;
 pub use crate::key_exchange::tripledh::TripleDh;
+#[cfg(feature = "kem")]
+pub use crate::key_exchange::tripledh_kem::TripleDhKem;
 pub use crate::messages::{
     CredentialFinalization, CredentialFinalizationLen, CredentialRequest, CredentialRequestLen,
     CredentialResponse, CredentialResponseLen, RegistrationRequest, RegistrationRequestLen,

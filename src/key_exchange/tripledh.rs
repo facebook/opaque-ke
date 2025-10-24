@@ -13,11 +13,10 @@ use core::ops::Add;
 
 use derive_where::derive_where;
 use digest::core_api::BlockSizeUser;
-use digest::{Digest, Mac, Output, OutputSizeUser};
+use digest::{Digest, Output, OutputSizeUser};
 use generic_array::sequence::Concat;
 use generic_array::typenum::{IsLess, Le, NonZero, Sum, U256};
 use generic_array::{ArrayLength, GenericArray};
-use hmac::Hmac;
 use rand::{CryptoRng, RngCore};
 use subtle::{ConstantTimeEq, CtOption};
 use zeroize::{Zeroize, ZeroizeOnDrop};
@@ -28,12 +27,12 @@ use super::{
     SerializedIdentifiers,
 };
 use crate::ciphersuite::{CipherSuite, KeGroup};
-use crate::errors::{InternalError, ProtocolError};
+use crate::errors::ProtocolError;
 use crate::hash::{Hash, OutputSize, ProxyHash};
 use crate::key_exchange::group::Group;
 use crate::key_exchange::shared::{self, NonceLen};
 pub use crate::key_exchange::shared::{DiffieHellman, Ke1Message, Ke1State};
-use crate::keypair::{KeyPair, PrivateKey, PublicKey};
+use crate::keypair::{PrivateKey, PublicKey};
 use crate::opaque::Identifiers;
 use crate::serialization::SliceExt;
 
@@ -62,8 +61,8 @@ pub struct TripleDh<G, H>(PhantomData<(G, H)>);
 )]
 #[derive_where(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, ZeroizeOnDrop)]
 pub struct Ke2State<H: OutputSizeUser> {
-    session_key: Output<H>,
-    expected_mac: Output<H>,
+    pub(super) session_key: Output<H>,
+    pub(super) expected_mac: Output<H>,
 }
 
 /// Builder for the second key exchange message
@@ -108,10 +107,10 @@ where
     <H::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
     Le<<H::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
 {
-    server_nonce: GenericArray<u8, NonceLen>,
+    pub(super) server_nonce: GenericArray<u8, NonceLen>,
     #[derive_where(skip(Zeroize))]
-    server_e_pk: PublicKey<G>,
-    mac: Output<H>,
+    pub(super) server_e_pk: PublicKey<G>,
+    pub(super) mac: Output<H>,
 }
 
 /// The third key exchange message
@@ -127,7 +126,7 @@ where
     <H::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
     Le<<H::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
 {
-    mac: Output<H>,
+    pub(super) mac: Output<H>,
 }
 
 ////////////////////////////////
@@ -169,32 +168,28 @@ where
         identifiers: SerializedIdentifiers<'_, KeGroup<CS>>,
         context: SerializedContext<'a>,
     ) -> Result<Self::KE2Builder<'a, CS>, ProtocolError> {
-        let server_e = KeyPair::<G>::derive_random(rng);
-        let server_nonce = shared::generate_nonce::<R>(rng);
-
-        let ke1_message_iter = ke1_message.to_iter();
-        let server_e_pk = server_e.public().serialize();
-
-        let transcript_hasher = shared::transcript(
-            &context,
-            &identifiers,
-            &credential_request,
-            &ke1_message_iter,
-            &credential_response,
+        let shared::Ke2BuilderCommon {
             server_nonce,
-            &server_e_pk,
-        );
-
-        let shared_secret_1 = server_e
-            .private()
-            .ke_diffie_hellman(&ke1_message.client_e_pk);
-        let shared_secret_3 = server_e.private().ke_diffie_hellman(&client_s_pk);
+            transcript_hasher,
+            client_e_pk,
+            server_e_pk,
+            shared_secret_1,
+            shared_secret_3,
+        } = shared::ke2_builder_common::<G, H, CS, R>(
+            rng,
+            credential_request,
+            ke1_message,
+            credential_response,
+            client_s_pk,
+            identifiers,
+            context,
+        )?;
 
         Ok(Ke2Builder {
             server_nonce,
             transcript_hasher,
-            client_e_pk: ke1_message.client_e_pk.clone(),
-            server_e_pk: server_e.public().clone(),
+            client_e_pk,
+            server_e_pk,
             shared_secret_1,
             shared_secret_3,
         })
@@ -218,6 +213,7 @@ where
         mut builder: Self::KE2Builder<'_, CS>,
         shared_secret_2: Self::KE2BuilderInput<CS>,
     ) -> Result<GenerateKe2Result<CS>, ProtocolError> {
+        let transcript_digest = builder.transcript_hasher.clone().finalize();
         let derived_keys = shared::derive_keys::<H>(
             [
                 builder.shared_secret_1.as_slice(),
@@ -225,25 +221,14 @@ where
                 &builder.shared_secret_3,
             ]
             .into_iter(),
-            &builder.transcript_hasher.clone().finalize(),
+            &transcript_digest,
         )?;
 
-        let mut mac_hasher =
-            Hmac::<H>::new_from_slice(&derived_keys.km2).map_err(|_| InternalError::HmacError)?;
-        Mac::update(
-            &mut mac_hasher,
-            &builder.transcript_hasher.clone().finalize(),
-        );
-        let mac = mac_hasher.finalize().into_bytes();
-
-        builder.transcript_hasher.update(&mac);
-        let mut mac_hasher =
-            Hmac::<H>::new_from_slice(&derived_keys.km3).map_err(|_| InternalError::HmacError)?;
-        Mac::update(
-            &mut mac_hasher,
-            &builder.transcript_hasher.clone().finalize(),
-        );
-        let expected_mac = mac_hasher.finalize().into_bytes();
+        let (mac, expected_mac) = shared::compute_ke2_macs(
+            &mut builder.transcript_hasher,
+            &derived_keys,
+            &transcript_digest,
+        )?;
 
         Ok(GenerateKe2Result {
             state: Ke2State {
@@ -290,35 +275,20 @@ where
         let shared_secret_2 = ke1_state.client_e_sk.ke_diffie_hellman(&server_s_pk);
         let shared_secret_3 = client_s_sk.ke_diffie_hellman(&ke2_message.server_e_pk);
 
-        let derived_keys = shared::derive_keys::<H>(
+        let (derived_keys, client_mac) = shared::finalize_ke3_transcript(
+            &mut transcript_hasher,
             [
                 shared_secret_1.as_slice(),
-                &shared_secret_2,
-                &shared_secret_3,
+                shared_secret_2.as_slice(),
+                shared_secret_3.as_slice(),
             ]
             .into_iter(),
-            &transcript_hasher.clone().finalize(),
+            &ke2_message.mac,
         )?;
-
-        let mut server_mac =
-            Hmac::<H>::new_from_slice(&derived_keys.km2).map_err(|_| InternalError::HmacError)?;
-        Mac::update(&mut server_mac, &transcript_hasher.clone().finalize());
-
-        server_mac
-            .verify(&ke2_message.mac)
-            .map_err(|_| ProtocolError::InvalidLoginError)?;
-
-        transcript_hasher.update(&ke2_message.mac);
-
-        let mut client_mac =
-            Hmac::<H>::new_from_slice(&derived_keys.km3).map_err(|_| InternalError::HmacError)?;
-        Mac::update(&mut client_mac, &transcript_hasher.finalize());
 
         Ok(GenerateKe3Result {
             session_key: derived_keys.session_key,
-            message: Ke3Message {
-                mac: client_mac.finalize().into_bytes(),
-            },
+            message: Ke3Message { mac: client_mac },
             #[cfg(test)]
             handshake_secret: derived_keys.handshake_secret,
             #[cfg(test)]

@@ -13,6 +13,8 @@ pub mod group;
 pub(crate) mod shared;
 pub mod sigma_i;
 pub mod tripledh;
+#[cfg(feature = "kem")]
+pub mod tripledh_kem;
 
 use core::iter;
 use core::ops::Add;
