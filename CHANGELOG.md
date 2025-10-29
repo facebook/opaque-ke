@@ -1,5 +1,8 @@
 # Changelog
 
+## 4.0.1 (October 30, 2025)
+* Fixing docs building issue
+
 ## 4.0.0 (October 23, 2025)
 * Increased MSRV to 1.83
 * Synced implementation with RFC 9807 (no core protocol changes)
