@@ -206,14 +206,6 @@ jobs:
           command: clippy
           args: --all-targets --features argon2,std,curve25519,ecdsa,ed25519 -- -D warnings
 
-      - name: Run cargo doc
-        uses: actions-rs/cargo@v1
-        env:
-          RUSTDOCFLAGS: -D warnings
-        with:
-          command: doc
-          args: --no-deps --document-private-items --features argon2,std,curve25519,ecdsa,ed25519
-
   format:
     name: cargo fmt
     runs-on: ubuntu-latest
@@ -234,6 +226,14 @@ jobs:
         with:
           command: fmt
           args: --all -- --check
+
+      - name: Run cargo doc
+        uses: actions-rs/cargo@v1
+        env:
+          RUSTDOCFLAGS: -D warnings
+        with:
+          command: doc
+          args: --no-deps --document-private-items --features argon2,std,curve25519,ecdsa,ed25519
 
   taplo:
     name: Taplo

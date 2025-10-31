@@ -10,7 +10,7 @@ name = "opaque-ke"
 readme = "README.md"
 repository = "https://github.com/facebook/opaque-ke"
 rust-version = "1.85"
-version = "4.0.0"
+version = "4.0.1"
 
 [features]
 argon2 = ["dep:argon2"]
