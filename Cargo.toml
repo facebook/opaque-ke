@@ -63,7 +63,7 @@ voprf = { version = "0.5", default-features = false, features = ["danger"] }
 zeroize = { version = "1.8", features = ["zeroize_derive"] }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
-getrandom = { version = "0.2", features = ["js"], optional = true }
+getrandom = { version = "0.3", features = ["js"], optional = true }
 
 [dev-dependencies]
 anyhow = "1"
