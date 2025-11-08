@@ -15,6 +15,7 @@ jobs:
         backend_feature:
           -
           - --features ristretto255
+          - --features ristretto255,kem
           - --features curve25519
           - --features ecdsa
           - --features ed25519
@@ -73,6 +74,7 @@ jobs:
         backend_feature:
           -
           - --features ristretto255
+          - --features ristretto255,kem
           - --features curve25519
           - --features ecdsa
           - --features ed25519
@@ -167,6 +169,7 @@ jobs:
       matrix:
         backend_feature:
           - --features ristretto255
+          - --features ristretto255,kem
           -
     steps:
       - name: Checkout sources
@@ -204,7 +207,7 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: clippy
-          args: --all-targets --features argon2,std,curve25519,ecdsa,ed25519 -- -D warnings
+          args: --all-targets --features argon2,std,curve25519,ecdsa,ed25519,kem -- -D warnings
 
   format:
     name: cargo fmt
@@ -233,7 +236,7 @@ jobs:
           RUSTDOCFLAGS: -D warnings
         with:
           command: doc
-          args: --no-deps --document-private-items --features argon2,std,curve25519,ecdsa,ed25519
+          args: --no-deps --document-private-items --features argon2,std,curve25519,ecdsa,ed25519,kem
 
   taplo:
     name: Taplo
