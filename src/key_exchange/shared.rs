@@ -10,11 +10,12 @@ use core::ops::Add;
 
 use derive_where::derive_where;
 use digest::core_api::BlockSizeUser;
-use digest::{Digest, Output, OutputSizeUser, Update};
+use digest::{Digest, Mac, Output, OutputSizeUser, Update};
 use generic_array::sequence::Concat;
 use generic_array::typenum::{IsLess, Le, NonZero, Sum, U1, U2, U32, U256, Unsigned};
 use generic_array::{ArrayLength, GenericArray};
 use hkdf::{Hkdf, HkdfExtract};
+use hmac::Hmac;
 use rand::{CryptoRng, RngCore};
 
 use super::{
@@ -100,6 +101,23 @@ pub(super) struct DerivedKeys<H: OutputSizeUser> {
     pub(super) handshake_secret: Output<H>,
 }
 
+/// Helper bundle containing the common `TripleDH` server state that both
+/// `TripleDh` and `TripleDhKem` builders need.
+pub(super) struct Ke2BuilderCommon<G: Group, H: Hash>
+where
+    H::Core: ProxyHash,
+    <H::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
+    Le<<H::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
+    G::Sk: DiffieHellman<G>,
+{
+    pub(super) server_nonce: GenericArray<u8, NonceLen>,
+    pub(super) transcript_hasher: H,
+    pub(super) client_e_pk: PublicKey<G>,
+    pub(super) server_e_pk: PublicKey<G>,
+    pub(super) shared_secret_1: GenericArray<u8, G::PkLen>,
+    pub(super) shared_secret_3: GenericArray<u8, G::PkLen>,
+}
+
 ////////////////////////////////////////////////
 // Helper functions and Trait Implementations //
 // ========================================== //
@@ -158,6 +176,60 @@ pub(super) fn transcript<CS: CipherSuite, KE: Group>(
         .chain(server_e_pk)
 }
 
+/// Generates the server-side `TripleDH` transcript state shared by multiple
+/// key-exchange variants.
+pub(super) fn ke2_builder_common<'a, G, H, CS, R>(
+    rng: &mut R,
+    credential_request: SerializedCredentialRequest<CS>,
+    ke1_message: Ke1Message<G>,
+    credential_response: SerializedCredentialResponse<CS>,
+    client_s_pk: PublicKey<G>,
+    identifiers: SerializedIdentifiers<'a, KeGroup<CS>>,
+    context: SerializedContext<'a>,
+) -> Result<Ke2BuilderCommon<G, H>, ProtocolError>
+where
+    G: Group,
+    H: Hash,
+    R: RngCore + CryptoRng,
+    CS: CipherSuite,
+    H::Core: ProxyHash,
+    <H::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
+    Le<<H::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
+    G::Sk: DiffieHellman<G>,
+    CS::KeyExchange: KeyExchange<Group = G, Hash = H>,
+{
+    let server_ephemeral = KeyPair::<G>::derive_random(rng);
+    let server_nonce = generate_nonce::<R>(rng);
+    let server_e_pk_bytes = server_ephemeral.public().serialize();
+
+    let ke1_iter = ke1_message.to_iter();
+    let client_e_pk = ke1_message.client_e_pk.clone();
+
+    let transcript_hasher = transcript(
+        &context,
+        &identifiers,
+        &credential_request,
+        &ke1_iter,
+        &credential_response,
+        server_nonce,
+        &server_e_pk_bytes,
+    );
+
+    let shared_secret_1 = server_ephemeral
+        .private()
+        .ke_diffie_hellman(&ke1_message.client_e_pk);
+    let shared_secret_3 = server_ephemeral.private().ke_diffie_hellman(&client_s_pk);
+
+    Ok(Ke2BuilderCommon {
+        server_nonce,
+        transcript_hasher,
+        client_e_pk,
+        server_e_pk: server_ephemeral.public().clone(),
+        shared_secret_1,
+        shared_secret_3,
+    })
+}
+
 // Internal function which takes computed shared secrets, along with some
 // auxiliary metadata, to produce the session key and two MAC keys
 pub(super) fn derive_keys<'a, H: Hash>(
@@ -197,6 +269,70 @@ where
         #[cfg(test)]
         handshake_secret,
     })
+}
+
+/// Helper function for shared functionality in KE2 MAC computation
+/// for both `TripleDH` and TripleDH-KEM
+pub(super) fn compute_ke2_macs<H: Hash>(
+    transcript_hasher: &mut H,
+    derived_keys: &DerivedKeys<H>,
+    transcript_digest: &[u8],
+) -> Result<(Output<H>, Output<H>), ProtocolError>
+where
+    H::Core: ProxyHash,
+    <H::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
+    Le<<H::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
+{
+    let mut mac_hasher =
+        Hmac::<H>::new_from_slice(&derived_keys.km2).map_err(|_| InternalError::HmacError)?;
+    Mac::update(&mut mac_hasher, transcript_digest);
+    let mac = mac_hasher.finalize().into_bytes();
+
+    transcript_hasher.update(&mac);
+    let finalized_transcript = transcript_hasher.clone().finalize();
+
+    let mut expected_mac_hasher =
+        Hmac::<H>::new_from_slice(&derived_keys.km3).map_err(|_| InternalError::HmacError)?;
+    Mac::update(&mut expected_mac_hasher, &finalized_transcript);
+    let expected_mac = expected_mac_hasher.finalize().into_bytes();
+
+    Ok((mac, expected_mac))
+}
+
+/// Finalizes the KE3 transcript by deriving session material from the provided
+/// shared secrets and verifying the server's MAC, returning both the derived
+/// keys and the client's MAC response. Callers are expected to supply any
+/// protocol-specific shared secrets (e.g. classic Diffie-Hellman results or
+/// KEM outputs) as byte slices.
+pub(super) fn finalize_ke3_transcript<'a, H: Hash>(
+    transcript_hasher: &mut H,
+    shared_secrets: impl Iterator<Item = &'a [u8]>,
+    server_mac: &Output<H>,
+) -> Result<(DerivedKeys<H>, Output<H>), ProtocolError>
+where
+    H::Core: ProxyHash,
+    <H::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
+    Le<<H::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
+{
+    let transcript_digest = transcript_hasher.clone().finalize();
+    let derived_keys = derive_keys::<H>(shared_secrets, &transcript_digest)?;
+    let mut server_mac_hasher =
+        Hmac::<H>::new_from_slice(&derived_keys.km2).map_err(|_| InternalError::HmacError)?;
+    Mac::update(&mut server_mac_hasher, &transcript_digest);
+    server_mac_hasher
+        .verify(server_mac)
+        .map_err(|_| ProtocolError::InvalidLoginError)?;
+
+    transcript_hasher.update(server_mac.as_slice());
+    let finalized_transcript = transcript_hasher.clone().finalize();
+
+    let mut client_mac_hasher =
+        Hmac::<H>::new_from_slice(&derived_keys.km3).map_err(|_| InternalError::HmacError)?;
+    Mac::update(&mut client_mac_hasher, &finalized_transcript);
+
+    let client_mac = client_mac_hasher.finalize().into_bytes();
+
+    Ok((derived_keys, client_mac))
 }
 
 fn hkdf_expand_label<H: Hash>(
