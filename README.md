@@ -22,7 +22,7 @@ Installation
 Add the following line to the dependencies of your `Cargo.toml`:
 
 ```
-opaque-ke = "4"
+opaque-ke = "4.1.0-pre.0"
 ```
 
 ### Minimum Supported Rust Version
