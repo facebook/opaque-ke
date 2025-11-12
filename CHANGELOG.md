@@ -1,5 +1,9 @@
 # Changelog
 
+## 4.1.0-pre.0 (November 11, 2025)
+* Fixed dependency exporting for the rand crate
+* Added TripleDhKem key exchange protocol
+
 ## 4.0.1 (October 30, 2025)
 * Fixing docs building issue
 
