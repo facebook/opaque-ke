@@ -1,5 +1,8 @@
 # Changelog
 
+## 4.1.0-pre.1 (November 17, 2025)
+* Added ml-kem re-export behind the kem feature
+
 ## 4.1.0-pre.0 (November 11, 2025)
 * Fixed dependency exporting for the rand crate
 * Added TripleDhKem key exchange protocol
