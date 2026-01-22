@@ -243,6 +243,7 @@ where
     serde(bound = "")
 )]
 #[derive(Clone, Debug, Eq, Hash, PartialEq, Zeroize)]
+#[allow(unused_assignments)]
 pub struct SerializedContext<'a> {
     length: GenericArray<u8, U2>,
     #[zeroize(skip)]
