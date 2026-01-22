@@ -87,7 +87,8 @@ pub enum ProtocolError<T = Infallible> {
     InvalidLoginError,
     /// Error with serializing / deserializing protocol messages
     SerializationError,
-    /// Invalid length for `name`: expected `len`, but is actually `actual_len`.
+    /** Invalid length for `{name}`: expected {len}, actual {actual_len} */
+    #[allow(clippy::doc_markdown, unused_assignments)]
     SizeError {
         /// name
         name: &'static str,
