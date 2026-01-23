@@ -97,7 +97,7 @@ p521 = { version = "0.13.3", default-features = false, features = [
 paste = "1"
 proptest = "1"
 rand = "0.8"
-rand_chacha = "0.3"
+rand_chacha = "0.9"
 regex = "1"
 sha2 = { version = "0.10", default-features = false }
 thiserror = "2"
