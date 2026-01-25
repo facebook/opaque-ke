@@ -57,7 +57,7 @@ hmac = "0.12"
 ml-kem = { version = "0.2", default-features = false, features = [
   "zeroize",
 ], optional = true }
-rand = { version = "0.8", default-features = false }
+rand = { version = "0.9", default-features = false }
 rfc6979 = { version = "0.4", optional = true }
 serde = { version = "1", default-features = false, features = [
   "derive",
@@ -96,7 +96,7 @@ p521 = { version = "0.13.3", default-features = false, features = [
 ] }
 paste = "1"
 proptest = "1"
-rand = "0.8"
+rand = "0.9"
 rand_chacha = "0.3"
 regex = "1"
 sha2 = { version = "0.10", default-features = false }
