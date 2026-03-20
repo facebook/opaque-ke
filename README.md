@@ -74,4 +74,6 @@ improvements to the library.
 License
 -------
 
-The upstream Rust project these bindings are based on (OPAQUE-KE) is dual-licensed under either the [MIT license](./LICENSE-MIT) or the [Apache 2.0 license](./LICENSE-APACHE). This fork uses the MIT license.
+The pre-existing Rust crate in this fork remains dual-licensed under either the
+[MIT license](./LICENSE-MIT) or the [Apache 2.0 license](./LICENSE-APACHE).
+The additive Python bindings under `python/opaque_ke_py/` are MIT-only.

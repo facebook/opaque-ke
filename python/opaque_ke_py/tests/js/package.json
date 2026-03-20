@@ -2,7 +2,11 @@
   "name": "opaque-ke-js-interop",
   "private": true,
   "type": "module",
+  "packageManager": "npm@11.9.0",
+  "engines": {
+    "node": "24.14.0"
+  },
   "dependencies": {
-    "@serenity-kit/opaque": "*"
+    "@serenity-kit/opaque": "1.1.0"
   }
 }

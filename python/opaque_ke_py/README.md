@@ -56,7 +56,13 @@ assert session_key == server_session_key
 - Protocol messages and state blobs are bytes in Python. Use base64 helpers for transport:
   `opaque_ke.encoding.encode_b64` returns URL-safe base64 without padding, and
   `opaque_ke.encoding.decode_b64` accepts URL-safe or standard base64 with or without padding.
-- Key stretching uses Argon2 and is always enabled in the bindings.
+- Persist the cipher suite alongside serialized `ServerSetup`, `ServerRegistration`, and `*State`
+  blobs, and pass it back to `deserialize(...)`. These blobs do not encode the suite for you.
+- Key stretching uses Argon2 and is always enabled in the bindings. When omitted,
+  the client uses the JS-compatible memory-constrained preset by default.
+- `KeyStretching` accepts both Python-style names (`memory_constrained`,
+  `rfc_recommended`) and JS-style aliases (`memory-constrained`,
+  `rfc-draft-recommended`).
 - State objects are single-use. Reusing a state raises `InvalidStateError`.
 - Errors raised by the core library are mapped to `opaque_ke.errors` exceptions.
 - Python `bytes` are immutable and not zeroized; keep secret data lifetimes short.
@@ -68,4 +74,5 @@ assert session_key == server_session_key
 ```
 
 JS interop tests are gated behind `OPAQUE_JS_INTEROP=1` and use the harness in
-`python/opaque_ke_py/tests/js/`. Install the JS dependency there before running.
+`python/opaque_ke_py/tests/js/`. The checked-in harness pins Node `24.14.0` and
+`@serenity-kit/opaque` `1.1.0`.

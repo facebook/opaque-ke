@@ -15,10 +15,11 @@ The bindings compile multiple suites by default. You can list them with
 - `p521_sha512`
 - `ml_kem_768_ristretto255_sha512`
 
-Most APIs accept an optional `suite` string. Deserialization helpers such as
+Most APIs accept an optional `suite` string. For deserialization helpers such as
 `ServerSetup.deserialize(...)`, `ServerRegistration.deserialize(...)`, and the
-`*State.deserialize(...)` methods also accept `suite` so the correct type is
-selected when the suite is not the default.
+`*State.deserialize(...)` methods, you should pass the suite that produced the
+blob. These serialized blobs are not self-describing, so omitting `suite` is
+only safe when the bytes uniquely match a single supported suite.
 
 ## Build configuration
 
@@ -29,6 +30,11 @@ suite identifier strings above; if no suite is provided, `ristretto255_sha512` i
 
 Wheels are built for CPython 3.11 through 3.14 on Linux, macOS, and Windows for both
 AMD64 and ARM64.
+
+Client-side key stretching defaults to the JS-compatible memory-constrained Argon2 preset
+when omitted. `KeyStretching` accepts both the Python spellings
+`memory_constrained` / `rfc_recommended` and the JS spellings
+`memory-constrained` / `rfc-draft-recommended`.
 
 ## Install (local dev)
 
@@ -182,8 +188,11 @@ Interop tests are gated behind `OPAQUE_JS_INTEROP=1` and run against
 
 ```sh
 cd python/opaque_ke_py/tests/js
+nvm use
 npm install
 
 cd ../../../../
 OPAQUE_JS_INTEROP=1 .venv/bin/python -m pytest python/opaque_ke_py/tests/test_js_interop.py
 ```
+
+The checked-in harness pins Node `24.14.0` and `@serenity-kit/opaque` `1.1.0`.

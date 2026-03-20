@@ -42,3 +42,44 @@ jobs:
       - name: Run pytest
         working-directory: python/opaque_ke_py
         run: .venv/bin/python -m pytest
+
+  js-interop:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Set up Node 24.14.0
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24.14.0"
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Create maturin venv and test environment
+        working-directory: python/opaque_ke_py
+        run: |
+          python -m venv .venv
+          .venv/bin/python -m pip install -U pip
+          .venv/bin/python -m pip install maturin pytest
+
+      - name: Build and install extension
+        working-directory: python/opaque_ke_py
+        run: .venv/bin/python -m maturin develop --release
+
+      - name: Install pinned JS interop dependency
+        working-directory: python/opaque_ke_py/tests/js
+        run: npm install
+
+      - name: Run JS interop pytest
+        working-directory: python/opaque_ke_py
+        env:
+          OPAQUE_JS_INTEROP: "1"
+        run: .venv/bin/python -m pytest tests/test_js_interop.py -q

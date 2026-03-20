@@ -107,7 +107,7 @@ Note: `context` is supported in both server and client login parameters; mismatc
 
 ### KSF support
 Initial support should include:
-- Default KSF parameters (matching Rust defaults).
+- Default KSF parameters aligned with the JS memory-constrained preset.
 - Optional explicit KSF configuration (Argon2 params; always enabled in the bindings).
 
 ## Serialization boundary

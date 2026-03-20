@@ -6,7 +6,7 @@ use opaque_ke::{
 use pyo3::prelude::*;
 use pyo3::types::{PyBytes, PyModule};
 
-use crate::errors::to_py_err;
+use crate::errors::{invalid_state_err, to_py_err};
 use crate::py_utils::per_suite_dispatch;
 use crate::suite::{
     MlKem768Ristretto255Sha512, P256Sha256, P384Sha384, P521Sha512, Ristretto255Sha512, SuiteId,
@@ -14,7 +14,7 @@ use crate::suite::{
 };
 use crate::types::{
     ClientRegistrationFinishParameters as PyClientRegistrationFinishParameters,
-    ClientRegistrationState, ClientRegistrationStateInner,
+    ClientRegistrationState, ClientRegistrationStateInner, KeyStretching,
     ServerRegistration as PyServerRegistration, ServerRegistrationInner, ServerSetup,
     ServerSetupInner,
 };
@@ -77,25 +77,22 @@ pub(crate) fn client_finish_registration(
         .as_ref()
         .map(|ids| ids.as_opaque())
         .unwrap_or_default();
-    let ksf = params
+    let key_stretching = params
         .as_ref()
         .and_then(|params| params.key_stretching())
-        .map(|ksf| ksf.build_ksf())
-        .transpose()?;
+        .cloned()
+        .unwrap_or_else(KeyStretching::default_js_compatible);
+    let ksf = key_stretching.build_ksf()?;
     let mut rng = OsRng;
     match state_suite {
         SuiteId::Ristretto255Sha512 => {
             let state = state.take_ristretto()?;
             let response = RegistrationResponse::<Ristretto255Sha512>::deserialize(&response)
                 .map_err(to_py_err)?;
-            let finish_params = if params.is_some() {
-                ClientRegistrationFinishParameters::<Ristretto255Sha512>::new(
-                    opaque_identifiers,
-                    ksf.as_ref(),
-                )
-            } else {
-                ClientRegistrationFinishParameters::<Ristretto255Sha512>::default()
-            };
+            let finish_params = ClientRegistrationFinishParameters::<Ristretto255Sha512>::new(
+                opaque_identifiers,
+                Some(&ksf),
+            );
             let result = state
                 .finish(&mut rng, &password, response, finish_params)
                 .map_err(to_py_err)?;
@@ -110,14 +107,10 @@ pub(crate) fn client_finish_registration(
             let state = state.take_p256()?;
             let response =
                 RegistrationResponse::<P256Sha256>::deserialize(&response).map_err(to_py_err)?;
-            let finish_params = if params.is_some() {
-                ClientRegistrationFinishParameters::<P256Sha256>::new(
-                    opaque_identifiers,
-                    ksf.as_ref(),
-                )
-            } else {
-                ClientRegistrationFinishParameters::<P256Sha256>::default()
-            };
+            let finish_params = ClientRegistrationFinishParameters::<P256Sha256>::new(
+                opaque_identifiers,
+                Some(&ksf),
+            );
             let result = state
                 .finish(&mut rng, &password, response, finish_params)
                 .map_err(to_py_err)?;
@@ -132,14 +125,10 @@ pub(crate) fn client_finish_registration(
             let state = state.take_p384()?;
             let response =
                 RegistrationResponse::<P384Sha384>::deserialize(&response).map_err(to_py_err)?;
-            let finish_params = if params.is_some() {
-                ClientRegistrationFinishParameters::<P384Sha384>::new(
-                    opaque_identifiers,
-                    ksf.as_ref(),
-                )
-            } else {
-                ClientRegistrationFinishParameters::<P384Sha384>::default()
-            };
+            let finish_params = ClientRegistrationFinishParameters::<P384Sha384>::new(
+                opaque_identifiers,
+                Some(&ksf),
+            );
             let result = state
                 .finish(&mut rng, &password, response, finish_params)
                 .map_err(to_py_err)?;
@@ -154,14 +143,10 @@ pub(crate) fn client_finish_registration(
             let state = state.take_p521()?;
             let response =
                 RegistrationResponse::<P521Sha512>::deserialize(&response).map_err(to_py_err)?;
-            let finish_params = if params.is_some() {
-                ClientRegistrationFinishParameters::<P521Sha512>::new(
-                    opaque_identifiers,
-                    ksf.as_ref(),
-                )
-            } else {
-                ClientRegistrationFinishParameters::<P521Sha512>::default()
-            };
+            let finish_params = ClientRegistrationFinishParameters::<P521Sha512>::new(
+                opaque_identifiers,
+                Some(&ksf),
+            );
             let result = state
                 .finish(&mut rng, &password, response, finish_params)
                 .map_err(to_py_err)?;
@@ -177,14 +162,11 @@ pub(crate) fn client_finish_registration(
             let response =
                 RegistrationResponse::<MlKem768Ristretto255Sha512>::deserialize(&response)
                     .map_err(to_py_err)?;
-            let finish_params = if params.is_some() {
+            let finish_params =
                 ClientRegistrationFinishParameters::<MlKem768Ristretto255Sha512>::new(
                     opaque_identifiers,
-                    ksf.as_ref(),
-                )
-            } else {
-                ClientRegistrationFinishParameters::<MlKem768Ristretto255Sha512>::default()
-            };
+                    Some(&ksf),
+                );
             let result = state
                 .finish(&mut rng, &password, response, finish_params)
                 .map_err(to_py_err)?;
@@ -284,7 +266,7 @@ pub(crate) fn server_finish_registration_with_suite(
     match suite {
         SuiteId::Ristretto255Sha512 => {
             let upload = RegistrationUpload::<Ristretto255Sha512>::deserialize(&upload)
-                .map_err(to_py_err)?;
+                .map_err(|err| registration_upload_err(err, &upload, suite))?;
             Ok(PyServerRegistration {
                 inner: ServerRegistrationInner::Ristretto255Sha512(ServerRegistration::<
                     Ristretto255Sha512,
@@ -294,8 +276,8 @@ pub(crate) fn server_finish_registration_with_suite(
             })
         }
         SuiteId::P256Sha256 => {
-            let upload =
-                RegistrationUpload::<P256Sha256>::deserialize(&upload).map_err(to_py_err)?;
+            let upload = RegistrationUpload::<P256Sha256>::deserialize(&upload)
+                .map_err(|err| registration_upload_err(err, &upload, suite))?;
             Ok(PyServerRegistration {
                 inner: ServerRegistrationInner::P256Sha256(
                     ServerRegistration::<P256Sha256>::finish(upload),
@@ -303,8 +285,8 @@ pub(crate) fn server_finish_registration_with_suite(
             })
         }
         SuiteId::P384Sha384 => {
-            let upload =
-                RegistrationUpload::<P384Sha384>::deserialize(&upload).map_err(to_py_err)?;
+            let upload = RegistrationUpload::<P384Sha384>::deserialize(&upload)
+                .map_err(|err| registration_upload_err(err, &upload, suite))?;
             Ok(PyServerRegistration {
                 inner: ServerRegistrationInner::P384Sha384(
                     ServerRegistration::<P384Sha384>::finish(upload),
@@ -312,8 +294,8 @@ pub(crate) fn server_finish_registration_with_suite(
             })
         }
         SuiteId::P521Sha512 => {
-            let upload =
-                RegistrationUpload::<P521Sha512>::deserialize(&upload).map_err(to_py_err)?;
+            let upload = RegistrationUpload::<P521Sha512>::deserialize(&upload)
+                .map_err(|err| registration_upload_err(err, &upload, suite))?;
             Ok(PyServerRegistration {
                 inner: ServerRegistrationInner::P521Sha512(
                     ServerRegistration::<P521Sha512>::finish(upload),
@@ -322,7 +304,7 @@ pub(crate) fn server_finish_registration_with_suite(
         }
         SuiteId::MlKem768Ristretto255Sha512 => {
             let upload = RegistrationUpload::<MlKem768Ristretto255Sha512>::deserialize(&upload)
-                .map_err(to_py_err)?;
+                .map_err(|err| registration_upload_err(err, &upload, suite))?;
             Ok(PyServerRegistration {
                 inner: ServerRegistrationInner::MlKem768Ristretto255Sha512(ServerRegistration::<
                     MlKem768Ristretto255Sha512,
@@ -332,6 +314,45 @@ pub(crate) fn server_finish_registration_with_suite(
             })
         }
     }
+}
+
+fn registration_upload_err<T: std::fmt::Display>(
+    err: opaque_ke::errors::ProtocolError<T>,
+    upload: &[u8],
+    expected: SuiteId,
+) -> PyErr {
+    if registration_upload_matches_other_suite(upload, expected) {
+        invalid_state_err("RegistrationUpload does not match this server instance")
+    } else {
+        to_py_err(err)
+    }
+}
+
+fn registration_upload_matches_other_suite(upload: &[u8], expected: SuiteId) -> bool {
+    [
+        (
+            SuiteId::Ristretto255Sha512,
+            RegistrationUpload::<Ristretto255Sha512>::deserialize(upload).is_ok(),
+        ),
+        (
+            SuiteId::P256Sha256,
+            RegistrationUpload::<P256Sha256>::deserialize(upload).is_ok(),
+        ),
+        (
+            SuiteId::P384Sha384,
+            RegistrationUpload::<P384Sha384>::deserialize(upload).is_ok(),
+        ),
+        (
+            SuiteId::P521Sha512,
+            RegistrationUpload::<P521Sha512>::deserialize(upload).is_ok(),
+        ),
+        (
+            SuiteId::MlKem768Ristretto255Sha512,
+            RegistrationUpload::<MlKem768Ristretto255Sha512>::deserialize(upload).is_ok(),
+        ),
+    ]
+    .into_iter()
+    .any(|(suite, matches)| suite != expected && matches)
 }
 
 pub fn register(py: Python<'_>, parent: &Bound<'_, PyModule>) -> PyResult<()> {

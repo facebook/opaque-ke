@@ -21,6 +21,16 @@ pub enum SuiteId {
 }
 
 impl SuiteId {
+    pub(crate) fn all() -> [Self; 5] {
+        [
+            SuiteId::Ristretto255Sha512,
+            SuiteId::P256Sha256,
+            SuiteId::P384Sha384,
+            SuiteId::P521Sha512,
+            SuiteId::MlKem768Ristretto255Sha512,
+        ]
+    }
+
     pub(crate) fn as_str(self) -> &'static str {
         match self {
             SuiteId::Ristretto255Sha512 => RISTRETTO255_SHA512,
@@ -32,13 +42,7 @@ impl SuiteId {
     }
 
     pub(crate) fn available() -> Vec<&'static str> {
-        vec![
-            SuiteId::Ristretto255Sha512.as_str(),
-            SuiteId::P256Sha256.as_str(),
-            SuiteId::P384Sha384.as_str(),
-            SuiteId::P521Sha512.as_str(),
-            SuiteId::MlKem768Ristretto255Sha512.as_str(),
-        ]
+        Self::all().into_iter().map(SuiteId::as_str).collect()
     }
 }
 

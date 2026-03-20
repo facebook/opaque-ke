@@ -5,6 +5,7 @@ from opaque_ke.types import (
     ClientLoginFinishParameters,
     ClientRegistrationFinishParameters,
     Identifiers,
+    KeyStretching,
     ServerLoginParameters,
 )
 
@@ -124,3 +125,58 @@ def test_verify_server_public_key_helper(client, server, server_setup, password,
 
     with pytest.raises(InvalidLoginError):
         type(client).verify_server_public_key(server_s_pk, b"bad-key")
+
+
+def test_default_key_stretching_matches_explicit_memory_constrained_registration(
+    client, server, server_setup
+):
+    password = b"password"
+    credential_identifier = b"user"
+    reg_params = ClientRegistrationFinishParameters(
+        None, KeyStretching("memory_constrained", None)
+    )
+    password_file, _ = _register_high_level(
+        client, server, server_setup, password, credential_identifier, reg_params
+    )
+
+    session_key, server_session_key, _, _ = _login_high_level(
+        client,
+        server,
+        server_setup,
+        password,
+        credential_identifier,
+        password_file,
+    )
+
+    assert session_key == server_session_key
+
+
+def test_default_key_stretching_matches_explicit_memory_constrained_login(
+    client, server, server_setup
+):
+    password = b"password"
+    credential_identifier = b"user"
+    password_file, _ = _register_high_level(
+        client, server, server_setup, password, credential_identifier
+    )
+    client_params = ClientLoginFinishParameters(
+        None, None, KeyStretching("memory-constrained", None), None
+    )
+
+    session_key, server_session_key, _, _ = _login_high_level(
+        client,
+        server,
+        server_setup,
+        password,
+        credential_identifier,
+        password_file,
+        None,
+        client_params,
+    )
+
+    assert session_key == server_session_key
+
+
+def test_key_stretching_accepts_js_style_aliases():
+    assert KeyStretching("memory-constrained", None).variant == "memory_constrained"
+    assert KeyStretching("rfc-draft-recommended", None).variant == "rfc_recommended"

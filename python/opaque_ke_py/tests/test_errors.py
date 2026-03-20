@@ -161,4 +161,72 @@ def test_corrupted_server_setup_secret_key_raises_serialization_error():
     data[64:96] = b"\x00" * 32
 
     with pytest.raises(SerializationError):
-        ServerSetup.deserialize(bytes(data))
+        ServerSetup.deserialize(bytes(data), "ristretto255_sha512")
+
+
+def test_high_level_finish_registration_wrong_suite_raises_invalid_state():
+    client = OpaqueClient("p256_sha256")
+    server = OpaqueServer("p256_sha256")
+    server_setup = ServerSetup("p256_sha256")
+
+    req, reg_state = client.start_registration(b"password")
+    resp = server.start_registration(server_setup, req, b"user")
+    upload, _ = client.finish_registration(reg_state, b"password", resp, None)
+
+    with pytest.raises(InvalidStateError):
+        OpaqueServer("p384_sha384").finish_registration(upload)
+
+
+def test_deserialize_rejects_trailing_bytes():
+    client = OpaqueClient()
+    server = OpaqueServer()
+    server_setup = ServerSetup()
+
+    with pytest.raises(SizeError):
+        ServerSetup.deserialize(server_setup.serialize() + b"junk", "ristretto255_sha512")
+
+    req, reg_state = client.start_registration(b"password")
+    resp = server.start_registration(server_setup, req, b"user")
+
+    with pytest.raises(SizeError):
+        client.finish_registration(reg_state, b"password", resp + b"junk", None)
+
+    req, reg_state = client.start_registration(b"password")
+    resp = server.start_registration(server_setup, req, b"user")
+    upload, _ = client.finish_registration(reg_state, b"password", resp, None)
+    with pytest.raises(SizeError):
+        server.finish_registration(upload + b"junk")
+
+    password_file = server.finish_registration(upload)
+    req, login_state = client.start_login(b"password")
+
+    with pytest.raises(SizeError):
+        server.start_login(server_setup, password_file, req + b"junk", b"user", None)
+
+    resp, server_state = server.start_login(
+        server_setup, password_file, req, b"user", None
+    )
+
+    with pytest.raises(SizeError):
+        client.finish_login(login_state, b"password", resp + b"junk", None)
+
+    req, login_state = client.start_login(b"password")
+    resp, server_state = server.start_login(
+        server_setup, password_file, req, b"user", None
+    )
+    finalization, _, _, _ = client.finish_login(login_state, b"password", resp, None)
+    with pytest.raises(SizeError):
+        server.finish_login(server_state, finalization + b"junk", None)
+
+
+def test_deserialize_requires_explicit_suite_for_ambiguous_blobs():
+    with pytest.raises(ValueError, match="ambiguous ServerSetup deserialization"):
+        ServerSetup.deserialize(ServerSetup().serialize())
+
+
+def test_wrong_suite_client_login_state_deserialize_raises_serialization_error():
+    client = OpaqueClient("p521_sha512")
+    _, state = client.start_login(b"password")
+
+    with pytest.raises(SerializationError):
+        type(state).deserialize(state.serialize(), "ristretto255_sha512")

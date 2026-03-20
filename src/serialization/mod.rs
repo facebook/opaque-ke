@@ -94,6 +94,18 @@ impl SliceExt for [u8] {
     }
 }
 
+pub(crate) fn ensure_exhausted(input: &[u8], name: &'static str) -> Result<(), ProtocolError> {
+    if input.is_empty() {
+        Ok(())
+    } else {
+        Err(ProtocolError::SizeError {
+            name,
+            len: 0,
+            actual_len: input.len(),
+        })
+    }
+}
+
 pub(crate) trait GenericArrayExt<O: ArrayLength<u8>> {
     type Output: ArrayLength<u8>;
 

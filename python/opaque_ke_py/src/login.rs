@@ -14,9 +14,9 @@ use crate::suite::{
 };
 use crate::types::{
     ClientLoginFinishParameters as PyClientLoginFinishParameters, ClientLoginState,
-    ClientLoginStateInner, ServerLoginParameters as PyServerLoginParameters, ServerLoginState,
-    ServerLoginStateInner, ServerRegistration, ServerRegistrationInner, ServerSetup,
-    ServerSetupInner,
+    ClientLoginStateInner, KeyStretching, ServerLoginParameters as PyServerLoginParameters,
+    ServerLoginState, ServerLoginStateInner, ServerRegistration, ServerRegistrationInner,
+    ServerSetup, ServerSetupInner,
 };
 use crate::{ensure_suite, py_utils};
 
@@ -94,11 +94,12 @@ pub(crate) fn client_finish_login(
         .as_ref()
         .map(|ids| ids.as_opaque())
         .unwrap_or_default();
-    let ksf = params
+    let key_stretching = params
         .as_ref()
         .and_then(|params| params.key_stretching())
-        .map(|ksf| ksf.build_ksf())
-        .transpose()?;
+        .cloned()
+        .unwrap_or_else(KeyStretching::default_js_compatible);
+    let ksf = key_stretching.build_ksf()?;
     let context = params
         .as_ref()
         .and_then(|params| params.context().map(|value| value.to_vec()));
@@ -111,15 +112,11 @@ pub(crate) fn client_finish_login(
             let state = state.take_ristretto()?;
             let response = CredentialResponse::<Ristretto255Sha512>::deserialize(&response)
                 .map_err(to_py_err)?;
-            let finish_params = if params.is_some() {
-                ClientLoginFinishParameters::<Ristretto255Sha512>::new(
-                    context.as_deref(),
-                    opaque_identifiers,
-                    ksf.as_ref(),
-                )
-            } else {
-                ClientLoginFinishParameters::<Ristretto255Sha512>::default()
-            };
+            let finish_params = ClientLoginFinishParameters::<Ristretto255Sha512>::new(
+                context.as_deref(),
+                opaque_identifiers,
+                Some(&ksf),
+            );
             let result = state
                 .finish(&mut rng, &password, response, finish_params)
                 .map_err(to_py_err)?;
@@ -143,15 +140,11 @@ pub(crate) fn client_finish_login(
             let state = state.take_p256()?;
             let response =
                 CredentialResponse::<P256Sha256>::deserialize(&response).map_err(to_py_err)?;
-            let finish_params = if params.is_some() {
-                ClientLoginFinishParameters::<P256Sha256>::new(
-                    context.as_deref(),
-                    opaque_identifiers,
-                    ksf.as_ref(),
-                )
-            } else {
-                ClientLoginFinishParameters::<P256Sha256>::default()
-            };
+            let finish_params = ClientLoginFinishParameters::<P256Sha256>::new(
+                context.as_deref(),
+                opaque_identifiers,
+                Some(&ksf),
+            );
             let result = state
                 .finish(&mut rng, &password, response, finish_params)
                 .map_err(to_py_err)?;
@@ -175,15 +168,11 @@ pub(crate) fn client_finish_login(
             let state = state.take_p384()?;
             let response =
                 CredentialResponse::<P384Sha384>::deserialize(&response).map_err(to_py_err)?;
-            let finish_params = if params.is_some() {
-                ClientLoginFinishParameters::<P384Sha384>::new(
-                    context.as_deref(),
-                    opaque_identifiers,
-                    ksf.as_ref(),
-                )
-            } else {
-                ClientLoginFinishParameters::<P384Sha384>::default()
-            };
+            let finish_params = ClientLoginFinishParameters::<P384Sha384>::new(
+                context.as_deref(),
+                opaque_identifiers,
+                Some(&ksf),
+            );
             let result = state
                 .finish(&mut rng, &password, response, finish_params)
                 .map_err(to_py_err)?;
@@ -207,15 +196,11 @@ pub(crate) fn client_finish_login(
             let state = state.take_p521()?;
             let response =
                 CredentialResponse::<P521Sha512>::deserialize(&response).map_err(to_py_err)?;
-            let finish_params = if params.is_some() {
-                ClientLoginFinishParameters::<P521Sha512>::new(
-                    context.as_deref(),
-                    opaque_identifiers,
-                    ksf.as_ref(),
-                )
-            } else {
-                ClientLoginFinishParameters::<P521Sha512>::default()
-            };
+            let finish_params = ClientLoginFinishParameters::<P521Sha512>::new(
+                context.as_deref(),
+                opaque_identifiers,
+                Some(&ksf),
+            );
             let result = state
                 .finish(&mut rng, &password, response, finish_params)
                 .map_err(to_py_err)?;
@@ -239,15 +224,11 @@ pub(crate) fn client_finish_login(
             let state = state.take_kem()?;
             let response = CredentialResponse::<MlKem768Ristretto255Sha512>::deserialize(&response)
                 .map_err(to_py_err)?;
-            let finish_params = if params.is_some() {
-                ClientLoginFinishParameters::<MlKem768Ristretto255Sha512>::new(
-                    context.as_deref(),
-                    opaque_identifiers,
-                    ksf.as_ref(),
-                )
-            } else {
-                ClientLoginFinishParameters::<MlKem768Ristretto255Sha512>::default()
-            };
+            let finish_params = ClientLoginFinishParameters::<MlKem768Ristretto255Sha512>::new(
+                context.as_deref(),
+                opaque_identifiers,
+                Some(&ksf),
+            );
             let result = state
                 .finish(&mut rng, &password, response, finish_params)
                 .map_err(to_py_err)?;

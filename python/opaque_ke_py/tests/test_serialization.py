@@ -8,6 +8,8 @@ from opaque_ke.types import (
     ServerSetup,
 )
 
+DEFAULT_SUITE = "ristretto255_sha512"
+
 
 def _register(client, server, server_setup, password, credential_identifier):
     request, state = client.start_registration(password)
@@ -20,7 +22,7 @@ def _register(client, server, server_setup, password, credential_identifier):
 def test_server_setup_roundtrip():
     setup = ServerSetup()
     data = setup.serialize()
-    restored = ServerSetup.deserialize(data)
+    restored = ServerSetup.deserialize(data, DEFAULT_SUITE)
     assert restored.serialize() == data
 
 
@@ -31,7 +33,7 @@ def test_server_registration_roundtrip():
     password_file = _register(client, server, server_setup, b"password", b"user")
 
     data = password_file.serialize()
-    restored = ServerRegistration.deserialize(data)
+    restored = ServerRegistration.deserialize(data, DEFAULT_SUITE)
     assert restored.serialize() == data
 
 
@@ -46,7 +48,7 @@ def test_client_registration_state_roundtrip():
     response = server.start_registration(server_setup, request, credential_identifier)
     data = state.serialize()
 
-    restored = ClientRegistrationState.deserialize(data)
+    restored = ClientRegistrationState.deserialize(data, DEFAULT_SUITE)
     upload, _ = client.finish_registration(restored, password, response, None)
     server.finish_registration(upload)
 
@@ -65,7 +67,7 @@ def test_client_login_state_roundtrip():
     )
     data = state.serialize()
 
-    restored = ClientLoginState.deserialize(data)
+    restored = ClientLoginState.deserialize(data, DEFAULT_SUITE)
     finalization, session_key, _, _ = client.finish_login(
         restored, password, response, None
     )
@@ -87,7 +89,7 @@ def test_server_login_state_roundtrip():
     )
     data = server_state.serialize()
 
-    restored = ServerLoginState.deserialize(data)
+    restored = ServerLoginState.deserialize(data, DEFAULT_SUITE)
     finalization, session_key, _, _ = client.finish_login(
         state, password, response, None
     )

@@ -12,7 +12,6 @@ from opaque_ke.server import OpaqueServer
 from opaque_ke.types import (
     ClientRegistrationFinishParameters,
     Identifiers,
-    KeyStretching,
     ServerRegistration,
     ServerSetup,
 )
@@ -54,11 +53,20 @@ def js_call(action: str, **kwargs):
             [node, str(harness)],
             input=json.dumps(payload).encode("utf-8"),
             capture_output=True,
-            check=True,
+            check=False,
             cwd=harness.parent,
         )
     except FileNotFoundError as exc:
         pytest.skip(f"Node not available: {exc}", allow_module_level=True)
+
+    if not result.stdout:
+        raise AssertionError(
+            {
+                "action": action,
+                "returncode": result.returncode,
+                "stderr": result.stderr.decode("utf-8", errors="replace"),
+            }
+        )
 
     data = json.loads(result.stdout.decode("utf-8"))
     if not data.get("ok"):
@@ -68,6 +76,15 @@ def js_call(action: str, **kwargs):
                 allow_module_level=True,
             )
         raise AssertionError(data)
+    if result.returncode != 0:
+        raise AssertionError(
+            {
+                "action": action,
+                "returncode": result.returncode,
+                "stderr": result.stderr.decode("utf-8", errors="replace"),
+                "result": data,
+            }
+        )
     return data["result"]
 
 
@@ -81,6 +98,7 @@ IDENTIFIERS_JS = {
     "server": SERVER_IDENTIFIER_BYTES.decode("ascii"),
 }
 CONTEXT_STR = "opaque-ke-py-test"
+DEFAULT_SUITE = "ristretto255_sha512"
 
 
 def test_python_registration_js_login_with_context_and_identifiers():
@@ -105,8 +123,7 @@ def test_python_registration_js_login_with_context_and_identifiers():
     identifiers = Identifiers(
         client=CLIENT_IDENTIFIER_BYTES, server=SERVER_IDENTIFIER_BYTES
     )
-    key_stretching = KeyStretching("memory_constrained", None)
-    reg_params = ClientRegistrationFinishParameters(identifiers, key_stretching)
+    reg_params = ClientRegistrationFinishParameters(identifiers, None)
     upload_bytes, _ = client.finish_registration(
         state,
         PASSWORD_BYTES,
@@ -120,7 +137,6 @@ def test_python_registration_js_login_with_context_and_identifiers():
     login_start = js_call(
         "clientStartLogin",
         password=PASSWORD_STR,
-        keyStretching="memory-constrained",
     )
     assert_base64url(login_start["clientLoginState"])
     assert_base64url(login_start["startLoginRequest"])
@@ -169,7 +185,6 @@ def test_js_registration_python_login_baseline():
     reg_start = js_call(
         "clientStartRegistration",
         password=PASSWORD_STR,
-        keyStretching="memory-constrained",
     )
     assert_base64url(reg_start["clientRegistrationState"])
     assert_base64url(reg_start["registrationRequest"])
@@ -190,15 +205,16 @@ def test_js_registration_python_login_baseline():
     )
     assert_base64url(reg_finish["registrationRecord"])
 
-    server_setup_py = ServerSetup.deserialize(b64url_decode(server_setup_str))
+    server_setup_py = ServerSetup.deserialize(
+        b64url_decode(server_setup_str), DEFAULT_SUITE
+    )
     password_file = ServerRegistration.deserialize(
-        b64url_decode(reg_finish["registrationRecord"])
+        b64url_decode(reg_finish["registrationRecord"]), DEFAULT_SUITE
     )
 
     start_login = js_call(
         "clientStartLogin",
         password=PASSWORD_STR,
-        keyStretching="memory-constrained",
     )
     assert_base64url(start_login["clientLoginState"])
     assert_base64url(start_login["startLoginRequest"])

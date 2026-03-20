@@ -33,7 +33,7 @@ use crate::keypair::PublicKey;
 use crate::opaque::{
     MaskedResponse, MaskedResponseLen, ServerLogin, ServerLoginStartResult, ServerSetup,
 };
-use crate::serialization::SliceExt;
+use crate::serialization::{SliceExt, ensure_exhausted};
 
 ////////////////////////////
 // High-level API Structs //
@@ -236,9 +236,10 @@ impl<CS: CipherSuite> RegistrationRequest<CS> {
 
     /// Deserialization from bytes
     pub fn deserialize(input: &[u8]) -> Result<Self, ProtocolError> {
-        Ok(Self {
-            blinded_element: voprf::BlindedElement::deserialize(input)?,
-        })
+        let blinded_element = voprf::BlindedElement::deserialize(input)?;
+        let input = &input[BlindedElementLen::<CS::OprfCs>::USIZE..];
+        ensure_exhausted(input, "trailing bytes")?;
+        Ok(Self { blinded_element })
     }
 }
 
@@ -263,10 +264,12 @@ impl<CS: CipherSuite> RegistrationResponse<CS> {
         let evaluation_element = EvaluationElement::deserialize(input)?;
         input = &input[EvaluationElementLen::<CS::OprfCs>::USIZE..];
 
-        Ok(Self {
+        let output = Self {
             evaluation_element,
             server_s_pk: PublicKey::deserialize_take(&mut input)?,
-        })
+        };
+        ensure_exhausted(input, "trailing bytes")?;
+        Ok(output)
     }
 
     #[cfg(test)]
@@ -305,10 +308,16 @@ impl<CS: CipherSuite> RegistrationUpload<CS> {
 
     /// Deserialization from bytes
     pub fn deserialize(mut input: &[u8]) -> Result<Self, ProtocolError> {
+        let output = Self::deserialize_take(&mut input)?;
+        ensure_exhausted(input, "trailing bytes")?;
+        Ok(output)
+    }
+
+    pub(crate) fn deserialize_take(input: &mut &[u8]) -> Result<Self, ProtocolError> {
         Ok(Self {
-            client_s_pk: PublicKey::deserialize_take(&mut input)?,
+            client_s_pk: PublicKey::deserialize_take(input)?,
             masking_key: input.take_array("masking key")?,
-            envelope: Envelope::deserialize_take(&mut input)?,
+            envelope: Envelope::deserialize_take(input)?,
         })
     }
 
@@ -350,7 +359,9 @@ impl<CS: CipherSuite> CredentialRequest<CS> {
     where
         <CS::KeyExchange as KeyExchange>::KE1Message: Deserialize,
     {
-        Self::deserialize_take(&mut input)
+        let output = Self::deserialize_take(&mut input)?;
+        ensure_exhausted(input, "trailing bytes")?;
+        Ok(output)
     }
 
     pub(crate) fn deserialize_take(input: &mut &[u8]) -> Result<Self, ProtocolError>
@@ -412,14 +423,16 @@ impl<CS: CipherSuite> CredentialResponse<CS> {
         let evaluation_element = EvaluationElement::deserialize(input)?;
         input = &input[voprf::EvaluationElementLen::<CS::OprfCs>::USIZE..];
 
-        Ok(Self {
+        let output = Self {
             evaluation_element,
             masking_nonce: input.take_array("masking nonce")?,
             masked_response: MaskedResponse::deserialize_take(&mut input)?,
             ke2_message: <CS::KeyExchange as KeyExchange>::KE2Message::deserialize_take(
                 &mut input,
             )?,
-        })
+        };
+        ensure_exhausted(input, "trailing bytes")?;
+        Ok(output)
     }
 
     pub(crate) fn to_parts(&self) -> SerializedCredentialResponse<CS> {
@@ -463,10 +476,12 @@ impl<CS: CipherSuite> CredentialFinalization<CS> {
     where
         <CS::KeyExchange as KeyExchange>::KE3Message: Deserialize,
     {
-        Ok(Self {
+        let output = Self {
             ke3_message: <CS::KeyExchange as KeyExchange>::KE3Message::deserialize_take(
                 &mut input,
             )?,
-        })
+        };
+        ensure_exhausted(input, "trailing bytes")?;
+        Ok(output)
     }
 }

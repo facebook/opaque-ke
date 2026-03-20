@@ -3,18 +3,14 @@
 ## Fork Purpose & Scope
 This fork’s primary goal is to add robust, user-friendly, and secure Python bindings using PyO3 while keeping the Rust core aligned with upstream.
 
-## Fork Purpose & Scope
-This fork's primary goal is to add robust, user-friendly, and secure Python bindings using PyO3 while keeping the Rust core aligned with upstream.
-
-
 ## Project Structure & Module Organization
-- `src/` holds the Rust library implementation and module tree.
+- `src/` holds the Rust library implementation and module tree. Avoid modifications here.
 - `tests/` contains integration tests (e.g., `migration.rs`, `remote_key.rs`).
 - `benches/` hosts Criterion benchmarks (see `opaque` bench target).
 - `examples/` provides runnable usage samples (e.g., `simple_login`).
 - `scripts/` includes helper expect scripts for demo flows.
 - Project config lives in `Cargo.toml`, with tooling settings in `rustfmt.toml`, `clippy.toml`, `taplo.toml`, and `deny.toml`.
-- `python/opaque_ke_py/` hosts the PyO3 bindings crate and `pyproject.toml` for maturin builds.
+- `python/opaque_ke_py/` hosts the PyO3 bindings crate and `pyproject.toml` for maturin builds. Focus contributions here.
 
 ## Build, Test, and Development Commands
 - `cargo fmt` — format Rust code per `rustfmt.toml`.

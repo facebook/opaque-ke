@@ -13,3 +13,4 @@
 *.so
 *.pyd
 **/.pytest_cache/
+.serena/

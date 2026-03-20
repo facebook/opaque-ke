@@ -18,7 +18,7 @@ use generic_array::{ArrayLength, GenericArray};
 use hkdf::{Hkdf, HkdfExtract};
 use rand::{CryptoRng, RngCore};
 use subtle::{Choice, ConstantTimeEq, CtOption};
-use voprf::{BlindedElement, Group as _, OprfClient, OprfClientLen};
+use voprf::{BlindedElement, BlindedElementLen, Group as _, OprfClient, OprfClientLen};
 use zeroize::Zeroizing;
 
 use crate::ciphersuite::{CipherSuite, KeGroup, KeHash, OprfGroup, OprfHash};
@@ -36,7 +36,7 @@ use crate::keypair::{
 };
 use crate::ksf::Ksf;
 use crate::messages::{CredentialRequestLen, RegistrationUploadLen};
-use crate::serialization::{GenericArrayExt, SliceExt};
+use crate::serialization::{GenericArrayExt, SliceExt, ensure_exhausted};
 use crate::{
     CredentialFinalization, CredentialRequest, CredentialResponse, RegistrationRequest,
     RegistrationResponse, RegistrationUpload, ServerLoginBuilder,
@@ -226,11 +226,15 @@ impl<CS: CipherSuite, SK: Clone, OS: Clone> ServerSetup<CS, SK, OS> {
         SK: PrivateKeySerialization<KeGroup<CS>>,
         OS: OprfSeedSerialization<OprfHash<CS>, SK::Error>,
     {
+        let oprf_seed = OS::deserialize_take(&mut input)?;
+        let keypair = SK::deserialize_take_key_pair(&mut input)?;
+        let dummy_pk =
+            PublicKey::deserialize_take(&mut input).map_err(ProtocolError::into_custom)?;
+        ensure_exhausted(input, "trailing bytes").map_err(ProtocolError::into_custom)?;
         Ok(Self {
-            oprf_seed: OS::deserialize_take(&mut input)?,
-            keypair: SK::deserialize_take_key_pair(&mut input)?,
-            dummy_pk: PublicKey::deserialize_take(&mut input)
-                .map_err(ProtocolError::into_custom)?,
+            oprf_seed,
+            keypair,
+            dummy_pk,
         })
     }
 
@@ -296,6 +300,8 @@ impl<CS: CipherSuite> ClientRegistration<CS> {
         input = &input[OprfClientLen::<CS::OprfCs>::USIZE..];
 
         let blinded_element = BlindedElement::deserialize(input)?;
+        input = &input[BlindedElementLen::<CS::OprfCs>::USIZE..];
+        ensure_exhausted(input, "trailing bytes")?;
 
         Ok(Self {
             oprf_client,
@@ -399,7 +405,10 @@ impl<CS: CipherSuite> ServerRegistration<CS> {
 
     /// Deserialization from bytes
     pub fn deserialize(input: &[u8]) -> Result<Self, ProtocolError> {
-        Ok(Self(RegistrationUpload::deserialize(input)?))
+        let mut input = input;
+        let upload = RegistrationUpload::deserialize_take(&mut input)?;
+        ensure_exhausted(input, "trailing bytes")?;
+        Ok(Self(upload))
     }
 
     /// Create a [`RegistrationResponse`] with a remote OPRF seed. To generate
@@ -493,11 +502,13 @@ impl<CS: CipherSuite> ClientLogin<CS> {
         let oprf_client = OprfClient::deserialize(input)?;
         input = &input[OprfClientLen::<CS::OprfCs>::USIZE..];
 
-        Ok(Self {
+        let output = Self {
             oprf_client,
             credential_request: CredentialRequest::deserialize_take(&mut input)?,
             ke1_state: <CS::KeyExchange as KeyExchange>::KE1State::deserialize_take(&mut input)?,
-        })
+        };
+        ensure_exhausted(input, "trailing bytes")?;
+        Ok(output)
     }
 }
 
@@ -627,12 +638,14 @@ impl<CS: CipherSuite> ServerLogin<CS> {
     where
         <CS::KeyExchange as KeyExchange>::KE2State<CS>: Deserialize,
     {
-        Ok(Self {
+        let output = Self {
             ke2_state:
                 <<CS::KeyExchange as KeyExchange>::KE2State<CS> as Deserialize>::deserialize_take(
                     &mut bytes,
                 )?,
-        })
+        };
+        ensure_exhausted(bytes, "trailing bytes")?;
+        Ok(output)
     }
 
     /// Create a [`ServerLoginBuilder`] with a remote OPRF seed and private key.

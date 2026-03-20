@@ -1383,9 +1383,10 @@ mod tests;
 
 #[cfg(feature = "argon2")]
 pub use argon2;
+pub use generic_array;
 #[cfg(feature = "kem")]
 pub use ml_kem;
-pub use {generic_array, rand};
+pub use rand;
 
 pub use crate::ciphersuite::CipherSuite;
 #[cfg(feature = "curve25519")]
