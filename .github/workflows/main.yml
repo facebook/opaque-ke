@@ -26,7 +26,7 @@ jobs:
           - --features serde
         toolchain:
           - stable
-          - 1.85.0
+          - 1.87.0
     name: test
     env:
       PKCS11_MODULE: /usr/lib/softhsm/libsofthsm2.so
@@ -95,7 +95,7 @@ jobs:
       matrix:
         toolchain:
           - stable
-          - 1.85.0
+          - 1.87.0
     name: test simple_login command-line example
     steps:
       - name: install expect
@@ -118,7 +118,7 @@ jobs:
       matrix:
         toolchain:
           - stable
-          - 1.85.0
+          - 1.87.0
     name: test digital_locker command-line example
     steps:
       - name: install expect

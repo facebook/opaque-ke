@@ -1,5 +1,9 @@
 # Changelog
 
+## 4.1.0-pre.2 (March 26, 2026)
+* Upgraded ml-kem from 0.2 to 0.3.0-rc.0
+* Increased MSRV to 1.87
+
 ## 4.1.0-pre.1 (November 17, 2025)
 * Added ml-kem re-export behind the kem feature
 

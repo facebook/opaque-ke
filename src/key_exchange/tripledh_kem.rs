@@ -18,7 +18,6 @@
 //! the generic `ml-kem` abstractions into the existing OPAQUE key-exchange
 //! pipeline.
 
-use core::convert::TryFrom;
 use core::fmt::Debug;
 use core::marker::PhantomData;
 use core::ops::Add;
@@ -29,9 +28,11 @@ use digest::{Digest, Output};
 use generic_array::sequence::Concat;
 use generic_array::typenum::{IsLess, Le, NonZero, Sum, U256};
 use generic_array::{ArrayLength, GenericArray};
-use ml_kem::kem::{Decapsulate, Encapsulate};
-use ml_kem::{
-    Ciphertext as MlKemCiphertext, Encoded, EncodedSizeUser, KemCore, SharedKey as MlKemSharedKey,
+#[allow(deprecated)]
+use ml_kem::ExpandedKeyEncoding;
+use ml_kem::kem::{
+    Ciphertext as MlKemCiphertext, Decapsulate, Encapsulate, Kem as MlKemTrait, KeyExport,
+    KeySizeUser, TryKeyInit,
 };
 use rand::{CryptoRng, RngCore};
 use subtle::{ConstantTimeEq, CtOption};
@@ -44,7 +45,7 @@ use super::{
     SerializedIdentifiers,
 };
 use crate::ciphersuite::{CipherSuite, KeGroup};
-use crate::errors::{InternalError, ProtocolError};
+use crate::errors::ProtocolError;
 use crate::hash::{Hash, OutputSize, ProxyHash};
 use crate::key_exchange::group::Group;
 use crate::keypair::{PrivateKey, PublicKey};
@@ -115,16 +116,42 @@ pub trait KemCoreWrapper {
     ) -> Result<GenericArray<u8, Self::SharedSecretLen>, ProtocolError>;
 }
 
-type RcEncapsulationKeyLen<K> = <<K as KemCore>::EncapsulationKey as EncodedSizeUser>::EncodedSize;
-type RcDecapsulationKeyLen<K> = <<K as KemCore>::DecapsulationKey as EncodedSizeUser>::EncodedSize;
-type RcCiphertextLen<K> = <K as KemCore>::CiphertextSize;
-type RcSharedSecretLen<K> = <K as KemCore>::SharedKeySize;
+/// Adapter to bridge `rand 0.8` (`rand_core 0.6`) RNGs to `rand_core 0.10`
+/// which is required by `ml-kem 0.3.x`.
+struct RngCompat<'a, R>(&'a mut R);
 
+impl<R: RngCore> rand_core_10::TryRng for RngCompat<'_, R> {
+    type Error = core::convert::Infallible;
+
+    fn try_next_u32(&mut self) -> Result<u32, Self::Error> {
+        Ok(self.0.next_u32())
+    }
+
+    fn try_next_u64(&mut self) -> Result<u64, Self::Error> {
+        Ok(self.0.next_u64())
+    }
+
+    fn try_fill_bytes(&mut self, dst: &mut [u8]) -> Result<(), Self::Error> {
+        self.0.fill_bytes(dst);
+        Ok(())
+    }
+}
+
+impl<R: RngCore + CryptoRng> rand_core_10::TryCryptoRng for RngCompat<'_, R> {}
+
+type RcEncapsulationKeyLen<K> = <<K as MlKemTrait>::EncapsulationKey as KeySizeUser>::KeySize;
+#[allow(deprecated)]
+type RcDecapsulationKeyLen<K> =
+    <<K as MlKemTrait>::DecapsulationKey as ExpandedKeyEncoding>::EncodedSize;
+type RcCiphertextLen<K> = <K as MlKemTrait>::CiphertextSize;
+type RcSharedSecretLen<K> = <K as MlKemTrait>::SharedKeySize;
+
+#[allow(deprecated)]
 impl<K> KemCoreWrapper for K
 where
-    K: KemCore,
-    K::EncapsulationKey: Encapsulate<MlKemCiphertext<K>, MlKemSharedKey<K>> + Clone,
-    K::DecapsulationKey: Decapsulate<MlKemCiphertext<K>, MlKemSharedKey<K>> + Clone + ZeroizeOnDrop,
+    K: MlKemTrait,
+    K::EncapsulationKey: Encapsulate<Kem = K> + KeyExport + TryKeyInit + Clone,
+    K::DecapsulationKey: Decapsulate<Kem = K> + ExpandedKeyEncoding + Clone + ZeroizeOnDrop,
     RcEncapsulationKeyLen<K>: ArrayLength<u8>,
     RcDecapsulationKeyLen<K>: ArrayLength<u8>,
     RcCiphertextLen<K>: ArrayLength<u8>,
@@ -140,13 +167,13 @@ where
     fn generate<R: RngCore + CryptoRng>(
         rng: &mut R,
     ) -> Result<(Self::DecapsulationKey, Self::EncapsulationKey), ProtocolError> {
-        Ok(K::generate(rng))
+        Ok(K::generate_keypair_from_rng(&mut RngCompat(rng)))
     }
 
     fn serialize_encapsulation_key(
         key: &Self::EncapsulationKey,
     ) -> GenericArray<u8, Self::EncapsulationKeyLen> {
-        GenericArray::clone_from_slice(key.as_bytes().as_slice())
+        GenericArray::clone_from_slice(key.to_bytes().as_slice())
     }
 
     fn deserialize_encapsulation_key(
@@ -154,15 +181,15 @@ where
     ) -> Result<Self::EncapsulationKey, ProtocolError> {
         let bytes: GenericArray<u8, RcEncapsulationKeyLen<K>> =
             input.take_array("kem encapsulation key")?;
-        let encoded = Encoded::<K::EncapsulationKey>::try_from(bytes.as_slice())
+        let key = ml_kem::array::Array::try_from(bytes.as_slice())
             .map_err(|_| ProtocolError::SerializationError)?;
-        Ok(K::EncapsulationKey::from_bytes(&encoded))
+        TryKeyInit::new(&key).map_err(|_| ProtocolError::SerializationError)
     }
 
     fn serialize_decapsulation_key(
         key: &Self::DecapsulationKey,
     ) -> GenericArray<u8, Self::DecapsulationKeyLen> {
-        GenericArray::clone_from_slice(key.as_bytes().as_slice())
+        GenericArray::clone_from_slice(key.to_expanded_bytes().as_slice())
     }
 
     fn deserialize_decapsulation_key(
@@ -170,9 +197,10 @@ where
     ) -> Result<Self::DecapsulationKey, ProtocolError> {
         let bytes: GenericArray<u8, RcDecapsulationKeyLen<K>> =
             input.take_array("kem decapsulation key")?;
-        let encoded = Encoded::<K::DecapsulationKey>::try_from(bytes.as_slice())
+        let key = ml_kem::array::Array::try_from(bytes.as_slice())
             .map_err(|_| ProtocolError::SerializationError)?;
-        Ok(K::DecapsulationKey::from_bytes(&encoded))
+        K::DecapsulationKey::from_expanded_bytes(&key)
+            .map_err(|_| ProtocolError::SerializationError)
     }
 
     fn encapsulate<R: RngCore + CryptoRng>(
@@ -185,14 +213,11 @@ where
         ),
         ProtocolError,
     > {
-        key.encapsulate(rng)
-            .map(|(ciphertext, shared)| {
-                (
-                    GenericArray::clone_from_slice(ciphertext.as_slice()),
-                    GenericArray::clone_from_slice(shared.as_slice()),
-                )
-            })
-            .map_err(|_| ProtocolError::LibraryError(InternalError::KemError))
+        let (ciphertext, shared) = key.encapsulate_with_rng(&mut RngCompat(rng));
+        Ok((
+            GenericArray::clone_from_slice(ciphertext.as_slice()),
+            GenericArray::clone_from_slice(shared.as_slice()),
+        ))
     }
 
     fn decapsulate(
@@ -201,9 +226,8 @@ where
     ) -> Result<GenericArray<u8, Self::SharedSecretLen>, ProtocolError> {
         let ciphertext = MlKemCiphertext::<K>::try_from(encapsulated_key.as_slice())
             .map_err(|_| ProtocolError::SerializationError)?;
-        key.decapsulate(&ciphertext)
-            .map(|shared| GenericArray::clone_from_slice(shared.as_slice()))
-            .map_err(|_| ProtocolError::LibraryError(InternalError::KemError))
+        let shared = key.decapsulate(&ciphertext);
+        Ok(GenericArray::clone_from_slice(shared.as_slice()))
     }
 }
 /// Triple Diffie-Hellman-style key exchange that offloads the second hop to a
