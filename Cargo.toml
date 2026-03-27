@@ -9,8 +9,8 @@ license = "Apache-2.0 OR MIT"
 name = "opaque-ke"
 readme = "README.md"
 repository = "https://github.com/facebook/opaque-ke"
-rust-version = "1.85"
-version = "4.1.0-pre.1"
+rust-version = "1.87"
+version = "4.1.0-pre.2"
 
 [features]
 argon2 = ["dep:argon2"]
@@ -18,7 +18,7 @@ curve25519 = ["dep:curve25519-dalek"]
 default = ["ristretto255", "serde"]
 ecdsa = ["dep:ecdsa", "dep:rfc6979"]
 ed25519 = ["dep:curve25519-dalek", "dep:ed25519-dalek"]
-kem = ["dep:ml-kem"]
+kem = ["dep:ml-kem", "dep:rand_core_10"]
 ristretto255 = ["dep:curve25519-dalek", "voprf/ristretto255-ciphersuite"]
 serde = [
   "dep:serde",
@@ -54,10 +54,11 @@ elliptic-curve = { version = "0.13", features = ["hash2curve", "sec1"] }
 generic-array = "=0.14.7" # pinned to avoid deprecation warnings
 hkdf = "0.12"
 hmac = "0.12"
-ml-kem = { version = "0.2", default-features = false, features = [
+ml-kem = { version = "0.3.0-rc.0", default-features = false, features = [
   "zeroize",
 ], optional = true }
 rand = { version = "0.8", default-features = false }
+rand_core_10 = { package = "rand_core", version = "0.10", default-features = false, optional = true }
 rfc6979 = { version = "0.4", optional = true }
 serde = { version = "1", default-features = false, features = [
   "derive",
@@ -73,7 +74,7 @@ getrandom = { version = "0.2", features = ["js"], optional = true }
 anyhow = "1"
 bincode = "1"
 chacha20poly1305 = "0.10"
-criterion = "0.7"
+criterion = "0.8"
 cryptoki = "0.9"
 elliptic-curve = { version = "0.13", features = ["alloc", "pkcs8"] }
 hex = "0.4"
