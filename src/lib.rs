@@ -1357,6 +1357,12 @@
 #![cfg_attr(docsrs, feature(doc_cfg))]
 #![cfg_attr(not(test), deny(unsafe_code))]
 #![warn(clippy::cargo, clippy::doc_markdown, missing_docs, rustdoc::all)]
+// The dependency tree legitimately contains two semver-incompatible versions
+// of `syn`: v2 (via `derive-where` and `curve25519-dalek-derive`) and v3 (via
+// `displaydoc` and `serde_derive`). Cargo cannot unify major versions, so the
+// `clippy::multiple_crate_versions` lint is a false positive here; without
+// this, `cargo clippy -- -D warnings` (as run in CI) fails.
+#![allow(clippy::multiple_crate_versions)]
 #![cfg_attr(not(test), warn(unused_crate_dependencies))]
 #![allow(type_alias_bounds)]
 
